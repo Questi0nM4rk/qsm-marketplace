@@ -42,6 +42,14 @@ export function substitute(command: string): Substitution {
   if (ids.length === 0) {
     return { command, ids };
   }
+  const owners = new Map<string, string>();
+  for (const id of ids) {
+    const taken = owners.get(variableOf(id));
+    if (taken !== undefined) {
+      throw new Error(`${taken} and ${id} would share ${variableOf(id)}; rename one of them`);
+    }
+    owners.set(variableOf(id), id);
+  }
   const body = command.replace(PLACEHOLDER, (_, id: string) => `"$${variableOf(id)}"`);
   const envs = ids.map((id) => {
     const { namespace, key } = locate(id);

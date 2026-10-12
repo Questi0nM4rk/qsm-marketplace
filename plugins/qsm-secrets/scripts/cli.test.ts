@@ -237,6 +237,23 @@ describe("the shared CLI base", () => {
     expect(envelope(run)).toMatchObject({ code: "usage", exit: 2 });
   });
 
+  test("mask --all with no backend chosen returns every string unchanged", () => {
+    const home = mkdtempSync(join(tmpdir(), "qsm-secrets-nochoice-"));
+    try {
+      const rows = ["tok=hunter2", "plain"];
+      const run = spawned(
+        "bun",
+        [CLI, "mask", "--all", "--json"],
+        { PATH: pathWith(null), HOME: home, XDG_CONFIG_HOME: home },
+        JSON.stringify(rows),
+      );
+      expect(run.code).toBe(0);
+      expect(JSON.parse(run.stdout).data.texts).toEqual(rows);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("clean without a runtime directory is ok and removes nothing", () => {
     const run = spawned("bun", [CLI, "clean", "--session", "s1", "--json"], {
       PATH: pathWith(null),

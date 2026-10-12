@@ -27,6 +27,8 @@ verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-c
 refused (exit 5). `prune` removes the capture entries whose id no transcript under
 `~/.claude/projects` names and prints each id; `--dry-run` only lists, and run it after your sessions
 end, because a live session's capture is named in its transcript only once the prompt is rewritten.
+A named key (`qsm/<name>`) is never pruned, and renaming a capture id leaves the old id in transcripts
+that name it, where it no longer resolves.
 `check` runs the probe like `env` with its output discarded and answers ok, or failed (exit 1)
 with the probe's code: `qsm-secrets check npm-token=NPM_TOKEN -- npm whoami`.
 

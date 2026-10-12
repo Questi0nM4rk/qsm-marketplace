@@ -231,6 +231,17 @@ test("a named key's placeholder runs env with its own namespace and key", async 
   );
 });
 
+test("two ids that map to one variable are refused, not run with the second value in both", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  guardAnswers(on, ALLOWED);
+  const id = (key: string): string => `{{${"secret"}:qsm/${key}}}`;
+
+  const denied = await $.tool.call({ tool: "Bash", command: `echo ${id("a-b")} ${id("a_b")}` });
+
+  expect(denied.result).toBeUndefined();
+  expect(denied.deny).toContain("would share QSM_SECRET_QSM_A_B");
+});
+
 test("every row is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
   const answer = (rows: string[]) => ({
     ...RAN,

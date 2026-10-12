@@ -398,7 +398,9 @@ A function hook on `tool.call` for Bash SHALL rewrite a command holding `{{secre
 call of `qsm-secrets env <id>=QSM_SECRET_<ID> -- sh -c '<command>'` in which the placeholder is the
 variable, so the value reaches that one command through its environment and never appears in the
 command text. A command with no placeholder SHALL pass unchanged, and the hook SHALL return the
-tool's result as it came, never a copy of it.
+tool's result as it came, never a copy of it. Two ids of one command whose variable names are the
+same (`qsm/a-b` and `qsm/a_b`) SHALL be refused with a message naming both, because the second
+value would silently stand in for the first.
 
 #### Scenario: an id in a command is replaced for that command only
 
@@ -409,6 +411,11 @@ tool's result as it came, never a copy of it.
 
 - **WHEN** a Bash command holds `{{secret:<id>}}` and a single quote
 - **THEN** the rewritten command runs the same words as the original
+
+#### Scenario: two ids share one variable
+
+- **WHEN** a Bash command holds `{{secret:qsm/a-b}}` and `{{secret:qsm/a_b}}`
+- **THEN** the call is denied and the reason names both ids
 
 #### Scenario: a placeholder inside single quotes is denied before it runs
 
