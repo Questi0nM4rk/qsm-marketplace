@@ -51,6 +51,11 @@ interface SetupFile {
   readonly secrets?: { readonly backend?: string };
 }
 
+/** Whether a backend is chosen at all. Without one nothing can be stored, so nothing needs masking. */
+export function backendChosen(env: Record<string, string | undefined> = process.env): boolean {
+  return (env.QSM_SECRETS_BACKEND ?? stored(env)) !== undefined;
+}
+
 /**
  * The one backend in use: `QSM_SECRETS_BACKEND`, else the choice activation stored. No choice is
  * `missing`, never a default, so a person who chose libsecret never reaches rbw.

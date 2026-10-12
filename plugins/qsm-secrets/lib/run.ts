@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { home } from "../../../lib/paths.ts";
-import { activeBackend, type Backend } from "./backend.ts";
+import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
 import {
   formatMetadata,
@@ -113,12 +113,19 @@ export function runMaskAll(): { texts: string[] } {
   if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
+  if (!backendChosen()) {
+    return { texts: parsed as string[] };
+  }
   const backend = activeBackend();
   const values = backend
     .entries()
     .flatMap((entry) => {
       const bytes = backend.read(entry.folder, entry.name);
-      const value = bytes === null ? "" : new TextDecoder().decode(bytes);
+      if (bytes === null) {
+        // A listed key that cannot be read (a locked vault) would pass unmasked: refuse instead.
+        fail(`cannot read ${entry.folder}/${entry.name} to mask it`, "unlock the vault", "blocked");
+      }
+      const value = new TextDecoder().decode(bytes);
       return value.length < MIN_MASKED
         ? []
         : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];

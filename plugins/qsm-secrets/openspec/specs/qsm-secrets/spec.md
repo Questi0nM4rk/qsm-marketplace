@@ -342,6 +342,22 @@ is.
 - **WHEN** a row has several text blocks
 - **THEN** one `mask --all` process masks all of them
 
+#### Scenario: no backend is chosen
+
+- **WHEN** no backend was chosen at activation
+- **THEN** nothing can be stored, and `mask --all` returns every string unchanged
+
+#### Scenario: a listed value cannot be read
+
+- **WHEN** a stored key is listed but its value cannot be read, as in a locked vault
+- **THEN** `mask --all` fails `blocked` naming the key, and the row is withheld
+
+#### Scenario: an entry of an older schema is stored
+
+- **WHEN** the libsecret store holds a `service=qsm` entry with no `namespace` attribute
+- **THEN** listing and `mask --all` fail naming the key and the command that removes it, because
+  without a delimiter in `secret-tool` output such an entry would shift its neighbours' namespaces
+
 ### Requirement: Config files are rendered per session in memory and removed at its end
 
 `qsm-secrets render <template>` SHALL write the template with its ids replaced under

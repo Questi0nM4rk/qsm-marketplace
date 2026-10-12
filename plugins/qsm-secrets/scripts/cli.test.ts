@@ -492,7 +492,9 @@ case "$verb" in
       base=$(basename "$f"); ns=\${base%%__*}; key=\${base#*__}
       printf '[/fake/%s]\\nlabel = qsm %s/%s\\nsecret = ' "$n" "$ns" "$key"
       cat "$f"; printf '\\nschema = org.freedesktop.Secret.Generic\\n'
-      if [ $((n % 2)) = 0 ]; then
+      if [ "$ns" = "none" ]; then
+        printf 'attribute.key = %s\\nattribute.service = qsm\\n' "$key" >&2
+      elif [ $((n % 2)) = 0 ]; then
         printf 'attribute.key = %s\\nattribute.namespace = %s\\nattribute.service = qsm\\n' "$key" "$ns" >&2
       else
         printf 'attribute.service = qsm\\nattribute.namespace = %s\\nattribute.key = %s\\n' "$ns" "$key" >&2
@@ -591,5 +593,18 @@ describe("the libsecret backend", () => {
       "{{secret:cap_trap}}",
       "",
     ]);
+  });
+
+  test("an entry of an older schema, with no namespace, fails loud and masks nothing", () => {
+    const legacy = join(store, "none__OLD_TOKEN");
+    writeFileSync(legacy, "old-value");
+    try {
+      const listed = run(["list", "--folder", "capture"]);
+      expect(listed.code).not.toBe(0);
+      expect(listed.stderr).toContain("has no namespace: OLD_TOKEN");
+      expect(maskAll(bin, ["tok=hunter2"]).status).not.toBe(0);
+    } finally {
+      rmSync(legacy);
+    }
   });
 });

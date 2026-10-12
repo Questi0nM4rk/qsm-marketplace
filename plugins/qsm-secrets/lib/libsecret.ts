@@ -54,8 +54,9 @@ function ready(): void {
 /**
  * Names and namespaces only. `secret-tool search` prints each item's `secret =` line on stdout and
  * its attributes on stderr in hash-table order, so stdout is never read: a value holding the text
- * `attribute.key = X` cannot forge a row. Every item carries the same attributes, so an attribute
- * name that repeats starts the next item.
+ * `attribute.key = X` cannot forge a row. stderr has no item delimiter, so an attribute name that
+ * repeats starts the next item; that holds only while every item carries the same three attributes,
+ * so an item without a namespace (an older schema) fails loud instead of shifting its neighbours.
  */
 function entries(): Entry[] {
   ready();
@@ -64,8 +65,16 @@ function entries(): Entry[] {
   let item = new Map<string, string>();
   const flush = (): void => {
     const key = item.get("key");
-    if (key !== undefined) {
-      rows.push({ name: key, folder: item.get("namespace") ?? "", user: WRAPPER_MARK });
+    const namespace = item.get("namespace");
+    if (key !== undefined && namespace === undefined) {
+      fail(
+        `a stored entry has no namespace: ${key} (an older schema)`,
+        `remove it with secret-tool clear service qsm key ${key} in your own terminal`,
+        "failed",
+      );
+    }
+    if (key !== undefined && namespace !== undefined) {
+      rows.push({ name: key, folder: namespace, user: WRAPPER_MARK });
     }
     item = new Map();
   };

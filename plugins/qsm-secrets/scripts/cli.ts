@@ -133,7 +133,8 @@ const capture: Handler = () =>
 const mask: Handler = (call) =>
   attempt(() => {
     if (call.args.all === true) {
-      return ok(runMaskAll());
+      const masked = runMaskAll();
+      return ok(masked, JSON.stringify(masked.texts));
     }
     const ids = (call.args.id as string[] | undefined) ?? [];
     if (ids.length === 0) {
