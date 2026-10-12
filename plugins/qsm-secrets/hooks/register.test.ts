@@ -59,6 +59,27 @@ test("a guard that cannot answer denies the call and says why", async ($, on) =>
   expect(denied.deny).toContain("no outcome envelope");
 });
 
+test("a broken guard lets the doctor and the installer through and nothing else", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  guardAnswers(on, "not an envelope");
+
+  for (const command of [
+    "qsm-secrets doctor",
+    "bun plugins/qsm-secrets/scripts/install.ts --dry-run",
+  ]) {
+    expect((await $.tool.call({ tool: "Bash", command })).result).toBe("ran");
+  }
+  for (const command of [
+    "qsm-secrets doctor; rbw get x",
+    "qsm-secrets doctor | cat",
+    "rbw get x",
+  ]) {
+    expect((await $.tool.call({ tool: "Bash", command })).deny).toContain(
+      "the credential guard failed",
+    );
+  }
+});
+
 test("the guard sees a placeholder as written, before the substitution rewrites it", async ($, on) => {
   on("tool.call", () => ({ result: "ran" }));
   const seen = guardAnswers(on, ALLOWED);
@@ -102,6 +123,19 @@ for (const [path, real] of PROTECTED_READS) {
     expect(denied.deny).toContain("qsm-secrets pipe");
   });
 }
+
+test("a Grep with no path is judged by the working directory", async ($, on) => {
+  fileHost(on, undefined);
+  let cwd = "/home/p";
+  on("session.cwd", () => ({ value: cwd }));
+
+  const denied = await $.tool.call({ tool: "Grep", pattern: "x" } as never);
+  expect(denied.deny).toContain("keyring-files");
+
+  cwd = "/home/p/project";
+  const ran = await $.tool.call({ tool: "Grep", pattern: "x" } as never);
+  expect(ran.result).toBe("ran");
+});
 
 test("a Read of an ordinary file runs", async ($, on) => {
   fileHost(on, "/home/p/project/README.md");

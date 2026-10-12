@@ -516,9 +516,12 @@ itself.
 
 The verb `qsm-secrets guard` SHALL read a Bash command on stdin, parse it with shell-ast, and answer
 `ok` or `blocked` with a stable code, the reason and the `qsm-secrets` verb to use instead. It
-SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`, `xargs`, `sh -c`
-bodies, subshells, command substitutions and pipelines, so a reader is judged by the command that
-finally runs. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
+SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`, `xargs`, `setsid`,
+`stdbuf`, `flock`, `ionice`, `chrt`, `watch`, `nohup`, `unbuffer`, `taskset`, `find -exec`,
+`qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
+pipelines, and past a backslash in the command's name, so a reader is judged by the command that
+finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
+directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
 `dbus-send` naming `org.freedesktop.secrets`; a reader of the keyring directory or the vault's data
 directory, by the spelling of the path or the file it resolves to; `python -c` or `node -e` naming a
 keyring library; a reader of the rendered config directory; a reader of a credential file; and
@@ -526,7 +529,8 @@ keyring library; a reader of the rendered config directory; a reader of a creden
 otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
 allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
 the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
-answer denies the call and names the cause. The verb is a compiled binary with the parser embedded,
+answer denies the call and names the cause, except for exactly `qsm-secrets doctor` and the plugin's
+install script, so a broken install can be diagnosed and repeated. The verb is a compiled binary with the parser embedded,
 because the hook sandbox cannot load WebAssembly.
 
 #### Scenario: a raw reader is denied with the wrapper to use
@@ -536,9 +540,15 @@ because the hook sandbox cannot load WebAssembly.
 
 #### Scenario: a wrapper does not hide a reader
 
-- **WHEN** an agent runs `sudo env A=1 rbw get x`, `echo a | xargs rbw get`, `bash -c 'ls; rbw get x'`
-  or `echo $(rbw get x)`
+- **WHEN** an agent runs `sudo env A=1 rbw get x`, `echo a | xargs rbw get`, `bash -c 'ls; rbw get x'`,
+  `echo $(rbw get x)`, `\rbw get x`, `flock f rbw get x`, `find . -exec rbw get x ;` or
+  `qsm-secrets env k=V -- rbw get x`
 - **THEN** the call is denied as a vault reader
+
+#### Scenario: a changed directory or a glob does not hide the keyring
+
+- **WHEN** an agent runs `cd <data dir> && cat keyrings/login.keyring` or `cat <data dir>/keyr*/login.keyring`
+- **THEN** the call is denied as keyring files
 
 #### Scenario: a lookup is not a run
 
@@ -576,13 +586,15 @@ because the hook sandbox cannot load WebAssembly.
 #### Scenario: a guard that cannot answer stops the call
 
 - **WHEN** the verb prints no outcome envelope
-- **THEN** the call is denied and the reason names the verb, its exit code and its stderr
+- **THEN** the call is denied and the reason names the verb, its exit code and its stderr, unless the
+  command is exactly `qsm-secrets doctor` or the install script, which runs
 
 ### Requirement: Read and Grep do not open the credential files
 
 A function hook on `tool.call` for `Read` and `Grep` SHALL deny a path inside the keyring directory,
 the vault's data directory or the rendered config directory, by its spelling or the file it resolves
-to, and a `Grep` whose path holds one of them, and SHALL answer with the wrapper to use instead.
+to, and a `Grep` whose path holds one of them (a `Grep` with no path is judged by the session's
+working directory), and SHALL answer with the wrapper to use instead.
 
 #### Scenario: a file read of the keyring is denied
 

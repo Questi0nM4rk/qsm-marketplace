@@ -88,3 +88,43 @@ export function reaches(
       (ancestors && (folded === "/" || root.path.startsWith(`${folded}/`))),
   );
 }
+
+/** A glob word as a pattern over one path part: `*`, `?` and `[...]` as the shell reads them. */
+function partPattern(part: string): RegExp {
+  const source = [...part]
+    .map((char) => {
+      if (char === "*") {
+        return "[^/]*";
+      }
+      if (char === "?") {
+        return "[^/]";
+      }
+      return /[A-Za-z0-9_\-[\]]/.test(char) ? char : `\\${char}`;
+    })
+    .join("");
+  try {
+    return new RegExp(`^${source}$`);
+  } catch {
+    return /^$/;
+  }
+}
+
+/** The root a glob word could expand to: `~/.local/share/keyr*\/login.keyring` reaches the keyring
+ * directory, because each leading part of the pattern may match the root's part at that depth. */
+export function globMentioned(
+  text: string,
+  roots: readonly Root[],
+  env: PathEnv,
+): Root | undefined {
+  if (!/[*?[]/.test(text)) {
+    return undefined;
+  }
+  const parts = normalizePath(expand(text, env)).split("/");
+  return roots.find((root) => {
+    const rootParts = root.path.split("/");
+    return (
+      parts.length >= rootParts.length &&
+      rootParts.every((rootPart, at) => partPattern(parts[at] as string).test(rootPart))
+    );
+  });
+}

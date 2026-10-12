@@ -20,7 +20,16 @@ import {
   wordToLit,
   wordToParts,
 } from "@questi0nm4rk/shell-ast";
-import { mentioned, type PathEnv, protectedRoots, type Root, reaches } from "./protected.ts";
+import {
+  expand,
+  globMentioned,
+  mentioned,
+  normalizePath,
+  type PathEnv,
+  protectedRoots,
+  type Root,
+  reaches,
+} from "./protected.ts";
 import { placeholderIds } from "./substitute.ts";
 
 export type RefusalCode =
@@ -192,22 +201,66 @@ function looksUp(name: string, flag: string): boolean {
   return name === "command" && /^-[a-zA-Z]*[vV]/.test(flag);
 }
 
-/** Where the command a runner runs starts among its words: `xargs [flags] cmd` and `command [flags]
- * cmd` run `cmd`. Undefined when there is none, it is dynamic, or the runner only looks it up. */
-function runnerInner(name: string, args: readonly Word[]): number | undefined {
-  if (name !== "xargs" && name !== "command") {
-    return undefined;
-  }
-  const words = args.map(wordToLit);
+/** Wrappers whose command sits among positional words of their own (`flock <file> cmd`, `chrt <prio>
+ * cmd`), so every word may start it and each is judged as a command. */
+const SCANNED_WRAPPERS: ReadonlySet<string> = new Set([
+  "setsid",
+  "stdbuf",
+  "flock",
+  "ionice",
+  "chrt",
+  "watch",
+  "nohup",
+  "unbuffer",
+  "taskset",
+]);
+const FIND_EXEC: ReadonlySet<string> = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+const SECRETS_RUNNERS: ReadonlySet<string> = new Set(["env", "pipe", "check"]);
+
+type Words = readonly (string | null)[];
+
+const isText = (word: string | null | undefined): word is string => typeof word === "string";
+
+function findStarts(words: Words): number[] {
+  return words.flatMap((word, at) =>
+    isText(word) && FIND_EXEC.has(word) && isText(words[at + 1]) ? [at + 1] : [],
+  );
+}
+
+function secretsStarts(words: Words): number[] {
+  const verb = words.find((word) => isText(word) && !word.startsWith("-"));
+  const dashes = words.indexOf("--");
+  return isText(verb) && SECRETS_RUNNERS.has(verb) && dashes !== -1 ? [dashes + 1] : [];
+}
+
+function flagged(name: string, words: Words): number[] {
   let at = 0;
   while ((words[at]?.startsWith("-") ?? false) && words[at] !== "--") {
     if (looksUp(name, words[at] as string)) {
-      return undefined;
+      return [];
     }
     at += name === "xargs" && XARGS_VALUE_FLAGS.has(words[at] as string) ? 2 : 1;
   }
   at += words[at] === "--" ? 1 : 0;
-  return typeof words[at] === "string" ? at : undefined;
+  return isText(words[at]) ? [at] : [];
+}
+
+/** Where each command a runner runs starts among its words: `xargs [flags] cmd` and `command [flags]
+ * cmd` run `cmd`; `qsm-secrets env|pipe|check ... -- cmd` and `find -exec cmd` run it too, and a
+ * scanned wrapper may run it at any word. Empty when there is none, it is dynamic, or the runner only
+ * looks it up. */
+function innerStarts(name: string, args: readonly Word[]): number[] {
+  const words = args.map(wordToLit);
+  if (SCANNED_WRAPPERS.has(name)) {
+    return words.flatMap((word, at) => (isText(word) ? [at] : []));
+  }
+  if (name === "find") {
+    return findStarts(words);
+  }
+  if (name === "qsm-secrets") {
+    return secretsStarts(words);
+  }
+  return name === "xargs" || name === "command" ? flagged(name, words) : [];
 }
 
 /** A word as the shell would hand it on, with an expansion left as written. */
@@ -219,6 +272,9 @@ function textOf(word: Word): string {
 
 const basename = (command: string): string => command.slice(command.lastIndexOf("/") + 1);
 
+/** The command's name as the shell runs it: `\\rbw` and `r\\bw` are `rbw`. */
+const nameOf = (command: string): string => basename(command.replaceAll("\\", ""));
+
 interface Effective {
   readonly name: string;
   /** the words after the command word */
@@ -228,15 +284,17 @@ interface Effective {
 /** Every command a layer of the wrapper chain runs. A `sh -c` body is judged as a whole by the caller. */
 function effective(layer: UnwrappedCall): Effective | null {
   if (layer.kind === "plain") {
-    return { name: basename(layer.cmd), args: layer.raw.args.slice(1) };
+    return { name: nameOf(layer.cmd), args: layer.raw.args.slice(1) };
   }
   if (layer.kind === "wrapped") {
-    return { name: basename(layer.cmd), args: layer.innerRaw.args.slice(1) };
+    return { name: nameOf(layer.cmd), args: layer.innerRaw.args.slice(1) };
   }
   return null;
 }
 
 interface Context {
+  /** where a `cd` on the way down left the shell, when that is known */
+  readonly cwd: { at?: string | undefined };
   readonly env: PathEnv;
   readonly roots: readonly Root[];
   /** a redirect of descriptor 3 to the output was seen on the way down */
@@ -259,6 +317,17 @@ function pathHit(text: string, ctx: Context): Root | undefined {
   const spelled = mentioned(text, ctx.roots, ctx.env);
   if (spelled !== undefined) {
     return spelled;
+  }
+  const globbed = globMentioned(text, ctx.roots, ctx.env);
+  if (globbed !== undefined) {
+    return globbed;
+  }
+  const { at } = ctx.cwd;
+  if (at !== undefined && !/^[/~$-]/.test(text)) {
+    const relative = reaches(`${at}/${text}`, ctx.roots, ctx.env, false);
+    if (relative !== undefined) {
+      return relative;
+    }
   }
   const real = realOf(text.replace(/^~(?=\/|$)/, ctx.env.home ?? "~"));
   return real === undefined ? undefined : reaches(real, ctx.roots, ctx.env, false);
@@ -397,9 +466,15 @@ async function judgeLayer(
   if (refusal !== null) {
     return refusal;
   }
-  const at = seen === null ? undefined : runnerInner(seen.name, seen.args);
-  if (seen !== null && at !== undefined) {
-    return await judgeChain({ ...call, assigns: [], args: seen.args.slice(at) }, ctx, exempt);
+  for (const at of seen === null ? [] : innerStarts(seen.name, seen.args)) {
+    const inner = await judgeChain(
+      { ...call, assigns: [], args: (seen as Effective).args.slice(at) },
+      ctx,
+      exempt,
+    );
+    if (inner !== null) {
+      return inner;
+    }
   }
   if (layer.kind === "wrapped-script") {
     exempt.add(layer.script);
@@ -423,6 +498,22 @@ async function judgeChain(
   return null;
 }
 
+/** After `cd <dir>` the relative words of later commands are read against that directory. */
+function followCd(call: CallExprNode, ctx: Context): void {
+  const name = nameOf(wordToLit(call.args[0] as Word) ?? "");
+  if (name !== "cd" && name !== "pushd") {
+    return;
+  }
+  const target = call.args[1] === undefined ? undefined : textOf(call.args[1]);
+  if (target === undefined || target.startsWith("-")) {
+    ctx.cwd.at = undefined;
+    return;
+  }
+  const spelled = expand(target, ctx.env);
+  const base = spelled.startsWith("/") ? "" : ctx.cwd.at;
+  ctx.cwd.at = base === undefined ? undefined : normalizePath(`${base}/${spelled}`);
+}
+
 async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> {
   const stmts = findAll(ast, "Stmt");
   const redirected = ctx.fd3Out || stmts.some((stmt) => stmt.redirs.some(fd3ToOutput));
@@ -444,6 +535,7 @@ async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> 
     if (refusal !== null) {
       return refusal;
     }
+    followCd(call, inner);
     const heredoc = stmt.redirs.find((r) => r.hdoc !== null);
     if (
       heredoc?.hdoc &&
@@ -509,5 +601,11 @@ async function judgeSource(source: string, ctx: Context): Promise<Refusal | null
 
 /** The refusal for a Bash command, or null when nothing in it reads a stored value. */
 export async function guardCommand(command: string, env: PathEnv): Promise<Refusal | null> {
-  return await judgeSource(command, { env, roots: protectedRoots(env), fd3Out: false, depth: 0 });
+  return await judgeSource(command, {
+    cwd: {},
+    env,
+    roots: protectedRoots(env),
+    fd3Out: false,
+    depth: 0,
+  });
 }

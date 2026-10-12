@@ -74,6 +74,11 @@ function refusalOf(ran: { exitCode: number; stdout: string; stderr: string }): s
   );
 }
 
+// The only commands a broken guard lets through, so a missing binary can be diagnosed and the
+// install repeated from a Bash call: each is one fixed command, no pipe, no list, no substitution.
+const RECOVERY =
+  /^\s*(?:qsm-secrets doctor|bun [\w./-]*plugins\/qsm-secrets\/scripts\/install\.ts(?: --dry-run)?)\s*$/;
+
 /** The guard runs first, on the command as written, so it sees a placeholder before the substitution
  * rewrites it. */
 function registerGuard(on: On): void {
@@ -86,9 +91,13 @@ function registerGuard(on: On): void {
     }
     $.ui.log(`refused a Bash command: ${reason.slice(0, 80)}`);
     return { deny: reason };
-  }).catch(($, _e, next) => {
+  }).catch(($, e, next) => {
     const reason = cause(next.error);
     $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
+    if (RECOVERY.test((e as { command?: string }).command ?? "")) {
+      $.ui.log(`the credential guard failed (${reason}); a recovery command was let through`);
+      return next(e);
+    }
     $.ui.log(`the credential guard failed (${reason}); the call was denied`);
     return { deny: `qsm-secrets: the credential guard failed (${reason}); the call was not run` };
   });
@@ -106,7 +115,9 @@ function registerFileGuard(on: On): void {
   for (const { tool, ancestors } of guarded) {
     on("tool.call", { tool }, async ($, e, next) => {
       const input = e as { file_path?: string; path?: string };
-      const target = input.file_path ?? input.path;
+      // A Grep with no path searches the working directory, so that is its path.
+      const target =
+        input.file_path ?? input.path ?? (ancestors ? await $.session.cwd() : undefined);
       if (target === undefined) {
         return next(e);
       }
