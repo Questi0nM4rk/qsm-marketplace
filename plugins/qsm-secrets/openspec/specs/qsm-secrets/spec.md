@@ -116,6 +116,64 @@ failure, not a silent success, when the key was not stored.
 - **WHEN** the caller removes a key that does not exist
 - **THEN** the wrapper reports failure
 
+### Requirement: Rename a stored key without exposing its value
+
+The wrapper SHALL rename a stored key, optionally into another folder, on both backends, with the
+value read and written inside its own process and never printed. It SHALL write the new entry and
+read it back equal before it removes the old one, and SHALL refuse, as blocked, a target that is
+already stored.
+
+#### Scenario: Renaming a stored key
+
+- **WHEN** the caller renames a stored key to a new name, or with `--to-folder` into another folder
+- **THEN** the new name holds the same value, the old name is no longer stored, and no value is
+  printed
+
+#### Scenario: The target already exists
+
+- **WHEN** the caller renames a key to a name that is already stored
+- **THEN** the wrapper refuses with `blocked` and both entries are unchanged
+
+#### Scenario: The copy does not read back equal
+
+- **WHEN** the new entry does not read back equal to the old value
+- **THEN** the new entry is removed, the old one is untouched and the wrapper reports failure
+
+### Requirement: Prune captured entries no transcript names
+
+The wrapper SHALL remove every entry of the capture namespace whose id appears in no session
+transcript under `~/.claude/projects`, print each removed id and never a value, and with `--dry-run`
+only list them. It SHALL refuse, as missing, when there is no transcript to check against, because
+every id would then look unused.
+
+#### Scenario: An unnamed capture is pruned
+
+- **WHEN** a captured entry's id appears in no transcript and the caller runs prune
+- **THEN** the entry is removed, its id is printed, entries of other namespaces and ids a
+  transcript names are kept, and a second run removes nothing
+
+#### Scenario: A dry run changes nothing
+
+- **WHEN** the caller runs prune with `--dry-run`
+- **THEN** the ids that would be removed are listed and every entry is still stored
+
+#### Scenario: No transcript to check against
+
+- **WHEN** no transcript exists under `~/.claude/projects`
+- **THEN** the wrapper reports missing and removes nothing
+
+### Requirement: Check a credential with a probe
+
+The wrapper SHALL run a probe command with a key's value in one environment variable, exactly as
+`env` does, discard the probe's stdout and stderr, and report ok, or failed with the probe's exit
+code.
+
+#### Scenario: The probe succeeds or fails
+
+- **WHEN** the caller runs `check <key>=<VAR> -- <probe>`
+- **THEN** the wrapper answers ok when the probe exits 0 and failed with its exit code otherwise,
+  and neither the probe's output nor the value is printed
+
 ### Requirement: Retrieve a raw value only through an explicitly opened channel
 
 The wrapper SHALL offer a last-resort verb that writes a key's value to a

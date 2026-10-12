@@ -20,6 +20,15 @@ export type Secrets = {
     key: string;
     folder?: string;
   }): Promise<unknown>;
+  rename(options: {
+    from: string;
+    to: string;
+    folder?: string;
+    toFolder?: string;
+  }): Promise<unknown>;
+  prune(options: {
+    dryRun?: boolean;
+  }): Promise<unknown>;
   guard(): Promise<unknown>;
   capture(): Promise<unknown>;
   mask(options: {

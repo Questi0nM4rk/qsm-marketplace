@@ -26,7 +26,7 @@ this plugin can go.
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
 | Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
 | Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
-| CLI | `qsm-secrets` | 15 verbs, see [USAGE.md](USAGE.md). |
+| CLI | `qsm-secrets` | 18 verbs, see [USAGE.md](USAGE.md). |
 
 ## Install
 
@@ -49,6 +49,9 @@ qsm-secrets set github-token                                 # you type the valu
 qsm-secrets pipe github-token -- gh auth login --with-token  # value on stdin
 qsm-secrets env npm-token=NPM_TOKEN -- npm publish           # value in one variable
 qsm-secrets list                                             # key names, never a value
+qsm-secrets check npm-token=NPM_TOKEN -- npm whoami          # does the stored token still work: ok or failed
+qsm-secrets rename old-name new-name                         # value never printed, old name removed last
+qsm-secrets prune --dry-run                                  # captures no transcript names; drop --dry-run to remove
 qsm-secrets render ./app.env.tpl --out app.env               # fills {{secret:<id>}}, prints the path
 ```
 
@@ -74,6 +77,8 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 - Masking: every row is masked against every stored value of six or more characters, one process
   per row; a value printed re-encoded (base64, escaped) is not masked, and a row the mask cannot
   read is withheld, with a toast. Without a chosen backend every row is withheld.
+- `prune` trusts the transcripts: run it after your sessions end, since a capture made in a live
+  session is named in its transcript only once the prompt is rewritten.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.
 - `set` needs a terminal and stores one line only.
 - The default namespace is the folder `qsm` (`--folder` or `QSM_SECRETS_FOLDER`).

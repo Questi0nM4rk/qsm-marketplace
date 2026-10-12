@@ -17,6 +17,7 @@ import { runClean, runRender } from "../lib/render.ts";
 import {
   type Delivery,
   runCapture,
+  runCheck,
   runEnv,
   runGet,
   runHas,
@@ -25,7 +26,9 @@ import {
   runMask,
   runMaskAll,
   runPipe,
+  runPrune,
   runRemove,
+  runRename,
   runScrub,
   runSet,
 } from "../lib/run.ts";
@@ -82,6 +85,37 @@ const env: Handler = (call) => {
   }
   return attempt(() => delivered(runEnv(namespace(call), pair.key, pair.variable, call.rest)));
 };
+
+/** The probe runs like env but its output is discarded: only its exit code is the answer. */
+const probe: Handler = (call) => {
+  const pair = parseEnvPair(call.args.pair as string);
+  if (pair === null) {
+    return fail("usage", "check takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
+  }
+  return attempt(() => {
+    const d = runCheck(namespace(call), pair.key, pair.variable, call.rest);
+    return d.exit === 0
+      ? ok(d, `ok: ${d.command}`)
+      : fail("failed", `failed: ${d.command} exited ${d.exit}`, d);
+  });
+};
+
+const rename: Handler = (call) =>
+  attempt(() => {
+    const from = { namespace: namespace(call), key: call.args.from as string };
+    const to = {
+      namespace: (call.args.toFolder as string | undefined) ?? from.namespace,
+      key: call.args.to as string,
+    };
+    const done = runRename(from, to);
+    return ok(done, `renamed ${done.from} to ${done.to}`);
+  });
+
+const prune: Handler = (call) =>
+  attempt(() => {
+    const done = runPrune(call.args.dryRun === true);
+    return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
+  });
 
 const get: Handler = (call) =>
   call.json ? fail("blocked", NO_JSON) : attempt(() => ok(runGet(namespace(call), key(call))));
@@ -229,6 +263,9 @@ if (import.meta.main) {
       list,
       inspect,
       rm,
+      rename,
+      prune,
+      check: probe,
       get,
       doctor,
       capture,

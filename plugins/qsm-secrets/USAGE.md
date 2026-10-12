@@ -5,6 +5,9 @@ qsm-secrets pipe <key> -- <cmd> [args...]
 qsm-secrets env <key>=<ENVVAR> -- <cmd> [args...]
 qsm-secrets has <key>
 qsm-secrets list
+qsm-secrets rename <from> <to> [--folder <f>] [--to-folder <f>]
+qsm-secrets prune [--dry-run]
+qsm-secrets check <key>=<ENVVAR> -- <probe> [args...]
 qsm-secrets render <template> --out <name>
 ```
 
@@ -19,6 +22,13 @@ in a transcript. Neither prints a value.
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,
 `keyring-library`, `credential-file`, `fd3-to-output`, `single-quoted-placeholder` or
 `unreadable-command`. The `tool.call` hook calls it; run it by hand to see why a command was refused.
+
+`rename` writes the new name, reads it back equal, then removes the old one; an existing target is
+refused (exit 5). `prune` removes the capture entries whose id no transcript under
+`~/.claude/projects` names and prints each id; `--dry-run` only lists, and run it after your sessions
+end, because a live session's capture is named in its transcript only once the prompt is rewritten.
+`check` runs the probe like `env` with its output discarded and answers ok, or failed (exit 1)
+with the probe's code: `qsm-secrets check npm-token=NPM_TOKEN -- npm whoami`.
 
 Other verbs: `set`, `inspect`, `rm`, `get`, `mask`, `doctor`. `qsm-secrets --help` lists them.
 Option scanning stops at `--`, so the consumer keeps its own flags.

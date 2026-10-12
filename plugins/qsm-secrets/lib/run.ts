@@ -23,6 +23,7 @@ import {
 } from "./entries.ts";
 import { fail } from "./errors.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
+import { WRAPPER_MARK } from "./vault.ts";
 
 /** The file descriptor `get` writes to. */
 const CHANNEL_FD = 3;
@@ -146,9 +147,11 @@ export function runMaskAll(): { texts: string[] } {
   return { texts };
 }
 
+const projectsDir = (): string => join(home(process.env), ".claude", "projects");
+
 /** The transcript a session id names: `~/.claude/projects/<dir>/<id>.jsonl`, wherever `<dir>` is. */
 function locateTranscript(sessionId: string): string {
-  const projects = join(home(process.env), ".claude", "projects");
+  const projects = projectsDir();
   const dirs = existsSync(projects) ? readdirSync(projects) : [];
   const found = dirs.map((d) => join(projects, d, `${sessionId}.jsonl`)).find((p) => existsSync(p));
   return found ?? fail(`no transcript for ${sessionId}`, `looked under ${projects}`, "missing");
@@ -205,24 +208,46 @@ export function runPipe(namespace: string, key: string, command: readonly string
   return { command: head, exit: consumer.status ?? 1 };
 }
 
-export function runEnv(
-  namespace: string,
-  key: string,
-  variable: string,
-  command: readonly string[],
-): Delivery {
+interface EnvDelivery {
+  readonly namespace: string;
+  readonly key: string;
+  readonly variable: string;
+  readonly command: readonly string[];
+  readonly stdio: "inherit" | "ignore";
+}
+
+function deliverEnv({ namespace, key, variable, command, stdio }: EnvDelivery): Delivery {
   const [head, tail] = consumerCommand(command);
   const value = resolve(namespace, key);
   // The value goes into the child's environment and nowhere else: not into this process's own env,
   // and not into any argv, which /proc exposes to every other user on a default Linux.
   const consumer = spawnSync(head, tail, {
     env: { ...process.env, [variable]: new TextDecoder().decode(value) },
-    stdio: "inherit",
+    stdio,
   });
   if (consumer.error !== undefined) {
     fail(`could not run ${head}`, "check the consumer command and its arguments");
   }
   return { command: head, exit: consumer.status ?? 1 };
+}
+
+export function runEnv(
+  namespace: string,
+  key: string,
+  variable: string,
+  command: readonly string[],
+): Delivery {
+  return deliverEnv({ namespace, key, variable, command, stdio: "inherit" });
+}
+
+/** `check`: runs like `env`, but the probe's output is discarded; only its exit code answers. */
+export function runCheck(
+  namespace: string,
+  key: string,
+  variable: string,
+  command: readonly string[],
+): Delivery {
+  return deliverEnv({ namespace, key, variable, command, stdio: "ignore" });
 }
 
 /** `has`: the outcome is the whole answer, by design. A printed line
@@ -306,4 +331,84 @@ export function runGet(namespace: string, key: string): { namespace: string; key
   }
   writeSync(CHANNEL_FD, resolve(namespace, key));
   return { namespace, key };
+}
+
+/**
+ * `rename`: the value is read into this process and written under the new name, never printed.
+ * The new entry is read back and compared before the old one goes, so a failed step leaves the old
+ * name intact; a target that exists is refused, never overwritten.
+ */
+export function runRename(
+  from: { namespace: string; key: string },
+  to: { namespace: string; key: string },
+): { from: string; to: string } {
+  const label = (side: { namespace: string; key: string }): string =>
+    `${side.namespace}/${side.key}`;
+  if (from.namespace === to.namespace && from.key === to.key) {
+    fail("rename needs two different names", "pass a new <to> or --to-folder", "usage");
+  }
+  const backend = backendHolding(from.namespace, from.key);
+  if (keyExists(backend.entries(), to.namespace, to.key)) {
+    fail(
+      `already stored: ${label(to)}`,
+      "pick another name, or remove it with qsm-secrets rm",
+      "blocked",
+    );
+  }
+  const value = backend.read(from.namespace, from.key);
+  if (value === null) {
+    missing(from.namespace, from.key);
+  }
+  backend.store(to.namespace, to.key, value);
+  const copy = backend.read(to.namespace, to.key);
+  if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
+    backend.remove(to.namespace, to.key);
+    fail(
+      `the copy at ${label(to)} did not read back equal, nothing renamed`,
+      `${label(from)} is untouched`,
+    );
+  }
+  if (!backend.remove(from.namespace, from.key)) {
+    fail(
+      `copied to ${label(to)} but could not remove ${label(from)}`,
+      `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
+    );
+  }
+  return { from: label(from), to: label(to) };
+}
+
+/** Every transcript under `~/.claude/projects`, subagent ones included. */
+function allTranscripts(projects: string): string[] {
+  return readdirSync(projects, { recursive: true, encoding: "utf8" })
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => join(projects, name));
+}
+
+/**
+ * `prune`: the capture entries whose id no transcript names are removed (or only listed). With no
+ * transcript to read, every id would look unused, so that is refused.
+ * ponytail: a capture made in a live session is named in its transcript only once the prompt is
+ * rewritten; run prune after the sessions end.
+ */
+export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
+  const backend = activeBackend();
+  const projects = projectsDir();
+  const transcripts = existsSync(projects) ? allTranscripts(projects) : [];
+  if (transcripts.length === 0) {
+    fail("no transcript to check the ids against", `looked under ${projects}`, "missing");
+  }
+  const used = new Set(transcripts.flatMap((path) => placeholderIds(readFileSync(path, "utf8"))));
+  const ids = backend
+    .entries()
+    .filter((e) => e.folder === CAPTURE_NAMESPACE && e.user === WRAPPER_MARK && !used.has(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (!dryRun) {
+    for (const id of ids) {
+      if (!backend.remove(CAPTURE_NAMESPACE, id)) {
+        fail(`could not remove ${id}`, "run qsm-secrets prune again after qsm-secrets doctor");
+      }
+    }
+  }
+  return { ids, dryRun };
 }

@@ -513,6 +513,16 @@ case "$verb" in
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
     [ -f "$store/\${ns}__\${key}" ] && cat "$store/\${ns}__\${key}" || exit 1 ;;
+  store)
+    while [ $# -gt 0 ]; do
+      case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
+    done
+    cat > "$store/\${ns}__\${key}" ;;
+  clear)
+    while [ $# -gt 0 ]; do
+      case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
+    done
+    rm -f "$store/\${ns}__\${key}" ;;
   *) exit 1 ;;
 esac
 `;
@@ -774,3 +784,148 @@ describe("guard", () => {
     expect(result.stderr).toContain("vault-reader");
   });
 });
+
+/** A stateful rbw over `store`: one file per folder__name, `add` takes the value from stdin. */
+function fakeRbwStore(store: string): string {
+  return `#!/bin/sh
+store='${store}'
+verb="$1"; shift
+folder=""; name=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --folder) folder="$2"; shift 2 ;;
+    --fields) shift 2 ;;
+    *) if [ -z "$name" ]; then name="$1"; fi; shift ;;
+  esac
+done
+case "$verb" in
+  list)
+    for f in "$store"/*; do
+      [ -f "$f" ] || continue
+      base=$(basename "$f")
+      printf '%s\\t%s\\tqsm-secrets\\n' "\${base#*__}" "\${base%%__*}"
+    done ;;
+  get) cat "$store/\${folder}__\${name}" || exit 1 ;;
+  add) cat > "$store/\${folder}__\${name}" ;;
+  remove) rm -f "$store/\${folder}__\${name}" ;;
+  *) exit 1 ;;
+esac
+`;
+}
+
+/** The placeholder text, built here so no literal one sits in this file. */
+const placeholderOf = (id: string): string => `{{${"secret"}:${id}}}`;
+
+for (const backendName of ["libsecret", "rbw"] as const) {
+  describe(`rename, prune and check on ${backendName}`, () => {
+    let bin = "";
+    let store = "";
+    let home = "";
+    const file = (folder: string, key: string): string => join(store, `${folder}__${key}`);
+    const run = (args: string[]): Run =>
+      spawned("bun", [CLI, ...args], {
+        QSM_SECRETS_BACKEND: backendName,
+        HOME: home,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+      });
+
+    beforeAll(() => {
+      bin = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-bin-"));
+      store = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-store-"));
+      home = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-home-"));
+      if (backendName === "libsecret") {
+        writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
+        writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
+      } else {
+        writeScript(join(bin, "rbw"), fakeRbwStore(store));
+      }
+      writeFileSync(file("qsm", "old-name"), "s3cret-value");
+      writeFileSync(file("qsm", "taken"), "other-value");
+      writeFileSync(file("capture", "cap_used"), "used-value");
+      writeFileSync(file("capture", "cap_stale"), "stale-value");
+      writeFileSync(file("qsm", "cap_stale"), "not-a-capture");
+      const project = join(home, ".claude", "projects", "p");
+      mkdirSync(project, { recursive: true });
+      writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
+    });
+
+    afterAll(() => {
+      for (const directory of [bin, store, home]) {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    test("rename moves the value, prints no value and removes the old name", () => {
+      const done = run(["rename", "old-name", "new-name"]);
+      expect(done.code).toBe(0);
+      expect(done.stdout).toContain("renamed qsm/old-name to qsm/new-name");
+      expect(done.stdout + done.stderr).not.toContain("s3cret-value");
+      expect(readFileSync(file("qsm", "new-name"), "utf8").trim()).toBe("s3cret-value");
+      expect(run(["has", "old-name"]).code).toBe(4);
+    });
+
+    test("rename refuses an existing target and changes nothing", () => {
+      const refused = run(["rename", "new-name", "taken"]);
+      expect(refused.code).toBe(5);
+      expect(refused.stderr).toContain("already stored: qsm/taken");
+      expect(readFileSync(file("qsm", "taken"), "utf8").trim()).toBe("other-value");
+      expect(run(["has", "new-name"]).code).toBe(0);
+    });
+
+    test("rename of a missing key is missing, and of one name to itself is usage", () => {
+      expect(run(["rename", "nope", "x"]).code).toBe(4);
+      expect(run(["rename", "new-name", "new-name"]).code).toBe(2);
+    });
+
+    test("rename --to-folder moves it to another folder", () => {
+      const moved = run(["rename", "new-name", "moved", "--to-folder", "work"]);
+      expect(moved.code).toBe(0);
+      expect(readFileSync(file("work", "moved"), "utf8").trim()).toBe("s3cret-value");
+      expect(run(["has", "new-name"]).code).toBe(4);
+    });
+
+    test("check reports the probe's exit code and prints nothing of the probe", () => {
+      const good = run(["check", "taken=V", "--", "sh", "-c", 'echo "$V"; test -n "$V"']);
+      expect(good.code).toBe(0);
+      expect(good.stdout).not.toContain("other-value");
+      const bad = run(["check", "taken=V", "--", "sh", "-c", 'echo "$V" >&2; exit 7']);
+      expect(bad.code).toBe(1);
+      expect(bad.stderr).toContain("exited 7");
+      expect(bad.stdout + bad.stderr).not.toContain("other-value");
+    });
+
+    test("prune --dry-run lists the unnamed capture id and removes nothing", () => {
+      const listed = run(["prune", "--dry-run"]);
+      expect(listed.code).toBe(0);
+      expect(listed.stdout.trim()).toBe("cap_stale");
+      expect(run(["has", "cap_stale", "--folder", "capture"]).code).toBe(0);
+    });
+
+    test("prune removes it, leaves other namespaces alone, and a second run removes nothing", () => {
+      const first = run(["prune"]);
+      expect(first.stdout.trim()).toBe("cap_stale");
+      expect(first.stdout + first.stderr).not.toContain("stale-value");
+      expect(run(["has", "cap_stale", "--folder", "capture"]).code).toBe(4);
+      expect(run(["has", "cap_used", "--folder", "capture"]).code).toBe(0);
+      expect(run(["has", "cap_stale", "--folder", "qsm"]).code).toBe(0);
+      const second = run(["prune"]);
+      expect(second.code).toBe(0);
+      expect(second.stdout.trim()).toBe("");
+    });
+
+    test("prune with no transcript to check refuses", () => {
+      const empty = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-empty-"));
+      try {
+        const refused = spawned("bun", [CLI, "prune"], {
+          QSM_SECRETS_BACKEND: backendName,
+          HOME: empty,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+        });
+        expect(refused.code).toBe(4);
+        expect(refused.stderr).toContain("no transcript");
+      } finally {
+        rmSync(empty, { recursive: true, force: true });
+      }
+    });
+  });
+}

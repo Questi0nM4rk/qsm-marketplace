@@ -43,6 +43,7 @@ is your output.
 | Is it stored? | `qsm-secrets has <key>` | ok when stored, missing when not |
 | What did we store? | `qsm-secrets list` | key names only |
 | What else is in there? | `qsm-secrets inspect` | name, username, folder per entry |
+| Does the stored token still work? | `qsm-secrets check <key>=<VAR> -- <probe>` | ok, or failed with the probe's exit code |
 | Is the tooling usable? | `qsm-secrets doctor` | every prerequisite, with a fix |
 
 Run `has` before building a command around a key, because a failed `has` is cheap and a deployment
@@ -60,7 +61,8 @@ vault folder; an empty name searches the whole vault by key name.
   unlock is a master password that belongs to the person at their own prompt.
 - A value that reached a file makes that file a secret: do not open or `cat` it, remove it when the
   step is done.
-- Check a credential by the consumer's exit code, not by looking at the value, because looking is
+- Check a credential with `qsm-secrets check <key>=<VAR> -- <probe>` (for example
+  `check npm-token=NPM_TOKEN -- npm whoami`), never by looking at the value, because looking is
   a read.
 - Never put a value in an argument, because other users on the machine can read process arguments.
   `pipe` and `env` exist so you never have to.

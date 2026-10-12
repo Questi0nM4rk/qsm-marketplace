@@ -55,6 +55,30 @@
           { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
         ]
       },
+      "qsm-secrets rename": {
+        "description": "Rename a stored key without its value leaving this process: the new entry is written and read back equal before the old one is removed, and an existing target is refused",
+        "args": [
+          { "name": "from", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
+          { "name": "to", "type": "string", "positional": true, "required": true, "description": "the new key name" },
+          { "name": "folder", "type": "string", "description": "the folder of the stored key (default: qsm)" },
+          { "name": "toFolder", "type": "string", "description": "the folder to move it to (default: the same folder)" }
+        ]
+      },
+      "qsm-secrets prune": {
+        "description": "Remove captured entries whose id no session transcript under ~/.claude/projects names; prints each id, never a value",
+        "args": [
+          { "name": "dryRun", "type": "boolean", "description": "only list the ids that would be removed" }
+        ]
+      },
+      "qsm-secrets check": {
+        "noNoun": true,
+        "description": "Run a probe with the key's value in one environment variable, discard its output and report ok or failed with its exit code; the command follows a -- separator, so this verb is reached from a shell, not from the noun",
+        "passthrough": true,
+        "args": [
+          { "name": "pair", "type": "string", "positional": true, "required": true, "description": "<key>=<ENVVAR>" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
       "qsm-secrets get": {
         "noNoun": true,
         "description": "Write the value to file descriptor 3, which the caller opens; refuses when it is closed",
