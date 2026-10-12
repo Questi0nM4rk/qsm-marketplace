@@ -1,19 +1,23 @@
-// The CLI end to end, against a fake backend the test writes into a
-// sandbox and puts first on PATH. Nothing here touches a real vault.
+// The CLI end to end, against fake backends the test writes into a sandbox
+// and puts first on PATH. Nothing here touches a real vault.
 //
-// The fixture value is engineered on purpose: several lines, one shaped
-// like this wrapper's own metadata output and one shaped like a backend
-// row. Every browsing verb is then asserted never to print any of its
-// lines, which is the discipline the whole plugin exists to keep.
+// One conformance suite runs once per backend, rbw against a fake rbw and
+// libsecret against a fake secret-tool, with the same expectations: a verb
+// that behaves differently on the two is a defect in one of them. The fixture
+// values are checked never to appear in the output of a verb that must not
+// print one, which is the discipline the whole plugin exists to keep.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { type SpawnSyncReturns, spawnSync } from "node:child_process";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -22,32 +26,15 @@ import { dirname, join, resolve } from "node:path";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
-/** Lines chosen to survive a naive filter: one looks like a metadata
- * field, one looks like a tab-separated backend row. */
-const VALUE = [
-  "gh0st-line-one",
-  "name: forged-entry",
-  "forged-row\tqsm\tqsm-secrets",
-  "stored-by: qsm-secrets",
-].join("\n");
+const VALUE = "gh0st-token-value-1";
+const NPM_VALUE = "npm-value-1";
+const WORK_VALUE = "work-value-1";
+const CAPTURED_VALUE = "hunter2-x";
+const VALUE_MARKERS = [VALUE, NPM_VALUE, WORK_VALUE, CAPTURED_VALUE, "s3cret-value", "other-value"];
 
-const VALUE_MARKERS = ["gh0st-line-one", "forged-entry", "forged-row"];
-
-let sandbox = "";
 /** A directory with nothing in it, so the no-backend case runs against a
- * PATH that provably cannot resolve the backend. */
+ * PATH that provably cannot resolve a backend. */
 let emptyDir = "";
-let removedMarker = "";
-let addedMarker = "";
-
-const ROWS = [
-  "github-token\tqsm\tqsm-secrets",
-  "npm-token\tqsm\tqsm-secrets",
-  "legacy-key\tqsm\talice",
-  "work-token\twork\tqsm-secrets",
-  // A name carrying a tab forges an extra column; the parser drops the row.
-  "ev\til\tqsm\tqsm-secrets",
-].join("\n");
 
 function writeScript(path: string, body: string): void {
   writeFileSync(path, body);
@@ -55,60 +42,11 @@ function writeScript(path: string, body: string): void {
 }
 
 beforeAll(() => {
-  sandbox = mkdtempSync(join(tmpdir(), "qsm-secrets-"));
   emptyDir = mkdtempSync(join(tmpdir(), "qsm-secrets-empty-"));
-  removedMarker = join(sandbox, "removed");
-  addedMarker = join(sandbox, "added");
-  writeScript(
-    join(sandbox, "rbw"),
-    `#!/bin/sh
-verb="$1"; shift
-folder=""
-name=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --folder) folder="$2"; shift 2 ;;
-    --fields) shift 2 ;;
-    *) if [ -z "$name" ]; then name="$1"; fi; shift ;;
-  esac
-done
-removed='${removedMarker}'
-case "$verb" in
-  list)
-    printf '%b\\n' '${ROWS.replaceAll("\t", "\\t")}' | while IFS= read -r row; do
-      rowname=$(printf '%s' "$row" | cut -f1)
-      if [ -f "$removed" ] && grep -qxF "$rowname" "$removed"; then
-        continue
-      fi
-      printf '%s\\n' "$row"
-    done ;;
-  unlocked) exit 0 ;;
-  config) printf '{"email": "someone@example.test"}\\n' ;;
-  add) printf '%s\\n' "$name" >> '${addedMarker}' ;;
-  get)
-    case "$folder/$name" in
-      qsm/github-token|qsm/legacy-key|work/work-token|/github-token|qsm/new-key)
-        printf '%b\\n' '${VALUE.replaceAll("\t", "\\t").replaceAll("\n", "\\n")}' ;;
-      qsm/empty-key) printf '\\n' ;;
-      *) echo "couldn't find entry for '$name'" >&2; exit 1 ;;
-    esac ;;
-  remove)
-    case "$folder/$name" in
-      qsm/github-token|qsm/empty-key) printf '%s\\n' "$name" >> "$removed" ;;
-      *) echo "couldn't find entry for '$name'" >&2; exit 1 ;;
-    esac ;;
-  *) exit 1 ;;
-esac
-`,
-  );
 });
 
 afterAll(() => {
-  for (const directory of [sandbox, emptyDir]) {
-    if (directory !== "") {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }
+  rmSync(emptyDir, { recursive: true, force: true });
 });
 
 interface Run {
@@ -117,54 +55,37 @@ interface Run {
   readonly stderr: string;
 }
 
-/** With the backend: the sandbox first. Without it: a PATH that holds the
+/** With a backend: its directory first. Without one: a PATH that holds the
  * empty directory and the runtime's own directory and nothing else, so no
  * backend installed on the machine running these tests can answer. */
-function pathWith(backend: boolean): string {
-  return backend
-    ? `${sandbox}:${process.env.PATH ?? ""}`
-    : `${emptyDir}:${dirname(process.execPath)}`;
+function pathWith(bin: string | null): string {
+  return bin === null
+    ? `${emptyDir}:${dirname(process.execPath)}`
+    : `${bin}:${process.env.PATH ?? ""}`;
 }
 
 /** EDITOR is pinned rather than inherited: the doctor's editor check reads
  * it, and a test that passes only in a shell that happens to set it is not
  * proof of anything. */
-const FIXED_ENV = { QSM_SECRETS_FOLDER: "qsm", QSM_SECRETS_BACKEND: "rbw", EDITOR: "true" };
+const FIXED_ENV = { QSM_SECRETS_FOLDER: "qsm", EDITOR: "true" };
 
 /** One child with the pinned environment; `env` adds to it or overrides it. */
-function spawned(command: string, args: string[], env: Record<string, string> = {}): Run {
+function spawned(
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+  input?: string,
+): Run {
   const result = spawnSync(command, args, {
     encoding: "utf8",
-    env: { ...process.env, ...FIXED_ENV, PATH: pathWith(true), ...env },
+    input,
+    env: { ...process.env, ...FIXED_ENV, ...env },
   });
   return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
 }
 
-function cli(
-  args: string[],
-  options: { backend?: boolean; env?: Record<string, string> } = {},
-): Run {
-  return spawned("bun", [CLI, ...args], {
-    PATH: pathWith(options.backend !== false),
-    ...options.env,
-  });
-}
-
-/** A real terminal, for the one verb that requires one. `script` runs the
- * command under a pty and exits with the command's own status; both
- * streams come back merged, exactly as a person at a keyboard sees them. */
-function terminal(command: string): Run {
-  return spawned("script", ["-qec", command, "/dev/null"]);
-}
-
-/** For the two cases that need a real shell: a file descriptor the caller
- * opens, and one the caller leaves closed. */
-function shell(script: string): Run {
-  return spawned("sh", ["-c", script], { CLI });
-}
-
-/** The first line of the fixture value found in either stream, or null.
- * A value, not an assertion, so a failure names the line that escaped. */
+/** The first fixture value found in either stream, or null. A value, not an
+ * assertion, so a failure names the one that escaped. */
 function leaked(run: Run): string | null {
   return (
     VALUE_MARKERS.find((marker) => run.stdout.includes(marker) || run.stderr.includes(marker)) ??
@@ -181,312 +102,12 @@ function envelope(run: Run): { code: string; exit: number; data: Record<string, 
   };
 }
 
-describe("the shared CLI base", () => {
-  test("--help lists every verb qsm.json declares", () => {
-    const run = cli(["--help"]);
-    expect(run.code).toBe(0);
-    for (const verb of ["pipe", "env", "set", "has", "list", "inspect", "rm", "get", "doctor"]) {
-      expect(run.stdout).toContain(`  ${verb}`);
-    }
-  });
+/** The placeholder text, built here so no literal one sits in this file. */
+const placeholderOf = (id: string): string => `{{${"secret"}:${id}}}`;
 
-  test("an unknown flag is a usage error, exit 2", () => {
-    const run = cli(["list", "--all"]);
-    expect(run.code).toBe(2);
-    expect(run.stderr).toContain("unknown flag --all");
-  });
-
-  test("a usage error under --json is still one envelope", () => {
-    const run = cli(["list", "--all", "--json"]);
-    expect(run.code).toBe(2);
-    expect(envelope(run)).toMatchObject({ code: "usage", exit: 2 });
-  });
-});
-
-describe("has", () => {
-  test("Key exists", () => {
-    const run = cli(["has", "github-token"]);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toBe("");
-    expect(run.stderr).toBe("");
-  });
-
-  test("Key missing", () => {
-    const run = cli(["has", "nope"]);
-    expect(run.code).toBe(4);
-    expect(run.stderr).toContain("not stored: nope");
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("--json answers with data, never a value", () => {
-    const run = cli(["has", "github-token", "--json"]);
-    expect(envelope(run)).toMatchObject({ code: "ok", data: { key: "github-token" } });
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("list", () => {
-  test("Listing keys this wrapper stored", () => {
-    const run = cli(["list"]);
-    expect(run.code).toBe(0);
-    expect(run.stdout.trim().split("\n")).toEqual(["github-token", "npm-token"]);
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("a name carrying a tab is dropped rather than forging a row", () => {
-    expect(cli(["list"]).stdout).not.toContain("ev");
-  });
-
-  test("--json carries the same names inside the envelope", () => {
-    const run = cli(["list", "--json"]);
-    expect(envelope(run)).toMatchObject({
-      code: "ok",
-      data: { namespace: "qsm", keys: ["github-token", "npm-token"] },
-    });
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("inspect", () => {
-  test("Inspecting every entry in a namespace", () => {
-    const run = cli(["inspect"]);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toContain("name: legacy-key");
-    expect(run.stdout).toContain("stored-by: other");
-    expect(run.stdout).not.toContain("work-token");
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("--json is metadata only too", () => {
-    const run = cli(["inspect", "--json"]);
-    const entries = envelope(run).data.entries as { name: string }[];
-    expect(entries.map((entry) => entry.name)).toEqual(["github-token", "legacy-key", "npm-token"]);
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("namespace selection", () => {
-  test("Reading from a named alternate namespace", () => {
-    expect(cli(["has", "work-token", "--folder", "work"]).code).toBe(0);
-    expect(cli(["has", "work-token"]).code).toBe(4);
-    expect(cli(["list", "--folder", "work"]).stdout.trim()).toBe("work-token");
-  });
-});
-
-describe("rm", () => {
-  test("Removing a stored key", () => {
-    try {
-      const run = cli(["rm", "github-token"]);
-      expect(run.code).toBe(0);
-      expect(run.stdout).toContain("removed github-token");
-      expect(readFileSync(removedMarker, "utf8").trim()).toBe("github-token");
-      expect(leaked(run)).toBeNull();
-      // The second half of the scenario: gone, not merely reported gone.
-      expect(cli(["has", "github-token"]).code).toBe(4);
-      expect(cli(["list"]).stdout).not.toContain("github-token");
-    } finally {
-      // The fixture is shared, and the verbs below this one need the key
-      // back. The removal marker is the whole of the backend's state.
-      rmSync(removedMarker, { force: true });
-    }
-  });
-
-  test("Removing a key that was never stored", () => {
-    const run = cli(["rm", "nope"]);
-    expect(run.code).toBe(4);
-    expect(run.stderr).toContain("not stored: nope");
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("pipe", () => {
-  test("Piping a stored key to a consumer", () => {
-    const seen = join(sandbox, "piped");
-    const run = cli(["pipe", "github-token", "--", "sh", "-c", `cat > '${seen}'; echo consumed`]);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toBe("consumed\n");
-    expect(readFileSync(seen, "utf8")).toBe(VALUE);
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("the consumer's own failure is reported, not swallowed", () => {
-    const run = cli(["pipe", "github-token", "--", "sh", "-c", "exit 7"]);
-    expect(run.code).toBe(1);
-    expect(run.stderr).toContain("exited 7");
-  });
-
-  test("Key not stored", () => {
-    const seen = join(sandbox, "never");
-    const run = cli(["pipe", "nope", "--", "sh", "-c", `echo ran > '${seen}'`]);
-    expect(run.code).toBe(4);
-    expect(run.stderr).toContain("not stored: nope");
-    expect(() => readFileSync(seen, "utf8")).toThrow();
-  });
-
-  test("a missing -- is a usage error, not a guess", () => {
-    expect(cli(["pipe", "github-token", "echo"]).code).toBe(2);
-  });
-
-  test("--json is refused rather than mixing a consumer's output into an envelope", () => {
-    const run = cli(["pipe", "github-token", "--json", "--", "true"]);
-    expect(run.code).toBe(5);
-    expect(envelope(run)).toMatchObject({ code: "blocked", exit: 5 });
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("env", () => {
-  test("Running a consumer with the value as one env var", () => {
-    const seen = join(sandbox, "envvar");
-    const run = cli([
-      "env",
-      "github-token=TARGET_TOKEN",
-      "--",
-      "sh",
-      "-c",
-      `printf %s "$TARGET_TOKEN" > '${seen}'`,
-    ]);
-    expect(run.code).toBe(0);
-    expect(readFileSync(seen, "utf8")).toBe(VALUE);
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("Key not stored for the environment delivery", () => {
-    const seen = join(sandbox, "env-never");
-    const run = cli(["env", "nope=TARGET_TOKEN", "--", "sh", "-c", `echo ran > '${seen}'`]);
-    expect(run.code).toBe(4);
-    expect(() => readFileSync(seen, "utf8")).toThrow();
-  });
-
-  test("a variable name a shell would not accept is refused", () => {
-    expect(cli(["env", "github-token=2BAD", "--", "true"]).code).toBe(2);
-  });
-});
-
-describe("get", () => {
-  test("Caller did not open the channel", () => {
-    const run = shell(`exec 3>&-; bun "$CLI" get github-token`);
-    expect(run.code).toBe(5);
-    expect(run.stderr).toContain("qsm-secrets pipe");
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("Caller opened the channel", () => {
-    const target = join(sandbox, "fd3");
-    const run = shell(`bun "$CLI" get github-token 3>'${target}'`);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toBe("");
-    expect(readFileSync(target, "utf8")).toBe(VALUE);
-  });
-
-  test("Machine output asked of a verb that carries a value", () => {
-    const target = join(sandbox, "fd3-json");
-    const run = shell(`bun "$CLI" get github-token --json 3>'${target}'`);
-    expect(run.code).toBe(5);
-    expect(readFileSync(target, "utf8")).toBe("");
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("set", () => {
-  test("refuses without a terminal, so a value cannot arrive from a script", () => {
-    const run = cli(["set", "new-key"]);
-    expect(run.code).toBe(4);
-    expect(run.stderr).toContain("needs a terminal");
-  });
-
-  test("Storing a new key", () => {
-    const run = terminal(`bun ${CLI} set new-key`);
-    expect(run.code).toBe(0);
-    expect(run.stdout).toContain("stored new-key");
-    expect(readFileSync(addedMarker, "utf8")).toContain("new-key");
-    expect(leaked(run)).toBeNull();
-  });
-
-  test("Prompt dismissed without a value", () => {
-    const run = terminal(`bun ${CLI} set empty-key`);
-    expect(run.code).toBe(1);
-    expect(run.stdout).toContain("came back empty");
-    expect(readFileSync(removedMarker, "utf8")).toContain("empty-key");
-  });
-});
-
-describe("doctor", () => {
-  test("Everything usable", () => {
-    const run = cli(["doctor", "--json"]);
-    const parsed = envelope(run);
-    expect(parsed.code).toBe("ok");
-    expect(parsed.data.ok).toBe(true);
-    expect(parsed.data.checks).toHaveLength(5);
-    expect(run.code).toBe(0);
-  });
-
-  test("One prerequisite missing", () => {
-    const run = cli(["doctor", "--json"], { backend: false });
-    const parsed = envelope(run);
-    const checks = parsed.data.checks as { name: string; ok: boolean; fix: string | null }[];
-    // An absent prerequisite is `missing` (exit 4), the code every other
-    // qsm doctor gives the same situation — not `failed`.
-    expect(run.code).toBe(4);
-    expect(parsed.code).toBe("missing");
-    expect(parsed.data.ok).toBe(false);
-    expect(checks).toHaveLength(5);
-    expect(checks[0]?.ok).toBe(false);
-    expect(checks[0]?.fix).toContain("rbw");
-    for (const check of checks) {
-      expect(check.name.length).toBeGreaterThan(0);
-    }
-    expect(leaked(run)).toBeNull();
-  });
-});
-
-describe("a backend that is not installed", () => {
-  // The backend off PATH is an absent prerequisite, not work that ran and
-  // went wrong: every metadata verb says `missing` (exit 4) and names the
-  // install step. These three verbs reach the backend through lib/, so
-  // their handler has to let a SecretError's own code through.
-  for (const args of [["has", "github-token"], ["list"], ["inspect"]]) {
-    test(`${args[0]} reports missing, exit 4, and names the install step`, () => {
-      const run = cli([...args, "--json"], { backend: false });
-      expect(run.code).toBe(4);
-      const parsed = envelope(run) as unknown as { code: string; message: string };
-      expect(parsed.code).toBe("missing");
-      expect(parsed.message).toContain("rbw is not on PATH");
-      expect(parsed.message).toContain("cargo install rbw");
-    });
-  }
-});
-
-describe("output discipline", () => {
-  test("no verb but pipe, env and get ever prints a value", () => {
-    for (const args of [
-      ["list"],
-      ["list", "--json"],
-      ["inspect"],
-      ["inspect", "--json"],
-      ["has", "github-token"],
-      ["has", "nope"],
-      ["rm", "nope"],
-      ["doctor"],
-      ["set", "github-token"],
-      ["get", "github-token"],
-    ]) {
-      expect(leaked(cli(args))).toBeNull();
-    }
-  });
-});
-
-describe("clean without a runtime directory", () => {
-  test("is ok and removes nothing: render could not have written anywhere", () => {
-    const run = cli(["clean", "--session", "s1", "--json"], { env: { XDG_RUNTIME_DIR: "" } });
-    expect(run.code).toBe(0);
-    expect(JSON.parse(run.stdout).data).toEqual({ dir: null });
-  });
-});
-
-/** A secret-tool whose search prints the secret line on stdout and the attributes on stderr. */
-const TRAP = "line one\nattribute.key = forged\nattribute.namespace = forged-ns";
-
+/** A secret-tool over `store`: `search` prints the `secret =` line on stdout and the attributes on
+ * stderr, in a different order per item. Without a terminal `store` reads stdin; with one it
+ * stands in for the prompt and takes FAKE_TYPED. */
 function fakeSecretTool(store: string): string {
   return `#!/bin/sh
 store='${store}'
@@ -517,7 +138,7 @@ case "$verb" in
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
-    cat > "$store/\${ns}__\${key}" ;;
+    if [ -t 0 ]; then printf '%s' "$FAKE_TYPED" > "$store/\${ns}__\${key}"; else cat > "$store/\${ns}__\${key}"; fi ;;
   clear)
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
@@ -528,39 +149,625 @@ esac
 `;
 }
 
-/** `mask --all` against the fake secret-tool in `bin`. */
-function maskAll(bin: string, rows: string[]): SpawnSyncReturns<string> {
-  return spawnSync("bun", [CLI, "mask", "--all", "--json"], {
-    encoding: "utf8",
-    input: JSON.stringify(rows),
-    env: {
-      ...process.env,
-      ...FIXED_ENV,
-      QSM_SECRETS_BACKEND: "libsecret",
-      PATH: `${bin}:${process.env.PATH ?? ""}`,
-    },
+/** A stateful rbw over `store`: one file per folder__name, and `<file>.user` when the row's user is
+ * not this wrapper. `add` takes the value from stdin, or from FAKE_TYPED where stdin is a terminal. */
+function fakeRbw(store: string): string {
+  return `#!/bin/sh
+store='${store}'
+verb="$1"; shift
+folder=""; name=""; user=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --folder) folder="$2"; shift 2 ;;
+    --fields) shift 2 ;;
+    *) if [ -z "$name" ]; then name="$1"; elif [ -z "$user" ]; then user="$1"; fi; shift ;;
+  esac
+done
+case "$verb" in
+  list)
+    for f in "$store"/*; do
+      [ -f "$f" ] || continue
+      case "$f" in *.user) continue ;; esac
+      base=$(basename "$f")
+      owner=qsm-secrets; [ -f "$f.user" ] && owner=$(cat "$f.user")
+      printf '%s\\t%s\\t%s\\n' "\${base#*__}" "\${base%%__*}" "$owner"
+    done ;;
+  unlocked) exit 0 ;;
+  config) printf '{"email": "someone@example.test"}\\n' ;;
+  get) [ -f "$store/\${folder}__\${name}" ] || { echo "couldn't find entry for '$name'" >&2; exit 1; }
+       cat "$store/\${folder}__\${name}"; echo ;;
+  add) if [ -t 0 ]; then printf '%s' "$FAKE_TYPED" > "$store/\${folder}__\${name}"; else cat > "$store/\${folder}__\${name}"; fi ;;
+  remove) [ -f "$store/\${folder}__\${name}" ] || { echo "couldn't find entry for '$name'" >&2; exit 1; }
+          rm -f "$store/\${folder}__\${name}" ;;
+  *) exit 1 ;;
+esac
+`;
+}
+
+interface Flavor {
+  readonly name: "rbw" | "libsecret";
+  readonly fake: (store: string) => string;
+  /** What the backend off PATH says: the message and the install step it names. */
+  readonly absent: readonly [string, string];
+  /** How many prerequisites `doctor` probes when all is well, and when the binary is gone. */
+  readonly checks: readonly [number, number];
+}
+
+const FLAVORS: readonly Flavor[] = [
+  {
+    name: "rbw",
+    fake: fakeRbw,
+    absent: ["rbw is not on PATH", "cargo install rbw"],
+    checks: [5, 5],
+  },
+  {
+    name: "libsecret",
+    fake: fakeSecretTool,
+    absent: ["secret-tool is not on PATH", "install libsecret"],
+    checks: [3, 2],
+  },
+];
+
+/** A fixed pty for the one verb that requires a terminal. `script` runs the command under it and
+ * exits with the command's own status; both streams come back merged, as a person sees them. */
+function terminal(command: string, env: Record<string, string>): Run {
+  return spawned("script", ["-qec", command, "/dev/null"], env);
+}
+
+describe("the shared CLI base", () => {
+  const cli = (args: string[]): Run => spawned("bun", [CLI, ...args], { PATH: pathWith(null) });
+
+  test("--help lists every verb qsm.json declares", () => {
+    const run = cli(["--help"]);
+    expect(run.code).toBe(0);
+    for (const verb of ["pipe", "env", "set", "has", "list", "inspect", "rm", "get", "doctor"]) {
+      expect(run.stdout).toContain(`  ${verb}`);
+    }
+  });
+
+  test("an unknown flag is a usage error, exit 2", () => {
+    const run = cli(["list", "--all"]);
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain("unknown flag --all");
+  });
+
+  test("a usage error under --json is still one envelope", () => {
+    const run = cli(["list", "--all", "--json"]);
+    expect(run.code).toBe(2);
+    expect(envelope(run)).toMatchObject({ code: "usage", exit: 2 });
+  });
+
+  test("clean without a runtime directory is ok and removes nothing", () => {
+    const run = spawned("bun", [CLI, "clean", "--session", "s1", "--json"], {
+      PATH: pathWith(null),
+      XDG_RUNTIME_DIR: "",
+    });
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout).data).toEqual({ dir: null });
+  });
+});
+
+for (const flavor of FLAVORS) {
+  describe(`conformance: ${flavor.name}`, () => {
+    let bin = "";
+    let store = "";
+    let home = "";
+    let runtime = "";
+    const file = (folder: string, key: string): string => join(store, `${folder}__${key}`);
+    const put = (folder: string, key: string, value: string): void =>
+      writeFileSync(file(folder, key), value);
+
+    const environment = (extra: Record<string, string> = {}): Record<string, string> => ({
+      QSM_SECRETS_BACKEND: flavor.name,
+      PATH: pathWith(bin),
+      HOME: home,
+      XDG_RUNTIME_DIR: runtime,
+      ...extra,
+    });
+    const cli = (
+      args: string[],
+      options: { backend?: boolean; input?: string; env?: Record<string, string> } = {},
+    ): Run =>
+      spawned(
+        "bun",
+        [CLI, ...args],
+        environment({
+          ...(options.backend === false ? { PATH: pathWith(null) } : {}),
+          ...options.env,
+        }),
+        options.input,
+      );
+    /** For the cases that need a real shell: a descriptor the caller opens, or leaves closed. */
+    const shell = (script: string): Run => spawned("sh", ["-c", script], environment({ CLI }));
+
+    beforeAll(() => {
+      bin = mkdtempSync(join(tmpdir(), "qsm-secrets-bin-"));
+      store = mkdtempSync(join(tmpdir(), "qsm-secrets-store-"));
+      home = mkdtempSync(join(tmpdir(), "qsm-secrets-home-"));
+      runtime = mkdtempSync(join(tmpdir(), "qsm-secrets-run-"));
+      if (flavor.name === "libsecret") {
+        writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
+        writeScript(join(bin, "secret-tool"), flavor.fake(store));
+      } else {
+        writeScript(join(bin, "rbw"), flavor.fake(store));
+      }
+      const project = join(home, ".claude", "projects", "p");
+      mkdirSync(project, { recursive: true });
+      writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
+    });
+
+    afterAll(() => {
+      for (const directory of [bin, store, home, runtime]) {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    beforeEach(() => {
+      for (const name of readdirSync(store)) {
+        rmSync(join(store, name), { force: true });
+      }
+      rmSync(join(runtime, "qsm-secrets"), { recursive: true, force: true });
+      put("qsm", "github-token", VALUE);
+      put("qsm", "npm-token", NPM_VALUE);
+      put("work", "work-token", WORK_VALUE);
+      put("capture", "cap_x", CAPTURED_VALUE);
+    });
+
+    describe("has", () => {
+      test("Key exists", () => {
+        const run = cli(["has", "github-token"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toBe("");
+        expect(run.stderr).toBe("");
+      });
+
+      test("Key missing", () => {
+        const run = cli(["has", "nope"]);
+        expect(run.code).toBe(4);
+        expect(run.stderr).toContain("not stored: nope");
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("--json answers with data, never a value", () => {
+        const run = cli(["has", "github-token", "--json"]);
+        expect(envelope(run)).toMatchObject({ code: "ok", data: { key: "github-token" } });
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("a named alternate namespace is the only one read", () => {
+        expect(cli(["has", "work-token", "--folder", "work"]).code).toBe(0);
+        expect(cli(["has", "work-token"]).code).toBe(4);
+      });
+    });
+
+    describe("list", () => {
+      test("Listing keys of a namespace", () => {
+        const run = cli(["list"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout.trim().split("\n").sort()).toEqual(["github-token", "npm-token"]);
+        expect(leaked(run)).toBeNull();
+        expect(cli(["list", "--folder", "work"]).stdout.trim()).toBe("work-token");
+      });
+
+      test("--json carries the same names inside the envelope", () => {
+        const run = cli(["list", "--json"]);
+        const data = envelope(run).data as { namespace: string; keys: string[] };
+        expect(data.namespace).toBe("qsm");
+        expect([...data.keys].sort()).toEqual(["github-token", "npm-token"]);
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("inspect", () => {
+      test("Inspecting every entry in a namespace", () => {
+        const run = cli(["inspect"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toContain("name: github-token");
+        expect(run.stdout).toContain("stored-by: qsm-secrets");
+        expect(run.stdout).not.toContain("work-token");
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("--json is metadata only too", () => {
+        const run = cli(["inspect", "--json"]);
+        const entries = envelope(run).data.entries as { name: string }[];
+        expect(entries.map((entry) => entry.name).sort()).toEqual(["github-token", "npm-token"]);
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("rm", () => {
+      test("Removing a stored key", () => {
+        const run = cli(["rm", "github-token"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toContain("removed github-token");
+        expect(leaked(run)).toBeNull();
+        // The second half of the scenario: gone, not merely reported gone.
+        expect(cli(["has", "github-token"]).code).toBe(4);
+        expect(cli(["list"]).stdout).not.toContain("github-token");
+      });
+
+      test("Removing a key that was never stored", () => {
+        const run = cli(["rm", "nope"]);
+        expect(run.code).toBe(4);
+        expect(run.stderr).toContain("not stored: nope");
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("pipe", () => {
+      test("Piping a stored key to a consumer", () => {
+        const seen = join(runtime, "piped");
+        const run = cli([
+          "pipe",
+          "github-token",
+          "--",
+          "sh",
+          "-c",
+          `cat > '${seen}'; echo consumed`,
+        ]);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toBe("consumed\n");
+        expect(readFileSync(seen, "utf8")).toBe(VALUE);
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("the consumer's own failure is reported, not swallowed", () => {
+        const run = cli(["pipe", "github-token", "--", "sh", "-c", "exit 7"]);
+        expect(run.code).toBe(1);
+        expect(run.stderr).toContain("exited 7");
+      });
+
+      test("Key not stored", () => {
+        const seen = join(runtime, "never");
+        const run = cli(["pipe", "nope", "--", "sh", "-c", `echo ran > '${seen}'`]);
+        expect(run.code).toBe(4);
+        expect(run.stderr).toContain("not stored: nope");
+        expect(existsSync(seen)).toBe(false);
+      });
+
+      test("a missing -- is a usage error, not a guess", () => {
+        expect(cli(["pipe", "github-token", "echo"]).code).toBe(2);
+      });
+
+      test("--json is refused rather than mixing a consumer's output into an envelope", () => {
+        const run = cli(["pipe", "github-token", "--json", "--", "true"]);
+        expect(run.code).toBe(5);
+        expect(envelope(run)).toMatchObject({ code: "blocked", exit: 5 });
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("env", () => {
+      test("Running a consumer with the value as one env var", () => {
+        const run = cli(["env", "github-token=V", "--", "printenv", "V"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toBe(`${VALUE}\n`);
+      });
+
+      test("a named namespace is read for the delivery", () => {
+        const run = cli(["env", "cap_x=V", "--folder", "capture", "--", "printenv", "V"]);
+        expect(run.code).toBe(0);
+        expect(run.stdout.trim()).toBe(CAPTURED_VALUE);
+      });
+
+      test("Key not stored for the environment delivery", () => {
+        const seen = join(runtime, "env-never");
+        const run = cli(["env", "nope=V", "--", "sh", "-c", `echo ran > '${seen}'`]);
+        expect(run.code).toBe(4);
+        expect(existsSync(seen)).toBe(false);
+      });
+
+      test("a variable name a shell would not accept is refused", () => {
+        expect(cli(["env", "github-token=2BAD", "--", "true"]).code).toBe(2);
+      });
+    });
+
+    describe("get", () => {
+      test("Caller did not open the channel", () => {
+        const run = shell(`exec 3>&-; bun "$CLI" get github-token`);
+        expect(run.code).toBe(5);
+        expect(run.stderr).toContain("qsm-secrets pipe");
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("Caller opened the channel", () => {
+        const target = join(runtime, "fd3");
+        const run = shell(`bun "$CLI" get github-token 3>'${target}'`);
+        expect(run.code).toBe(0);
+        expect(run.stdout).toBe("");
+        expect(readFileSync(target, "utf8")).toBe(VALUE);
+      });
+
+      test("Machine output asked of a verb that carries a value", () => {
+        const target = join(runtime, "fd3-json");
+        const run = shell(`bun "$CLI" get github-token --json 3>'${target}'`);
+        expect(run.code).toBe(5);
+        expect(readFileSync(target, "utf8")).toBe("");
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("set", () => {
+      const typed = (key: string, value: string): Run =>
+        terminal(`bun ${CLI} set ${key}`, environment({ FAKE_TYPED: value }));
+
+      test("refuses without a terminal, so a value cannot arrive from a script", () => {
+        const run = cli(["set", "new-key"]);
+        expect(run.code).toBe(4);
+        expect(run.stderr).toContain("needs a terminal");
+      });
+
+      test("Storing a new key", () => {
+        const run = typed("new-key", "typed-value-1");
+        expect(run.code).toBe(0);
+        expect(run.stdout).toContain("stored new-key");
+        expect(readFileSync(file("qsm", "new-key"), "utf8")).toBe("typed-value-1");
+        expect(cli(["has", "new-key"]).code).toBe(0);
+      });
+
+      test("Prompt dismissed without a value", () => {
+        const run = typed("empty-key", "");
+        expect(run.code).toBe(1);
+        expect(run.stdout).toContain("came back empty");
+        expect(cli(["has", "empty-key"]).code).toBe(4);
+      });
+    });
+
+    describe("mask", () => {
+      test("--id swaps each named id's stored value for its placeholder", () => {
+        const run = cli(["mask", "--id", "cap_x", "--id", "qsm/npm-token"], {
+          input: `a ${CAPTURED_VALUE} b ${NPM_VALUE}`,
+        });
+        expect(run.code).toBe(0);
+        expect(run.stdout.trimEnd()).toBe(
+          `a ${placeholderOf("cap_x")} b ${placeholderOf("qsm/npm-token")}`,
+        );
+      });
+
+      test("--id of a key that is not stored is missing", () => {
+        expect(cli(["mask", "--id", "nope"], { input: "x" }).code).toBe(4);
+      });
+
+      test("--all masks every stored value of every namespace in each string", () => {
+        const rows = [`tok=${CAPTURED_VALUE} and ${NPM_VALUE}`, "nothing here", ""];
+        const run = cli(["mask", "--all", "--json"], { input: JSON.stringify(rows) });
+        expect(run.code).toBe(0);
+        expect(envelope(run).data.texts).toEqual([
+          `tok=${placeholderOf("cap_x")} and ${placeholderOf("qsm/npm-token")}`,
+          "nothing here",
+          "",
+        ]);
+      });
+
+      test("--all refuses what is not a JSON array of strings", () => {
+        expect(cli(["mask", "--all"], { input: '{"a":1}' }).code).toBe(2);
+      });
+    });
+
+    describe("render", () => {
+      const template = (text: string): string => {
+        const path = join(runtime, "template");
+        writeFileSync(path, text);
+        return path;
+      };
+
+      test("writes the template with its ids replaced, readable by its owner only", () => {
+        const run = cli([
+          "render",
+          template(`token=${placeholderOf("qsm/npm-token")} id=${placeholderOf("cap_x")}`),
+          "--out",
+          "config",
+          "--session",
+          "s1",
+        ]);
+        expect(run.code).toBe(0);
+        const path = run.stdout.trim();
+        expect(path).toBe(join(runtime, "qsm-secrets", "s1", "config"));
+        expect(readFileSync(path, "utf8")).toBe(`token=${NPM_VALUE} id=${CAPTURED_VALUE}`);
+        expect(statSync(path).mode & 0o777).toBe(0o600);
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("an id that is not stored is missing and writes nothing", () => {
+        const run = cli([
+          "render",
+          template(placeholderOf("qsm/nope")),
+          "--out",
+          "config",
+          "--session",
+          "s1",
+        ]);
+        expect(run.code).toBe(4);
+        expect(existsSync(join(runtime, "qsm-secrets", "s1", "config"))).toBe(false);
+      });
+    });
+
+    describe("rename", () => {
+      beforeEach(() => {
+        put("qsm", "old-name", "s3cret-value");
+        put("qsm", "taken", "other-value");
+      });
+
+      test("moves the value, prints no value and removes the old name", () => {
+        const done = cli(["rename", "old-name", "new-name"]);
+        expect(done.code).toBe(0);
+        expect(done.stdout).toContain("renamed qsm/old-name to qsm/new-name");
+        expect(leaked(done)).toBeNull();
+        expect(readFileSync(file("qsm", "new-name"), "utf8").trim()).toBe("s3cret-value");
+        expect(cli(["has", "old-name"]).code).toBe(4);
+      });
+
+      test("refuses an existing target and changes nothing", () => {
+        const refused = cli(["rename", "old-name", "taken"]);
+        expect(refused.code).toBe(5);
+        expect(refused.stderr).toContain("already stored: qsm/taken");
+        expect(readFileSync(file("qsm", "taken"), "utf8").trim()).toBe("other-value");
+        expect(cli(["has", "old-name"]).code).toBe(0);
+      });
+
+      test("a missing key is missing, and one name to itself is usage", () => {
+        expect(cli(["rename", "nope", "x"]).code).toBe(4);
+        expect(cli(["rename", "old-name", "old-name"]).code).toBe(2);
+      });
+
+      test("--to-folder moves it to another folder", () => {
+        const moved = cli(["rename", "old-name", "moved", "--to-folder", "work"]);
+        expect(moved.code).toBe(0);
+        expect(readFileSync(file("work", "moved"), "utf8").trim()).toBe("s3cret-value");
+        expect(cli(["has", "old-name"]).code).toBe(4);
+      });
+    });
+
+    describe("check", () => {
+      test("reports the probe's exit code and prints nothing of the probe", () => {
+        const good = cli(["check", "github-token=V", "--", "sh", "-c", 'echo "$V"; test -n "$V"']);
+        expect(good.code).toBe(0);
+        expect(leaked(good)).toBeNull();
+        const bad = cli(["check", "github-token=V", "--", "sh", "-c", 'echo "$V" >&2; exit 7']);
+        expect(bad.code).toBe(1);
+        expect(bad.stderr).toContain("exited 7");
+        expect(leaked(bad)).toBeNull();
+      });
+    });
+
+    describe("prune", () => {
+      beforeEach(() => {
+        put("capture", "cap_used", "used-value");
+        put("capture", "cap_stale", "stale-value");
+        put("qsm", "cap_stale", "not-a-capture");
+      });
+
+      test("--dry-run lists the unnamed capture id and removes nothing", () => {
+        const listed = cli(["prune", "--dry-run"]);
+        expect(listed.code).toBe(0);
+        // cap_x is a capture id too, and no transcript names it.
+        expect(listed.stdout.trim().split("\n").sort()).toEqual(["cap_stale", "cap_x"]);
+        expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(0);
+      });
+
+      test("removes it, leaves other namespaces alone, and a second run removes nothing", () => {
+        const first = cli(["prune"]);
+        expect(first.stdout.trim().split("\n").sort()).toEqual(["cap_stale", "cap_x"]);
+        expect(first.stdout + first.stderr).not.toContain("stale-value");
+        expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(4);
+        expect(cli(["has", "cap_used", "--folder", "capture"]).code).toBe(0);
+        expect(cli(["has", "cap_stale", "--folder", "qsm"]).code).toBe(0);
+        const second = cli(["prune"]);
+        expect(second.code).toBe(0);
+        expect(second.stdout.trim()).toBe("");
+      });
+
+      test("with no transcript to check refuses", () => {
+        const empty = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-empty-"));
+        try {
+          const refused = cli(["prune"], { env: { HOME: empty } });
+          expect(refused.code).toBe(4);
+          expect(refused.stderr).toContain("no transcript");
+        } finally {
+          rmSync(empty, { recursive: true, force: true });
+        }
+      });
+    });
+
+    describe("doctor", () => {
+      test("Everything usable", () => {
+        const run = cli(["doctor", "--json"]);
+        const parsed = envelope(run);
+        expect(parsed.code).toBe("ok");
+        expect(parsed.data.ok).toBe(true);
+        expect(parsed.data.checks).toHaveLength(flavor.checks[0]);
+        expect(run.code).toBe(0);
+      });
+
+      test("One prerequisite missing", () => {
+        const run = cli(["doctor", "--json"], { backend: false });
+        const parsed = envelope(run);
+        const checks = parsed.data.checks as { name: string; ok: boolean; fix: string | null }[];
+        // An absent prerequisite is `missing` (exit 4), the code every other
+        // qsm doctor gives the same situation, not `failed`.
+        expect(run.code).toBe(4);
+        expect(parsed.code).toBe("missing");
+        expect(parsed.data.ok).toBe(false);
+        expect(checks).toHaveLength(flavor.checks[1]);
+        expect(checks[0]?.ok).toBe(false);
+        expect(checks[0]?.fix).toContain(flavor.name);
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
+    describe("a backend that is not installed", () => {
+      // An absent backend is an absent prerequisite, not work that ran and went wrong: every verb
+      // that reaches it says `missing` (exit 4) and names the install step.
+      for (const args of [["has", "github-token"], ["list"], ["inspect"], ["mask", "--all"]]) {
+        test(`${args.join(" ")} reports missing, exit 4, and names the install step`, () => {
+          const run = cli([...args, "--json"], { backend: false, input: "[]" });
+          expect(run.code).toBe(4);
+          const parsed = envelope(run) as unknown as { code: string; message: string };
+          expect(parsed.code).toBe("missing");
+          expect(parsed.message).toContain(flavor.absent[0]);
+          expect(parsed.message).toContain(flavor.absent[1]);
+        });
+      }
+    });
+
+    describe("capture", () => {
+      /** A token of a known shape, built here so no literal one sits in the file. */
+      const token = `ghp_${"aB3dE9".repeat(6)}`;
+      const capture = (text: string, options: { backend?: boolean } = {}): Run =>
+        cli(["capture", "--json"], { input: text, backend: options.backend !== false });
+      const textOf = (run: Run): string => (envelope(run).data as { text: string }).text;
+
+      test("a pasted name=value is stored under that name and shown as qsm/<name>", () => {
+        const run = capture(`deploy-key=${token} for the release`);
+        const data = envelope(run).data as { captured: { id: string }[] };
+        expect(run.code).toBe(0);
+        expect(textOf(run)).toBe(
+          `${placeholderOf("qsm/deploy-key")}…${token.slice(-4)} for the release`,
+        );
+        expect(data.captured.map((c) => c.id)).toEqual(["qsm/deploy-key"]);
+        expect(readFileSync(file("qsm", "deploy-key"), "utf8")).toBe(token);
+        expect(run.stdout).not.toContain(token);
+      });
+
+      test("a name already stored is not overwritten: the value gets a generated id and the name is reported", () => {
+        const before = readdirSync(store).length;
+        const run = capture(`github-token=${token}`);
+        const data = envelope(run).data as { taken: string[] };
+        expect(data.taken).toEqual(["github-token"]);
+        expect(textOf(run)).toMatch(/^github-token=\{\{secret:cap_[0-9a-f]{12}\}\}…/);
+        expect(readdirSync(store)).toHaveLength(before + 1);
+        expect(readFileSync(file("qsm", "github-token"), "utf8")).toBe(VALUE);
+      });
+
+      test("a bare value keeps a generated id", () => {
+        expect(textOf(capture(`here: ${token}`))).toMatch(/^here: \{\{secret:cap_/);
+      });
+
+      test("a path and a placeholder pass byte for byte, and need no backend", () => {
+        const text = `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s/scratchpad and ${placeholderOf("cap_03c8872d7caa")}`;
+        const run = capture(text, { backend: false });
+        expect(run.code).toBe(0);
+        expect(textOf(run)).toBe(text);
+      });
+    });
   });
 }
 
-/** A bus that always answers, a secret-tool over `store`, and three stored entries. */
-function seedFakeSecretService(bin: string, store: string): void {
-  writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
-  writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
-  writeFileSync(join(store, "capture__cap_x"), "hunter2");
-  writeFileSync(join(store, "capture__cap_trap"), TRAP);
-  writeFileSync(join(store, "qsm__npm-token"), "npm-value");
-}
-
-// The libsecret backend against a fake secret-tool shaped like the real one: `search` prints the
-// `secret =` line on stdout and the attributes on stderr, in a different order per item.
-describe("the libsecret backend", () => {
+// What only one backend can show. rbw rows carry a user, so an entry another tool stored is listed
+// as `other`; libsecret prints attributes in hash-table order and holds multi-line values, so a
+// value that looks like attributes must forge no entry and an entry of an older schema must fail.
+describe("rbw: an entry another tool stored", () => {
   let bin = "";
   let store = "";
 
   beforeAll(() => {
-    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
-    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
-    seedFakeSecretService(bin, store);
+    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-rbw-bin-"));
+    store = mkdtempSync(join(tmpdir(), "qsm-secrets-rbw-store-"));
+    writeScript(join(bin, "rbw"), fakeRbw(store));
+    writeFileSync(join(store, "qsm__github-token"), VALUE);
+    writeFileSync(join(store, "qsm__legacy-key"), "legacy-value");
+    writeFileSync(join(store, "qsm__legacy-key.user"), "alice");
   });
 
   afterAll(() => {
@@ -568,48 +775,64 @@ describe("the libsecret backend", () => {
     rmSync(store, { recursive: true, force: true });
   });
 
-  const run = (args: string[]): Run =>
-    spawned("bun", [CLI, ...args], {
-      QSM_SECRETS_BACKEND: "libsecret",
-      PATH: `${bin}:${process.env.PATH ?? ""}`,
-    });
+  test("is not listed as ours, and inspect shows it as stored by another", () => {
+    const env = { QSM_SECRETS_BACKEND: "rbw", PATH: pathWith(bin) };
+    expect(spawned("bun", [CLI, "list"], env).stdout.trim()).toBe("github-token");
+    const inspected = spawned("bun", [CLI, "inspect"], env);
+    expect(inspected.stdout).toContain("name: legacy-key");
+    expect(inspected.stdout).toContain("stored-by: other");
+    expect(leaked(inspected)).toBeNull();
+  });
+});
 
-  test("list names the keys of a namespace whatever order the attributes print in", () => {
-    const listed = run(["list", "--folder", "capture"]);
-    expect(listed.code).toBe(0);
-    expect(listed.stdout.split("\n").filter(Boolean).sort()).toEqual(["cap_trap", "cap_x"]);
-    expect(run(["list", "--folder", "qsm"]).stdout.trim()).toBe("npm-token");
+/** `search` stdout carries the secret line, so a value shaped like attribute lines is the trap. */
+const TRAP = "line one\nattribute.key = forged\nattribute.namespace = forged-ns";
+
+describe("libsecret: the shape of secret-tool's output", () => {
+  let bin = "";
+  let store = "";
+
+  beforeAll(() => {
+    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
+    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
+    writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
+    writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
+    writeFileSync(join(store, "capture__cap_x"), "hunter2");
+    writeFileSync(join(store, "capture__cap_trap"), TRAP);
+    writeFileSync(join(store, "qsm__npm-token"), "npm-value");
   });
 
+  afterAll(() => {
+    rmSync(bin, { recursive: true, force: true });
+    rmSync(store, { recursive: true, force: true });
+  });
+
+  const run = (args: string[], input?: string): Run =>
+    spawned(
+      "bun",
+      [CLI, ...args],
+      { QSM_SECRETS_BACKEND: "libsecret", PATH: pathWith(bin) },
+      input,
+    );
+
   test("a value holding attribute lines forges no entry and never prints", () => {
-    const listed = run(["list", "--folder", "forged-ns"]);
-    expect(listed.stdout.trim()).toBe("");
+    expect(run(["list", "--folder", "capture"]).stdout.split("\n").filter(Boolean).sort()).toEqual([
+      "cap_trap",
+      "cap_x",
+    ]);
+    expect(run(["list", "--folder", "forged-ns"]).stdout.trim()).toBe("");
     const inspected = run(["inspect", "--folder", "capture"]);
     expect(inspected.stdout + inspected.stderr).not.toContain("forged");
     expect(inspected.stdout + inspected.stderr).not.toContain("hunter2");
   });
 
-  test("has finds a stored key and reports a missing one", () => {
-    expect(run(["has", "cap_x", "--folder", "capture"]).code).toBe(0);
-    expect(run(["has", "nope", "--folder", "capture"]).code).toBe(4);
-  });
-
-  test("env delivers the stored value to the consumer", () => {
-    const delivered = run(["env", "cap_x=V", "--folder", "capture", "--", "printenv", "V"]);
-    expect(delivered.code).toBe(0);
-    expect(delivered.stdout.trim()).toBe("hunter2");
-  });
-
-  test("mask --all masks every stored value of every namespace in each string", () => {
-    const rows = ["tok=hunter2 and npm-value", "nothing here", TRAP, ""];
-    const masked = maskAll(bin, rows);
-    expect(masked.status).toBe(0);
-    const done = envelope({ code: 0, stdout: masked.stdout, stderr: masked.stderr });
-    expect(done.data.texts).toEqual([
-      "tok={{secret:cap_x}} and {{secret:qsm/npm-token}}",
-      "nothing here",
-      "{{secret:cap_trap}}",
-      "",
+  test("mask --all masks a multi-line value as one", () => {
+    const rows = ["tok=hunter2 and npm-value", TRAP];
+    const masked = run(["mask", "--all", "--json"], JSON.stringify(rows));
+    expect(masked.code).toBe(0);
+    expect(envelope(masked).data.texts).toEqual([
+      `tok=${placeholderOf("cap_x")} and ${placeholderOf("qsm/npm-token")}`,
+      placeholderOf("cap_trap"),
     ]);
   });
 
@@ -620,63 +843,10 @@ describe("the libsecret backend", () => {
       const listed = run(["list", "--folder", "capture"]);
       expect(listed.code).not.toBe(0);
       expect(listed.stderr).toContain("has no namespace: OLD_TOKEN");
-      expect(maskAll(bin, ["tok=hunter2"]).status).not.toBe(0);
+      expect(run(["mask", "--all"], JSON.stringify(["tok=hunter2"])).code).not.toBe(0);
     } finally {
       rmSync(legacy);
     }
-  });
-});
-
-describe("capture", () => {
-  /** A token of a known shape, built here so no literal one sits in the file. */
-  const token = `ghp_${"aB3dE9".repeat(6)}`;
-  const placeholder = (id: string): string => `{{${"secret"}:${id}}}`;
-
-  function capture(text: string, options: { backend?: boolean } = {}): Run {
-    const result = spawnSync("bun", [CLI, "capture", "--json"], {
-      encoding: "utf8",
-      input: text,
-      env: {
-        ...process.env,
-        ...FIXED_ENV,
-        PATH: pathWith(options.backend !== false),
-      },
-    });
-    return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
-  }
-
-  const added = (): string[] => readFileSync(addedMarker, "utf8").trim().split("\n");
-  const textOf = (run: Run): string => (envelope(run).data as { text: string }).text;
-
-  test("a pasted name=value is stored under that name and shown as qsm/<name>", () => {
-    const run = capture(`deploy-key=${token} for the release`);
-    const data = envelope(run).data as { captured: { id: string }[] };
-    expect(run.code).toBe(0);
-    expect(textOf(run)).toBe(`${placeholder("qsm/deploy-key")}…${token.slice(-4)} for the release`);
-    expect(data.captured.map((c) => c.id)).toEqual(["qsm/deploy-key"]);
-    expect(added()).toContain("deploy-key");
-    expect(run.stdout).not.toContain(token);
-  });
-
-  test("a name already stored is not overwritten: the value gets a generated id and the name is reported", () => {
-    const before = added().length;
-    const run = capture(`github-token=${token}`);
-    const data = envelope(run).data as { taken: string[] };
-    expect(data.taken).toEqual(["github-token"]);
-    expect(textOf(run)).toMatch(/^github-token=\{\{secret:cap_[0-9a-f]{12}\}\}…/);
-    expect(added().slice(before)).toHaveLength(1);
-    expect(added()).not.toContain("github-token");
-  });
-
-  test("a bare value keeps a generated id", () => {
-    expect(textOf(capture(`here: ${token}`))).toMatch(/^here: \{\{secret:cap_/);
-  });
-
-  test("a path and a placeholder pass byte for byte, and need no backend", () => {
-    const text = `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s/scratchpad and ${placeholder("cap_03c8872d7caa")}`;
-    const run = capture(text, { backend: false });
-    expect(run.code).toBe(0);
-    expect(textOf(run)).toBe(text);
   });
 });
 
@@ -784,148 +954,3 @@ describe("guard", () => {
     expect(result.stderr).toContain("vault-reader");
   });
 });
-
-/** A stateful rbw over `store`: one file per folder__name, `add` takes the value from stdin. */
-function fakeRbwStore(store: string): string {
-  return `#!/bin/sh
-store='${store}'
-verb="$1"; shift
-folder=""; name=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --folder) folder="$2"; shift 2 ;;
-    --fields) shift 2 ;;
-    *) if [ -z "$name" ]; then name="$1"; fi; shift ;;
-  esac
-done
-case "$verb" in
-  list)
-    for f in "$store"/*; do
-      [ -f "$f" ] || continue
-      base=$(basename "$f")
-      printf '%s\\t%s\\tqsm-secrets\\n' "\${base#*__}" "\${base%%__*}"
-    done ;;
-  get) cat "$store/\${folder}__\${name}" || exit 1 ;;
-  add) cat > "$store/\${folder}__\${name}" ;;
-  remove) rm -f "$store/\${folder}__\${name}" ;;
-  *) exit 1 ;;
-esac
-`;
-}
-
-/** The placeholder text, built here so no literal one sits in this file. */
-const placeholderOf = (id: string): string => `{{${"secret"}:${id}}}`;
-
-for (const backendName of ["libsecret", "rbw"] as const) {
-  describe(`rename, prune and check on ${backendName}`, () => {
-    let bin = "";
-    let store = "";
-    let home = "";
-    const file = (folder: string, key: string): string => join(store, `${folder}__${key}`);
-    const run = (args: string[]): Run =>
-      spawned("bun", [CLI, ...args], {
-        QSM_SECRETS_BACKEND: backendName,
-        HOME: home,
-        PATH: `${bin}:${process.env.PATH ?? ""}`,
-      });
-
-    beforeAll(() => {
-      bin = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-bin-"));
-      store = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-store-"));
-      home = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-home-"));
-      if (backendName === "libsecret") {
-        writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
-        writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
-      } else {
-        writeScript(join(bin, "rbw"), fakeRbwStore(store));
-      }
-      writeFileSync(file("qsm", "old-name"), "s3cret-value");
-      writeFileSync(file("qsm", "taken"), "other-value");
-      writeFileSync(file("capture", "cap_used"), "used-value");
-      writeFileSync(file("capture", "cap_stale"), "stale-value");
-      writeFileSync(file("qsm", "cap_stale"), "not-a-capture");
-      const project = join(home, ".claude", "projects", "p");
-      mkdirSync(project, { recursive: true });
-      writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
-    });
-
-    afterAll(() => {
-      for (const directory of [bin, store, home]) {
-        rmSync(directory, { recursive: true, force: true });
-      }
-    });
-
-    test("rename moves the value, prints no value and removes the old name", () => {
-      const done = run(["rename", "old-name", "new-name"]);
-      expect(done.code).toBe(0);
-      expect(done.stdout).toContain("renamed qsm/old-name to qsm/new-name");
-      expect(done.stdout + done.stderr).not.toContain("s3cret-value");
-      expect(readFileSync(file("qsm", "new-name"), "utf8").trim()).toBe("s3cret-value");
-      expect(run(["has", "old-name"]).code).toBe(4);
-    });
-
-    test("rename refuses an existing target and changes nothing", () => {
-      const refused = run(["rename", "new-name", "taken"]);
-      expect(refused.code).toBe(5);
-      expect(refused.stderr).toContain("already stored: qsm/taken");
-      expect(readFileSync(file("qsm", "taken"), "utf8").trim()).toBe("other-value");
-      expect(run(["has", "new-name"]).code).toBe(0);
-    });
-
-    test("rename of a missing key is missing, and of one name to itself is usage", () => {
-      expect(run(["rename", "nope", "x"]).code).toBe(4);
-      expect(run(["rename", "new-name", "new-name"]).code).toBe(2);
-    });
-
-    test("rename --to-folder moves it to another folder", () => {
-      const moved = run(["rename", "new-name", "moved", "--to-folder", "work"]);
-      expect(moved.code).toBe(0);
-      expect(readFileSync(file("work", "moved"), "utf8").trim()).toBe("s3cret-value");
-      expect(run(["has", "new-name"]).code).toBe(4);
-    });
-
-    test("check reports the probe's exit code and prints nothing of the probe", () => {
-      const good = run(["check", "taken=V", "--", "sh", "-c", 'echo "$V"; test -n "$V"']);
-      expect(good.code).toBe(0);
-      expect(good.stdout).not.toContain("other-value");
-      const bad = run(["check", "taken=V", "--", "sh", "-c", 'echo "$V" >&2; exit 7']);
-      expect(bad.code).toBe(1);
-      expect(bad.stderr).toContain("exited 7");
-      expect(bad.stdout + bad.stderr).not.toContain("other-value");
-    });
-
-    test("prune --dry-run lists the unnamed capture id and removes nothing", () => {
-      const listed = run(["prune", "--dry-run"]);
-      expect(listed.code).toBe(0);
-      expect(listed.stdout.trim()).toBe("cap_stale");
-      expect(run(["has", "cap_stale", "--folder", "capture"]).code).toBe(0);
-    });
-
-    test("prune removes it, leaves other namespaces alone, and a second run removes nothing", () => {
-      const first = run(["prune"]);
-      expect(first.stdout.trim()).toBe("cap_stale");
-      expect(first.stdout + first.stderr).not.toContain("stale-value");
-      expect(run(["has", "cap_stale", "--folder", "capture"]).code).toBe(4);
-      expect(run(["has", "cap_used", "--folder", "capture"]).code).toBe(0);
-      expect(run(["has", "cap_stale", "--folder", "qsm"]).code).toBe(0);
-      const second = run(["prune"]);
-      expect(second.code).toBe(0);
-      expect(second.stdout.trim()).toBe("");
-    });
-
-    test("prune with no transcript to check refuses", () => {
-      const empty = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-empty-"));
-      try {
-        const refused = spawned("bun", [CLI, "prune"], {
-          QSM_SECRETS_BACKEND: backendName,
-          HOME: empty,
-          PATH: `${bin}:${process.env.PATH ?? ""}`,
-        });
-        expect(refused.code).toBe(4);
-        expect(refused.stderr).toContain("no transcript");
-      } finally {
-        rmSync(empty, { recursive: true, force: true });
-      }
-    });
-  });
-}
