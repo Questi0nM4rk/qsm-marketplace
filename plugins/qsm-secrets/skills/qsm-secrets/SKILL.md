@@ -14,7 +14,8 @@ the backend (a Bitwarden vault or the local keyring, chosen at activation).
 ## A pasted secret is already a placeholder
 
 When the person pastes a token, a hook stores it and you read `{{secret:cap_<hex>}}` plus its last
-four characters. Write the placeholder as-is in a Bash command: the hook runs the command with the
+four characters; a pasted `name=value` reads `{{secret:qsm/<name>}}`, the key the person named.
+Write the placeholder as-is in a Bash command: the hook runs the command with the
 value in one environment variable and scrubs the value from the result. Do not ask for the value or
 try to recover it.
 

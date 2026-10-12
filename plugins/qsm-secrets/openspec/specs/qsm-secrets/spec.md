@@ -240,17 +240,36 @@ output, its error text, or its JSON envelope, whatever the backend's own listing
 
 ### Requirement: A pasted secret is captured before the prompt enters the session
 
-A function hook on `prompt.submit` SHALL find in the prompt text a known token shape, or a token of
-32 or more characters that holds a digit, is not hex digits and hyphens alone, and has a Shannon
-entropy of at least 3.5 bits per character, SHALL store each in
-the chosen backend under a generated id, and SHALL pass down a prompt in which the value is
+A function hook on `prompt.submit` SHALL find in the prompt text a known token shape (GitHub,
+GitLab, npm, Anthropic, OpenAI, AWS, Slack, Stripe, Google, JWT, a private key block), a value after
+a name that says credential (`token`, `secret`, `password`, `api_key`, `Bearer`, and the like) that
+is random-looking and not a word or a name, or a bare token of 32 or more characters, SHALL store
+each in the chosen backend under a generated id, and SHALL pass down a prompt in which the value is
 replaced by `{{secret:<id>}}` followed, for a secret of 20 or more characters, by its last four
-characters. A prompt with no secret SHALL pass down unchanged. The person SHALL see a toast naming
-each id. The hook SHALL act only on a prompt the person typed or pasted (origin `composer`,
-`bridge`, `sdk` or `channel`); a prompt of any other origin (a task notification, a subagent
-hand-back, a schedule, another session) is text the engine or a model wrote, so it SHALL pass down
-unchanged and the log SHALL name its origin. The limit SHALL be stated: the terminal already showed
-the text, and a secret sent before this hook existed is not recalled.
+characters. A known shape always counts. A bare token SHALL count only when it is none of: inside a
+placeholder, a path, a URL or a dotted name, an id (`session_`, `toolu_`, `cap_`, `msg_`), a hash
+(hex or hex and hyphens alone, a UUID, `sha256-`), a name (separators at a tenth of its length or
+more, or camelCase words of four letters or more on average), base64 of text (decoding to printable
+bytes), and when its Shannon entropy is at least 0.9 of what a random token of its length and
+alphabet averages. A hex value counts only after a credential name. On the labelled corpus in
+`lib/capture.corpus.ts` (70 positives, 98 negatives) the capture SHALL keep precision 1.0 and
+recall of at least 0.95; the test `lib/capture.test.ts` asserts both. A prompt with no secret SHALL
+pass down unchanged. The person SHALL see a toast naming each id. The hook SHALL act only on a
+prompt the person typed or pasted (origin `composer`, `bridge`, `sdk` or `channel`); a prompt of any
+other origin (a task notification, a subagent hand-back, a schedule, another session) is text the
+engine or a model wrote, so it SHALL pass down unchanged and the log SHALL name its origin. The
+limit SHALL be stated: the terminal already showed the text, and a secret sent before this hook
+existed is not recalled.
+
+A secret pasted as `name=value`, with the name matching `[a-z][a-z0-9-]{1,40}`, SHALL be stored in
+the namespace `qsm` under the key `<name>`, and the prompt SHALL show `{{secret:qsm/<name>}}` in
+place of the whole `name=value`; a bare value keeps `cap_<hex>`. A name that is already stored SHALL
+NOT be overwritten: the value is stored under `cap_<hex>`, the text keeps `name=`, and the toast
+names the name and says it was already stored. A placeholder of the form `{{secret:qsm/<name>}}`
+SHALL work wherever `{{secret:<id>}}` does: in a command, in a mask, in the transcript scrub.
+
+A capture that fails SHALL stop the prompt: the hook drops it with a message naming the cause and
+the fix (`qsm-secrets doctor`), and never lets an unchecked prompt in.
 
 #### Scenario: a pasted token is replaced by its id before the prompt enters the session
 
@@ -280,11 +299,30 @@ the text, and a secret sent before this hook existed is not recalled.
 - **THEN** it passes down byte for byte, `qsm-secrets capture` is not run, and the log names the
   origin
 
-#### Scenario: a failed capture names its cause
+#### Scenario: a path or a placeholder is not a secret
+
+- **WHEN** a prompt contains a path such as
+  `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s`,
+  or a `{{secret:cap_<hex>}}` placeholder, or a `session_` id
+- **THEN** it passes down byte for byte, and a placeholder is never captured into a new id
+
+#### Scenario: a pasted name=value is stored under that name
+
+- **WHEN** the person pastes `deploy-key=<a known token shape>`
+- **THEN** the value is stored in namespace `qsm` as key `deploy-key`, and the prompt holds
+  `{{secret:qsm/deploy-key}}` and the last four characters, not the name's value
+
+#### Scenario: a name that already exists is not overwritten
+
+- **WHEN** the person pastes `github-token=<token>` and `github-token` is already stored in `qsm`
+- **THEN** the stored entry is untouched, the value is stored as `cap_<hex>`, the prompt holds
+  `github-token={{secret:cap_<hex>}}`, and the toast says the name was already stored
+
+#### Scenario: a failed capture stops the prompt and names its cause
 
 - **WHEN** `qsm-secrets capture` fails for a prompt the person typed
-- **THEN** the log holds the verb, the exit code and the outcome code or stderr, and never the
-  prompt
+- **THEN** the prompt is dropped with a message holding the cause and `qsm-secrets doctor`, the log
+  holds the verb, the exit code and the outcome code or stderr, and neither holds the prompt
 
 #### Scenario: the transcript holds the id and not the value
 
@@ -382,12 +420,19 @@ the same user can read the file while the session lives.
 The engine writes a submitted prompt raw into the transcript before any hook runs, so the session
 end SHALL replace every captured value still in the transcript with its `{{secret:<id>}}`
 placeholder, by rewriting the file atomically in a detached process, and SHALL print no value. The
-scrub SHALL start before the session directory is removed, so a failed removal cannot skip it.
+scrub SHALL start before the session directory is removed, so a failed removal cannot skip it, and
+the removal SHALL run even when the scrub fails: each step runs and reports on its own, and the
+session ends either way.
 
 #### Scenario: the transcript holds the placeholder after the session ends
 
 - **WHEN** a session ends after a secret was pasted and captured
 - **THEN** the transcript file holds the placeholder and not the value
+
+#### Scenario: a failed scrub still removes the rendered files
+
+- **WHEN** the scrub fails at the session end
+- **THEN** the session directory is still removed and the log names the scrub's cause
 
 ### Requirement: An agent is routed to the wrapper instead of reading a value itself
 

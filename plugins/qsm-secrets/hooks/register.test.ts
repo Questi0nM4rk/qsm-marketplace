@@ -31,7 +31,11 @@ function host(on: On, stdout: string): () => string {
 }
 
 test("a captured prompt reaches the model as the replacement, with a toast naming the id", async ($, on) => {
-  const data = { text: "key {{secret:cap_1}}…abcd", captured: [{ id: "cap_1", suffix: "abcd" }] };
+  const data = {
+    text: "key {{secret:cap_1}}…abcd",
+    captured: [{ id: "cap_1", suffix: "abcd" }],
+    taken: [],
+  };
   const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
 
   const sent = await $.prompt.submit(PASTE);
@@ -40,16 +44,30 @@ test("a captured prompt reaches the model as the replacement, with a toast namin
   expect(toast()).toBe("qsm-secrets: captured 1 secret(s) as cap_1");
 });
 
-test("a failed capture lets the prompt in unchanged and toasts it loudly", async ($, on) => {
+test("a failed capture drops the prompt, naming the cause and the fix, and toasts it loudly", async ($, on) => {
   const failure = { code: "missing", exit: 4, message: "no backend chosen", data: null };
   const toast = host(on, JSON.stringify(failure));
 
-  const sent = await $.prompt.submit(PASTE);
+  const sent = (await $.prompt.submit(PASTE)) as { text?: string; drop?: string };
 
-  expect(sent.text).toBe("key ghp_x");
-  expect(toast()).toBe(
-    "qsm-secrets ERROR: prompt.submit: capture failed, the prompt went in unchanged",
-  );
+  expect(sent.text).toBeUndefined();
+  expect(sent.drop).toContain("capture failed");
+  expect(sent.drop).toContain("qsm-secrets doctor");
+  expect(sent.drop).not.toContain("ghp_x");
+  expect(toast()).toBe("qsm-secrets ERROR: prompt.submit: capture failed, the prompt was not sent");
+});
+
+test("a name that was already stored is said in the toast", async ($, on) => {
+  const data = {
+    text: "k=cap_1",
+    captured: [{ id: "cap_1", suffix: "abcd" }],
+    taken: ["k"],
+  };
+  const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
+
+  await $.prompt.submit(PASTE);
+
+  expect(toast()).toContain("k is already stored");
 });
 
 const ENV_CHAIN = "qsm-secrets env cap_1=QSM_SECRET_CAP_1 --folder capture -- sh -c ";
@@ -65,6 +83,21 @@ test("a command holding an id runs wrapped in qsm-secrets env, the id never in i
   await $.tool.call({ tool: "Bash", command: "echo {{secret:cap_1}}…abcd it's" });
 
   expect(ran).toBe(`${ENV_CHAIN}'echo "$QSM_SECRET_CAP_1" it'\\''s'`);
+});
+
+test("a named key's placeholder runs env with its own namespace and key", async ($, on) => {
+  let ran = "";
+  on("tool.call", (_$, e) => {
+    ran = (e as { command: string }).command;
+    return { result: { stdout: "", stderr: "", interrupted: false } };
+  });
+  on("ui.log", () => ({ value: undefined }));
+
+  await $.tool.call({ tool: "Bash", command: `echo {{${"secret"}:qsm/deploy-key}}…abcd` });
+
+  expect(ran).toBe(
+    `qsm-secrets env deploy-key=QSM_SECRET_QSM_DEPLOY_KEY --folder qsm -- sh -c 'echo "$QSM_SECRET_QSM_DEPLOY_KEY"'`,
+  );
 });
 
 test("every row is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
@@ -205,4 +238,19 @@ test("a session end starts the transcript scrub before it cleans, so a failed cl
 
   expect(seen.verbs).toEqual(["scrub", "clean"]);
   expect(seen.logs.join("\n")).toContain("XDG_RUNTIME_DIR is not set");
+});
+
+test("a scrub that fails still lets the clean run, and the failure is logged", async ($, on) => {
+  const NoTranscript = JSON.stringify({
+    code: "missing",
+    exit: 4,
+    message: "no transcript for s1",
+    data: null,
+  });
+  const seen = ending(on, (verb) => (verb === "scrub" ? NoTranscript : OK));
+
+  await $.session.end({ sessionId: "s1", reason: "other", resume: {} as never });
+
+  expect(seen.verbs).toEqual(["scrub", "clean"]);
+  expect(seen.logs.join("\n")).toContain("no transcript for s1");
 });

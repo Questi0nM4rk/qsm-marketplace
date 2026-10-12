@@ -608,3 +608,56 @@ describe("the libsecret backend", () => {
     }
   });
 });
+
+describe("capture", () => {
+  /** A token of a known shape, built here so no literal one sits in the file. */
+  const token = `ghp_${"aB3dE9".repeat(6)}`;
+  const placeholder = (id: string): string => `{{${"secret"}:${id}}}`;
+
+  function capture(text: string, options: { backend?: boolean } = {}): Run {
+    const result = spawnSync("bun", [CLI, "capture", "--json"], {
+      encoding: "utf8",
+      input: text,
+      env: {
+        ...process.env,
+        ...FIXED_ENV,
+        PATH: pathWith(options.backend !== false),
+      },
+    });
+    return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
+  }
+
+  const added = (): string[] => readFileSync(addedMarker, "utf8").trim().split("\n");
+  const textOf = (run: Run): string => (envelope(run).data as { text: string }).text;
+
+  test("a pasted name=value is stored under that name and shown as qsm/<name>", () => {
+    const run = capture(`deploy-key=${token} for the release`);
+    const data = envelope(run).data as { captured: { id: string }[] };
+    expect(run.code).toBe(0);
+    expect(textOf(run)).toBe(`${placeholder("qsm/deploy-key")}…${token.slice(-4)} for the release`);
+    expect(data.captured.map((c) => c.id)).toEqual(["qsm/deploy-key"]);
+    expect(added()).toContain("deploy-key");
+    expect(run.stdout).not.toContain(token);
+  });
+
+  test("a name already stored is not overwritten: the value gets a generated id and the name is reported", () => {
+    const before = added().length;
+    const run = capture(`github-token=${token}`);
+    const data = envelope(run).data as { taken: string[] };
+    expect(data.taken).toEqual(["github-token"]);
+    expect(textOf(run)).toMatch(/^github-token=\{\{secret:cap_[0-9a-f]{12}\}\}…/);
+    expect(added().slice(before)).toHaveLength(1);
+    expect(added()).not.toContain("github-token");
+  });
+
+  test("a bare value keeps a generated id", () => {
+    expect(textOf(capture(`here: ${token}`))).toMatch(/^here: \{\{secret:cap_/);
+  });
+
+  test("a path and a placeholder pass byte for byte, and need no backend", () => {
+    const text = `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s/scratchpad and ${placeholder("cap_03c8872d7caa")}`;
+    const run = capture(text, { backend: false });
+    expect(run.code).toBe(0);
+    expect(textOf(run)).toBe(text);
+  });
+});

@@ -64,7 +64,7 @@
         ]
       },
       "qsm-secrets capture": {
-        "description": "Read a prompt piped on stdin, store each secret in it (a known token shape, or a 32-character token of high entropy) in the active backend under a generated id, and print the text with each value replaced by {{secret:<id>}} and, for a long secret, its last four characters"
+        "description": "Read a prompt piped on stdin, store each secret in it (a known token shape, a value after a credential name, or a random 32-character token that is no path, name, id or hash) in the active backend under a generated id, or under its own name for a pasted name=value, and print the text with each value replaced by {{secret:<id>}} (or {{secret:qsm/<name>}}) and, for a long secret, its last four characters"
       },
       "qsm-secrets mask": {
         "description": "Read text piped on stdin and print it with each named id's stored value replaced by its {{secret:<id>}} placeholder; with --all, read a JSON array of strings and mask every stored value of every namespace in each, with one backend read",

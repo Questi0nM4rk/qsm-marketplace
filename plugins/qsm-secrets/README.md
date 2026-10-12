@@ -23,7 +23,7 @@ this plugin can go.
 | Hook | `tool.call` (guard) | Denies a Bash command that reads a stored value outside the wrapper, and names the wrapper to use. |
 | Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable. |
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
-| Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` and gives the model a placeholder. |
+| Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
 | Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
 | CLI | `qsm-secrets` | 14 verbs, see [USAGE.md](USAGE.md). |
 
@@ -52,7 +52,9 @@ qsm-secrets render ./app.env.tpl --out app.env               # fills {{secret:<i
 ```
 
 Paste a token into a prompt and the hook stores it. The model reads `{{secret:cap_<hex>}}`
-instead of the value.
+instead of the value. Paste `deploy-key=<token>` and it is stored as the key `deploy-key` in the
+`qsm` namespace, and the model reads `{{secret:qsm/deploy-key}}`; a name that is already stored is
+never overwritten, the value gets a `cap_<hex>` and the toast says why.
 
 ## Caveats
 
@@ -60,8 +62,8 @@ instead of the value.
 - A rendered file is plaintext while the session lives. Another process of the same user can read
   it. An environment variable is visible to the process that holds it.
 - Capture: the terminal already showed the text, and a secret sent before the hook existed is not
-  recalled. A failed capture lets the prompt in unchanged, with an error toast. A hex-only secret
-  is not caught by the entropy floor.
+  recalled. A failed capture stops the prompt (it is dropped with the cause and the fix, and you
+  send it again). A hex-only secret is caught only after a credential name (`token=`, `secret:`).
 - Masking: every row is masked against every stored value of six or more characters, one process
   per row; a value printed re-encoded (base64, escaped) is not masked, and a row the mask cannot
   read is withheld, with a toast. Without a chosen backend every row is withheld.
@@ -72,8 +74,11 @@ instead of the value.
   call answers `missing`. It never falls back to Bitwarden.
 - The content denylist is only as good as the names you approved. A name never written down on
   this machine is not found.
-- Capture catches a known token shape (`ghp_`, `sk-`, `AKIA`, `xox`, JWT) or a 32-character token of
-  high entropy. The model also sees the last four characters when the secret has 20 or more.
+- Capture catches a known token shape (`ghp_`, `glpat-`, `sk-`, `AKIA`, `xox`, JWT), a value after
+  a credential name, or a 32-character token that is random for its alphabet and is not a path, a
+  name, an id, a hash or base64 of text. Measured on a labelled corpus: precision 1.0, recall 1.0
+  (the test asserts at least 0.95). The model also sees the last four characters when the secret
+  has 20 or more.
 - `render` writes to `$XDG_RUNTIME_DIR/qsm-secrets/<session>/<name>` (directory 0700, file 0600).
   The session end removes it.
 - The content denylist lives at `${XDG_CONFIG_HOME:-~/.config}/qsm/content-denylist.toml`, never in

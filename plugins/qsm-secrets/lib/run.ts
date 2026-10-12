@@ -22,7 +22,7 @@ import {
   storedKeys,
 } from "./entries.ts";
 import { fail } from "./errors.ts";
-import { CAPTURE_NAMESPACE, placeholderIds } from "./substitute.ts";
+import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
 
 /** The file descriptor `get` writes to. */
 const CHANNEL_FD = 3;
@@ -73,20 +73,28 @@ export function runCapture(): Capture {
     fail("capture reads its text from stdin", "pipe the text in", "usage");
   }
   let backend: Backend | undefined;
-  return captureSecrets(readFileSync(0, "utf8"), (id, value) => {
+  const active = (): Backend => {
     backend ??= activeBackend();
-    backend.store(CAPTURE_NAMESPACE, id, new TextEncoder().encode(value));
+    return backend;
+  };
+  return captureSecrets(readFileSync(0, "utf8"), {
+    store: (namespace, key, value) =>
+      active().store(namespace, key, new TextEncoder().encode(value)),
+    exists: (namespace, key) => keyExists(active().entries(), namespace, key),
   });
 }
 
 /** `mask`: the text piped on stdin with each named id's stored value swapped for its placeholder. */
 export function runMask(ids: readonly string[]): { text: string } {
   const backend = activeBackend();
-  const values = ids.map((id) => ({ id, value: backend.read(CAPTURE_NAMESPACE, id) }));
+  const values = ids.map((id) => {
+    const { namespace, key } = locate(id);
+    return { id, value: backend.read(namespace, key), namespace, key };
+  });
   let text = readFileSync(0, "utf8");
-  for (const { id, value } of values) {
+  for (const { id, value, namespace, key } of values) {
     if (value === null) {
-      missing(CAPTURE_NAMESPACE, id);
+      missing(namespace, key);
     }
     // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
     text = text.replaceAll(new TextDecoder().decode(value), `{{secret:${id}}}`);
@@ -159,7 +167,8 @@ export function runScrub(target: string): { path: string; scrubbed: number } {
   const backend = ids.length === 0 ? undefined : activeBackend();
   let scrubbed = 0;
   for (const id of backend === undefined ? [] : ids) {
-    const bytes = backend?.read(CAPTURE_NAMESPACE, id);
+    const { namespace, key } = locate(id);
+    const bytes = backend?.read(namespace, key);
     if (bytes === null || bytes === undefined) {
       continue;
     }

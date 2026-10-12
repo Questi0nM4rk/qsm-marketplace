@@ -132,9 +132,23 @@ function registerMask(on: On): void {
 function registerScrub(on: On): void {
   on("session.end", async ($, e, next) => {
     const session = await $.session.id();
-    // The scrub first: a failed clean must not leave the transcript holding a pasted value.
-    await $.secrets.scrub({ transcript: session, detach: true });
-    await $.secrets.clean({ session });
+    // The scrub first: a failed clean must not leave the transcript holding a pasted value. A failed
+    // scrub must not leave the rendered files behind either, so each step runs and reports alone.
+    const failed: string[] = [];
+    for (const step of [
+      () => $.secrets.scrub({ transcript: session, detach: true }),
+      () => $.secrets.clean({ session }),
+    ]) {
+      try {
+        await step();
+      } catch (error) {
+        failed.push(cause({ kind: "failed", message: String((error as Error).message) }));
+      }
+    }
+    if (failed.length > 0) {
+      $.ui.toast("qsm-secrets ERROR: session.end: the cleanup or the scrub did not finish");
+      $.ui.log(`the session-end cleanup failed (${failed.join("; ")}); the session ended`);
+    }
     return next(e);
   }).catch(($, e, next) => {
     $.ui.toast("qsm-secrets ERROR: session.end: the cleanup or the scrub did not finish");
@@ -175,18 +189,25 @@ export function register(on: On): void {
     const done = dataOf(argv, ran) as {
       text: string;
       captured: { id: string }[];
+      taken: string[];
     };
     if (done.captured.length === 0) {
       return next(e);
     }
     const ids = done.captured.map((c) => c.id).join(", ");
-    $.ui.toast(`qsm-secrets: captured ${done.captured.length} secret(s) as ${ids}`);
+    const why = done.taken.map((name) => `; ${name} is already stored, so it got a generated id`);
+    $.ui.toast(`qsm-secrets: captured ${done.captured.length} secret(s) as ${ids}${why.join("")}`);
     return next({ ...e, text: done.text });
   }).catch(($, e, next) => {
-    // Fails open on purpose: dropping the prompt is harsher than a loud toast. The log names the
-    // cause, never the text.
-    $.ui.toast("qsm-secrets ERROR: prompt.submit: capture failed, the prompt went in unchanged");
-    $.ui.log(`capture failed (${cause(next.error)}); the prompt was not changed`);
-    return next(e);
+    // Fails closed: a prompt that could not be checked may hold a value, so it is not sent. The
+    // log names the cause, never the text.
+    const reason = cause(next.error);
+    $.ui.toast("qsm-secrets ERROR: prompt.submit: capture failed, the prompt was not sent");
+    $.ui.log(`capture failed (${reason}); the prompt was dropped`);
+    return next.called
+      ? next(e)
+      : {
+          drop: `qsm-secrets: capture failed (${reason}); the prompt was not sent. Fix the cause (qsm-secrets doctor names it), then send the prompt again`,
+        };
   });
 }
