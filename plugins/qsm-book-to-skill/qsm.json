@@ -1,0 +1,134 @@
+{
+  "name": "qsm-book-to-skill",
+  "qsm": {
+    "bin": {
+      "qsm-book-to-skill": "scripts/cli.ts"
+    },
+    "noun": "bookToSkill",
+    "commands": {
+      "qsm-book-to-skill validate": {
+        "description": "Expand the given paths into the sources this converter can read, and name every one it cannot with the reason; writes sources.json",
+        "args": [
+          {
+            "name": "input",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "file, directory, or glob to convert; name more of them on the command line for several",
+            "repeatable": true
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill extract": {
+        "description": "Turn every validated source into text, consolidate it, and report each source's size, pages, words, tokens and detected chapters; writes text.md and metadata.json",
+        "args": [
+          {
+            "name": "sources",
+            "type": "string",
+            "description": "the validate stage's sources.json (defaults to the one in the run directory)"
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill analyze": {
+        "description": "Find the chapter boundaries in the consolidated text and estimate each chapter's size; writes structure.json",
+        "args": [
+          {
+            "name": "text",
+            "type": "string",
+            "description": "the consolidated text (defaults to the one in the run directory)"
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill draft": {
+        "description": "Write one file per chapter holding that chapter's own text and one summary scaffold beside it",
+        "args": [
+          {
+            "name": "text",
+            "type": "string",
+            "description": "the consolidated text"
+          },
+          {
+            "name": "structure",
+            "type": "string",
+            "description": "the analyze stage's structure.json"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "draft directory (defaults to draft/ in the run directory)"
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill assemble": {
+        "description": "Build the skill directory from the filled drafts: the chapter summaries and one master skill definition",
+        "args": [
+          {
+            "name": "draft",
+            "type": "string",
+            "description": "the draft directory to assemble from"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "directory the skill is created in (defaults to QSM_SKILLS_DIR, else skills/ in the run directory)"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "description": "the slug to use instead of the one derived from the text's first heading"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "description": "the generated skill's description: when to load it, in the words a user would say",
+            "required": true
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill scan": {
+        "description": "Judge an assembled skill against the rules a skill has to meet (frontmatter, size, links, no draft placeholder, no page reference), exit non-zero on any finding, and print where it is and what it holds",
+        "args": [
+          {
+            "name": "skill",
+            "type": "string",
+            "description": "the assembled skill directory"
+          },
+          {
+            "name": "work",
+            "type": "string",
+            "description": "run directory for every stage's files"
+          }
+        ]
+      },
+      "qsm-book-to-skill doctor": {
+        "description": "Report the binary healthy and warn for each optional converter that is not on PATH, naming what installs it and which formats it reads",
+        "args": []
+      }
+    }
+  }
+}

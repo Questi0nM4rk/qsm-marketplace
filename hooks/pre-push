@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# installed by qsm-langdev
+# Remove with: qsm-langdev uninstall
+set -euo pipefail
+
+qsm-langdev hook pre-push || exit 1
+
+# The marketplace's own gates, repo-specific, so nothing outside a langdev checker
+# (the generated contracts, every plugin's hooks tsconfig against .claude/types)
+# reaches origin red.
+bun run validate || exit 1
+bun run typecheck || exit 1

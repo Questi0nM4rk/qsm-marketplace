@@ -1,0 +1,256 @@
+// The verbs.
+
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { home } from "../../../lib/paths.ts";
+import { activeBackend, type Backend } from "./backend.ts";
+import { type Capture, captureSecrets } from "./capture.ts";
+import {
+  formatMetadata,
+  keyExists,
+  type Metadata,
+  namespaceMetadata,
+  storedKeys,
+} from "./entries.ts";
+import { fail } from "./errors.ts";
+import { CAPTURE_NAMESPACE, placeholderIds } from "./substitute.ts";
+
+/** The file descriptor `get` writes to. */
+const CHANNEL_FD = 3;
+
+const PIPE_HINT = "use qsm-secrets pipe <key> -- <cmd> or qsm-secrets env <key>=<VAR> -- <cmd>";
+
+function missing(namespace: string, key: string): never {
+  const where = namespace === "" ? "the vault" : `namespace ${namespace}`;
+  fail(
+    `not stored: ${key}`,
+    `check ${where} with qsm-secrets list or qsm-secrets inspect`,
+    "missing",
+  );
+}
+
+function consumerCommand(command: readonly string[]): [string, string[]] {
+  const [head, ...tail] = command;
+  if (head === undefined) {
+    fail("no consumer command", `write the command after --, for example ${PIPE_HINT}`, "usage");
+  }
+  return [head, tail];
+}
+
+/** The active backend, once the key is known to be stored in it. */
+function backendHolding(namespace: string, key: string): Backend {
+  const backend = activeBackend();
+  if (!keyExists(backend.entries(), namespace, key)) {
+    missing(namespace, key);
+  }
+  return backend;
+}
+
+/** Exists first, value second. */
+export function resolve(namespace: string, key: string): Uint8Array {
+  const value = backendHolding(namespace, key).read(namespace, key);
+  if (value === null) {
+    missing(namespace, key);
+  }
+  return value;
+}
+
+/**
+ * `capture`: the text comes piped on stdin. The backend is resolved on the first secret, so a
+ * prompt without one needs no backend at all.
+ */
+export function runCapture(): Capture {
+  if (process.stdin.isTTY === true) {
+    fail("capture reads its text from stdin", "pipe the text in", "usage");
+  }
+  let backend: Backend | undefined;
+  return captureSecrets(readFileSync(0, "utf8"), (id, value) => {
+    backend ??= activeBackend();
+    backend.store(CAPTURE_NAMESPACE, id, new TextEncoder().encode(value));
+  });
+}
+
+/** `mask`: the text piped on stdin with each named id's stored value swapped for its placeholder. */
+export function runMask(ids: readonly string[]): { text: string } {
+  const backend = activeBackend();
+  const values = ids.map((id) => ({ id, value: backend.read(CAPTURE_NAMESPACE, id) }));
+  let text = readFileSync(0, "utf8");
+  for (const { id, value } of values) {
+    if (value === null) {
+      missing(CAPTURE_NAMESPACE, id);
+    }
+    // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
+    text = text.replaceAll(new TextDecoder().decode(value), `{{secret:${id}}}`);
+  }
+  return { text };
+}
+
+/** The transcript a session id names: `~/.claude/projects/<dir>/<id>.jsonl`, wherever `<dir>` is. */
+function locateTranscript(sessionId: string): string {
+  const projects = join(home(process.env), ".claude", "projects");
+  const dirs = existsSync(projects) ? readdirSync(projects) : [];
+  const found = dirs.map((d) => join(projects, d, `${sessionId}.jsonl`)).find((p) => existsSync(p));
+  return found ?? fail(`no transcript for ${sessionId}`, `looked under ${projects}`, "missing");
+}
+
+/**
+ * `scrub`: in a transcript (a path, or a session id) every captured value that still appears is
+ * swapped for its placeholder. Only ids the file already names a placeholder for are read, so a
+ * transcript with no capture needs no backend. The file is replaced by a rename, never edited in place.
+ * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
+ */
+export function runScrub(target: string): { path: string; scrubbed: number } {
+  const path = target.includes("/") ? target : locateTranscript(target);
+  let text = readFileSync(path, "utf8");
+  const ids = placeholderIds(text);
+  const backend = ids.length === 0 ? undefined : activeBackend();
+  let scrubbed = 0;
+  for (const id of backend === undefined ? [] : ids) {
+    const bytes = backend?.read(CAPTURE_NAMESPACE, id);
+    if (bytes === null || bytes === undefined) {
+      continue;
+    }
+    const value = new TextDecoder().decode(bytes);
+    // The transcript is JSON lines: a value holding a quote or a backslash sits there escaped.
+    for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) {
+      if (text.includes(form)) {
+        text = text.replaceAll(form, `{{secret:${id}}}`);
+        scrubbed += 1;
+      }
+    }
+  }
+  if (scrubbed > 0) {
+    const temp = join(dirname(path), `.${process.pid}.scrub`);
+    writeFileSync(temp, text, { mode: statSync(path).mode });
+    renameSync(temp, path);
+  }
+  return { path, scrubbed };
+}
+
+/** What a delivery verb reports: the consumer ran, and with which code. */
+export interface Delivery {
+  readonly command: string;
+  readonly exit: number;
+}
+
+export function runPipe(namespace: string, key: string, command: readonly string[]): Delivery {
+  const [head, tail] = consumerCommand(command);
+  const value = resolve(namespace, key);
+  const consumer = spawnSync(head, tail, { input: value, stdio: ["pipe", "inherit", "inherit"] });
+  if (consumer.error !== undefined) {
+    fail(`could not run ${head}`, "check the consumer command and its arguments");
+  }
+  return { command: head, exit: consumer.status ?? 1 };
+}
+
+export function runEnv(
+  namespace: string,
+  key: string,
+  variable: string,
+  command: readonly string[],
+): Delivery {
+  const [head, tail] = consumerCommand(command);
+  const value = resolve(namespace, key);
+  // The value goes into the child's environment and nowhere else: not into this process's own env,
+  // and not into any argv, which /proc exposes to every other user on a default Linux.
+  const consumer = spawnSync(head, tail, {
+    env: { ...process.env, [variable]: new TextDecoder().decode(value) },
+    stdio: "inherit",
+  });
+  if (consumer.error !== undefined) {
+    fail(`could not run ${head}`, "check the consumer command and its arguments");
+  }
+  return { command: head, exit: consumer.status ?? 1 };
+}
+
+/** `has`: the outcome is the whole answer, by design. A printed line
+ * either way would be one more thing for a reader to mistake for a value. */
+export function runHas(namespace: string, key: string): boolean {
+  return keyExists(activeBackend().entries(), namespace, key);
+}
+
+export function runList(namespace: string): { namespace: string; keys: string[] } {
+  return { namespace, keys: storedKeys(activeBackend().entries(), namespace) };
+}
+
+export function runInspect(namespace: string): {
+  namespace: string;
+  entries: Metadata[];
+  text: string;
+} {
+  const entries = namespaceMetadata(activeBackend().entries(), namespace);
+  return { namespace, entries, text: formatMetadata(namespace, entries) };
+}
+
+export function runRemove(
+  namespace: string,
+  key: string,
+): { namespace: string; key: string; removed: true } {
+  const backend = backendHolding(namespace, key);
+  if (!backend.remove(namespace, key)) {
+    fail(`could not remove ${key}`, `run ${backend.name} remove ${key} yourself to see why`);
+  }
+  return { namespace, key, removed: true };
+}
+
+/** `set`: the value is typed into the backend's own prompt. */
+export function runSet(
+  namespace: string,
+  key: string,
+): { namespace: string; key: string; stored: true } {
+  const backend = activeBackend();
+  if (process.stdin.isTTY !== true) {
+    fail(
+      "set needs a terminal",
+      `run it yourself in a shell; a value is typed into ${backend.name}'s prompt, never passed in`,
+      "missing",
+    );
+  }
+  backend.store(namespace, key);
+  // Read back only to measure. An empty first line in the editor is a dismissed prompt, and an
+  // empty entry left in the vault would make `has` answer yes to a key that carries nothing.
+  const value = backend.read(namespace, key);
+  if (value === null || value.length === 0) {
+    backend.remove(namespace, key);
+    fail(
+      "the prompt came back empty, nothing stored",
+      "run qsm-secrets set again and type a value",
+    );
+  }
+  return { namespace, key, stored: true };
+}
+
+/**
+ * A zero-byte write, not a stat: a closed descriptor still answers `fstat` under this runtime,
+ * while `write` returns EBADF.
+ */
+function channelOpen(): boolean {
+  try {
+    writeSync(CHANNEL_FD, new Uint8Array(0));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `get`: the last resort, for a consumer that reads neither stdin nor an environment variable. */
+export function runGet(namespace: string, key: string): { namespace: string; key: string } {
+  if (!channelOpen()) {
+    fail(
+      "refuses to write a value to ordinary output",
+      `open the channel yourself, qsm-secrets get ${key} 3>FILE, or better: ${PIPE_HINT}`,
+      "blocked",
+    );
+  }
+  writeSync(CHANNEL_FD, resolve(namespace, key));
+  return { namespace, key };
+}

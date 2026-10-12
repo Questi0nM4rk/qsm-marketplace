@@ -1,0 +1,47 @@
+# Outside tools and projects the lens looks for in a plugin's files, one name per line.
+# A name matches as a whole word anywhere in a file (a hyphen continues a word); `#` starts a comment.
+# The lens reads this file from the marketplace it shows, and else uses the copy built into the binary.
+br
+opensrc
+git
+gh
+glab
+bun
+node
+npm
+jq
+yq
+wt
+rbw
+bw
+docker
+shot-scraper
+curl
+rg
+fd
+sqlite3
+semgrep
+ast-grep
+biome
+tsc
+uv
+ruff
+dotnet
+cargo
+openspec
+playwright
+hurl
+scc
+lizard
+comby
+beads
+shell-ast
+hook-kit
+feats
+tagen
+vori
+tavily
+tvly
+ctx7
+searxng
+browserbox

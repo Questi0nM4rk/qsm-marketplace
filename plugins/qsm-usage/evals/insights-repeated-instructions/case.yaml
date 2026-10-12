@@ -1,0 +1,38 @@
+---
+schema_version: "1.0"
+name: insights-repeated-instructions
+description: Six short sessions; one instruction repeats three times, one twice, one is already loaded, one appears once.
+tags: [scenario]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 14
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    I keep telling the agent the same things. My last sessions are in
+    ./claude-home/projects/-home-dev-shop and the instructions it loads are in ./CLAUDE.md. What
+    should I make permanent, and what keeps going wrong? Change nothing yet.
+runs: 3
+graders:
+  - type: llm
+    name: permanent-list-follows-the-repeats
+    focus: last_message
+    criteria: |
+      PASS if the reply proposes making permanent the use-bun-not-npm instruction (three sessions)
+      and the show-the-diff-before-committing instruction (two sessions), each as the exact line to
+      add and the file or mechanism it goes to. FAIL if either is missing, or if it proposes the
+      one-off no-emoji request as a permanent rule.
+  - type: llm
+    name: already-loaded-instruction-is-dropped
+    focus: last_message
+    criteria: |
+      PASS if the reply notices that "run the tests before saying it works" is already in
+      CLAUDE.md and does not propose adding it again (it may name it as ignored by the agent
+      despite being loaded). FAIL if it proposes adding that line.
+  - type: llm
+    name: friction-split-between-agent-and-user
+    focus: last_message
+    criteria: |
+      PASS if the reply separates what the agent did wrong (kept using npm after being told, said it
+      worked without running the tests) from what in the user's prompts caused rework (the page and
+      the api in one task), with an example each. FAIL if it lists only generic advice.

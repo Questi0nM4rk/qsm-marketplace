@@ -1,0 +1,21 @@
+#!/bin/bash
+# semgrep --test fixture for rules/bash.yaml. Not a .sh file, so no checker
+# of this repository scores it: the flagged lines are the point.
+
+# ruleid: qsm.bash.tls-verification-off
+curl -k https://example.invalid
+# ruleid: qsm.bash.tls-verification-off
+curl -fsSL --insecure "$url"
+# ruleid: qsm.bash.tls-verification-off
+body=$(curl -sk https://example.invalid)
+# ruleid: qsm.bash.tls-verification-off
+wget -q --no-check-certificate https://example.invalid
+
+# ok: qsm.bash.tls-verification-off
+curl -fsSL https://example.invalid
+# ok: qsm.bash.tls-verification-off
+curl --cacert ca.pem https://example.invalid
+# ok: qsm.bash.tls-verification-off
+wget -q https://example.invalid
+# ok: qsm.bash.tls-verification-off
+grep -k pattern file

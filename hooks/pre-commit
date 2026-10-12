@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# installed by qsm-langdev
+# Remove with: qsm-langdev uninstall
+set -euo pipefail
+
+bun lib/generate-noun.ts --staged || exit 1
+qsm-langdev hook pre-commit || exit 1

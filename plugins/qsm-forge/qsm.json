@@ -1,0 +1,321 @@
+{
+  "name": "qsm-forge",
+  "qsm": {
+    "bin": {
+      "qsm-forge": "scripts/cli.ts"
+    },
+    "noun": "forge",
+    "commands": {
+      "qsm-forge gh status": {
+        "description": "Print a pull request's state, review decision, merge readiness, unresolved-thread count, and every check's result",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh threads": {
+        "description": "List the unresolved review threads with their comment id, file, line, first comment, and whether a reply is already there",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh comments": {
+        "description": "List the review comments; --unresolved keeps only the ones in an unresolved thread",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "unresolved",
+            "type": "boolean",
+            "description": "only comments in unresolved threads"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh reply": {
+        "description": "Reply to the thread a comment belongs to and resolve it, unless --no-resolve",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "commentId",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "id of a comment in the thread"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "required": true,
+            "description": "the reply text"
+          },
+          {
+            "name": "noResolve",
+            "type": "boolean",
+            "description": "reply without resolving"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh resolve": {
+        "description": "Resolve the thread a comment belongs to, posting --message first when one is given",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "commentId",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "id of a comment in the thread"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "description": "a note to post before resolving"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh resolve-all": {
+        "description": "With --message, reply to and resolve every unresolved thread; without it, resolve only the threads whose latest reply carries the fixed-in marker",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "description": "reply posted on every unresolved thread"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh dismiss-reviews": {
+        "description": "Dismiss every review in the changes-requested state, optionally one author's only",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "author",
+            "type": "string",
+            "description": "dismiss only this login's reviews"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "description": "the dismissal message"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gh submit-review": {
+        "description": "Post one review payload as a single review: overall comment, inline comments, and a decision of comment, approve, or request-changes",
+        "args": [
+          {
+            "name": "pr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "pull request number"
+          },
+          {
+            "name": "file",
+            "type": "string",
+            "description": "payload path (default: standard input)"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "description": "owner/name (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gl status": {
+        "description": "Print a merge request's state, merge readiness, pipeline result, and unresolved-thread count",
+        "args": [
+          {
+            "name": "mr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "merge request number"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "namespace/project (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gl threads": {
+        "description": "List the unresolved discussions with their note id, file, line, first note, and whether a reply is already there",
+        "args": [
+          {
+            "name": "mr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "merge request number"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "namespace/project (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gl reply": {
+        "description": "Reply to the discussion a note belongs to; the thread stays unresolved, because GitLab treats resolving as the reviewer's act",
+        "args": [
+          {
+            "name": "mr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "merge request number"
+          },
+          {
+            "name": "noteId",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "id of a note in the thread"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "required": true,
+            "description": "the reply text"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "namespace/project (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gl resolve": {
+        "description": "Resolve the discussion a note belongs to, posting --message first when one is given",
+        "args": [
+          {
+            "name": "mr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "merge request number"
+          },
+          {
+            "name": "noteId",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "id of a note in the thread"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "description": "a note to post before resolving"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "namespace/project (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge gl submit-review": {
+        "description": "Post one review payload as the overall note, each inline discussion, and the approval settlement",
+        "args": [
+          {
+            "name": "mr",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "merge request number"
+          },
+          {
+            "name": "file",
+            "type": "string",
+            "description": "payload path (default: standard input)"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "namespace/project (default: the origin remote)"
+          }
+        ]
+      },
+      "qsm-forge doctor": {
+        "description": "Report whether gh and glab are on PATH; missing only when neither is, because each verb group needs just its own",
+        "args": []
+      }
+    }
+  }
+}

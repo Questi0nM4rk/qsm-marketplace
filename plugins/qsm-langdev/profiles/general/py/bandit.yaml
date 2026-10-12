@@ -1,0 +1,23 @@
+---
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns this
+# file. bandit has no config auto-discovery — the registry passes `-c
+# bandit.yaml` when this file exists.
+#
+# Every test bandit ships is on. bandit has no default-off tier and no
+# recommended subset: all 82 numbered tests plus the B001 blacklist meta-test
+# run unless a skip below names one, so this file is the whole of what is off.
+# `tests:` would be the other way to write it and is not used: naming all 82
+# means a bandit upgrade adds a test that silently never runs.
+#
+# The tests bound to a framework — Django's B610 and B611, Flask's B201,
+# Jinja2's B701, paramiko's B601 — stay on. Unlike a wrong-framework lint rule,
+# they match a call that only exists in that framework, so on a repository
+# without it they report nothing rather than inventing findings.
+#
+# bandit rates severity and confidence per finding and has no warning level;
+# every finding fails. A rule worth suppressing at a call site was the wrong
+# rule to enable: add it to skips here with the reason, never a nosec comment
+# in the code.
+skips:
+  - B101  # assert — pytest suites assert by design; the -O caveat applies to apps, not tests
+  - B404  # blanket 'subprocess was imported' — the call-site rules (B602-B607) carry the signal

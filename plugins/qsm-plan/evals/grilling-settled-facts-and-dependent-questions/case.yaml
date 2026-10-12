@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: grilling-settled-facts-and-dependent-questions
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: grilling-settled-facts-and-dependent-questions.sh

@@ -1,0 +1,9 @@
+{
+  "name": "qsm-setup",
+  "version": "0.1.0",
+  "description": "Sets up this Claude for the marketplace: install plugins in dependency order, write the always-loaded instructions, rules and output style, doctor what is installed, keep the bin farm and completions generated, relink at session start.",
+  "author": { "name": "qsm" },
+  "keywords": ["setup", "install", "instructions", "output-style", "doctor", "bin-farm", "completions"],
+  "dependencies": ["qsm-essentials"],
+  "types": "./types/index.d.ts"
+}

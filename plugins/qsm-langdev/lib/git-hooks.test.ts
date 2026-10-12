@@ -1,0 +1,106 @@
+// Installing beside a hook the repository already has, and taking out
+// exactly what was put in. Every repository is a sandbox under the system
+// temp directory, removed after each test whether the test passed or
+// failed.
+
+import { afterEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { installHooks, uninstallHooks } from "./git-hooks.ts";
+
+const sandboxes: string[] = [];
+
+afterEach(() => {
+  while (sandboxes.length > 0) {
+    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
+  }
+});
+
+function repo(): string {
+  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-hooks-"));
+  sandboxes.push(root);
+  const init = spawnSync("git", ["init", "-q", "-b", "main"], { cwd: root, encoding: "utf8" });
+  if (init.status !== 0) {
+    throw new Error(`git init failed: ${init.stderr}`);
+  }
+  return root;
+}
+
+function hookPath(root: string, name: string): string {
+  return join(root, ".git", "hooks", name);
+}
+
+const THEIRS = "#!/usr/bin/env bash\nset -e\necho their own check\n";
+
+describe("installHooks", () => {
+  test("writes the hook whole where the repository has none", () => {
+    const root = repo();
+
+    const actions = installHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("written");
+    expect(readFileSync(hookPath(root, "pre-commit"), "utf8")).toContain(
+      "qsm-langdev hook pre-commit",
+    );
+  });
+
+  test("Installing beside an existing hook", () => {
+    const root = repo();
+    writeFileSync(hookPath(root, "pre-commit"), THEIRS, { mode: 0o755 });
+
+    const actions = installHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("appended");
+    const body = readFileSync(hookPath(root, "pre-commit"), "utf8");
+    expect(body).toContain("echo their own check");
+    expect(body).toContain("qsm-langdev gate (added by qsm-langdev install)");
+    expect(readFileSync(`${hookPath(root, "pre-commit")}.qsm-backup`, "utf8")).toBe(THEIRS);
+  });
+
+  test("a second install adds nothing further", () => {
+    const root = repo();
+    writeFileSync(hookPath(root, "pre-commit"), THEIRS, { mode: 0o755 });
+    installHooks(root, ["pre-commit"]);
+    const afterFirst = readFileSync(hookPath(root, "pre-commit"), "utf8");
+
+    const actions = installHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("already");
+    expect(readFileSync(hookPath(root, "pre-commit"), "utf8")).toBe(afterFirst);
+  });
+});
+
+describe("uninstallHooks", () => {
+  test("Uninstall restores the prior hook", () => {
+    const root = repo();
+    writeFileSync(hookPath(root, "pre-commit"), THEIRS, { mode: 0o755 });
+    installHooks(root, ["pre-commit"]);
+
+    const actions = uninstallHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("unappended");
+    expect(readFileSync(hookPath(root, "pre-commit"), "utf8")).toBe(THEIRS);
+  });
+
+  test("removes a hook it wrote whole", () => {
+    const root = repo();
+    installHooks(root, ["pre-commit"]);
+
+    const actions = uninstallHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("removed");
+    expect(existsSync(hookPath(root, "pre-commit"))).toBe(false);
+  });
+
+  test("leaves a hook it never touched alone", () => {
+    const root = repo();
+    writeFileSync(hookPath(root, "pre-commit"), THEIRS, { mode: 0o755 });
+
+    const actions = uninstallHooks(root, ["pre-commit"]);
+
+    expect(actions[0]?.kind).toBe("absent");
+    expect(readFileSync(hookPath(root, "pre-commit"), "utf8")).toBe(THEIRS);
+  });
+});

@@ -1,0 +1,10 @@
+{
+  "name": "qsm-book-to-skill",
+  "version": "0.1.0",
+  "description": "Turns a book or a long document into a skill: a compiled binary runs the conversion as one verb per stage, from validating the sources through extraction, chapter analysis, naming, drafting and assembly to the scan that decides whether the generated skill is finished, and a skill drives it for the two stages that need judgement.",
+  "types": "./types/index.d.ts",
+  "keywords": ["book", "skill", "document", "pdf", "epub", "extraction", "conversion", "knowledge"],
+  "author": {
+    "name": "qsm"
+  }
+}

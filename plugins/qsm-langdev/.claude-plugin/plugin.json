@@ -1,0 +1,21 @@
+{
+  "name": "qsm-langdev",
+  "version": "0.1.0",
+  "description": "Per-language quality checks over one declarative registry, gated by comparing a reference tree against the tree being shipped.",
+  "types": "./types/index.d.ts",
+  "keywords": [
+    "lint",
+    "quality",
+    "language",
+    "regression",
+    "gate",
+    "langdev",
+    "syntax",
+    "semantic",
+    "static analysis"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": []
+}

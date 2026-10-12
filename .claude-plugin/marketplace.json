@@ -1,0 +1,116 @@
+{
+  "name": "qsm-marketplace",
+  "owner": {
+    "name": "qsm"
+  },
+  "plugins": [
+    {
+      "name": "qsm-langdev",
+      "source": "./plugins/qsm-langdev"
+    },
+    {
+      "name": "qsm-langdev-dotnet",
+      "source": "./plugins/qsm-langdev-dotnet"
+    },
+    {
+      "name": "qsm-langdev-fish",
+      "source": "./plugins/qsm-langdev-fish"
+    },
+    {
+      "name": "qsm-langdev-py",
+      "source": "./plugins/qsm-langdev-py"
+    },
+    {
+      "name": "qsm-langdev-shell",
+      "source": "./plugins/qsm-langdev-shell"
+    },
+    {
+      "name": "qsm-langdev-ts",
+      "source": "./plugins/qsm-langdev-ts"
+    },
+    {
+      "name": "qsm-langdev-zsh",
+      "source": "./plugins/qsm-langdev-zsh"
+    },
+    {
+      "name": "qsm-cockpit",
+      "source": "./plugins/qsm-cockpit"
+    },
+    {
+      "name": "qsm-essentials",
+      "source": "./plugins/qsm-essentials"
+    },
+    {
+      "name": "qsm-memory",
+      "source": "./plugins/qsm-memory"
+    },
+    {
+      "name": "qsm-book-to-skill",
+      "source": "./plugins/qsm-book-to-skill"
+    },
+    {
+      "name": "qsm-builder",
+      "source": "./plugins/qsm-builder"
+    },
+    {
+      "name": "qsm-forge",
+      "source": "./plugins/qsm-forge"
+    },
+    {
+      "name": "qsm-index",
+      "source": "./plugins/qsm-index"
+    },
+    {
+      "name": "qsm-knowledge",
+      "source": "./plugins/qsm-knowledge"
+    },
+    {
+      "name": "qsm-openspec",
+      "source": "./plugins/qsm-openspec"
+    },
+    {
+      "name": "qsm-plan",
+      "source": "./plugins/qsm-plan"
+    },
+    {
+      "name": "qsm-review",
+      "source": "./plugins/qsm-review"
+    },
+    {
+      "name": "qsm-secrets",
+      "source": "./plugins/qsm-secrets"
+    },
+    {
+      "name": "qsm-setup",
+      "source": "./plugins/qsm-setup"
+    },
+    {
+      "name": "qsm-statusline",
+      "source": "./plugins/qsm-statusline"
+    },
+    {
+      "name": "qsm-tasks",
+      "source": "./plugins/qsm-tasks"
+    },
+    {
+      "name": "qsm-usage",
+      "source": "./plugins/qsm-usage"
+    },
+    {
+      "name": "qsm-toolbox",
+      "source": "./plugins/qsm-toolbox"
+    },
+    {
+      "name": "qsm-uix",
+      "source": "./plugins/qsm-uix"
+    },
+    {
+      "name": "qsm-web",
+      "source": "./plugins/qsm-web"
+    },
+    {
+      "name": "qsm-worktrunk",
+      "source": "./plugins/qsm-worktrunk"
+    }
+  ]
+}

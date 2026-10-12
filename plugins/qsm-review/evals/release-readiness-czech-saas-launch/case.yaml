@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: release-readiness-czech-saas-launch
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: release-readiness-czech-saas-launch.sh

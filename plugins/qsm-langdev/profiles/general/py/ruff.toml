@@ -1,0 +1,81 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+# this file. The defect tier: every rule ruff ships is on except the ones named
+# below, and each of those carries why. A finding here means the code is wrong
+# rather than improvable; the smell tier is the same file with the second block
+# removed, which is what the strict profile is.
+#
+# Preview rules stay off. `select = ["ALL"]` does not reach them without
+# `preview = true`, and ruff calls them unstable: measured on a 69-file corpus
+# of real Python, not one preview rule fired.
+#
+# ruff has no warning level — every finding fails, which is the no-warnings
+# floor already. Types are required wherever possible: ANN demands an
+# annotation on every def and ANN401 bans Any as an annotation, the way the ts
+# profile bans `any`. A rule worth suppressing at a call site was the wrong
+# rule to enable: drop it here with the reason, never a noqa comment.
+
+[lint]
+preview = false
+select = ["ALL"]
+ignore = [
+  # A framework this profile cannot know the repository uses. A wrong-framework
+  # rule does not stay quiet, it invents findings.
+  "AIR",     # Airflow
+  "PD",      # pandas
+  "NPY",     # numpy
+  "DJ",      # Django
+  "FAST",    # FastAPI
+
+  # Another checker in this registry already owns the finding, and two owners
+  # means one defect reported twice.
+  "S",       # flake8-bandit — bandit and semgrep p/python own security
+  "C901",    # mccabe complexity — lizard gates CCN across every language
+
+  # The formatter would fight it: `ruff format` decides quotes, indentation and
+  # trailing commas, so a finding here is churn. Measured on the corpus:
+  # Q000 1359 findings, E501 440, W293 352, COM812 242, none of them a defect.
+  "W191", "E111", "E114", "E117", "D206", "D300",
+  "Q000", "Q001", "Q002", "Q003",
+  "COM812", "COM819",
+  "ISC001", "ISC002",
+  "E501",
+
+  # ruff ships both halves of a contradiction; the other half is on.
+  "D203",    # blank line before class — D211, no blank line, wins
+  "D213",    # summary on the second line — D212, first line, wins
+
+  # Decided against, with the reason.
+  "CPY001",  # copyright header — this repository has no header policy
+  "TD002",   # TODO author — a task belongs in the tracker, not in a comment
+  "TD003",   # TODO link — same
+
+  # The smell tier. Every rule below reports code that works and could read
+  # better, which is an error under `strict` and silence here. This block is
+  # the whole difference between the two profiles.
+  "D",       # docstring presence and wording — a missing docstring is not a defect
+  "DOC",     # docstring contents against the signature — same
+  "N",       # naming conventions
+  "PLR",     # pylint refactor suggestions
+  "PLC",     # pylint conventions
+  "PLW",     # pylint warnings — opinions, not errors; PLE stays on
+  "PTH",     # migrate os.path to pathlib
+  "PERF",    # performance idioms
+  "FURB",    # modernization idioms
+  "RET",     # return discipline
+  "ARG",     # unused arguments — an interface a caller pays for may keep one
+  "TID",     # import tidiness
+  "TRY",     # exception-handling style
+  "EM",      # exception message phrasing
+  "FBT",     # boolean positional arguments — a design smell
+  "SLF",     # private member access
+  "ERA",     # commented-out code
+  "TD",      # TODO comment discipline
+  "FIX",     # TODO, FIXME and XXX markers
+  "T20",     # print and pprint — print is a CLI's output
+  "PT",      # pytest style
+  "PGH",     # blanket noqa and type-ignore pragmas
+  "ICN",     # import alias conventions
+]
+
+[format]
+docstring-code-format = true

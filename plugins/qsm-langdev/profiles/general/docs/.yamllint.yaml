@@ -1,0 +1,65 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+# this file. Every rule yamllint ships is named here, none inherited:
+# `extends: default` leaves six rules off without saying so, and a rule nobody
+# decided about is the thing this profile exists to remove.
+#
+# The defect tier: a finding means the document does not say what it looks like
+# it says. The layout rules that separate the two profiles are named at the
+# bottom, off here and error under strict.
+#
+# Every enabled rule is error level. yamllint's `warning` level exists and is
+# not used: a finding either fails or is turned off here with the reason.
+#
+# A rule worth suppressing at a call site was the wrong rule to enable: turn it
+# off here with the reason, never a yamllint disable-line comment.
+---
+rules:
+  # Structure: a finding means the document does not say what it looks like it
+  # says.
+  anchors:
+    level: error
+    forbid-undeclared-aliases: true
+    forbid-duplicated-anchors: true
+    forbid-unused-anchors: true
+  key-duplicates: {level: error}
+  octal-values:
+    level: error
+    forbid-implicit-octal: true   # 0755 is 493, and the file does not say so
+    forbid-explicit-octal: true
+  empty-values:
+    level: error
+    forbid-in-block-mappings: true
+    forbid-in-flow-mappings: true
+    forbid-in-block-sequences: true
+  float-values:
+    level: error
+    require-numeral-before-decimal: true
+    forbid-scientific-notation: false   # 1e6 is a number, not a mistake
+    forbid-nan: true
+    forbid-inf: true
+  truthy:
+    level: error
+    allowed-values: ["true", "false", "on", "off"]  # GitHub Actions uses 'on:'
+  indentation: {level: error}          # wrong indentation changes the tree
+  new-line-at-end-of-file: {level: error}
+  new-lines: {level: error}
+  trailing-spaces: {level: error}
+
+  # Off, with the reason.
+  document-end: disable    # the `...` marker is optional YAML and nothing here reads it
+  key-ordering: disable    # order carries meaning: a pipeline's steps, a compose file's services
+  line-length: disable     # prose in YAML wraps naturally; length is not a defect
+
+  # The layout tier. Every rule below reports YAML that parses to the right
+  # tree and could read better, which is an error under strict and silence
+  # here. This block is the whole difference between the two profiles.
+  braces: disable
+  brackets: disable
+  colons: disable
+  commas: disable
+  comments: disable
+  comments-indentation: disable
+  document-start: disable
+  empty-lines: disable
+  hyphens: disable
+  quoted-strings: disable

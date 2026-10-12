@@ -1,0 +1,166 @@
+import { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
+import { appendFileSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { TranscriptBuilder } from "./fixtures/transcript.ts";
+import { catchUp, listTranscripts, saveTranscript, unsavedTranscripts } from "./save.ts";
+import { applySchema } from "./store.ts";
+
+function db(): Database {
+  const d = new Database(":memory:");
+  applySchema(d);
+  return d;
+}
+
+/** A Claude Code projects dir with one project folder. */
+function projects(): { root: string; dir: string } {
+  const root = sandboxDir("qsm-memory-projects-");
+  const dir = join(root, "-home-x-repo");
+  mkdirSync(dir);
+  return { root, dir };
+}
+
+function write(path: string, text: string): string {
+  writeFileSync(path, text);
+  return path;
+}
+
+/** A subagent transcript of session `parent`, which `implement` prompts. */
+function subagent(dir: string, parent: string, implement: string): string {
+  mkdirSync(join(dir, parent, "subagents"), { recursive: true });
+  return write(
+    join(dir, parent, "subagents", "agent-1.jsonl"),
+    new TranscriptBuilder().human(implement).assistant("done").text(),
+  );
+}
+
+const SESSION = "11111111-2222-3333-4444-555555555555";
+
+describe("saveTranscript", () => {
+  test("a transcript saves as text and nothing else", () => {
+    const d = db();
+    const { dir } = projects();
+    const path = write(
+      join(dir, `${SESSION}.jsonl`),
+      new TranscriptBuilder()
+        .human("rename the verb")
+        .assistant("renamed it")
+        .toolUse("Edit", { file_path: "/work/repo/cli.ts" })
+        .toolResult("edited")
+        .title("Fix the gate")
+        .junk()
+        .text(),
+    );
+
+    const r = saveTranscript(d, path);
+
+    expect(r).toEqual({ status: "saved", id: SESSION, turns: 2, added: 2 });
+    const turns = d
+      .query<{ role: string; text: string }, []>("SELECT role, text FROM turns ORDER BY seq")
+      .all();
+    expect(turns).toEqual([
+      { role: "user", text: "rename the verb" },
+      { role: "assistant", text: "renamed it" },
+    ]);
+    const session = d
+      .query<{ title: string; project: string; transcript_path: string }, []>(
+        "SELECT title, project, transcript_path FROM sessions",
+      )
+      .get();
+    expect(session).toEqual({
+      title: "Fix the gate",
+      project: "/work/repo",
+      transcript_path: path,
+    });
+  });
+});
+
+describe("saveTranscript, again", () => {
+  test("a resumed session re-saves only the new turns", () => {
+    const d = db();
+    const { dir } = projects();
+    const first = new TranscriptBuilder().human("one").assistant("two");
+    const path = write(join(dir, `${SESSION}.jsonl`), first.text());
+    saveTranscript(d, path);
+    appendFileSync(
+      path,
+      first.human("three").assistant("four").text().split("\n").slice(2).join("\n"),
+    );
+
+    const r = saveTranscript(d, path);
+
+    expect(r).toEqual({ status: "saved", id: SESSION, turns: 4, added: 2 });
+    expect(d.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 1 });
+    const seqs = d.query<{ seq: number }, []>("SELECT seq FROM turns ORDER BY seq").all();
+    expect(seqs.map((s) => s.seq)).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("saveTranscript, main sessions only", () => {
+  test("a subagent transcript and a session nobody typed in are skipped, the second not counted again", () => {
+    const d = db();
+    const { root, dir } = projects();
+    const sub = subagent(dir, SESSION, "implement the noun");
+    const headless = write(
+      join(dir, `${SESSION}.jsonl`),
+      new TranscriptBuilder().headless("run the eval").assistant("done").text(),
+    );
+
+    expect(saveTranscript(d, sub)).toEqual({
+      status: "skipped",
+      path: sub,
+      reason: "subagent transcript",
+    });
+    expect(unsavedTranscripts(d, root)).toEqual([headless]);
+    expect(saveTranscript(d, headless)).toEqual({
+      status: "skipped",
+      path: headless,
+      reason: "no human turn",
+    });
+    expect(d.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 0 });
+    expect(unsavedTranscripts(d, root)).toEqual([]);
+  });
+});
+
+describe("catch-up", () => {
+  test("list --unsaved names transcripts the archive lacks", () => {
+    const d = db();
+    const { root, dir } = projects();
+    const a = write(join(dir, "aaa.jsonl"), new TranscriptBuilder().human("a").text());
+    const b = write(join(dir, "bbb.jsonl"), new TranscriptBuilder().human("b").text());
+    subagent(dir, "aaa", "c");
+
+    expect(new Set(listTranscripts(root))).toEqual(new Set([a, b]));
+    expect(new Set(unsavedTranscripts(d, root))).toEqual(new Set([a, b]));
+    expect(d.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 0 });
+  });
+
+  test("a transcript newer than its saved-at is saved again", () => {
+    const d = db();
+    const { root, dir } = projects();
+    const path = write(join(dir, "aaa.jsonl"), new TranscriptBuilder().human("a").text());
+    saveTranscript(d, path, { now: () => "2026-09-30T10:00:00.000Z" });
+    utimesSync(path, new Date("2026-09-30T09:00:00Z"), new Date("2026-09-30T09:00:00Z"));
+    expect(unsavedTranscripts(d, root)).toEqual([]);
+
+    utimesSync(path, new Date("2026-09-30T11:00:00Z"), new Date("2026-09-30T11:00:00Z"));
+
+    expect(unsavedTranscripts(d, root)).toEqual([path]);
+    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0 });
+  });
+
+  test("catch-up stops at twenty and says how many remain", () => {
+    const d = db();
+    const { root, dir } = projects();
+    for (let i = 0; i < 25; i += 1) {
+      write(
+        join(dir, `s${String(i).padStart(2, "0")}.jsonl`),
+        new TranscriptBuilder().human(`n${i}`).text(),
+      );
+    }
+
+    expect(catchUp(d, root)).toEqual({ saved: 20, skipped: 0, remain: 5 });
+    expect(catchUp(d, root)).toEqual({ saved: 5, skipped: 0, remain: 0 });
+  });
+});

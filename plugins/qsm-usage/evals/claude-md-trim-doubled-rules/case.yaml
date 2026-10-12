@@ -1,0 +1,42 @@
+---
+schema_version: "1.0"
+name: claude-md-trim-doubled-rules
+description: A long CLAUDE.md with doubled rules, lint-enforced style and a derivable layout; each cut needs a reason of its own.
+tags: [scenario]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 14
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    My CLAUDE.md in this folder has grown and every session pays for it. Slim it down. Change
+    nothing yet: I confirm each cut myself.
+runs: 3
+graders:
+  - type: llm
+    name: cuts-have-their-own-reason
+    focus: last_message
+    criteria: |
+      PASS if the reply proposes cutting the doubled rules (run the tests before every commit,
+      never commit .env, never log customer emails, write clean readable code) and for each names
+      the copy that stays and where, and proposes cutting the directory layout, tech stack and
+      the standard commands because the tree and package.json already say them. Each cut is quoted
+      or pointed at as its own block with its own reason. FAIL if the cuts rest on file length,
+      if one reason is shared by several unrelated cuts, or if the doubled rules are not found.
+  - type: llm
+    name: reasons-checked-against-the-repo
+    focus: trace
+    criteria: |
+      PASS if the cut of the style rules (indentation, semicolons, quotes, ===, unused variables,
+      console.log) says which config already enforces them (.prettierrc, eslint.config.js) and the
+      agent opened those files before saying so. FAIL if the reason is a guess ("linters usually
+      handle this") with no look at the repo.
+  - type: llm
+    name: rules-that-only-the-person-wrote-survive
+    focus: last_message
+    criteria: |
+      PASS if no "never" rule disappears entirely (force-push main, never edit src/generated,
+      never mock the database in billing tests, and one copy of no-.env and no-logging-emails
+      stays), and the integer-cents explanation, the per-line tax rule and the migrate flag
+      warning are kept or not proposed for a cut. FAIL if any of them is proposed for removal with
+      no copy left elsewhere, or if the file is declared lean.

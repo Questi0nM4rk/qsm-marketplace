@@ -1,0 +1,382 @@
+diff --git a/Cargo.lock b/Cargo.lock
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3379,7 +3379,7 @@
+ 
+ [[package]]
+ name = "sentrux"
+-version = "0.5.7"
++version = "0.5.7-qsm.2"
+ dependencies = [
+  "clap",
+  "eframe",
+@@ -3389,7 +3389,7 @@
+ 
+ [[package]]
+ name = "sentrux-core"
+-version = "0.5.7"
++version = "0.5.7-qsm.2"
+ dependencies = [
+  "crossbeam-channel",
+  "dashmap",
+diff --git a/sentrux-bin/Cargo.toml b/sentrux-bin/Cargo.toml
+--- a/sentrux-bin/Cargo.toml
++++ b/sentrux-bin/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+ name = "sentrux"
+-version = "0.5.7"
++version = "0.5.7-qsm.2"
+ edition = "2021"
+ description = "Live codebase visualization and structural quality gate for AI-agent-written code"
+ license = "MIT"
+diff --git a/sentrux-bin/src/main_impl.rs b/sentrux-bin/src/main_impl.rs
+--- a/sentrux-bin/src/main_impl.rs
++++ b/sentrux-bin/src/main_impl.rs
+@@ -71,6 +71,12 @@
+         /// Directory to check
+         #[arg(default_value = ".")]
+         path: String,
++
++        /// Print the report as JSON instead: quality, the five root causes,
++        /// and every cross-module edge, sorted so two runs on one tree diff
++        /// clean. Field names are in USAGE.md. (qsm addition)
++        #[arg(long)]
++        json: bool,
+     },
+ 
+     /// Structural regression gate — compare against a saved baseline
+@@ -178,8 +184,8 @@
+     }
+ 
+     match cli.command {
+-        Some(Command::Check { path }) => {
+-            std::process::exit(run_check(&path));
++        Some(Command::Check { path, json }) => {
++            std::process::exit(run_check(&path, json));
+         }
+         Some(Command::Gate { save, path }) => {
+             std::process::exit(run_gate(&path, save));
+@@ -282,7 +288,10 @@
+ // ---------------------------------------------------------------------------
+ 
+ /// Run architectural rules check from CLI. Returns exit code.
+-fn run_check(path: &str) -> i32 {
++///
++/// With `json`, stdout carries only the JSON document (scan progress already
++/// goes to stderr) and the exit code keeps the human path's meaning.
++fn run_check(path: &str, json: bool) -> i32 {
+     let root = std::path::Path::new(path);
+     if !root.is_dir() {
+         eprintln!("Error: not a directory: {path}");
+@@ -315,6 +324,10 @@
+     let arch_report = metrics::arch::compute_arch(&result.snapshot);
+     let check = metrics::rules::check_rules(&config, &health, &arch_report, &result.snapshot.import_graph);
+ 
++    if json {
++        print!("{}", metrics::json::render(&health, &check));
++        return if check.violations.is_empty() { 0 } else { 1 };
++    }
+     print_check_results(&check, &health, &arch_report)
+ }
+ 
+diff --git a/sentrux-core/Cargo.toml b/sentrux-core/Cargo.toml
+--- a/sentrux-core/Cargo.toml
++++ b/sentrux-core/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+ name = "sentrux-core"
+-version = "0.5.7"
++version = "0.5.7-qsm.2"
+ edition = "2021"
+ description = "Core library for sentrux — structural quality analysis engine"
+ license = "MIT"
+diff --git a/sentrux-core/src/core/path_utils.rs b/sentrux-core/src/core/path_utils.rs
+--- a/sentrux-core/src/core/path_utils.rs
++++ b/sentrux-core/src/core/path_utils.rs
+@@ -4,7 +4,32 @@
+ //! depth heuristics. Handles depth-2 and depth-3 boundaries, dominant
+ //! directory stripping (src/, lib/), and extension removal. Used throughout
+ //! the metrics and analysis layers to assign files to logical modules.
+-//! Public functions: `module_of`, `is_same_module`.
++//! Public functions: `module_of`, `module_of_at`, `is_same_module`,
++//! `set_module_depth`, `module_depth`.
++//!
++//! The depth at which a directory becomes a module is 3 by default and is
++//! configurable per repository through `[modules] depth` in
++//! `.sentrux/rules.toml` (qsm fork): a repository laid out as
++//! `tools/<name>/{lib,scripts}` is one module per tool at depth 2, and its
++//! `scripts -> lib` calls stop counting as cross-module edges.
++
++use std::sync::atomic::{AtomicUsize, Ordering};
++
++/// Default: three directory levels, upstream's behaviour.
++const DEFAULT_MODULE_DEPTH: usize = 3;
++
++static MODULE_DEPTH: AtomicUsize = AtomicUsize::new(DEFAULT_MODULE_DEPTH);
++
++/// The directory depth at which a path becomes a module, for this process.
++pub fn module_depth() -> usize {
++    MODULE_DEPTH.load(Ordering::Relaxed)
++}
++
++/// Sets the module depth for this process; anything below 2 is 2, because a
++/// single top-level directory is a layer, not a module.
++pub fn set_module_depth(depth: usize) {
++    MODULE_DEPTH.store(depth.max(2), Ordering::Relaxed);
++}
+ 
+ /// Adaptive module boundary detection.
+ ///
+@@ -49,14 +74,21 @@
+     strip_extension(path)
+ }
+ 
+-/// Handle files at >=2 directory levels.
+-/// Returns depth-3 module if 3+ levels, depth-2 module if exactly 2 levels.
+-fn module_of_deep(path: &str, _first_slash: usize, depth2_end: usize) -> &str {
+-    let after_depth2 = &path[depth2_end + 1..];
+-    match after_depth2.find('/') {
+-        Some(j) => &path[..depth2_end + 1 + j],
+-        None => &path[..depth2_end],
++/// Handle files at >=2 directory levels: the first `depth` directories, or
++/// every directory when the path has fewer than `depth`.
++fn module_of_deep(path: &str, depth: usize) -> &str {
++    let mut end = 0;
++    let mut seen = 0;
++    for (i, ch) in path.char_indices() {
++        if ch == '/' {
++            seen += 1;
++            end = i;
++            if seen == depth {
++                return &path[..end];
++            }
++        }
+     }
++    &path[..end]
+ }
+ 
+ /// Source dirs aggregated from all plugins. Cached at first access.
+@@ -89,8 +121,13 @@
+     }
+ }
+ 
+-/// Extract the module name from a file path using adaptive directory depth.
++/// Extract the module name from a file path at the process-wide module depth.
+ pub fn module_of(path: &str) -> &str {
++    module_of_at(path, module_depth())
++}
++
++/// Extract the module name from a file path, grouping directories at `depth`.
++pub fn module_of_at(path: &str, depth: usize) -> &str {
+     let first_slash = match path.find('/') {
+         Some(i) => i,
+         None => return module_of_root_file(path),
+@@ -98,7 +135,7 @@
+ 
+     let rest = &path[first_slash + 1..];
+     match rest.find('/') {
+-        Some(i) => module_of_deep(path, first_slash, first_slash + 1 + i),
++        Some(_) => module_of_deep(path, depth),
+         None => module_of_single_dir(path, first_slash),
+     }
+ }
+@@ -144,6 +181,23 @@
+         );
+     }
+ 
++    #[test]
++    fn configured_depth_two_makes_a_tool_one_module() {
++        // A repository laid out as tools/<name>/{lib,scripts}: at the default
++        // depth the two directories are two modules and every scripts -> lib
++        // call is a cross-module edge; at depth 2 the tool is the module.
++        assert_eq!(module_of_at("tools/qsm-langdev/lib/state.ts", 3), "tools/qsm-langdev/lib");
++        assert_eq!(module_of_at("tools/qsm-langdev/scripts/cli/list.ts", 3), "tools/qsm-langdev/scripts");
++        assert_eq!(module_of_at("tools/qsm-langdev/lib/state.ts", 2), "tools/qsm-langdev");
++        assert_eq!(module_of_at("tools/qsm-langdev/scripts/cli/list.ts", 2), "tools/qsm-langdev");
++        // Shallower paths keep their parent directory whatever the depth.
++        assert_eq!(module_of_at("src/layout/types.rs", 2), "src/layout");
++        assert_eq!(module_of_at("src/layout/types.rs", 5), "src/layout");
++        assert_eq!(module_of_at("a/b/c/d/e.rs", 4), "a/b/c/d");
++        assert_eq!(module_of_at("analysis/scanner.rs", 2), "analysis");
++        assert_eq!(module_of_at("db.rs", 2), "db");
++    }
++
+     #[test]
+     fn depth_2_and_3_are_different_modules() {
+         // Flat files at depth-2 vs files in subdirs are different modules
+diff --git a/sentrux-core/src/metrics/arch/tests.rs b/sentrux-core/src/metrics/arch/tests.rs
+--- a/sentrux-core/src/metrics/arch/tests.rs
++++ b/sentrux-core/src/metrics/arch/tests.rs
+@@ -219,6 +219,7 @@
+             modularity: 0.53, acyclicity: 0.33, depth: 0.62,
+             equality: 0.7, redundancy: 0.9,
+         },
++        cross_module_edge_list: Vec::new(),
+     };
+ 
+     let diff = baseline.diff(&current);
+diff --git a/sentrux-core/src/metrics/arch/tests2.rs b/sentrux-core/src/metrics/arch/tests2.rs
+--- a/sentrux-core/src/metrics/arch/tests2.rs
++++ b/sentrux-core/src/metrics/arch/tests2.rs
+@@ -70,6 +70,7 @@
+             modularity: 0.6, acyclicity: 0.5, depth: 0.67,
+             equality: 0.75, redundancy: 0.95,
+         },
++        cross_module_edge_list: Vec::new(),
+     };
+ 
+     let diff = baseline.diff(&current);
+diff --git a/sentrux-core/src/metrics/mod.rs b/sentrux-core/src/metrics/mod.rs
+--- a/sentrux-core/src/metrics/mod.rs
++++ b/sentrux-core/src/metrics/mod.rs
+@@ -13,8 +13,10 @@
+ pub mod rules;    // rules/mod.rs + checks.rs
+ 
+ // ── Flat modules (remain at metrics root) ──
++pub mod cross_module;     // qsm: the edges the modularity score charges
+ pub mod cross_validation; // FREE: compression-based quality cross-check
+ pub mod dsm;
++pub mod json;             // qsm: `check --json`
+ pub mod root_causes;
+ pub mod stability;
+ pub mod testgap;
+@@ -594,6 +596,9 @@
+         redundancy_ratio,
+     };
+     let (root_cause_scores, quality_signal) = root_causes::compute_root_cause_scores(&root_cause_raw);
++    // Same two edge sets Q just used, so the list is exactly what Q charged.
++    let cross_module_edge_list =
++        cross_module::collect_cross_module_edges(&dep_edges, &snapshot.call_graph);
+ 
+     HealthReport {
+         coupling_score: mm.coupling_score,
+@@ -632,6 +637,7 @@
+         quality_signal,
+         root_cause_raw,
+         root_cause_scores,
++        cross_module_edge_list,
+     }
+ }
+ 
+diff --git a/sentrux-core/src/metrics/rules/mod.rs b/sentrux-core/src/metrics/rules/mod.rs
+--- a/sentrux-core/src/metrics/rules/mod.rs
++++ b/sentrux-core/src/metrics/rules/mod.rs
+@@ -52,6 +52,26 @@
+     /// Explicit deny rules between file patterns.
+     #[serde(default)]
+     pub boundaries: Vec<BoundaryRule>,
++
++    /// How paths group into modules (qsm fork).
++    #[serde(default)]
++    pub modules: ModulesConfig,
++}
++
++/// `[modules]` section: the directory depth at which a path becomes a module.
++///
++/// ```toml
++/// [modules]
++/// depth = 2   # tools/<name> is one module; its lib/ and scripts/ are inside it
++/// ```
++///
++/// Default 3, upstream's behaviour. Applied process-wide when the rules load,
++/// so every metric that asks which module a file belongs to — modularity,
++/// coupling, the cross-module edge list — answers at the repository's depth.
++#[derive(Debug, Clone, Deserialize, Default)]
++pub struct ModulesConfig {
++    /// Directory levels per module; at least 2.
++    pub depth: Option<usize>,
+ }
+ 
+ /// Per-language section in rules.toml.
+@@ -106,8 +126,18 @@
+     pub fn load(path: &Path) -> Result<Self, String> {
+         let content = std::fs::read_to_string(path)
+             .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+-        toml::from_str(&content)
+-            .map_err(|e| format!("Failed to parse {}: {e}", path.display()))
++        let config: Self = toml::from_str(&content)
++            .map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
++        if let Some(depth) = config.modules.depth {
++            if depth < 2 {
++                return Err(format!(
++                    "{}: [modules] depth must be at least 2, got {depth}",
++                    path.display()
++                ));
++            }
++            crate::core::path_utils::set_module_depth(depth);
++        }
++        Ok(config)
+     }
+ 
+     /// Try to load from `.sentrux/rules.toml` relative to a root directory.
+diff --git a/sentrux-core/src/metrics/rules/tests.rs b/sentrux-core/src/metrics/rules/tests.rs
+--- a/sentrux-core/src/metrics/rules/tests.rs
++++ b/sentrux-core/src/metrics/rules/tests.rs
+@@ -53,6 +53,21 @@
+         assert!(config.boundaries.is_empty());
+     }
+ 
++    #[test]
++    fn parse_modules_depth() {
++        let toml = r#"
++[constraints]
++max_cycles = 0
++
++[modules]
++depth = 2
++"#;
++        let config: RulesConfig = toml::from_str(toml).unwrap();
++        assert_eq!(config.modules.depth, Some(2));
++        let none: RulesConfig = toml::from_str("[constraints]\nmax_cycles = 0\n").unwrap();
++        assert_eq!(none.modules.depth, None);
++    }
++
+     #[test]
+     fn parse_full_rules() {
+         let toml = r#"
+diff --git a/sentrux-core/src/metrics/test_helpers.rs b/sentrux-core/src/metrics/test_helpers.rs
+--- a/sentrux-core/src/metrics/test_helpers.rs
++++ b/sentrux-core/src/metrics/test_helpers.rs
+@@ -4,7 +4,7 @@
+ //! across mod_tests.rs, mod_tests2.rs, arch/tests.rs, arch/tests2.rs,
+ //! dsm/tests.rs, rules/tests.rs, and whatif/tests.rs.
+ 
+-use crate::core::types::ImportEdge;
++use crate::core::types::{CallEdge, ImportEdge};
+ use crate::core::snapshot::Snapshot;
+ use crate::core::types::FileNode;
+ use std::collections::HashMap;
+@@ -18,6 +18,17 @@
+     }
+ }
+ 
++/// Build a minimal `CallEdge` between two files; the function names are
++/// placeholders, since every metric here works at file granularity.
++pub fn call_edge(from: &str, to: &str) -> CallEdge {
++    CallEdge {
++        from_file: from.to_string(),
++        from_func: "caller".to_string(),
++        to_file: to.to_string(),
++        to_func: "callee".to_string(),
++    }
++}
++
+ /// Build a minimal `FileNode` (non-dir, 100 lines, rust lang) from a path.
+ pub fn file(path: &str) -> FileNode {
+     FileNode {
+diff --git a/sentrux-core/src/metrics/types.rs b/sentrux-core/src/metrics/types.rs
+--- a/sentrux-core/src/metrics/types.rs
++++ b/sentrux-core/src/metrics/types.rs
+@@ -107,6 +107,11 @@
+     /// Normalized root cause scores ∈ [0,1] (for signal computation)
+     pub root_cause_scores: super::root_causes::RootCauseScores,
+ 
++    // ── qsm: which edges the modularity score charged ──
++    /// Every import or call edge that crosses a module boundary, one entry per
++    /// file pair per kind, sorted. `cross_module_edges` above counts the import
++    /// ones; this names them, and the call ones Q also spans.
++    pub cross_module_edge_list: Vec<super::cross_module::CrossModuleEdge>,
+ }
+ 
+ /// A file-level metric: path + numeric value (e.g., fan-out count, line count).

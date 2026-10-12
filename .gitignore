@@ -1,0 +1,50 @@
+# Dependencies & build output
+node_modules
+dist/
+build/
+
+# The code graph travels with the repo so a second machine reads it instead of
+# spending 73s rebuilding it. Only the two files a consumer actually reads are
+# tracked: graph.json is what `graphify explain`/`path` and the index MCP query,
+# GRAPH_REPORT.md is what a human opens. Everything else in graphify-out/ is
+# rebuild scaffolding or a rendered view, and it churns on every code change.
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/GRAPH_REPORT.md
+
+# Compiled binaries — tools install to ~/.local/bin, never the repo
+bin/
+
+# .NET build artifacts (e.g. an INFRA tool's source compiled out-of-tree)
+obj/
+nupkg/
+
+# Editor / IDE
+.vs/
+*.sln
+
+# Local Claude Code config & tool scratch (machine-local, never committed)
+.claude/
+.playwright-mcp/
+
+# Leftover staging dirs from the removed qsm-setup learning-loop hook
+.qsm-learning-loop/
+
+# Logs, env, OS cruft
+*.log
+.env
+.env.local
+.DS_Store
+__pycache__/
+*.pyc
+
+# qsm-book-to-skill: upstream clone lands at install time, never vendored
+adapters/claude/modules/qsm-book-to-skill/skills/
+adapters/claude/modules/qsm-book-to-skill/dist/
+
+# qsm-langdev per-tree cache (the import graph), rebuilt from the tree
+.qsm-langdev/
+plugins/*/evals/results/
+
+# qsm-builder lens: generated into each marketplace, rewritten on every run
+.qsm/

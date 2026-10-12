@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: spec-archive-closes-every-bound-task
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: spec-archive-closes-every-bound-task.sh

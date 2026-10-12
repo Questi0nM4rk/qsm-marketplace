@@ -1,0 +1,20 @@
+# qsm-langdev profile: general and strict alike. Seeded by `qsm-langdev init`;
+# the repo owns this file. markdownlint has no severity levels, so every
+# enabled rule already fails the check, and the two profiles do not differ:
+# a markdown defect is a markdown defect whichever profile a repository runs.
+# Every rule is on. The two entries below are the whole of the exceptions,
+# each measured against this repository rather than assumed.
+---
+config:
+  default: true
+  MD013:
+    # markdownlint defaults to 80; this repository's .editorconfig says 100.
+    # At 80 this rule reported 42 findings, 40 of them in one file; at 100 it
+    # reports one, and exempting code blocks takes it to zero. A command line
+    # is not reflowable prose, and neither is a table row.
+    line_length: 100
+    code_blocks: false
+    tables: false
+  # CLAUDE.md is one include directive, `@AGENTS.md`, and will never have a
+  # heading. It is the only finding this rule produces here.
+  MD041: false

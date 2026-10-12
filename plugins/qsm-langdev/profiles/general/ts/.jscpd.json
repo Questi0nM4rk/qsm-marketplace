@@ -1,0 +1,7 @@
+{
+  "minTokens": 50,
+  "minLines": 5,
+  "mode": "mild",
+  "format": ["typescript", "tsx", "javascript", "jsx"],
+  "ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "**/*.min.js", "**/profiles/**"]
+}

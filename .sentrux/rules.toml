@@ -1,0 +1,28 @@
+# Absolute architectural rules, enforced by `sentrux check .`. Relative drift is
+# the gates' job; nothing here stores a floor.
+
+[constraints]
+max_cycles = 0
+no_god_files = true
+
+# Layer 0 is shared code, layer 1 is every plugin. A lower layer never imports
+# from a higher one.
+[[layers]]
+name = "lib"
+paths = ["lib/*"]
+order = 0
+
+[[layers]]
+name = "plugins"
+paths = ["plugins/*"]
+order = 1
+
+# A plugin imports from root lib/ and from itself, never from another plugin.
+[[boundaries]]
+from = "plugins/*"
+to = "plugins/*"
+reason = "a plugin never imports from another plugin; shared code lives in root lib/"
+
+# A plugin is one module: plugins/<name>.
+[modules]
+depth = 2

@@ -1,0 +1,12 @@
+# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns
+# this file. Default rule set at error level; only line length stays off.
+# Suppress per line with '# yamllint disable-line rule:<name>'.
+---
+extends: default
+ignore: |
+  openspec/changes/**/.openspec.yaml
+rules:
+  line-length: disable  # prose in YAML wraps naturally; length is not a defect
+  truthy:
+    level: error
+    allowed-values: ["true", "false", "on", "off"]  # GitHub Actions uses 'on:'

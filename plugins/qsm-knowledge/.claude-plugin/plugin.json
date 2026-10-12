@@ -1,0 +1,20 @@
+{
+  "name": "qsm-knowledge",
+  "version": "0.1.0",
+  "description": "The grounded knowledge base: a notebook that answers only from the sources put into it, a vault that holds the notes distilled from those answers, and one binary that checks the notebook resolves and that every written note carries what the vault needs.",
+  "types": "./types/index.d.ts",
+  "keywords": [
+    "notebook",
+    "vault",
+    "research",
+    "citations",
+    "obsidian",
+    "notes",
+    "grounding",
+    "synthesis"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": ["qsm-essentials"]
+}

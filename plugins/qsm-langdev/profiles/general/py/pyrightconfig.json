@@ -1,0 +1,145 @@
+// qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+// this file. pyright reads this as JSONC, so the reasons live beside the rules.
+//
+// Every one of pyright's 81 diagnostic rules is named here at its level, and so
+// are its 10 non-rule settings. `typeCheckingMode` is recorded and decides
+// nothing, because nothing is left to inherit: a rule nobody decided about is
+// what this profile exists to remove.
+//
+// The defect tier: a finding means the code is wrong rather than
+// under-described. The rules that separate the two profiles are in the last
+// block, off here and error under strict.
+//
+// Every enabled rule is error. pyright's `warning` level exists and is not
+// used: a finding either fails, or is off below with the reason.
+//
+// reportUnnecessaryTypeIgnoreComment is on, so a `# type: ignore` that suppresses
+// nothing is itself a finding. A rule worth suppressing at a call site was the
+// wrong rule to enable: turn it off here with the reason, never a
+// `# pyright: ignore` in the code.
+{
+  "typeCheckingMode": "standard",
+
+  // Off in both profiles, with the reason.
+  // A stub without its source is a fact about the environment, not about this code.
+  "reportMissingModuleSource": "none",
+  // Formatting. ruff's ISC001 and ISC002 are off for the same reason: the
+  // formatter decides where a string breaks.
+  "reportImplicitStringConcatenation": "none",
+  // Fires on every call whose return value is discarded, including the ones
+  // where discarding is the point: file.write, set.discard, dict.pop.
+  "reportUnusedCallResult": "none",
+  // ruff's B006 and B008 own mutable and function-call defaults, and two owners
+  // means one defect reported twice.
+  "reportCallInDefaultInitializer": "none",
+
+  // On at error: the code is wrong, not merely under-described.
+  "reportAbstractUsage": "error",
+  "reportArgumentType": "error",
+  "reportAssertAlwaysTrue": "error",
+  "reportAssertTypeFailure": "error",
+  "reportAssignmentType": "error",
+  "reportAttributeAccessIssue": "error",
+  "reportCallIssue": "error",
+  "reportFunctionMemberAccess": "error",
+  "reportGeneralTypeIssues": "error",
+  "reportImportCycles": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportIncompatibleVariableOverride": "error",
+  "reportInconsistentConstructor": "error",
+  "reportInconsistentOverload": "error",
+  "reportIndexIssue": "error",
+  "reportInvalidStringEscapeSequence": "error",
+  "reportInvalidTypeArguments": "error",
+  "reportInvalidTypeForm": "error",
+  "reportInvalidTypeVarUse": "error",
+  "reportMatchNotExhaustive": "error",
+  "reportMissingImports": "error",
+  "reportMissingSuperCall": "error",
+  "reportNoOverloadImplementation": "error",
+  "reportOperatorIssue": "error",
+  "reportOptionalCall": "error",
+  "reportOptionalContextManager": "error",
+  "reportOptionalIterable": "error",
+  "reportOptionalMemberAccess": "error",
+  "reportOptionalOperand": "error",
+  "reportOptionalSubscript": "error",
+  "reportOverlappingOverload": "error",
+  "reportPossiblyUnboundVariable": "error",
+  "reportPrivateImportUsage": "error",
+  "reportPropertyTypeMismatch": "error",
+  "reportRedeclaration": "error",
+  "reportReturnType": "error",
+  "reportSelfClsParameterName": "error",
+  "reportTypedDictNotRequiredAccess": "error",
+  "reportUnboundVariable": "error",
+  "reportUndefinedVariable": "error",
+  "reportUnhashable": "error",
+  "reportUninitializedInstanceVariable": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportUnreachable": "error",
+  "reportUnsupportedDunderAll": "error",
+  "reportUnusedCoroutine": "error",
+  "reportUnusedExcept": "error",
+  "reportUnusedExpression": "error",
+  "reportWildcardImportFromLibrary": "error",
+
+  // The strictness tier. Every rule below reports code that runs correctly and
+  // describes itself incompletely, which is an error under strict and silence
+  // here. This block is the whole difference between the two profiles.
+  //
+  // A third-party package's missing stubs, and the unknown types that follow
+  // from them: under general they are the dependency's shape, not this code's.
+  "reportMissingTypeStubs": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownLambdaType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUntypedBaseClass": "none",
+  "reportUntypedClassDecorator": "none",
+  "reportUntypedFunctionDecorator": "none",
+  "reportUntypedNamedTuple": "none",
+  // Annotation coverage: ruff's ANN already requires one on every def, and it
+  // reports a missing annotation as a missing annotation rather than as an
+  // unknown type three call sites away.
+  "reportMissingParameterType": "none",
+  "reportMissingTypeArgument": "none",
+  // Dead code: vulture and ruff's F401 own it, and they name the symbol.
+  "reportUnusedClass": "none",
+  "reportUnusedFunction": "none",
+  "reportUnusedImport": "none",
+  "reportUnusedVariable": "none",
+  // A statically decidable test is a smell worth removing, not a defect.
+  "reportUnnecessaryCast": "none",
+  "reportUnnecessaryComparison": "none",
+  "reportUnnecessaryContains": "none",
+  "reportUnnecessaryIsInstance": "none",
+  // Convention, not correctness.
+  "reportConstantRedefinition": "none",
+  "reportDuplicateImport": "none",
+  "reportImplicitOverride": "none",
+  "reportPrivateUsage": "none",
+  "reportTypeCommentUsage": "none",
+  // A deprecation is a deadline, not a break: strict fails on it, general does not.
+  "reportDeprecated": "none",
+  // Stub authoring, which a repository that ships no .pyi never does.
+  "reportIncompleteStub": "none",
+  "reportInvalidStubStatement": "none",
+
+  // The ten settings that are not rules, each one named.
+  "analyzeUnannotatedFunctions": true,
+  "disableBytesTypePromotions": true,
+  "strictParameterNoneValue": true,
+  "enableTypeIgnoreComments": true,
+  "enableReachabilityAnalysis": true,
+  // Literal inference stays wide here: a list built empty and filled later is
+  // ordinary code, and strict is where it has to declare itself.
+  "strictListInference": false,
+  "strictDictionaryInference": false,
+  "strictSetInference": false,
+  "deprecateTypingAliases": false,
+  // Proposed typing-spec features that can change under us: the argument that
+  // keeps biome's nursery and ruff's preview rules off.
+  "enableExperimentalFeatures": false
+}

@@ -1,0 +1,14 @@
+{
+  "name": "qsm-toolbox",
+  "qsm": {
+    "bin": {
+      "qsm-toolbox": "scripts/cli.ts"
+    },
+    "noun": "toolbox",
+    "commands": {
+      "qsm-toolbox doctor": {
+        "description": "Report every third-party tool in the catalog: present with its version, or missing with the line that installs it; it reports and never gates"
+      }
+    }
+  }
+}

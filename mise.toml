@@ -1,0 +1,5 @@
+[tools]
+# Pinned exact — bump deliberately via PR, never "latest".
+# Verified against npm registry 2026-07-16.
+bun = "1.3.14"
+node = "24"

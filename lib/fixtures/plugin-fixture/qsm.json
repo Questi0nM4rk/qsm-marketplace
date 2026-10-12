@@ -1,0 +1,11 @@
+{
+  "name": "qsm-fixture",
+  "qsm": {
+    "bin": { "qsm-fix-a": "scripts/cli.ts", "qsm-fix-b": "scripts/cli-b.ts" },
+    "noun": "fixture",
+    "commands": {
+      "qsm-fix-a ping": { "description": "answer pong", "args": [] },
+      "qsm-fix-b ping": { "description": "answer pong too", "args": [] }
+    }
+  }
+}

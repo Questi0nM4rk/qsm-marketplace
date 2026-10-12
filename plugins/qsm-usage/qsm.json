@@ -1,0 +1,175 @@
+{
+  "name": "qsm-usage",
+  "qsm": {
+    "bin": {
+      "qsm-usage": "scripts/cli.ts"
+    },
+    "noun": "usage",
+    "commands": {
+      "qsm-usage toon encode": {
+        "description": "Encode a JSON, YAML, or TOML file to TOON; --frontmatter or --table --section pull the data out of Markdown first",
+        "args": [
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the file to encode"
+          },
+          {
+            "name": "frontmatter",
+            "type": "boolean",
+            "description": "encode the YAML frontmatter block of a Markdown file"
+          },
+          {
+            "name": "table",
+            "type": "boolean",
+            "description": "encode one pipe table of a Markdown file; needs --section"
+          },
+          {
+            "name": "section",
+            "type": "string",
+            "description": "the heading the table sits under, matched case-insensitively"
+          }
+        ]
+      },
+      "qsm-usage toon decode": {
+        "description": "Decode a TOON file back to compact JSON on stdout",
+        "args": [
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the TOON file to decode"
+          }
+        ]
+      },
+      "qsm-usage toon size": {
+        "description": "Compare an input against its TOON encoding in characters and estimated tokens, and say which to use",
+        "args": [
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the file to measure"
+          },
+          {
+            "name": "frontmatter",
+            "type": "boolean",
+            "description": "measure the YAML frontmatter block of a Markdown file"
+          },
+          {
+            "name": "table",
+            "type": "boolean",
+            "description": "measure one pipe table of a Markdown file; needs --section"
+          },
+          {
+            "name": "section",
+            "type": "string",
+            "description": "the heading the table sits under, matched case-insensitively"
+          }
+        ]
+      },
+      "qsm-usage toon wrap": {
+        "description": "Read text on stdin, parse it as JSON, YAML, or TOML, and say whether its TOON encoding is worth using in its place",
+        "args": [
+          {
+            "name": "stdin",
+            "type": "boolean",
+            "description": "read the text from standard input; required"
+          }
+        ]
+      },
+      "qsm-usage filter": {
+        "description": "Ask the command output filter what it makes of a Bash command: the command to run instead, or a denial; nothing when the filter is absent or has nothing to rewrite",
+        "args": [
+          {
+            "name": "command",
+            "type": "string",
+            "required": true,
+            "description": "the Bash command about to run"
+          },
+          {
+            "name": "subagent",
+            "type": "boolean",
+            "description": "a subagent asked: its git commands are never routed through the filter"
+          }
+        ]
+      },
+      "qsm-usage doctor": {
+        "description": "Report whether qsm-usage and the command output filter are each usable, with what each one answered"
+      },
+      "qsm-usage count": {
+        "description": "Count the tokens of files or of standard input, offline by default and exactly with the credential",
+        "args": [
+          {
+            "name": "files",
+            "type": "string",
+            "positional": true,
+            "repeatable": true,
+            "description": "the files to count; omit with --stdin"
+          },
+          {
+            "name": "stdin",
+            "type": "boolean",
+            "description": "count standard input as well"
+          },
+          {
+            "name": "total",
+            "type": "boolean",
+            "description": "print the total even for a single input"
+          },
+          {
+            "name": "mode",
+            "type": "string",
+            "choices": [
+              "estimate",
+              "exact"
+            ],
+            "description": "estimate offline (default), or exact through the provider's tokenizer"
+          },
+          {
+            "name": "model",
+            "type": "string",
+            "description": "the model whose tokenizer exact mode asks (default claude's current)"
+          }
+        ]
+      },
+      "qsm-usage drop": {
+        "description": "Record a finding the person dropped, as <topic>:<target>, so a later review does not offer it again",
+        "args": [
+          {
+            "name": "key",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the finding's topic and target, e.g. unused-extensions:skill pdf-tools"
+          }
+        ]
+      },
+      "qsm-usage dropped": {
+        "description": "List the findings dropped in earlier reviews, one key per line"
+      },
+      "qsm-usage report": {
+        "description": "Validate a findings document and render one self-contained HTML report from it",
+        "args": [
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the findings JSON file to render"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "required": true,
+            "description": "the HTML file to write"
+          }
+        ]
+      }
+    }
+  }
+}

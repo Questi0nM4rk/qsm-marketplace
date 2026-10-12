@@ -1,0 +1,61 @@
+# gitleaks config for qsm-marketplace
+# Extends gitleaks defaults; allowlists doc placeholders verified during initial scan.
+# Real secrets in the same paths would still be caught - the allowlist is regex-based.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation placeholders, shell variable refs, well-known test fixtures"
+regexTarget = "line"
+
+regexes = [
+    # Shell variable references (the "$" pattern with closing colon for curl basic auth)
+    '''\$[A-Z_][A-Z0-9_]*:''',
+    '''\$\(cat ~/[^)]+\):''',
+
+    # Explicit placeholder words
+    '''YOUR_[A-Z_]+''',
+    '''your-[a-z-]+-here''',
+    '''YourPassword''',
+    '''YourStrongPassword[0-9!]*''',
+
+    # Default local-only credentials in install docs
+    '''admin:admin''',
+
+    # Truncated example API keys
+    '''sk-\.\.\.''',
+    '''sk-ant-\.\.\.''',
+    '''sk-ant-test''',
+    '''sk_test_1234567890abcdef''',
+
+    # Well-known example JWT header ({"alg":"HS256","typ":"JWT"} base64)
+    '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.''',
+
+    # Project name false positive (appears in sonar properties + curl URLs)
+    '''sonar\.projectKey=qsm-marketplace''',
+    '''projectKey=qsm-marketplace''',
+
+    # Local docker-compose CE default password
+    '''SONAR_JDBC_PASSWORD: sonar''',
+
+    # Generic doc placeholders for username/password in URL or JSON
+    '''["'](user|username)["']\s*:\s*["'](user|username)["']''',
+    '''["'](password|pass)["']\s*:\s*["'](password|pass)["']''',
+    '''postgres://user:p(assword|%40ssw%3Drd)@''',
+    '''postgresql://user:password@''',
+    '''neo4j_password="password"''',
+]
+
+paths = [
+    # Lock files / generated content
+    '''bun\.lock$''',
+    '''package-lock\.json$''',
+
+    # Test fixtures (intentional placeholder values)
+    '''\.test\.(ts|js|tsx|jsx)$''',
+
+    # Scanner configs (contain placeholder patterns by design)
+    '''\.gitleaks\.toml$''',
+    '''\.secrets\.baseline$''',
+]

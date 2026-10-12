@@ -1,0 +1,134 @@
+{
+  "name": "qsm-setup",
+  "qsm": {
+    "bin": {
+      "qsm-setup": "scripts/cli.ts"
+    },
+    "noun": "setup",
+    "commands": {
+      "qsm-setup install": {
+        "description": "Install every discovered plugin, a named list, or a profile, in dependency order, collect-all",
+        "args": [
+          {
+            "name": "plugins",
+            "type": "string",
+            "positional": true,
+            "description": "plugin names (exclusive with --all and --profile)",
+            "repeatable": true
+          },
+          {
+            "name": "all",
+            "type": "boolean",
+            "description": "every discovered plugin"
+          },
+          {
+            "name": "profile",
+            "type": "string",
+            "description": "a saved profile, or general"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report what each installer would do"
+          },
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      },
+      "qsm-setup activate": {
+        "description": "Run one plugin's activation, the only step that changes files you own (the Claude home, settings); its choices follow a -- separator",
+        "noNoun": true,
+        "passthrough": true,
+        "args": [
+          {
+            "name": "plugin",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the plugin whose scripts/activate.ts runs"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report what the activation would change"
+          },
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      },
+      "qsm-setup doctor": {
+        "description": "Probe each installed plugin, name orphans, check built binaries against the record, and check the Claude Code installation",
+        "args": [
+          {
+            "name": "plugin",
+            "type": "string",
+            "positional": true,
+            "description": "check only this plugin"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean",
+            "description": "print probe output for passing plugins too"
+          },
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      },
+      "qsm-setup relink": {
+        "description": "Regenerate fish completions and prune undeclared binaries and completions",
+        "args": [
+          {
+            "name": "check",
+            "type": "boolean",
+            "description": "report staleness, write nothing"
+          },
+          {
+            "name": "auto",
+            "type": "boolean",
+            "description": "relink only when setup.json opts this machine in"
+          },
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      },
+      "qsm-setup build-bins": {
+        "description": "Run every plugin's own build step and record the binaries it produced",
+        "args": [
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      },
+      "qsm-setup tools": {
+        "description": "Compare the installed qsm binaries and their verbs against origin/main as last fetched",
+        "args": [
+          {
+            "name": "fetch",
+            "type": "boolean",
+            "description": "git fetch origin main first; the only network call"
+          },
+          {
+            "name": "root",
+            "type": "string",
+            "description": "marketplace checkout"
+          }
+        ]
+      }
+    },
+    "doctor": "command -v qsm-setup >/dev/null && qsm-setup --help >/dev/null"
+  }
+}

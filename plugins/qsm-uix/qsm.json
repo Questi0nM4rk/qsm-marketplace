@@ -1,0 +1,191 @@
+{
+  "name": "qsm-uix",
+  "qsm": {
+    "bin": {
+      "qsm-uix": "scripts/cli.ts"
+    },
+    "noun": "uix",
+    "commands": {
+      "qsm-uix screenshot": {
+        "description": "Capture one full monitor to a PNG; without --output the focused monitor is used",
+        "args": [
+          {
+            "name": "output",
+            "type": "string",
+            "description": "monitor name (default: the focused one)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "file to write (default: a timestamped file under the kit's output directory)"
+          }
+        ]
+      },
+      "qsm-uix crop": {
+        "description": "Cut a region out of an image and magnify it with a point filter, so edges and antialiasing stay honest",
+        "args": [
+          {
+            "name": "input",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the image to cut from"
+          },
+          {
+            "name": "rect",
+            "type": "string",
+            "required": true,
+            "description": "region as X,Y,W,H"
+          },
+          {
+            "name": "zoom",
+            "type": "number",
+            "description": "magnification, at least 1 (default 1)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "file to write (default: a timestamped file under the kit's output directory)"
+          }
+        ]
+      },
+      "qsm-uix diff": {
+        "description": "Compare two captures and report the SSIM distortion, where 0 means identical, plus a difference image",
+        "args": [
+          {
+            "name": "a",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the first image"
+          },
+          {
+            "name": "b",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the second image"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "difference image to write (default: a timestamped file under the kit's output directory)"
+          }
+        ]
+      },
+      "qsm-uix burst": {
+        "description": "Take a timed sequence of monitor frames and report each frame's real elapsed time, for judging motion",
+        "args": [
+          {
+            "name": "count",
+            "type": "number",
+            "required": true,
+            "description": "how many frames, at least 2"
+          },
+          {
+            "name": "interval",
+            "type": "number",
+            "required": true,
+            "description": "milliseconds to wait between frames"
+          },
+          {
+            "name": "outDir",
+            "type": "string",
+            "required": true,
+            "description": "directory the frames are written into"
+          },
+          {
+            "name": "output",
+            "type": "string",
+            "description": "monitor name (default: the focused one)"
+          }
+        ]
+      },
+      "qsm-uix pixel-sample": {
+        "description": "Read one pixel of an image as hex and rgb, so a colour claim cites the rendered pixel and not the name in code",
+        "args": [
+          {
+            "name": "image",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the image to sample"
+          },
+          {
+            "name": "at",
+            "type": "string",
+            "required": true,
+            "description": "the pixel as X,Y"
+          }
+        ]
+      },
+      "qsm-uix contrast": {
+        "description": "WCAG contrast ratio between two pixels of an image, with the AA verdicts for body text and for large text or an essential glyph",
+        "args": [
+          {
+            "name": "image",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the image to sample"
+          },
+          {
+            "name": "fg",
+            "type": "string",
+            "required": true,
+            "description": "the foreground pixel as X,Y"
+          },
+          {
+            "name": "bg",
+            "type": "string",
+            "required": true,
+            "description": "the background pixel as X,Y"
+          }
+        ]
+      },
+      "qsm-uix region-stats": {
+        "description": "Colour and brightness statistics of a region: pixel count, distinct colours, mean luminance, the brightest and darkest pixel, and the dominant palette with each colour's share",
+        "args": [
+          {
+            "name": "image",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the image to scan"
+          },
+          {
+            "name": "rect",
+            "type": "string",
+            "required": true,
+            "description": "region as X,Y,W,H, at most 65536 pixels"
+          },
+          {
+            "name": "top",
+            "type": "number",
+            "description": "how many palette entries to report (default 6)"
+          }
+        ]
+      },
+      "qsm-uix a11y-tree": {
+        "description": "Print the platform accessibility tree (AT-SPI): per node indent, role, name, and the focused, focusable and showing states; filtered to one application when named",
+        "args": [
+          {
+            "name": "app",
+            "type": "string",
+            "positional": true,
+            "description": "application name, or part of it (default: every application on the bus)"
+          },
+          {
+            "name": "depth",
+            "type": "number",
+            "description": "levels below each application to walk (default 32)"
+          }
+        ]
+      },
+      "qsm-uix doctor": {
+        "description": "Report whether the screenshot, image and key-sender tools are on PATH and the AT-SPI bus answers, naming the remedy for each one that does not",
+        "args": []
+      }
+    }
+  }
+}

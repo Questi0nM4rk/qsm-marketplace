@@ -1,0 +1,10 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+# this file. clippy.toml carries thresholds, not lint levels: which lints run
+# is `qsm-langdev`'s CLIPPY_LINTS, which denies clippy::all, clippy::pedantic
+# and clippy::cargo and names the two it allows. These two numbers are the
+# whole of the general-to-strict axis for rust — strict sets 15 and 5.
+#
+# A lint worth suppressing at a call site was the wrong lint to enable: name it
+# in CLIPPY_LINTS with the reason, never an #[allow] in the code.
+cognitive-complexity-threshold = 25
+too-many-arguments-threshold = 7

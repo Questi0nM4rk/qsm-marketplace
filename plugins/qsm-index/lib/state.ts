@@ -1,0 +1,117 @@
+// What a repository's cache directory says about its builds: the lock a running build holds, and
+// the status file every build writes.
+
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+
+export interface Lock {
+  readonly pid: number;
+  readonly started_at: string;
+}
+
+function readJson(file: string): unknown {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (cause) {
+    // EPERM: the process is there, it is only not ours.
+    return (cause as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** The lock, when a live process holds it; null when there is none or its process is dead. */
+export function liveHolder(file: string): Lock | null {
+  const lock = readJson(file) as Partial<Lock> | null;
+  return typeof lock?.pid === "number" && lock.pid > 0 && isAlive(lock.pid)
+    ? { pid: lock.pid, started_at: String(lock.started_at) }
+    : null;
+}
+
+export type LockTake = { readonly taken: true } | { readonly taken: false; readonly holder: Lock };
+
+/** True when this call created the file; false when it was already there. */
+function createOnce(file: string, content: string): boolean {
+  try {
+    writeFileSync(file, content, { flag: "wx" });
+    return true;
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "EEXIST") {
+      return false;
+    }
+    throw cause;
+  }
+}
+
+/** Creates the lock for this process; a lock left by a dead process is removed and taken once. */
+export function takeLock(file: string, now: Date): LockTake {
+  mkdirSync(dirname(file), { recursive: true });
+  const mine = { pid: process.pid, started_at: now.toISOString() };
+  if (createOnce(file, JSON.stringify(mine))) {
+    return { taken: true };
+  }
+  const holder = liveHolder(file);
+  if (holder !== null) {
+    return { taken: false, holder };
+  }
+  rmSync(file, { force: true });
+  if (createOnce(file, JSON.stringify(mine))) {
+    return { taken: true };
+  }
+  // Another build took the stale lock between the remove and the create.
+  return { taken: false, holder: (readJson(file) as Lock | null) ?? mine };
+}
+
+/** Removes the lock when this process holds it, and leaves anyone else's alone. */
+export function releaseLock(file: string): void {
+  const lock = readJson(file) as Partial<Lock> | null;
+  if (lock?.pid === process.pid) {
+    rmSync(file, { force: true });
+  }
+}
+
+export type BuildResult = "ok" | "partial" | "failed";
+
+export interface BuildStatus {
+  readonly repo: string;
+  readonly state: "running" | "done";
+  readonly phase: "graph" | "semantic" | null;
+  readonly started_at: string;
+  readonly finished_at: string | null;
+  readonly duration_ms: number | null;
+  readonly result: BuildResult | null;
+  readonly cause: string | null;
+  readonly built_at_commit: string | null;
+  readonly changed_at_build: Readonly<Record<string, string>>;
+  /** Why the graph does not land in the cache, when it does not: a foreign graphify-out symlink. */
+  readonly warning: string | null;
+}
+
+/** The status file, or null when no build ever wrote one. */
+export function readStatus(file: string): BuildStatus | null {
+  return readJson(file) as BuildStatus | null;
+}
+
+/** How many paths differ, in either direction, between the changed set a build started from and
+ * the changed set now: a file dirty at build time and untouched since is already in the graph. */
+export function changedSince(
+  atBuild: Readonly<Record<string, string>>,
+  now: Readonly<Record<string, string>>,
+): number {
+  const paths = new Set([...Object.keys(atBuild), ...Object.keys(now)]);
+  return [...paths].filter((path) => atBuild[path] !== now[path]).length;
+}
+
+/** Written to a temp file and renamed over, so a reader never sees half a file. */
+export function writeStatus(file: string, status: BuildStatus): void {
+  const temp = `${file}.${process.pid}.tmp`;
+  writeFileSync(temp, `${JSON.stringify(status, null, 2)}\n`);
+  renameSync(temp, file);
+}

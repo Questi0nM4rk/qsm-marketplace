@@ -1,0 +1,138 @@
+// One SQLite database per machine: the archive of sessions and the short-term notes.
+
+import { Database } from "bun:sqlite";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
+import os from "node:os";
+import { dirname, join } from "node:path";
+import { typedText } from "./transcript.ts";
+
+export type Env = Readonly<Record<string, string | undefined>>;
+
+/** `QSM_MEMORY_DB`, else `$XDG_DATA_HOME/qsm-memory/memory.db`, else
+ * `~/.local/share/qsm-memory/memory.db`. */
+export function resolveDbPath(env: Env): string {
+  const override = env.QSM_MEMORY_DB;
+  if (override !== undefined && override.length > 0) {
+    return override;
+  }
+  const data = env.XDG_DATA_HOME ?? join(env.HOME ?? os.homedir(), ".local", "share");
+  return join(data, "qsm-memory", "memory.db");
+}
+
+// A turn is what a person or the model said, as text. The full context, tool calls and results
+// included, is the transcript file at sessions.transcript_path.
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  cwd TEXT NOT NULL,
+  project TEXT NOT NULL,
+  title TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ended_at TEXT NOT NULL,
+  transcript_path TEXT NOT NULL,
+  saved_at TEXT NOT NULL,
+  turn_count INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS turns (
+  session_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  uuid TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+  ts TEXT NOT NULL,
+  text TEXT NOT NULL,
+  PRIMARY KEY (session_id, seq),
+  UNIQUE (session_id, uuid)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
+  text,
+  content='turns',
+  content_rowid='rowid',
+  tokenize='porter unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS turns_ai AFTER INSERT ON turns BEGIN
+  INSERT INTO turns_fts(rowid, text) VALUES (new.rowid, new.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS turns_ad AFTER DELETE ON turns BEGIN
+  INSERT INTO turns_fts(turns_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+END;
+
+CREATE TABLE IF NOT EXISTS skipped (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL,
+  mtime REAL NOT NULL,
+  reason TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  project TEXT,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+);
+`;
+
+/** User turns that are no person's words (slash-command wrappers, task notifications, compaction
+ * summaries, bash output, interrupt markers) were stored before the rule knew them. Delete them,
+ * then the sessions left with no user turn, renumber nothing (a gap in `seq` is harmless), fix the
+ * turn counts and VACUUM. Cheap to repeat: a second run finds nothing and skips the VACUUM. */
+function purgeHarnessTurns(db: Database): void {
+  const candidates = db
+    .query<{ session_id: string; seq: number; text: string }, []>(
+      `SELECT session_id, seq, text FROM turns WHERE role = 'user'
+       AND (text LIKE '<%' OR text LIKE 'This session is being continued%' OR text LIKE '[Request interrupted%')`,
+    )
+    .all()
+    .filter((turn) => typedText(turn.text).length === 0);
+  if (candidates.length === 0) {
+    return;
+  }
+  const drop = db.query("DELETE FROM turns WHERE session_id = ? AND seq = ?");
+  const touched = [...new Set(candidates.map((c) => c.session_id))];
+  db.transaction(() => {
+    for (const { session_id: id, seq } of candidates) {
+      drop.run(id, seq);
+    }
+    db.run(
+      `DELETE FROM sessions WHERE id IN (${touched.map(() => "?").join(",")})
+       AND NOT EXISTS (SELECT 1 FROM turns WHERE session_id = sessions.id AND role = 'user')`,
+      touched,
+    );
+    db.run(
+      "UPDATE sessions SET turn_count = (SELECT COUNT(*) FROM turns WHERE session_id = sessions.id)",
+    );
+    db.run("DELETE FROM turns WHERE session_id NOT IN (SELECT id FROM sessions)");
+  })();
+  db.run("VACUUM");
+}
+
+/** Applies the schema; idempotent, and usable on `new Database(":memory:")`. */
+export function applySchema(db: Database): void {
+  db.run(SCHEMA_SQL);
+  purgeHarnessTurns(db);
+}
+
+/** Opens (creating if absent) the database at `path`: owner-only file and
+ * directory, WAL, a busy timeout so two hooks ending together both write. */
+export function openDb(path: string): Database {
+  const dir = dirname(path);
+  const fresh = !existsSync(path);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const db = new Database(path);
+  if (fresh) {
+    chmodSync(path, 0o600);
+  }
+  db.run("PRAGMA busy_timeout = 5000");
+  db.run("PRAGMA journal_mode = WAL");
+  applySchema(db);
+  return db;
+}
+
+/** The archive for this environment. */
+export function openArchive(env: Env): Database {
+  return openDb(resolveDbPath(env));
+}

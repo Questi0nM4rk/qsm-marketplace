@@ -1,0 +1,40 @@
+// qsm-essentials' function-hooks module: every agent names its model, and the transcript shows it.
+// The rules are lib/agent-model.ts; the hooks only refuse, tag and draw.
+import type { On } from "claude-code";
+import { NO_MODEL, TIER_COLOR, tagged, tierOf } from "../lib/agent-model.ts";
+
+export function register(on: On): void {
+  on("agent.spawn", (_$, e, next) => {
+    if (e.fork) {
+      return next(e);
+    }
+    if (e.model === undefined || e.model === "") {
+      return { deny: NO_MODEL };
+    }
+    // A workflow agent's content cannot be rewritten; the engine would log the attempt.
+    return e.workflow === undefined
+      ? next({ ...e, description: tagged(e.description, e.model) })
+      : next(e);
+  });
+
+  on("ui.render", { component: "ToolUse" }, async ($, e, next) => {
+    const { input } = e.props;
+    const model =
+      e.props.tool === "Agent" && typeof input === "object" && input !== null
+        ? Reflect.get(input, "model")
+        : undefined;
+    if (typeof model !== "string") {
+      return next(e);
+    }
+    const tier = tierOf(model);
+    const { Box, Text } = $.ui.resolve(e);
+    return (
+      <Box flexDirection="row">
+        <Text color={TIER_COLOR[tier] ?? "gray"} bold>
+          {tier}{" "}
+        </Text>
+        {await next(e)}
+      </Box>
+    );
+  });
+}

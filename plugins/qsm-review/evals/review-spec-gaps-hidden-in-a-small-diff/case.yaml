@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: review-spec-gaps-hidden-in-a-small-diff
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: review-spec-gaps-hidden-in-a-small-diff.sh

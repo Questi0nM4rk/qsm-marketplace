@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: readability-first-impression-of-an-unclear-repo
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: readability-first-impression-of-an-unclear-repo.sh

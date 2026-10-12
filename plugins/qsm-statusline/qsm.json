@@ -1,0 +1,40 @@
+{
+  "name": "qsm-statusline",
+  "qsm": {
+    "bin": { "qsm-statusline": "scripts/cli.ts" },
+    "noun": "statusline",
+    "commands": {
+      "qsm-statusline render": {
+        "description": "Read the harness status-line payload on stdin and print the status line; a source that is unavailable is omitted, and the render always succeeds",
+        "args": [
+          {
+            "name": "cwd",
+            "type": "string",
+            "description": "directory whose git state to show (defaults to the payload's working directory)"
+          },
+          { "name": "noColor", "type": "boolean", "description": "print without ANSI colour" }
+        ]
+      },
+      "qsm-statusline refresh": {
+        "description": "Recompute one directory's cached git state; the renderer starts this behind the frame, and it is runnable by hand to warm a cold cache",
+        "args": [
+          {
+            "name": "cwd",
+            "type": "string",
+            "description": "directory to read (defaults to the working directory)"
+          }
+        ]
+      },
+      "qsm-statusline doctor": {
+        "description": "Report whether the binary is on PATH and whether the harness settings run it, and print the status-line entry that wires it",
+        "args": [
+          {
+            "name": "settings",
+            "type": "string",
+            "description": "settings file to read (defaults to the user's Claude Code settings.json)"
+          }
+        ]
+      }
+    }
+  }
+}

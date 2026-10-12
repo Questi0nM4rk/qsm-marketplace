@@ -1,0 +1,5 @@
+# qsm-langdev strict profile. Tighter than clippy's defaults (25 and 7).
+# These two thresholds are the whole of rust strictness: the registry runs
+# one clippy invocation for every profile.
+cognitive-complexity-threshold = 15
+too-many-arguments-threshold = 5

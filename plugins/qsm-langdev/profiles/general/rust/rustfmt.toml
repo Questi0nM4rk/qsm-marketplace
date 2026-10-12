@@ -1,0 +1,5 @@
+# qsm-langdev general profile. rustfmt's defaults, made explicit so the gate and
+# the editor format the same way; the edition is what `rustfmt --check` on a
+# standalone file needs to parse current syntax.
+edition = "2021"
+newline_style = "Unix"

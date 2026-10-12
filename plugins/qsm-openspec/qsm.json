@@ -1,0 +1,21 @@
+{
+  "name": "qsm-openspec",
+  "qsm": {
+    "bin": {
+      "qsm-openspec": "scripts/cli.ts"
+    },
+    "noun": "openspec",
+    "commands": {
+      "qsm-openspec doctor": {
+        "description": "Report the installed OpenSpec CLI version and any upstream-generated openspec prompts the project carries",
+        "args": [
+          {
+            "name": "root",
+            "type": "string",
+            "description": "repository to report on (defaults to the repository the working directory sits in)"
+          }
+        ]
+      }
+    }
+  }
+}

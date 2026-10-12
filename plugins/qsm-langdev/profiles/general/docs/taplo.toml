@@ -1,0 +1,20 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns this
+# file.
+#
+# taplo has no rule catalog to name. It is a TOML formatter and a JSON Schema
+# validator, and `taplo lint` — the verb the gate runs — does three fixed
+# things: parse the document, run the structural check that catches a duplicate
+# or redefined key, and validate against whatever external JSON Schema the file
+# is associated with. None of the three is toggleable, so there is nothing here
+# to turn on or off.
+#
+# There is no [formatting] block. Those 20 options configure `taplo fmt`,
+# which nothing runs: verified by linting a file with misaligned entries, six
+# blank lines and a trailing comma, which passes, next to a file with a
+# duplicate key, which fails with "conflicting keys".
+#
+# `include` is the whole configuration, and it is load-bearing in a direction
+# that is easy to miss: taplo resolves these globs against the working
+# directory and reports success for a file none of them matches. A narrower
+# pattern here does not lint less loudly, it lints nothing and says ok.
+include = ["**/*.toml"]

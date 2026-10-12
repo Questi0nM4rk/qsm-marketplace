@@ -1,0 +1,26 @@
+{
+  "name": "qsm-knowledge",
+  "qsm": {
+    "bin": {
+      "qsm-knowledge": "scripts/cli.ts"
+    },
+    "noun": "knowledge",
+    "commands": {
+      "qsm-knowledge validate": {
+        "description": "Check one vault note: required frontmatter, a known type, a YYYY-MM-DD date, lowercase hyphenated tags, and a wikilink",
+        "args": [
+          {
+            "name": "note",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "path to the note file"
+          }
+        ]
+      },
+      "qsm-knowledge doctor": {
+        "description": "Probe that the notebook binary is on PATH and answers a help invocation, and name which check failed"
+      }
+    }
+  }
+}

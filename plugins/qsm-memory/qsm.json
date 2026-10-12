@@ -1,0 +1,163 @@
+{
+  "qsm": {
+    "bin": {
+      "qsm-memory": "scripts/cli.ts"
+    },
+    "noun": "memory",
+    "commands": {
+      "qsm-memory save": {
+        "description": "Save one Claude Code main transcript into the archive (what a person and the model said, as text; idempotent), or --catch-up every main transcript the archive lacks; a subagent transcript or one nobody typed in is skipped; --detach does it in a background process and returns at once",
+        "args": [
+          {
+            "name": "transcript",
+            "type": "string",
+            "positional": true,
+            "description": "path to a .jsonl transcript"
+          },
+          {
+            "name": "catchUp",
+            "type": "boolean",
+            "description": "save every transcript under Claude Code's projects dir the archive lacks or has an older copy of, at most 20"
+          },
+          {
+            "name": "cwd",
+            "type": "string",
+            "description": "the working directory when the transcript names none"
+          },
+          {
+            "name": "detach",
+            "type": "boolean",
+            "description": "run the save in a detached qsm-memory process and return at once; its outcome is appended to save.log beside the archive"
+          }
+        ]
+      },
+      "qsm-memory search": {
+        "description": "Full-text search over what was said in every saved session on this machine; prints hit lines or 'no session matches'",
+        "args": [
+          {
+            "name": "query",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the search words; prefix and stem matching"
+          },
+          {
+            "name": "limit",
+            "type": "number",
+            "description": "max hits (default 10)"
+          },
+          {
+            "name": "since",
+            "type": "string",
+            "description": "7d, or an ISO date: sessions that ended after it"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "only sessions of this project root"
+          }
+        ]
+      },
+      "qsm-memory show": {
+        "description": "Print one saved session's text turns; --full reads the transcript file on disk instead (tool calls and results too), and says so when the file is gone; --lines a-b windows by turn",
+        "args": [
+          {
+            "name": "session",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "a session id or its prefix"
+          },
+          {
+            "name": "full",
+            "type": "boolean",
+            "description": "read the transcript file on disk: tool calls and tool results too"
+          },
+          {
+            "name": "lines",
+            "type": "string",
+            "description": "a-b, the turn window"
+          }
+        ]
+      },
+      "qsm-memory list": {
+        "description": "One line per saved session, newest first: date, project, id, turns, title; --unsaved names transcripts on disk the archive lacks",
+        "args": [
+          {
+            "name": "since",
+            "type": "string",
+            "description": "7d, or an ISO date"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "only sessions of this project root"
+          },
+          {
+            "name": "unsaved",
+            "type": "boolean",
+            "description": "transcripts the archive lacks or has an older copy of; saves nothing"
+          }
+        ]
+      },
+      "qsm-memory note": {
+        "description": "Write a short-term note for this project, from today, expiring in 14 days; a handoff starts with the task id",
+        "args": [
+          {
+            "name": "text",
+            "type": "string",
+            "positional": true,
+            "description": "the note"
+          },
+          {
+            "name": "expires",
+            "type": "number",
+            "description": "days until the note expires (default 14)"
+          },
+          {
+            "name": "keep",
+            "type": "boolean",
+            "description": "never expires; drop it by hand"
+          },
+          {
+            "name": "global",
+            "type": "boolean",
+            "description": "every project sees it"
+          },
+          {
+            "name": "drop",
+            "type": "string",
+            "description": "remove the note with this id instead of writing one"
+          }
+        ]
+      },
+      "qsm-memory notes": {
+        "description": "The current notes for this project and the global ones, newest first, each with its from-date and expiry",
+        "args": [
+          {
+            "name": "all",
+            "type": "boolean",
+            "description": "every project's notes"
+          }
+        ]
+      },
+      "qsm-memory orient": {
+        "description": "The session-start block, at most 1000 characters, built with no model call: this project's last 5 saved sessions, the in-progress tasks and their epics from the task tool, the active notes, and how to search",
+        "args": [
+          {
+            "name": "cwd",
+            "type": "string",
+            "description": "the directory whose project to brief (default: the working directory)"
+          }
+        ]
+      },
+      "qsm-memory doctor": {
+        "description": "The health probe: the archive opens, how many sessions and notes it holds, and how many main transcripts on disk it still lacks"
+      },
+      "qsm-memory mcp": {
+        "description": "Serve search, show, list, notes and note as MCP tools over stdio",
+        "noNoun": true
+      }
+    }
+  }
+}

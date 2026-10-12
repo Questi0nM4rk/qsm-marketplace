@@ -1,0 +1,40 @@
+---
+schema_version: "1.0"
+name: hooks-review-lagging-tool-calls
+description: Hook timing from transcripts; one hook has no timing entries and looks slow from its command, one is slow but on an event with a longer allowance.
+tags: [scenario]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 14
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Every tool call lags by a second or two and I suspect my hooks. A copy of my Claude home is
+    in ./claude-home: settings.json and my last four sessions under projects/. The qsm-usage
+    ledger is not available here. Which hooks are slow or noisy?
+runs: 3
+graders:
+  - type: llm
+    name: slow-hook-found-by-measurement
+    focus: trace
+    criteria: |
+      PASS if the agent read the hook durations from the session files and the reply names the
+      PreToolUse Bash hook (lint-check) as the one lagging each call, with its measured typical
+      and worst time (about 3 s typical, over 4 s worst) and one fix for it. FAIL if the cause
+      is named from the hook commands alone, or no number comes from the sessions.
+  - type: llm
+    name: timeouts-and-slow-stop-judged-apart
+    focus: last_message
+    criteria: |
+      PASS if the reply says the PostToolUse prettier hook keeps hitting its 5 s timeout and treats
+      5 s as a floor (it ran at least that long), and does not blame the Stop notify hook (about
+      4 s) for the lag between tool calls. FAIL if the Stop hook is named as a cause of per-call
+      lag, or the timeouts are reported as an exact duration.
+  - type: llm
+    name: silent-hook-is-not-guessed
+    focus: last_message
+    criteria: |
+      PASS if the reply says the UserPromptSubmit context hook has no timing data in the sessions
+      and gives no speed verdict for it, even though its script looks heavy, and says what would
+      be needed to judge injected text (the ledger, which is missing here). FAIL if it calls that
+      hook slow or noisy from its command, or says nothing about it.

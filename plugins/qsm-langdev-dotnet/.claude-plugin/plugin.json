@@ -1,0 +1,19 @@
+{
+  "name": "qsm-langdev-dotnet",
+  "version": "0.1.0",
+  "description": "C# language idioms for an agent about to write .NET, beside the qsm-langdev gate that checks it.",
+  "keywords": [
+    "csharp",
+    "dotnet",
+    "idioms",
+    "async",
+    "dependency-injection",
+    "langdev"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": [
+    "qsm-langdev"
+  ]
+}

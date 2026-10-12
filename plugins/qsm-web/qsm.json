@@ -1,0 +1,237 @@
+{
+  "name": "qsm-web",
+  "qsm": {
+    "bin": {
+      "qsm-web": "scripts/cli.ts"
+    },
+    "noun": "web",
+    "commands": {
+      "qsm-web opensrc get": {
+        "description": "Acquire a library's source by package spec or repository address into one directory per library, and print what was acquired",
+        "args": [
+          {
+            "name": "target",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "a package spec (bare, scoped, registry-prefixed, owner/repo, or version-pinned) or a repository address"
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "description": "resolve the spec against this project's declared dependencies"
+          }
+        ]
+      },
+      "qsm-web doctor": {
+        "description": "Report each web bin's health, and whether the Tavily CLI, the Tavily skills and the Context7 skill are present, naming the fix for each that is not"
+      },
+      "qsm-web searxng search": {
+        "description": "Search the configured instance and print the results as one JSON array",
+        "args": [
+          {
+            "name": "query",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "repeatable": true,
+            "description": "the query words, joined with spaces"
+          },
+          {
+            "name": "numResults",
+            "type": "number",
+            "description": "how many results to keep (default from the config)"
+          },
+          {
+            "name": "engines",
+            "type": "string",
+            "description": "restrict to these engines, comma separated"
+          },
+          {
+            "name": "category",
+            "type": "string",
+            "description": "restrict to one category"
+          },
+          {
+            "name": "timeRange",
+            "type": "string",
+            "choices": ["day", "week", "month", "year"],
+            "description": "how far back results may reach"
+          },
+          {
+            "name": "language",
+            "type": "string",
+            "description": "result language, e.g. en"
+          },
+          {
+            "name": "safesearch",
+            "type": "number",
+            "choices": ["0", "1", "2"],
+            "description": "0 off, 1 moderate, 2 strict"
+          },
+          {
+            "name": "instance",
+            "type": "string",
+            "description": "query this instance instead of the configured one"
+          }
+        ]
+      },
+      "qsm-web searxng setup": {
+        "description": "Ask for the instance and the default engines and write them to the config file",
+        "noNoun": true
+      },
+      "qsm-web browserbox start": {
+        "description": "Start one container instance holding its own browser and live view",
+        "args": [
+          {
+            "name": "out",
+            "type": "string",
+            "description": "where this instance's artifacts land"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
+      "qsm-web browserbox ls": {
+        "description": "List the running instances with their live-view ports",
+        "args": [
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
+      "qsm-web browserbox stop": {
+        "description": "Stop one named instance, or every running one",
+        "args": [
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "description": "the instance to stop (exclusive with --all)"
+          },
+          {
+            "name": "all",
+            "type": "boolean",
+            "description": "stop every running instance"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
+      "qsm-web browserbox fetch": {
+        "description": "Open one address in an instance and report the page, with the artifacts asked for",
+        "args": [
+          {
+            "name": "url",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the address to open"
+          },
+          {
+            "name": "in",
+            "type": "string",
+            "description": "fetch inside this running instance instead of a fresh one"
+          },
+          { "name": "html", "type": "boolean", "description": "keep the rendered HTML" },
+          { "name": "screenshot", "type": "boolean", "description": "keep a screenshot" },
+          { "name": "cookies", "type": "boolean", "description": "keep the cookies" },
+          {
+            "name": "settle",
+            "type": "number",
+            "description": "milliseconds to wait after load before reading the page"
+          },
+          {
+            "name": "timeout",
+            "type": "number",
+            "description": "milliseconds before the page is given up on"
+          },
+          {
+            "name": "keep",
+            "type": "boolean",
+            "description": "leave the tab and its instance running afterwards"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
+      "qsm-web browserbox script": {
+        "description": "Run a step script inside an instance, filling any secret step from the vault",
+        "args": [
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the instance to run the script in"
+          },
+          {
+            "name": "file",
+            "type": "string",
+            "description": "the script file (exclusive with --steps)"
+          },
+          {
+            "name": "steps",
+            "type": "string",
+            "description": "the script as inline JSON (exclusive with --file)"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
+      "qsm-web browserbox takeover": {
+        "description": "Hand one tab to a human and wait until the wall is cleared or the timeout passes",
+        "args": [
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the instance holding the tab"
+          },
+          {
+            "name": "tab",
+            "type": "number",
+            "positional": true,
+            "required": true,
+            "description": "the tab to hand over"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "description": "what the human is being asked to clear"
+          },
+          {
+            "name": "timeout",
+            "type": "number",
+            "description": "milliseconds to wait for the wall to be cleared"
+          },
+          {
+            "name": "open",
+            "type": "boolean",
+            "description": "open the live view in the desktop browser"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      }
+    }
+  }
+}

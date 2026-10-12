@@ -1,0 +1,17 @@
+{
+  "name": "qsm-cockpit",
+  "version": "0.1.0",
+  "description": "The qsm loop at a glance: a band above the prompt with the stage the main chat said and every running agent on a chip coloured by its model tier, a stage tool the agent says its stage with, and a /cockpit pane with the agents, the claimed tasks and the decisions per ask.",
+  "keywords": [
+    "cockpit",
+    "stage",
+    "agents",
+    "loop",
+    "pane"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "types": "./types/index.d.ts",
+  "dependencies": ["qsm-tasks"]
+}

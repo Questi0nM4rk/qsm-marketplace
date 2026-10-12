@@ -1,0 +1,125 @@
+{
+  "name": "qsm-builder",
+  "qsm": {
+    "bin": {
+      "qsm-builder": "scripts/cli.ts"
+    },
+    "noun": "builder",
+    "commands": {
+      "qsm-builder lens": {
+        "description": "Serve the lens on 127.0.0.1, rendered from the repository on every request and redrawn when a file changes; a pen on each text turns an edit into one task in the task tool, never a file write",
+        "noNoun": true,
+        "args": [
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "the marketplace root, the one holding .claude-plugin/marketplace.json (default: the working directory)"
+          },
+          {
+            "name": "port",
+            "type": "number",
+            "description": "the port to listen on (default: 4747; 0 picks a free one)"
+          }
+        ]
+      },
+      "qsm-builder lens export": {
+        "description": "Read the marketplace in a directory and write one static, self-contained HTML page of it: every plugin, why it exists, its skills and agents, its eval cases, and what it refers to",
+        "args": [
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "the marketplace root, the one holding .claude-plugin/marketplace.json (default: the working directory)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "description": "the HTML file to write (default: .qsm/lens.html in the marketplace, which is gitignored and rewritten on each run)"
+          }
+        ]
+      },
+      "qsm-builder lens readme": {
+        "description": "Write the root README's generated block (banner, what it is, overview graph, catalog by kind, how to open the lens) and the two banners in assets/ from the model the lens reads; --check writes nothing and exits worse when they differ from what would be written",
+        "args": [
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "the marketplace root, the one holding .claude-plugin/marketplace.json (default: the working directory)"
+          },
+          {
+            "name": "check",
+            "type": "boolean",
+            "description": "write nothing; exit worse and name each file that is not what would be written"
+          }
+        ]
+      },
+      "qsm-builder lens pull": {
+        "description": "Turn the edits saved on the published lens (rows in the artifact database) into tasks in the marketplace of the working directory, the same ones the local server makes, and mark each row taken; a second pull makes none",
+        "args": [
+          {
+            "name": "url",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the claude.ai link of the published lens artifact"
+          }
+        ]
+      },
+      "qsm-builder lens brief": {
+        "description": "What the agent is told the first time it touches a plugin's files: the open edits and feedback of the plugin the file belongs to, or no text when the file is in no plugin of a marketplace or the plugin has none",
+        "args": [
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the absolute path of a file inside <marketplace>/plugins/<name>/"
+          }
+        ]
+      },
+      "qsm-builder lens tasks": {
+        "description": "List a plugin's open tasks in the marketplace of the working directory: the edits made on the lens and the feedback on its tools, each with whether its file changed since the edit was made (stale)",
+        "args": [
+          {
+            "name": "plugin",
+            "type": "string",
+            "positional": true,
+            "description": "the plugin, e.g. qsm-web (default: every plugin's own tasks)"
+          }
+        ]
+      },
+      "qsm-builder lens marketplace": {
+        "description": "The whole marketplace as a read-only view: its reason to exist, every plugin with its reason in one line, its dependencies and its count of open tasks; the data the Claude mod pane draws",
+        "args": [
+          {
+            "name": "dir",
+            "type": "string",
+            "description": "the marketplace root (default: the working directory)"
+          }
+        ]
+      },
+      "qsm-builder lens plugin": {
+        "description": "One plugin as a read-only view: why it exists, its skills and agents (each with its description and trigger words), its dependencies with the reasons from its spec, its open tasks; the data the Claude mod pane draws",
+        "args": [
+          {
+            "name": "plugin",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the plugin, e.g. qsm-web"
+          },
+          {
+            "name": "dir",
+            "type": "string",
+            "description": "the marketplace root (default: the working directory)"
+          }
+        ]
+      },
+      "qsm-builder doctor": {
+        "description": "The health probe: the binary runs and the task tool is on PATH for the lens's tasks; missing, naming qsm-tasks, when it is not"
+      }
+    }
+  }
+}

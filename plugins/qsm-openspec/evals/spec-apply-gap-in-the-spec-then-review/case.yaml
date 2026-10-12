@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: spec-apply-gap-in-the-spec-then-review
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: spec-apply-gap-in-the-spec-then-review.sh

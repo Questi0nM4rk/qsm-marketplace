@@ -1,0 +1,120 @@
+// The libsecret backend: the one place that runs `secret-tool`. Local only: it talks to the
+// Secret Service daemon on the session bus, never to a network, and never to rbw.
+
+import { spawnSync } from "node:child_process";
+import { binCheck, binPath } from "./bin.ts";
+import type { Check } from "./doctor.ts";
+import type { Entry } from "./entries.ts";
+import { fail } from "./errors.ts";
+import { WRAPPER_MARK } from "./vault.ts";
+
+const BIN = "secret-tool";
+const BUS_CLI = "busctl";
+const BUS_SEND = "dbus-send";
+const SERVICE = "org.freedesktop.secrets";
+const START_PROVIDER =
+  "start a Secret Service provider, for example gnome-keyring-daemon or KeePassXC";
+const INSTALL_FIX = "install libsecret (it ships secret-tool)";
+
+/** The attributes every entry of ours carries; `secret-tool` matches on all of them. */
+function attributes(namespace: string, key?: string): string[] {
+  return ["service", "qsm", "namespace", namespace, ...(key === undefined ? [] : ["key", key])];
+}
+
+/** Whether something owns the Secret Service name on the session bus, in one process. */
+function daemonOwned(): boolean {
+  const asked =
+    binPath(BUS_CLI) === null
+      ? spawnSync(
+          BUS_SEND,
+          [
+            "--session",
+            "--print-reply",
+            "--dest=org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus.NameHasOwner",
+            `string:${SERVICE}`,
+          ],
+          { encoding: "utf8" },
+        )
+      : spawnSync(BUS_CLI, ["--user", "status", SERVICE], { encoding: "utf8" });
+  return asked.status === 0 && !/boolean false/.test(asked.stdout);
+}
+
+/** Every operation starts here: nothing runs, and nothing falls back, without the tool and a daemon. */
+function ready(): void {
+  if (binPath(BIN) === null) {
+    fail(`${BIN} is not on PATH`, INSTALL_FIX, "missing");
+  }
+  if (!daemonOwned()) {
+    fail(`no Secret Service answers on the session bus (${SERVICE})`, START_PROVIDER, "missing");
+  }
+}
+
+/** Names and namespaces only: the `secret =` line of the search output is dropped here. */
+function entries(): Entry[] {
+  ready();
+  const found = spawnSync(BIN, ["search", "--all", "service", "qsm"], { encoding: "utf8" });
+  const rows: Entry[] = [];
+  let namespace = "";
+  for (const line of found.stdout.split("\n")) {
+    const [, value] = /^attribute\.namespace = (.*)$/.exec(line) ?? [];
+    if (value !== undefined) {
+      namespace = value;
+    }
+    const [, key] = /^attribute\.key = (.*)$/.exec(line) ?? [];
+    if (key !== undefined) {
+      rows.push({ name: key, folder: namespace, user: WRAPPER_MARK });
+    }
+  }
+  return rows;
+}
+
+function read(namespace: string, key: string): Uint8Array | null {
+  ready();
+  const result = spawnSync(BIN, ["lookup", ...attributes(namespace, key)]);
+  return result.status === 0 && result.stdout.length > 0 ? new Uint8Array(result.stdout) : null;
+}
+
+/** `secret-tool store` reads the secret from stdin when that is not a terminal. */
+function store(namespace: string, key: string, value?: Uint8Array): void {
+  ready();
+  const label = `--label=qsm ${namespace}/${key}`;
+  const stored = spawnSync(BIN, ["store", label, ...attributes(namespace, key)], {
+    input: value,
+    stdio: value === undefined ? "inherit" : ["pipe", "ignore", "pipe"],
+  });
+  if (stored.status !== 0) {
+    fail("nothing stored", `${BIN} store failed or was cancelled; run qsm-secrets doctor`);
+  }
+}
+
+function remove(namespace: string, key: string): boolean {
+  ready();
+  return spawnSync(BIN, ["clear", ...attributes(namespace, key)]).status === 0;
+}
+
+function health(namespace: string): Check[] {
+  const bin = binCheck(BIN, INSTALL_FIX);
+  const owned = daemonOwned();
+  const daemon: Check = owned
+    ? { name: "Secret Service on the session bus", ok: true, detail: SERVICE, fix: null }
+    : {
+        name: "Secret Service on the session bus",
+        ok: false,
+        detail: "no owner",
+        fix: START_PROVIDER,
+      };
+  if (!(bin.ok && owned)) {
+    return [bin, daemon];
+  }
+  const count = entries().filter((entry) => entry.folder === namespace || namespace === "").length;
+  return [
+    bin,
+    daemon,
+    { name: `namespace ${namespace}`, ok: true, detail: `${count} entries`, fix: null },
+  ];
+}
+
+/** Shaped like `Backend`; `backend.ts` is where that is checked. */
+export const libsecret = { name: "libsecret", entries, read, store, remove, health };

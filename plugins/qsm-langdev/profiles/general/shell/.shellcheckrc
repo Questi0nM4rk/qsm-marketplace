@@ -1,0 +1,11 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+# this file. shellcheck's four severities are upstream-fixed and the runner
+# counts every finding regardless of level, so the no-warnings floor holds
+# structurally — this file adds no disables. A rule worth suppressing at a
+# call site was the wrong rule to enable: disable it here with the reason,
+# never a `# shellcheck disable` comment in the code.
+
+# Follow `source`d files from the script's own directory: the ratchet invokes
+# shellcheck per file list, which otherwise false-positives SC1091.
+source-path=SCRIPTDIR
+external-sources=true

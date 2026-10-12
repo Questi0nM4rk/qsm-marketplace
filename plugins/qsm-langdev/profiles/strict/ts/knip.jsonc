@@ -1,0 +1,22 @@
+// qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+// file. Without it knip has no entry point and reports every file as unused,
+// which is findings nobody can act on. Name what the outside calls: each
+// plugin's scripts, its hooks, and the gates. Whatever a named entry cannot
+// reach is dead code, which is the finding worth having.
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  // A hooks module is register.tsx (JSX for its dialogs); a test file is an
+  // entry too, so a helper exported for its own test is used, not dead.
+  "entry": [
+    "plugins/*/scripts/*.ts",
+    "plugins/*/hooks/*.ts",
+    "plugins/*/hooks/*.tsx",
+    ".gates/*.ts",
+    "**/*.test.ts"
+  ],
+  "project": ["lib/**/*.ts", "plugins/**/*.ts", ".gates/**/*.ts"],
+  // Binaries a plugin's own installer puts on PATH rather than package
+  // dependencies: knip cannot see where they come from and would report
+  // each as unlisted.
+  "ignoreBinaries": ["sentrux"]
+}

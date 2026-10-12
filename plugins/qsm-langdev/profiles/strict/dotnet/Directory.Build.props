@@ -1,0 +1,32 @@
+<Project>
+  <!--
+    qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns
+    this file.
+
+    AnalysisMode All runs every candidate CA rule rather than the SDK's
+    recommended subset, which is the whole difference from general: verified
+    against dotnet 10.0.111, CA1822 fires under All and stays quiet under
+    Default on identical code. EnforceCodeStyleInBuild turns on the
+    IDE-prefixed style rules, and their severity comes from .editorconfig.
+
+    Every analyzer finding gates, and none of them is a warning nobody acts on.
+    The gate builds with -p:TreatWarningsAsErrors=false on the command line,
+    which beats anything this file says, and counts what the build reports on
+    both sides of a commit and a push: one more finding than the reference
+    commit blocks. The override is what makes them countable — under
+    TreatWarningsAsErrors the build stops at the first one and reports a failed
+    build instead of a list, which the gate can only read as a broken run.
+    Verified on dotnet 10.0.111: the same file builds to errors with
+    TreatWarningsAsErrors set in the project and to CS8603, CA1050 and CA1822
+    with the gate's override in place.
+
+    A rule worth suppressing at a call site was the wrong rule to enable: turn
+    it off in .editorconfig with the reason, never a #pragma in the code.
+  -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

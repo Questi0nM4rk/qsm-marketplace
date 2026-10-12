@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: researcher-stale-docs-installed-version
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: scaffold.sh

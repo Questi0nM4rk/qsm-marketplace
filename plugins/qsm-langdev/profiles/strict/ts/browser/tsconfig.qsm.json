@@ -1,0 +1,27 @@
+{
+  // qsm-langdev profile, target browser. Seeded by `qsm-langdev init`; the
+  // repo owns this file. Reference it from the repo tsconfig:
+  // "extends": "./tsconfig.qsm.json".
+  //
+  // Same checking options as the node target — type safety does not depend on
+  // where the code runs — with the library the code is checked against
+  // swapped: DOM instead of a server runtime's globals.
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noUncheckedSideEffectImports": true,
+    "strictBuiltinIteratorReturn": true,
+    "useUnknownInCatchVariables": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  }
+}

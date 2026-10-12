@@ -1,0 +1,17 @@
+# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+# file. One source of formatting for .cs, read by both csharpier and
+# `dotnet format`, so the two cannot disagree. The style-severity line is the
+# no-warnings floor: without it `dotnet format` does not report IDE style
+# rules at all. Only [*.cs] is touched; repo-wide editor settings stay the
+# project's. A rule worth suppressing at a call site was the wrong rule to
+# enable: turn it off here with the reason, never with a pragma in the code.
+root = false
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+max_line_length = 100
+dotnet_analyzer_diagnostic.category-Style.severity = error

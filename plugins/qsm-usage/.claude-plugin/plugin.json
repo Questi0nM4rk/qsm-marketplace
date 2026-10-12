@@ -1,0 +1,34 @@
+{
+  "name": "qsm-usage",
+  "version": "0.1.0",
+  "description": "Reviews how you use Claude Code and proposes what to cut, what to make permanent, and what to reach for instead, each with its saving in tokens; ships the measuring tools it stands on: qsm-usage count and toon, and a hook that filters shell output before the agent reads it.",
+  "types": "./types/index.d.ts",
+  "keywords": [
+    "usage",
+    "review",
+    "tokens",
+    "context",
+    "toon",
+    "measurement",
+    "filter",
+    "audit"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": [],
+  "userConfig": {
+    "toonWrap": {
+      "type": "string",
+      "multiple": true,
+      "title": "TOON wrap list",
+      "description": "Tool calls whose structured output reaches the model as TOON when that is smaller. A Bash pattern matches the command, an mcp__ pattern the tool name; * matches anything.",
+      "default": [
+        "qsm-* --json",
+        "gh * --json *",
+        "kubectl * -o json",
+        "mcp__*"
+      ]
+    }
+  }
+}

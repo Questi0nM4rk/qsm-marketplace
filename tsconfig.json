@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.qsm.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": [".gates/**/*.ts", "lib/**/*.ts", "plugins/**/*.ts"],
+  // A function-hooks module imports type-only from the ambient module
+  // 'claude-code', which only exists under the generated declarations a
+  // hooks/tsconfig.json includes (plugin-authoring skill; CLAUDEMODS.md
+  // section 10). The root config has no such include, so it cannot resolve
+  // that module: excluded here, typechecked instead through each hooks
+  // module's own tsconfig (`bunx tsc -p plugins/<name>/hooks`).
+  "exclude": [
+    "node_modules",
+    "**/dist/**",
+    "plugins/*/hooks/register.ts",
+    "plugins/*/hooks/noun.generated.ts",
+    "plugins/*/hooks/*.test.ts"
+  ]
+}

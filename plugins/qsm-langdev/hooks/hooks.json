@@ -1,0 +1,19 @@
+{
+  "modules": [
+    "./register.tsx"
+  ],
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/dist/gate-hook\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "qsm-langdev-ts",
+  "version": "0.1.0",
+  "description": "TypeScript and Bun development idioms for an agent about to write code, beside the qsm-langdev gate that enforces them.",
+  "keywords": [
+    "typescript",
+    "bun",
+    "idioms",
+    "types",
+    "runtime",
+    "langdev"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": [
+    "qsm-langdev"
+  ]
+}

@@ -1,0 +1,33 @@
+---
+schema_version: "1.0"
+name: shell-dev-error-report
+description: A bash script written with no extra instructions, graded on shebang, external tools and style.
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: seed.sh
+execution:
+  max_turns: 12
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Write report.sh in this folder. It takes a log file path, and prints how many ERROR lines
+    there are for each day, and the three most frequent error messages. Run it on app.log and
+    show me the script and its output.
+graders:
+  - type: llm
+    name: portable-lean-readable
+    focus: trace
+    criteria: |
+      Intent of this eval: a person asks for a small bash report script and wants one they can keep; the agent is trusted when the script is portable and lean with bash builtins, strict and carefully written, not a chain of grep, awk and sed.
+
+      PASS only if the script that was written and run does all of:
+
+      1. its first line is `#!/usr/bin/env bash`, and it runs under strict mode;
+      2. it does the splitting, matching, counting and trimming with bash builtins (parameter
+         expansion, `[[ =~ ]]`, `read`, an associative array) and calls an external tool only
+         where no builtin does the job; a pipeline of `grep`, `awk`, `sed`, `cut` or `cat file |`
+         for the per-day counting is a FAIL;
+      3. it reads as a small program: quoted expansions, `local` variables in functions, errors
+         to stderr with a non-zero exit, and a check of the argument.
+
+      FAIL if any is missing.

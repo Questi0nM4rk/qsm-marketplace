@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "qsm-memory": {
+      "command": "qsm-memory",
+      "args": ["mcp"]
+    }
+  }
+}

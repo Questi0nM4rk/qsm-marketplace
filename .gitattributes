@@ -1,0 +1,5 @@
+# Derived from qsm.json by lib/generate-noun.ts and proven fresh by the generated gate.
+# export-ignore keeps them out of the trees qsm-langdev scores (it materializes them with
+# git archive), as the root spec asks: tools leave generated files to the generator.
+plugins/*/hooks/noun.generated.ts export-ignore linguist-generated=true
+plugins/*/types/index.d.ts linguist-generated=true

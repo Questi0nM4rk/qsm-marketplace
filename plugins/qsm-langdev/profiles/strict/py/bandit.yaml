@@ -1,0 +1,24 @@
+---
+# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+# file. bandit has no config auto-discovery — the registry passes `-c
+# bandit.yaml` when this file exists.
+#
+# Every test bandit ships is on, and nothing is skipped. bandit has no
+# default-off tier and no recommended subset: all 82 numbered tests plus the
+# B001 blacklist meta-test run, and an empty skips list is the claim that none
+# of them was worth turning off.
+#
+# The two the general profile skips are back: B101, assert, because a suite is
+# not the only place an assert carries a check, and B404, the blanket
+# 'subprocess was imported', because at this tier the import is worth reading
+# even when B602 to B607 say nothing about the call.
+#
+# The tests bound to a framework — Django's B610 and B611, Flask's B201,
+# Jinja2's B701, paramiko's B601 — report nothing on a repository that does not
+# use that framework: they match a call that only exists there.
+#
+# bandit rates severity and confidence per finding and has no warning level;
+# every finding fails. A rule worth suppressing at a call site was the wrong
+# rule to enable: add it to skips here with the reason, never a nosec comment
+# in the code.
+skips: []

@@ -1,0 +1,218 @@
+// qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+// file. Every rule, not a curated subset: a finding here may be a
+// defect or a smell, and both are worth an error.
+//
+// Every rule biome ships is on except the ones named below, and each of those
+// carries why. Three kinds are named: rules for a framework this profile
+// cannot know a repository uses (React, Vue, Solid, Qwik, Next, GraphQL, CSS,
+// a11y — a wrong-framework rule does not stay quiet, it invents findings:
+// useQwikValidLexicalScope reported 22 on a CLI that has never seen Qwik),
+// rules this project decided against with the reason beside them, and the
+// nursery group, which biome itself calls unstable, minus the one rule named
+// back on inside it.
+//
+// There is no biome-ignore comment anywhere. A finding worth suppressing at a
+// call site is evidence the rule was the wrong rule to enable, so it comes out
+// here instead.
+//
+// Target: node. `node:` imports and `process` are the runtime, not a mistake.
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
+  "formatter": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "all",
+      "nursery": {
+        "recommended": false,
+        // The one nursery rule named back on. `a || fallback` takes the
+        // fallback for "", 0, NaN and false, which are values a caller meant to
+        // send; `a ?? fallback` takes it only for null and undefined. Measured
+        // on this tree: 0 findings across 36 uses of ||, because every one of
+        // them is boolean logic rather than a fallback. It costs nothing today
+        // and catches the first one written.
+        "useNullishCoalescing": "error"
+      },
+      "a11y": {
+        "noAccessKey": "off",
+        "noAmbiguousAnchorText": "off",
+        "noAriaHiddenOnFocusable": "off",
+        "noAriaUnsupportedElements": "off",
+        "noAutofocus": "off",
+        "noDistractingElements": "off",
+        "noHeaderScope": "off",
+        "noInteractiveElementToNoninteractiveRole": "off",
+        "noLabelWithoutControl": "off",
+        "noNoninteractiveElementInteractions": "off",
+        "noNoninteractiveElementToInteractiveRole": "off",
+        "noNoninteractiveTabindex": "off",
+        "noPositiveTabindex": "off",
+        "noRedundantAlt": "off",
+        "noRedundantRoles": "off",
+        "noStaticElementInteractions": "off",
+        "noSvgWithoutTitle": "off",
+        "useAltText": "off",
+        "useAnchorContent": "off",
+        "useAriaActivedescendantWithTabindex": "off",
+        "useAriaPropsForRole": "off",
+        "useAriaPropsSupportedByRole": "off",
+        "useButtonType": "off",
+        "useFocusableInteractive": "off",
+        "useGenericFontNames": "off",
+        "useHeadingContent": "off",
+        "useHtmlLang": "off",
+        "useIframeTitle": "off",
+        "useKeyWithClickEvents": "off",
+        "useKeyWithMouseEvents": "off",
+        "useMediaCaption": "off",
+        "useSemanticElements": "off",
+        "useValidAnchor": "off",
+        "useValidAriaProps": "off",
+        "useValidAriaRole": "off",
+        "useValidAriaValues": "off",
+        "useValidAutocomplete": "off",
+        "useValidLang": "off"
+      },
+      "complexity": {
+        "noImportantStyles": "off",
+        "noUselessFragments": "off"
+      },
+      "correctness": {
+        "noBeforeInteractiveScriptOutsideDocument": "off",
+        "noChildrenProp": "off",
+        "noDuplicateArgumentNames": "off",
+        "noDuplicateAttributes": "off",
+        "noDuplicateEnumValueNames": "off",
+        "noDuplicateInputFieldNames": "off",
+        "noDuplicateVariableNames": "off",
+        "noInvalidDirectionInLinearGradient": "off",
+        "noInvalidGridAreas": "off",
+        "noInvalidPositionAtImportRule": "off",
+        "noMissingVarFunction": "off",
+        "noNestedComponentDefinitions": "off",
+        "noNextAsyncClientComponent": "off",
+        "noNodejsModules": "off",
+        "noProcessGlobal": "off",
+        "noQwikUseVisibleTask": "off",
+        "noReactPropAssignments": "off",
+        "noRenderReturnValue": "off",
+        "noRestrictedElements": "off",
+        "noSolidDestructuredProps": "off",
+        "noUnknownFunction": "off",
+        "noUnknownMediaFeatureName": "off",
+        "noUnknownProperty": "off",
+        "noUnknownPseudoClass": "off",
+        "noUnknownPseudoElement": "off",
+        "noUnknownTypeSelector": "off",
+        "noUnknownUnit": "off",
+        "noUnmatchableAnbSelector": "off",
+        "noVoidElementsWithChildren": "off",
+        "noVueDataObjectDeclaration": "off",
+        "noVueDuplicateKeys": "off",
+        "noVueReservedKeys": "off",
+        "noVueReservedProps": "off",
+        "noVueSetupPropsReactivityLoss": "off",
+        "noVueVIfWithVFor": "off",
+        "useExhaustiveDependencies": "off",
+        "useGraphqlNamedOperations": "off",
+        "useHookAtTopLevel": "off",
+        "useImageSize": "off",
+        "useInlineScriptId": "off",
+        "useJsxKeyInIterable": "off",
+        "useLoneAnonymousOperation": "off",
+        "useQwikClasslist": "off",
+        "useQwikMethodUsage": "off",
+        "useQwikValidLexicalScope": "off",
+        "useUniqueElementIds": "off",
+        "useVueVForKey": "off",
+        "useVueValidTemplateRoot": "off",
+        "useVueValidVBind": "off",
+        "useVueValidVCloak": "off",
+        "useVueValidVElse": "off",
+        "useVueValidVElseIf": "off",
+        "useVueValidVHtml": "off",
+        "useVueValidVIf": "off",
+        "useVueValidVOn": "off",
+        "useVueValidVOnce": "off",
+        "useVueValidVPre": "off",
+        "useVueValidVText": "off"
+      },
+      "performance": {
+        "noImgElement": "off",
+        "noJsxPropsBind": "off",
+        "noSyncScripts": "off",
+        "noUnwantedPolyfillio": "off",
+        "useGoogleFontPreconnect": "off",
+        "useSolidForComponent": "off",
+        "useTopLevelRegex": "off",
+        "useVueVapor": "off"
+      },
+      "security": {
+        "noBlankTarget": "off",
+        "noDangerouslySetInnerHtml": "off",
+        "noDangerouslySetInnerHtmlWithChildren": "off",
+        "noScriptUrl": "off"
+      },
+      "style": {
+        "noContinue": "off",
+        "noDescendingSpecificity": "off",
+        "noHeadElement": "off",
+        "noHexColors": "off",
+        "noImplicitBoolean": "off",
+        "noJsxLiterals": "off",
+        "noProcessEnv": "off",
+        "noRootType": "off",
+        "noTernary": "off",
+        "noValueAtRule": "off",
+        "noVueOptionsApi": "off",
+        "useComponentExportOnlyModules": "off",
+        "useConsistentCurlyBraces": "off",
+        "useConsistentGraphqlDescriptions": "off",
+        "useDeprecatedReason": "off",
+        "useExportsLast": "off",
+        "useFragmentSyntax": "off",
+        "useGraphqlNamingConvention": "off",
+        "useInputName": "off",
+        "useLoneExecutableDefinition": "off",
+        "useReactFunctionComponents": "off",
+        "useSelfClosingElements": "off",
+        "useVueConsistentVBindStyle": "off",
+        "useVueConsistentVOnStyle": "off",
+        "useVueDefineMacrosOrder": "off",
+        "useVueHyphenatedAttributes": "off",
+        "useVueMultiWordComponentNames": "off"
+      },
+      "suspicious": {
+        "noAlert": "off",
+        "noArrayIndexKey": "off",
+        "noDeprecatedMediaType": "off",
+        "noDocumentCookie": "off",
+        "noDocumentImportInPage": "off",
+        "noDuplicateAtImportRules": "off",
+        "noDuplicateCustomProperties": "off",
+        "noDuplicateFields": "off",
+        "noDuplicateFontNames": "off",
+        "noDuplicateGraphqlOperationName": "off",
+        "noDuplicateJsxProps": "off",
+        "noDuplicateProperties": "off",
+        "noDuplicateSelectorsKeyframeBlock": "off",
+        "noDuplicatedSpreadProps": "off",
+        "noEmptyBlock": "off",
+        "noHeadImportInDocument": "off",
+        "noImportantInKeyframe": "off",
+        "noLeakedRender": "off",
+        "noReactForwardRef": "off",
+        "noReactSpecificProps": "off",
+        "noShorthandPropertyOverrides": "off",
+        "noSuspiciousSemicolonInJsx": "off",
+        "noUnknownAtRules": "off",
+        "noUnknownAttribute": "off",
+        "noVueArrowFuncInWatch": "off",
+        "useDeprecatedDate": "off",
+        "useGoogleFontDisplay": "off"
+      }
+    }
+  }
+}

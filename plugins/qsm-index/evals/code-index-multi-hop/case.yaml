@@ -1,0 +1,52 @@
+---
+schema_version: "1.0"
+name: code-index-multi-hop
+description: Four multi-hop questions with known answers about a snapshot of this marketplace, under a low turn cap, so the index has to win on correctness and fewer turns.
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: snapshot.sh
+execution:
+  max_turns: 10
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    The current folder holds a copy of a TypeScript monorepo of command-line plugins that I have
+    never read. Answer these four questions from its code. For each, name the functions and the
+    file paths, and say which one you are sure of and which you inferred. You have few steps, so
+    spend them where they pay.
+
+    1. Root `lib/detach.ts` exports `spawnDetached`. Which functions call it directly?
+    2. A graph read on a stale index answers with a first line `index is stale; reindex started`.
+       Name the function that writes that line, and the chain of functions below it down to the
+       one that calls `spawnDetached`.
+    3. Which flag of a `qsm-memory` verb starts a detached process, which command does that
+       process run, and where does its output go?
+    4. A verb handler of any qsm command-line binary throws an Error. Which function catches it,
+       which outcome code does it become, and what exit code does the binary return?
+graders:
+  - type: llm
+    name: graph-hops-q1-q2
+    criteria: |
+      PASS only if both hold:
+
+      1. Question 1 names exactly these three direct callers, each with its plugin and file:
+         `spawnBuild` in qsm-index (lib/auto.ts), `startDetached` in qsm-memory (lib/detach.ts),
+         and the `scrub` handler in qsm-secrets (scripts/cli.ts).
+      2. Question 2 names `stalenessLine` as the writer of the line and the chain
+         `stalenessLine`, `refresh` (lib/tools.ts), `auto` and `spawnBuild` (lib/auto.ts), down to
+         `spawnDetached`.
+
+      FAIL if a caller is missing or invented, or a link of the chain is missing.
+  - type: llm
+    name: flow-hops-q3-q4
+    criteria: |
+      PASS only if both hold:
+
+      3. Question 3 answers `save --detach` of qsm-memory, which starts a detached
+         `qsm-memory save` (with the transcript, `--catch-up` or `--cwd` as given) through
+         `startDetached`, and its output is appended to `save.log` beside the archive.
+      4. Question 4 answers `callHandler` in lib/cli-base.ts, the outcome code `failed`, and exit
+         code 1.
+
+      FAIL if the flag, the command, the log, the function, the code or the exit number is wrong
+      or missing.

@@ -1,0 +1,15 @@
+{
+  // qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns
+  // this file. Reference it from the repo tsconfig: "extends": "./tsconfig.qsm.json".
+  // On top of general: indexing returns T | undefined until proven, overrides
+  // are declared, optional means absent-or-value rather than maybe-undefined.
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true
+  }
+}

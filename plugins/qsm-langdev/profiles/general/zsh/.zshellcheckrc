@@ -1,0 +1,6 @@
+# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+# this file. zshellcheck rule suppression: every ZC kata listed here is a
+# repo-wide disable and needs a written reason beside it; per-line
+# suppression in code (`# noka`) is the preferred route. zsh-lint, the other
+# zsh check, has no config surface at all — nothing to ship for it.
+disabled_katas: []

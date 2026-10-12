@@ -1,0 +1,20 @@
+{
+  "name": "qsm-web",
+  "version": "0.1.0",
+  "description": "Repeatable web research: one loop (searxng search, keyword rounds, Context7 for a library, Tavily when the keywords will not come, one page in a browser, the person on a wall), the web-research agent that runs it, and one skill per tool.",
+  "types": "./types/index.d.ts",
+  "keywords": [
+    "web",
+    "search",
+    "research",
+    "documentation",
+    "opensrc",
+    "browser",
+    "captcha",
+    "takeover"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": []
+}

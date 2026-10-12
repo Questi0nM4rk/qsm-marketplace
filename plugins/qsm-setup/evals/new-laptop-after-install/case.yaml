@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: new-laptop-after-install
+tags: [scenario]
+runs: 3
+context:
+  scaffold_script: scaffold.sh

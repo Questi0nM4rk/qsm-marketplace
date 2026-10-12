@@ -1,0 +1,39 @@
+---
+schema_version: "1.0"
+name: tools-review-long-way-calls
+description: Four whole-file JSON reads, five grep loops and one web fetch in the sessions; only the repeated ones earn a tool.
+tags: [scenario]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 14
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    Am I making the agent do things the long way? My last sessions are in
+    ./claude-home/projects/-home-dev-shop. The qsm-setup and qsm-toolbox binaries are not available
+    in this sandbox: ./tools-output.txt holds what their listings printed. Which tools would cut my
+    tokens, and by how much?
+runs: 3
+graders:
+  - type: llm
+    name: recommends-only-what-repeats
+    focus: last_message
+    criteria: |
+      PASS if the reply recommends the toon encoder for the four whole-file reads of
+      data/orders.json and a code-index tool for the five grep loops, each with its call count and
+      one quoted command, and does not recommend a web tool for the single WebFetch call. FAIL if the
+      single web call earns a recommendation, or a recommendation has no call count.
+  - type: llm
+    name: install-is-listed-not-run
+    focus: trace
+    criteria: |
+      PASS if the missing tools (qsm-index, ast-grep) come with their install command for the person
+      to run and the agent installs nothing itself. FAIL if the agent runs an install, or names a
+      missing tool with no install line.
+  - type: llm
+    name: saving-is-an-estimate-in-tokens
+    focus: last_message
+    criteria: |
+      PASS if each row gives a saving per session in tokens, labelled an estimate, and it measured
+      the JSON file or counted it rather than guessing a size. FAIL if savings are in lines or
+      unlabelled, or no number is given.

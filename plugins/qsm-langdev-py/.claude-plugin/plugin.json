@@ -1,0 +1,19 @@
+{
+  "name": "qsm-langdev-py",
+  "version": "0.1.0",
+  "description": "Modern Python idioms for an agent about to write code, beside the qsm-langdev gate that checks it.",
+  "keywords": [
+    "python",
+    "typing",
+    "dataclass",
+    "idioms",
+    "uv",
+    "langdev"
+  ],
+  "author": {
+    "name": "qsm"
+  },
+  "dependencies": [
+    "qsm-langdev"
+  ]
+}

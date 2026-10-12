@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "qsm-index": {
+      "command": "qsm-index",
+      "args": ["mcp", "serve"]
+    }
+  }
+}

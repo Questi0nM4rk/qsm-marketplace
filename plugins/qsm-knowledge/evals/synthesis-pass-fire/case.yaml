@@ -1,0 +1,7 @@
+---
+schema_version: "1.1"
+name: synthesis-pass-fire
+tags: [fire]
+runs: 3
+context:
+  scaffold_script: synthesis-pass-fire.sh

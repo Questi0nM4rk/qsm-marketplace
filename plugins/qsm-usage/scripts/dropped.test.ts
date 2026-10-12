@@ -1,0 +1,44 @@
+// `qsm-usage drop` and `dropped` through the real binary, state under a sandbox dir.
+
+import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+
+const CLI = resolve(import.meta.dir, "cli.ts");
+
+const sandbox = () => sandboxDir("qsm-usage-dropped-test-");
+
+function run(state: string, args: string[]) {
+  return spawnSync("bun", [CLI, ...args], {
+    encoding: "utf8",
+    env: { ...process.env, QSM_SETUP_STATE_DIR: state },
+  });
+}
+
+describe("qsm-usage drop", () => {
+  test("a dropped finding is listed once, however often it is dropped", () => {
+    const state = sandbox();
+    expect(run(state, ["dropped"]).stdout.trim()).toBe("");
+    expect(run(state, ["drop", "unused-extensions:skill pdf-tools"]).status).toBe(0);
+    expect(run(state, ["drop", "unused-extensions:skill pdf-tools"]).status).toBe(0);
+    expect(run(state, ["drop", "duplicates:rule a"]).status).toBe(0);
+    expect(run(state, ["dropped"]).stdout.trim().split("\n")).toEqual([
+      "unused-extensions:skill pdf-tools",
+      "duplicates:rule a",
+    ]);
+  });
+
+  test("a key that is not topic:target is a broken call", () => {
+    const ran = run(sandbox(), ["drop", "nothing"]);
+    expect(ran.status).toBe(2);
+  });
+
+  test("a damaged file fails loud instead of reading as empty", () => {
+    const state = sandbox();
+    run(state, ["drop", "duplicates:rule a"]);
+    writeFileSync(join(state, "usage", "dropped.json"), "{}");
+    expect(run(state, ["dropped"]).status).toBe(1);
+  });
+});

@@ -1,0 +1,199 @@
+{
+  "name": "qsm-index",
+  "qsm": {
+    "bin": {
+      "qsm-index": "scripts/cli.ts"
+    },
+    "noun": "index",
+    "commands": {
+      "qsm-index build": {
+        "description": "Build the map of the git repository holding a path in the foreground: refresh its structural dependency graph, run one semantic search, and record the result in its status file",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the local path to index"
+          }
+        ]
+      },
+      "qsm-index search": {
+        "description": "Semantic and keyword lookup over the git repository holding an absolute path, with a natural-language or code query",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the repository"
+          },
+          {
+            "name": "query",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "natural-language or code query"
+          },
+          {
+            "name": "top_k",
+            "type": "number",
+            "description": "result count, at most 20 (default 5)"
+          }
+        ]
+      },
+      "qsm-index structure": {
+        "description": "Structural graph lookup over the git repository holding an absolute path: explain describes one node and its neighbours, path finds the shortest dependency path between two nodes",
+        "args": [
+          {
+            "name": "repo",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the graphed repository"
+          },
+          {
+            "name": "op",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "choices": [
+              "explain",
+              "path"
+            ],
+            "description": "graph operation"
+          },
+          {
+            "name": "node",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "node to explain, or the start node of a path"
+          },
+          {
+            "name": "to",
+            "type": "string",
+            "description": "end node, for op=path only"
+          }
+        ]
+      },
+      "qsm-index impact": {
+        "description": "What depends on a node of the structural graph of the git repository holding an absolute path, found by a reverse walk to a depth (default 2); a node nothing depends on answers unknown, never safe",
+        "args": [
+          {
+            "name": "repo",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the graphed repository"
+          },
+          {
+            "name": "node",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "node to find the dependents of"
+          },
+          {
+            "name": "depth",
+            "type": "number",
+            "description": "reverse traversal depth (default 2)"
+          }
+        ]
+      },
+      "qsm-index context": {
+        "description": "The symbols of one file of the structural graph with their start lines; with file:line it marks the enclosing symbol and adds the chunks semble finds related to that line",
+        "args": [
+          {
+            "name": "repo",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the graphed repository"
+          },
+          {
+            "name": "target",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "file, or file:line, relative to the repository or absolute"
+          }
+        ]
+      },
+      "qsm-index reindex": {
+        "description": "Start a background build of the git repository holding an absolute path and return at once; a build already running is left running; --if-indexed starts one only for a repository that has an index the person did not decline",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the repository"
+          },
+          {
+            "name": "ifIndexed",
+            "type": "boolean",
+            "description": "start the build only when the repository already has an index and the person did not decline it; otherwise answer ok and start nothing"
+          }
+        ]
+      },
+      "qsm-index edited": {
+        "description": "Count one edited file towards the refresh of the indexed repository holding it, and start a background build at the twentieth distinct file since the last build started; a file outside an indexed, not declined repository counts nothing",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the edited file, absolute or relative to --cwd"
+          },
+          {
+            "name": "cwd",
+            "type": "string",
+            "description": "the directory a relative path is resolved against (default: the working directory)"
+          }
+        ]
+      },
+      "qsm-index status": {
+        "description": "Report whether the repository's index is present, how far it is behind HEAD, how many files changed since the build, whether a build is running, and how the last one ended",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the repository"
+          }
+        ]
+      },
+      "qsm-index auto": {
+        "description": "The session-start decision for the git repository holding a path: leave a fresh, running or declined one alone, refresh a stale one of at most 5000 files in the background, and answer ask for one with no index or a stale one above 5000 files, its data carrying askText, the instruction the session hands the agent",
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the repository"
+          },
+          {
+            "name": "consent",
+            "type": "string",
+            "choices": [
+              "yes",
+              "no"
+            ],
+            "description": "the person's answer to ask: yes builds, no is remembered for this repository"
+          }
+        ]
+      },
+      "qsm-index doctor": {
+        "description": "Report healthy only when the qsm-index binary is on PATH and answers --help; graphify must be 0.8.34 or newer; semble is reported beside the verdict"
+      },
+      "qsm-index mcp serve": {
+        "description": "Serve search, structure, reindex and status over MCP on stdio until the client disconnects; no call blocks past the 30 s MCP limit",
+        "noNoun": true
+      }
+    }
+  }
+}

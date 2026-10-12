@@ -1,0 +1,78 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readStatusLine, STATUS_LINE_COMMAND, describe as say, settingsPath } from "./settings.ts";
+
+// Every sandbox this file makes is removed after the test that made it,
+// passing or failing: a `finally` inside one test would leave the rest.
+const sandboxes: string[] = [];
+
+function settingsFile(contents: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "qsm-statusline-settings-"));
+  sandboxes.push(dir);
+  const path = join(dir, "settings.json");
+  writeFileSync(path, contents);
+  return path;
+}
+
+afterEach(() => {
+  for (const dir of sandboxes.splice(0)) {
+    // A sealed file is unsealed first, or its own removal is denied too.
+    chmodSync(join(dir, "settings.json"), 0o600);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("readStatusLine", () => {
+  test("recognises the entry this plugin wires", () => {
+    const path = settingsFile(
+      JSON.stringify({ statusLine: { type: "command", command: STATUS_LINE_COMMAND } }),
+    );
+    expect(readStatusLine(path)).toEqual({ kind: "wired" });
+  });
+
+  test("a missing file is a fresh machine, which invites a write", () => {
+    expect(readStatusLine(join(tmpdir(), "qsm-statusline-absent", "settings.json"))).toEqual({
+      kind: "absent",
+    });
+  });
+
+  test("a settings file with other keys and no status line is absent, not broken", () => {
+    expect(readStatusLine(settingsFile(JSON.stringify({ model: "opus" })))).toEqual({
+      kind: "absent",
+    });
+  });
+
+  test("somebody else's status line is reported, never replaced silently", () => {
+    const path = settingsFile(
+      JSON.stringify({ statusLine: { type: "command", command: "~/.claude/mine.sh" } }),
+    );
+    expect(readStatusLine(path)).toEqual({ kind: "other", command: "~/.claude/mine.sh" });
+  });
+
+  test("Configuration file is unreadable", () => {
+    const state = readStatusLine(settingsFile('{"statusLine": '));
+    expect(state.kind).toBe("unreadable");
+    expect(say(state)).toContain("could not be read");
+  });
+
+  test("a file the process may not open is unreadable, not a fresh machine", () => {
+    // Absent invites a write, unreadable forbids one. A settings file whose
+    // permissions say no holds a configuration this process cannot see.
+    const path = settingsFile(JSON.stringify({ statusLine: { type: "command", command: "x" } }));
+    chmodSync(path, 0o000);
+    expect(readStatusLine(path).kind).toBe("unreadable");
+  });
+
+  test("valid JSON that is not an object is unreadable too", () => {
+    expect(readStatusLine(settingsFile("[1,2,3]")).kind).toBe("unreadable");
+  });
+});
+
+describe("settingsPath", () => {
+  test("the QSM override wins, and an empty one falls back to the user's file", () => {
+    expect(settingsPath({ QSM_STATUSLINE_SETTINGS: "/tmp/other.json" })).toBe("/tmp/other.json");
+    expect(settingsPath({})).toContain(join(".claude", "settings.json"));
+  });
+});

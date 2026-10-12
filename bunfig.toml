@@ -1,0 +1,5 @@
+# Function-hook tests (plugins/*/hooks/*.test.ts) run only inside the harness:
+# `claude plugin test plugins/<name>/hooks`. They import claude-code/testing, which
+# `bun test` cannot resolve, so bun test skips them.
+[test]
+pathIgnorePatterns = ["plugins/*/hooks/**"]

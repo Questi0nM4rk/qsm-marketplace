@@ -1,0 +1,104 @@
+{
+  "name": "qsm-secrets",
+  "qsm": {
+    "bin": { "qsm-secrets": "scripts/cli.ts" },
+    "noun": "secrets",
+    "commands": {
+      "qsm-secrets pipe": {
+        "noNoun": true,
+        "description": "Run a consumer with the key's value on its stdin; the command follows a -- separator, so this verb is reached from a shell, not from the noun",
+        "passthrough": true,
+        "args": [
+          { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets env": {
+        "noNoun": true,
+        "description": "Run a consumer with the key's value in one environment variable; the command follows a -- separator, so this verb is reached from a shell, not from the noun",
+        "passthrough": true,
+        "args": [
+          { "name": "pair", "type": "string", "positional": true, "required": true, "description": "<key>=<ENVVAR>" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets set": {
+        "description": "Store a new key; the value is typed into the vault's own prompt and is never an argument or stdin",
+        "args": [
+          { "name": "key", "type": "string", "positional": true, "required": true, "description": "the key name to store under" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
+        ]
+      },
+      "qsm-secrets has": {
+        "description": "Report whether the key is stored: ok when it is, missing when it is not; never a value",
+        "args": [
+          { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets list": {
+        "description": "Print the key names this wrapper stored in the namespace; never a value",
+        "args": [
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets inspect": {
+        "description": "Print name, username and folder for every entry in the namespace, whoever stored it; never a value",
+        "args": [
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets rm": {
+        "description": "Remove a stored key; reports missing rather than a silent success when it was not stored",
+        "args": [
+          { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
+        ]
+      },
+      "qsm-secrets get": {
+        "noNoun": true,
+        "description": "Write the value to file descriptor 3, which the caller opens; refuses when it is closed",
+        "args": [
+          { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+        ]
+      },
+      "qsm-secrets capture": {
+        "description": "Read a prompt piped on stdin, store each secret in it (a known token shape, or a 32-character token of high entropy) in the active backend under a generated id, and print the text with each value replaced by {{secret:<id>}} and, for a long secret, its last four characters"
+      },
+      "qsm-secrets mask": {
+        "description": "Read text piped on stdin and print it with each named id's stored value replaced by its {{secret:<id>}} placeholder",
+        "args": [
+          { "name": "id", "type": "string", "repeatable": true, "required": true, "description": "a captured id whose value is masked" }
+        ]
+      },
+      "qsm-secrets scrub": {
+        "description": "Replace every captured value that is still in a transcript with its placeholder, by rewriting the file atomically; never prints a value",
+        "args": [
+          { "name": "transcript", "type": "string", "positional": true, "required": true, "description": "a transcript path, or a session id, found as <id>.jsonl under ~/.claude/projects" },
+          { "name": "detach", "type": "boolean", "description": "start the scrub in a detached process and return at once" }
+        ]
+      },
+      "qsm-secrets render": {
+        "description": "Write a template with each {{secret:<id>}} or {{secret:<namespace>/<key>}} filled in to a file only this session's user can read, under XDG_RUNTIME_DIR, and print its path",
+        "args": [
+          { "name": "template", "type": "string", "positional": true, "required": true, "description": "the template file's path" },
+          { "name": "out", "type": "string", "required": true, "description": "the rendered file's name inside the session directory" },
+          { "name": "session", "type": "string", "description": "the session id (default: CLAUDE_CODE_SESSION_ID)" }
+        ]
+      },
+      "qsm-secrets clean": {
+        "description": "Remove the session's directory with every file rendered into it",
+        "args": [
+          { "name": "session", "type": "string", "description": "the session id (default: CLAUDE_CODE_SESSION_ID)" }
+        ]
+      },
+      "qsm-secrets doctor": {
+        "description": "Probe every prerequisite the other verbs depend on and name the fix for each failed check",
+        "args": [
+          { "name": "folder", "type": "string", "description": "the rbw folder to probe (default: qsm)" }
+        ]
+      }
+    }
+  }
+}

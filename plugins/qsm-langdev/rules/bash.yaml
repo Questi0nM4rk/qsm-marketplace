@@ -1,0 +1,28 @@
+# qsm-langdev's own semgrep rules for bash, run by semgrep-bash beside the
+# registry's. A rule belongs here only when neither the registry nor
+# shellcheck finds it, and each one is proven by rules/bash.fixture:
+# `# ruleid:` above a line it must flag, `# ok:` above one it must not.
+---
+rules:
+  # shellcheck has no check for it (none of its 520 wiki pages names curl,
+  # wget or certificates), and the registry's three bash rules are about
+  # piping or eval-ing the download, not about how it was fetched.
+  - id: qsm.bash.tls-verification-off
+    languages: [bash]
+    severity: WARNING
+    message: >-
+      TLS certificate verification is turned off, so anyone on the network
+      path can answer in the server's place. Fix the trust store or pass the
+      server's CA with --cacert (curl) or --ca-certificate (wget).
+    metadata:
+      category: security
+      cwe:
+        - "CWE-295: Improper Certificate Validation"
+    pattern-either:
+      - patterns:
+          - pattern: curl ... $FLAG ...
+          # -k alone or inside a cluster of short flags: -k, -sk, -fsSLk.
+          - metavariable-regex:
+              metavariable: $FLAG
+              regex: ^(--insecure|-[a-zA-Z]*k[a-zA-Z]*)$
+      - pattern: wget ... --no-check-certificate ...

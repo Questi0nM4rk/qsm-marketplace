@@ -1,0 +1,32 @@
+<Project>
+  <!--
+    qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns
+    this file.
+
+    AnalysisMode Default runs the SDK's recommended CA set (verified against
+    dotnet 10.0.111). EnforceCodeStyleInBuild turns on the IDE-prefixed style
+    rules, but their severity comes from .editorconfig, not from here: without
+    the severity line in .editorconfig, IDE rules build clean even with this
+    flag on.
+
+    Every analyzer finding gates, and none of them is a warning nobody acts on.
+    The gate builds with -p:TreatWarningsAsErrors=false on the command line,
+    which beats anything this file says, and counts what the build reports on
+    both sides of a commit and a push: one more finding than the reference
+    commit blocks. The override is what makes them countable — under
+    TreatWarningsAsErrors the build stops at the first one and reports a failed
+    build instead of a list, which the gate can only read as a broken run.
+    Verified on dotnet 10.0.111: the same file builds to errors with
+    TreatWarningsAsErrors set in the project and to CS8603, CA1050 and CA1822
+    with the gate's override in place.
+
+    A rule worth suppressing at a call site was the wrong rule to enable: turn
+    it off in .editorconfig with the reason, never a #pragma in the code.
+  -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Default</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

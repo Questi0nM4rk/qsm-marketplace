@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="260" viewBox="0 0 1000 260" role="img" aria-label="qsm-marketplace: A minimal marketplace of specialist plugins for Claude Code. 27 plugins.">
+<defs><pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r="1.3" fill="#d8cfea"/></pattern></defs>
+<rect width="1000" height="260" fill="#e9e4f3"/>
+<rect width="1000" height="260" fill="url(#dots)"/>
+<rect x="38" y="30" width="940" height="200" fill="#d2c7e8"/>
+<rect x="29" y="21" width="940" height="200" fill="#f7f4fb" stroke="#c9bfdf" stroke-width="2"/>
+<text x="61" y="66" font-family="'JetBrains Mono',Consolas,monospace" font-size="14" font-weight="500" fill="#635e77">qsm-marketplace · marketplace lens</text>
+<text x="61" y="124" font-family="'Archivo Black','Arial Black',Impact,sans-serif" font-size="44" fill="#2b2937">qsm-marketplace</text>
+<text x="61" y="160" font-family="Rubik,'Segoe UI',system-ui,sans-serif" font-size="18" fill="#635e77">A minimal marketplace of specialist plugins for Claude Code.</text>
+<rect x="64" y="183" width="108" height="28" fill="#d2c7e8"/>
+<rect x="61" y="180" width="108" height="28" fill="#e6defa" stroke="#6554ad" stroke-width="2"/>
+<text x="115" y="199" text-anchor="middle" font-family="'JetBrains Mono',Consolas,monospace" font-size="14" fill="#2b2937">27 plugins</text>
+</svg>

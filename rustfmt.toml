@@ -1,0 +1,5 @@
+# qsm-langdev strict profile. Same floor as general: rustfmt has no stricter
+# stable options worth a second ruleset, so strictness for rust lives in
+# the two thresholds in clippy.toml instead.
+edition = "2021"
+newline_style = "Unix"

@@ -1,0 +1,39 @@
+---
+schema_version: "1.0"
+name: duplicates-overlapping-guidance
+description: Local vs checked-in guidance, a rule scoped by paths, a memory that restates a loaded rule, and two files that disagree.
+tags: [scenario]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 14
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: |
+    I think my guidance is written twice in several places and I want to delete the copies. The
+    project is this folder (CLAUDE.md, CLAUDE.local.md, .claude/rules/) and a copy of my memory
+    is in ./claude-home/memory. Find the overlaps and tell me what to remove. Change nothing yet.
+runs: 3
+graders:
+  - type: llm
+    name: keeps-the-right-copy-with-a-reason
+    focus: last_message
+    criteria: |
+      PASS if the reply finds the pnpm duplicate between CLAUDE.local.md and CLAUDE.md and keeps the
+      checked-in CLAUDE.md copy because the team sees it, and finds the em-dash memory note
+      restating the loaded style.md rule and keeps the rule because it loads every session. Each
+      finding names both places. FAIL if either pair is missed or the wrong copy is kept.
+  - type: llm
+    name: scoped-rule-does-not-cover-local-copy
+    focus: last_message
+    criteria: |
+      PASS if the reply does not propose deleting the "run the unit tests before committing" line from
+      CLAUDE.local.md on the strength of .claude/rules/testing.md, because that rule has a paths
+      filter and loads only for test files, or it names that as the reason the line stays. FAIL if it
+      proposes removing the local line as covered.
+  - type: llm
+    name: contradiction-is-not-a-duplicate
+    focus: last_message
+    criteria: |
+      PASS if the reply reports that the past-tense commit rule in CLAUDE.md and the imperative one
+      in CLAUDE.local.md disagree, quotes both, and leaves the choice to the person instead of
+      deleting one. FAIL if it treats them as a duplicate or picks a side.
