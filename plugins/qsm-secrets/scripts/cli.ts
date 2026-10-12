@@ -2,7 +2,7 @@
 
 // qsm-secrets: a credential reaches the command that needs it without its value reaching the agent.
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
 import { spawnDetached } from "../../../lib/detach.ts";
@@ -12,6 +12,7 @@ import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
 import { activeBackend } from "../lib/backend.ts";
 import { formatChecks } from "../lib/doctor.ts";
 import { SecretError } from "../lib/errors.ts";
+import { guardCommand } from "../lib/guard.ts";
 import { runClean, runRender } from "../lib/render.ts";
 import {
   type Delivery,
@@ -168,6 +169,19 @@ const scrub: Handler = (call) =>
       : fail("missing", failure);
   });
 
+/** The Bash command on stdin, refused with its code and the verb to use instead, or allowed. */
+const guard: Handler = async () => {
+  if (process.stdin.isTTY === true) {
+    return fail("usage", "guard reads the Bash command from stdin; pipe it in");
+  }
+  const refusal = await guardCommand(readFileSync(0, "utf8"), {
+    home: process.env.HOME,
+    dataHome: process.env.XDG_DATA_HOME,
+    runtimeDir: process.env.XDG_RUNTIME_DIR,
+  });
+  return refusal === null ? ok({ denied: false }) : fail("blocked", refusal.reason, refusal);
+};
+
 /** The session a render or clean belongs to: `--session`, else the id the engine sets for Bash. */
 function inSession(call: Call, run: (session: string) => Outcome): Outcome {
   const id = (call.args.session as string | undefined) ?? process.env.CLAUDE_CODE_SESSION_ID;
@@ -218,6 +232,7 @@ if (import.meta.main) {
       get,
       doctor,
       capture,
+      guard,
       mask,
       scrub,
       render,

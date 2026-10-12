@@ -63,6 +63,10 @@
           { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
         ]
       },
+      "qsm-secrets guard": {
+        "description": "Read a Bash command on stdin and refuse it, as blocked with a code and the verb to use instead, when it would put a stored credential into a tool result: a vault or keyring reader, the secret service on the bus, the keyring or vault data files, a rendered config file, a keyring library, the descriptor-3 channel pointed at the output, or a placeholder inside single quotes; the command is read from its syntax tree, through wrappers, subshells and pipelines",
+        "args": []
+      },
       "qsm-secrets capture": {
         "description": "Read a prompt piped on stdin, store each secret in it (a known token shape, a value after a credential name, or a random 32-character token that is no path, name, id or hash) in the active backend under a generated id, or under its own name for a pasted name=value, and print the text with each value replaced by {{secret:<id>}} (or {{secret:qsm/<name>}}) and, for a long secret, its last four characters"
       },

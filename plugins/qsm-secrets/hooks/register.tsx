@@ -1,12 +1,16 @@
 // qsm-secrets' function-hooks module: the noun, `$.secrets`, one method per verb, and the guard that
 // refuses a Bash command that would print a stored credential into the tool result (the decision is
-// blockedCommand, a pure function of the command line in lib/), and the capture of a pasted secret
+// `qsm-secrets guard`, which reads the command's syntax tree and needs the WASM parser this sandbox
+// cannot load), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
 // before the prompt enters the session (the decision is `qsm-secrets capture`), and the use of a
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
-import { blockedCommand } from "../lib/blocked.ts";
+import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
+
+// The guard runs before every Bash call, so a parse that hangs must not hold the call for long.
+const GUARD_TIMEOUT_MS = 5000;
 
 // A backend that wants an unlock prompt must not hold the prompt for long.
 const CAPTURE_TIMEOUT_MS = 10_000;
@@ -43,6 +47,95 @@ function dataOf(
     );
   }
   return unwrap(argv, ran);
+}
+
+/** What `qsm-secrets guard` said: the reason to deny with, or null when the command may run. A verb
+ * that did not answer is an error, and the hook's catch denies the call. */
+function refusalOf(ran: { exitCode: number; stdout: string; stderr: string }): string | null {
+  if (!isEnvelope(ran.stdout)) {
+    const stderr = ran.stderr.trim().slice(0, 300);
+    throw new Error(
+      `qsm-secrets guard printed no outcome envelope (exit ${ran.exitCode}): ${stderr.length > 0 ? stderr : "no stderr"}`,
+    );
+  }
+  const envelope = JSON.parse(ran.stdout) as {
+    code: string;
+    message?: string;
+    data?: { reason?: string };
+  };
+  if (envelope.code === "ok") {
+    return null;
+  }
+  if (envelope.code === "blocked" && typeof envelope.data?.reason === "string") {
+    return envelope.data.reason;
+  }
+  throw new Error(
+    `qsm-secrets guard answered ${envelope.code}: ${(envelope.message ?? "").slice(0, 200)}`,
+  );
+}
+
+/** The guard runs first, on the command as written, so it sees a placeholder before the substitution
+ * rewrites it. */
+function registerGuard(on: On): void {
+  on("tool.call", { tool: "Bash" }, async ($, e, next) => {
+    const argv = argvOf(verbs.guard as VerbRow);
+    const ran = await $.process.run(argv, { stdin: e.command, timeoutMs: GUARD_TIMEOUT_MS });
+    const reason = refusalOf(ran);
+    if (reason === null) {
+      return next(e);
+    }
+    $.ui.log(`refused a Bash command: ${reason.slice(0, 80)}`);
+    return { deny: reason };
+  }).catch(($, _e, next) => {
+    const reason = cause(next.error);
+    $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
+    $.ui.log(`the credential guard failed (${reason}); the call was denied`);
+    return { deny: `qsm-secrets: the credential guard failed (${reason}); the call was not run` };
+  });
+}
+
+/** Read and Grep put a file's lines into the tool result as surely as `cat` does. A Grep also walks
+ * everything under its path, so a path above a protected directory is refused too. */
+function registerFileGuard(on: On): void {
+  // The shipped types list no Grep (a build without the tool has nothing to guard), so its name is
+  // cast; a build that has the tool routes its calls here.
+  const guarded = [
+    { tool: "Read" as const, ancestors: false },
+    { tool: "Grep" as "Read", ancestors: true },
+  ];
+  for (const { tool, ancestors } of guarded) {
+    on("tool.call", { tool }, async ($, e, next) => {
+      const input = e as { file_path?: string; path?: string };
+      const target = input.file_path ?? input.path;
+      if (target === undefined) {
+        return next(e);
+      }
+      const home = await $.env.get("HOME");
+      const dataHome = await $.env.get("XDG_DATA_HOME");
+      const runtimeDir = await $.env.get("XDG_RUNTIME_DIR");
+      const env: PathEnv = { home, dataHome, runtimeDir };
+      const roots = protectedRoots(env);
+      let real: string | undefined;
+      try {
+        real = (await $.fs.stat(target, { resolve: true })).realPath;
+      } catch {
+        // a path that is not there is judged by its spelling
+      }
+      const spellings = [target, real].filter((path): path is string => path !== undefined);
+      if (!spellings.some((path) => reaches(path, roots, env, ancestors) !== undefined)) {
+        return next(e);
+      }
+      $.ui.log(`refused a ${tool} of ${target}`);
+      return {
+        deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
+      };
+    }).catch(($, _e, next) => {
+      const reason = cause(next.error);
+      $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
+      $.ui.log(`the file guard failed (${reason}); the call was denied`);
+      return { deny: `qsm-secrets: the file guard failed (${reason}); the call was not run` };
+    });
+  }
 }
 
 /** A command naming an id runs with the value in its environment; its result is masked on the way
@@ -161,23 +254,11 @@ export function register(on: On): void {
   // Adds $.secrets: one method per qsm-secrets verb, generated by lib/generate-noun.ts. Never
   // hand-edit noun.generated.ts or types/index.d.ts.
   registerNoun(on);
+  registerGuard(on);
+  registerFileGuard(on);
   registerSubstitution(on);
   registerMask(on);
   registerScrub(on);
-
-  on("tool.call", { tool: "Bash" }, ($, e, next) => {
-    const refusal = blockedCommand(e.command);
-    if (refusal === null) {
-      return next(e);
-    }
-    $.ui.log(`refused ${refusal.command}`);
-    return { deny: refusal.reason };
-  }).catch(($, _e, next) => {
-    const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
-    $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
-    $.ui.log(`the credential guard failed (${cause(next.error)}); the call was denied`);
-    return { deny: `qsm-secrets: the credential guard failed (${reason}); the call was not run` };
-  });
 
   on("prompt.submit", async ($, e, next) => {
     if (!PERSON_ORIGINS.includes(e.origin.kind)) {

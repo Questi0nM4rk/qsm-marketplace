@@ -1,0 +1,513 @@
+// What the guard refuses: a Bash command that would put a stored credential into the tool result, read
+// from its syntax tree and not from its text. The tree sees through sudo, env, nice, timeout, command,
+// xargs, `sh -c`, subshells, pipelines and command substitutions, because shell-ast resolves each call
+// to the command that finally runs. It needs the WASM parser, which the hook sandbox cannot load, so
+// it is the verb `qsm-secrets guard` and the hook calls it.
+
+import { realpathSync } from "node:fs";
+import {
+  type CallExprNode,
+  findAll,
+  ParseSizeError,
+  ParseSyntaxError,
+  parse,
+  type Redirect,
+  type ShellFile,
+  type Stmt,
+  type UnwrappedCall,
+  unwrapDeepParsed,
+  type Word,
+  wordToLit,
+  wordToParts,
+} from "@questi0nm4rk/shell-ast";
+import { mentioned, type PathEnv, protectedRoots, type Root, reaches } from "./protected.ts";
+import { placeholderIds } from "./substitute.ts";
+
+export type RefusalCode =
+  | "vault-reader"
+  | "bus-secrets"
+  | "keyring-files"
+  | "rendered-config"
+  | "keyring-library"
+  | "credential-file"
+  | "fd3-to-output"
+  | "single-quoted-placeholder"
+  | "unreadable-command";
+
+export interface Refusal {
+  readonly code: RefusalCode;
+  /** what matched, for the log */
+  readonly command: string;
+  /** what the agent is told: the code, why, and the qsm-secrets verb to use instead */
+  readonly reason: string;
+}
+
+const USE_WRAPPER =
+  "Use `qsm-secrets pipe <key> -- <cmd>` or `qsm-secrets env <key>=<VAR> -- <cmd>`: the value reaches the command without reaching this transcript.";
+
+function refuse(code: RefusalCode, command: string, why: string, instead: string): Refusal {
+  return { code, command, reason: `[qsm-secrets ${code}] ${why} ${instead}` };
+}
+
+const VAULT_TOOLS: ReadonlySet<string> = new Set(["secret-tool", "rbw", "bw", "pass"]);
+const BUS_TOOLS: ReadonlySet<string> = new Set([
+  "busctl",
+  "gdbus",
+  "dbus-send",
+  "dbus-monitor",
+  "qdbus",
+  "qdbus6",
+]);
+const INTERPRETERS = /^(python[\d.]*|node|nodejs|bun|deno|ruby|perl)$/;
+const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(["-c", "-e", "-p", "--eval", "--print"]);
+const KEYRING_LIBRARY = /keyring|secretstorage|keytar|libsecret|org\.freedesktop\.secret/i;
+
+/** Commands that put a file's content on their output or into another file. */
+const READERS: ReadonlySet<string> = new Set([
+  "cat",
+  "tac",
+  "nl",
+  "bat",
+  "batcat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "most",
+  "grep",
+  "egrep",
+  "fgrep",
+  "rg",
+  "ag",
+  "ack",
+  "sed",
+  "awk",
+  "gawk",
+  "jq",
+  "yq",
+  "xxd",
+  "od",
+  "hexdump",
+  "strings",
+  "base64",
+  "cp",
+  "mv",
+  "rsync",
+  "scp",
+  "tar",
+  "zip",
+  "gzip",
+  "dd",
+  "sort",
+  "uniq",
+  "cut",
+  "paste",
+  "diff",
+  "cmp",
+  "vi",
+  "vim",
+  "nvim",
+  "nano",
+  "view",
+  "source",
+  ".",
+]);
+
+/** Commands that name a path without reading what is in it. */
+const NAMES_ONLY: ReadonlySet<string> = new Set([
+  "ls",
+  "stat",
+  "file",
+  "du",
+  "test",
+  "[",
+  "[[",
+  "echo",
+  "printf",
+  "realpath",
+  "readlink",
+  "basename",
+  "dirname",
+  "which",
+]);
+
+const FILE_READERS: ReadonlySet<string> = new Set([
+  "cat",
+  "bat",
+  "batcat",
+  "head",
+  "tail",
+  "less",
+  "more",
+]);
+
+/** Files whose whole content is a credential. */
+const CREDENTIAL_FILES: readonly RegExp[] = [
+  /(^|\/)\.env(\.[^/]*)?$/,
+  /(^|\/)\.netrc$/,
+  /(^|\/)\.npmrc$/,
+  /(^|\/)\.pgpass$/,
+  /(^|\/)\.git-credentials$/,
+  /(^|\/)\.ssh\/id_[^/]+$/,
+  /(^|\/)\.aws\/credentials$/,
+  /(^|\/)credentials(\.json)?$/,
+  /\.(pem|key|p12|pfx)$/,
+];
+
+const FD3_TARGETS: ReadonlySet<string> = new Set([
+  "1",
+  "2",
+  "/dev/stdout",
+  "/dev/stderr",
+  "/dev/fd/1",
+  "/dev/fd/2",
+  "/proc/self/fd/1",
+  "/proc/self/fd/2",
+]);
+const OUTPUT_OPS: ReadonlySet<string> = new Set([">", ">>", ">|", ">&", "&>"]);
+const INPUT_OPS: ReadonlySet<string> = new Set(["<", "<>"]);
+
+/** xargs flags that take the next word as their value. */
+const XARGS_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "-I",
+  "-n",
+  "--max-args",
+  "-P",
+  "--max-procs",
+  "-d",
+  "--delimiter",
+  "-E",
+  "-L",
+  "--max-lines",
+  "-s",
+  "--max-chars",
+  "-a",
+  "--arg-file",
+]);
+
+const MAX_DEPTH = 8;
+
+/** Whether a flag of `name` ends the flags: `command -v cmd` only looks `cmd` up, so nothing runs. */
+function looksUp(name: string, flag: string): boolean {
+  return name === "command" && /^-[a-zA-Z]*[vV]/.test(flag);
+}
+
+/** Where the command a runner runs starts among its words: `xargs [flags] cmd` and `command [flags]
+ * cmd` run `cmd`. Undefined when there is none, it is dynamic, or the runner only looks it up. */
+function runnerInner(name: string, args: readonly Word[]): number | undefined {
+  if (name !== "xargs" && name !== "command") {
+    return undefined;
+  }
+  const words = args.map(wordToLit);
+  let at = 0;
+  while ((words[at]?.startsWith("-") ?? false) && words[at] !== "--") {
+    if (looksUp(name, words[at] as string)) {
+      return undefined;
+    }
+    at += name === "xargs" && XARGS_VALUE_FLAGS.has(words[at] as string) ? 2 : 1;
+  }
+  at += words[at] === "--" ? 1 : 0;
+  return typeof words[at] === "string" ? at : undefined;
+}
+
+/** A word as the shell would hand it on, with an expansion left as written. */
+function textOf(word: Word): string {
+  return wordToParts(word)
+    .map((part) => (part.kind === "literal" ? part.value : part.sourceText))
+    .join("");
+}
+
+const basename = (command: string): string => command.slice(command.lastIndexOf("/") + 1);
+
+interface Effective {
+  readonly name: string;
+  /** the words after the command word */
+  readonly args: readonly Word[];
+}
+
+/** Every command a layer of the wrapper chain runs. A `sh -c` body is judged as a whole by the caller. */
+function effective(layer: UnwrappedCall): Effective | null {
+  if (layer.kind === "plain") {
+    return { name: basename(layer.cmd), args: layer.raw.args.slice(1) };
+  }
+  if (layer.kind === "wrapped") {
+    return { name: basename(layer.cmd), args: layer.innerRaw.args.slice(1) };
+  }
+  return null;
+}
+
+interface Context {
+  readonly env: PathEnv;
+  readonly roots: readonly Root[];
+  /** a redirect of descriptor 3 to the output was seen on the way down */
+  readonly fd3Out: boolean;
+  readonly depth: number;
+}
+
+function realOf(text: string): string | undefined {
+  if (text.length === 0 || /[\s*?[\]{}$`'"]/.test(text)) {
+    return undefined;
+  }
+  try {
+    return realpathSync(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function pathHit(text: string, ctx: Context): Root | undefined {
+  const spelled = mentioned(text, ctx.roots, ctx.env);
+  if (spelled !== undefined) {
+    return spelled;
+  }
+  const real = realOf(text.replace(/^~(?=\/|$)/, ctx.env.home ?? "~"));
+  return real === undefined ? undefined : reaches(real, ctx.roots, ctx.env, false);
+}
+
+function isGet(name: string, texts: readonly string[]): boolean {
+  return name === "qsm-secrets" && texts.find((t) => !t.startsWith("-")) === "get";
+}
+
+function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal | null {
+  const texts = words.map(textOf);
+  const shown = `${name} ${texts.join(" ")}`.trim().slice(0, 80);
+  if (name === "qsm-secrets") {
+    return ctx.fd3Out && isGet(name, texts)
+      ? refuse(
+          "fd3-to-output",
+          shown,
+          "`qsm-secrets get` writes to descriptor 3, and this one points it back at the tool result.",
+          `${USE_WRAPPER} Open descriptor 3 on a file or a pipe to the consumer instead.`,
+        )
+      : null;
+  }
+  if (VAULT_TOOLS.has(name)) {
+    return refuse(
+      "vault-reader",
+      shown,
+      `\`${name}\` can print a stored credential to this tool result.`,
+      `${USE_WRAPPER} To store one, \`qsm-secrets set <key>\`; to browse, \`qsm-secrets list\` or \`qsm-secrets has <key>\`.`,
+    );
+  }
+  if (BUS_TOOLS.has(name) && texts.some((t) => /org\.freedesktop\.secret/i.test(t))) {
+    return refuse(
+      "bus-secrets",
+      shown,
+      "this talks to the secret service over the bus, which can return a stored credential.",
+      `${USE_WRAPPER} To browse, \`qsm-secrets list\`.`,
+    );
+  }
+  if (INTERPRETERS.test(name)) {
+    const inline = texts.some((t) => INLINE_CODE_FLAGS.has(t));
+    const module = texts[texts.indexOf("-m") + 1];
+    const mentionsLibrary =
+      (inline && texts.some((t) => KEYRING_LIBRARY.test(t))) ||
+      (texts.includes("-m") && module !== undefined && KEYRING_LIBRARY.test(module));
+    if (mentionsLibrary) {
+      return refuse(
+        "keyring-library",
+        shown,
+        "an inline script that uses a keyring library reads a stored credential into this tool result.",
+        USE_WRAPPER,
+      );
+    }
+  }
+  return judgePaths(name, texts, shown, ctx);
+}
+
+function judgePaths(
+  name: string,
+  texts: readonly string[],
+  shown: string,
+  ctx: Context,
+): Refusal | null {
+  for (const text of texts) {
+    const hit = pathHit(text, ctx);
+    if (hit?.kind === "store" && !NAMES_ONLY.has(name)) {
+      return refuse(
+        "keyring-files",
+        shown,
+        `\`${name}\` is pointed at the keyring or the vault's data directory, whose files hold stored credentials.`,
+        USE_WRAPPER,
+      );
+    }
+    if (hit?.kind === "rendered" && (READERS.has(name) || name === "cd" || name === "pushd")) {
+      return refuse(
+        "rendered-config",
+        shown,
+        `\`${name}\` would read a rendered config file, which has its secrets filled in.`,
+        "Hand the file's path to the command that needs it; read the template, which holds placeholders, to see its shape.",
+      );
+    }
+    if (
+      FILE_READERS.has(name) &&
+      !text.startsWith("-") &&
+      CREDENTIAL_FILES.some((pattern) => pattern.test(text))
+    ) {
+      return refuse(
+        "credential-file",
+        shown,
+        `\`${name}\` would put a credential file in this tool result.`,
+        USE_WRAPPER,
+      );
+    }
+  }
+  return null;
+}
+
+function judgeRedirect(redirect: Redirect, ctx: Context): Refusal | null {
+  const target = textOf(redirect.word);
+  if (INPUT_OPS.has(redirect.op)) {
+    const hit = pathHit(target, ctx);
+    if (hit !== undefined) {
+      return refuse(
+        hit.kind === "store" ? "keyring-files" : "rendered-config",
+        `${redirect.op} ${target}`.slice(0, 80),
+        "this feeds a protected file to a command.",
+        USE_WRAPPER,
+      );
+    }
+  }
+  return null;
+}
+
+function fd3ToOutput(redirect: Redirect): boolean {
+  return (
+    redirect.n?.value === "3" &&
+    OUTPUT_OPS.has(redirect.op) &&
+    FD3_TARGETS.has(textOf(redirect.word))
+  );
+}
+
+/** Each statement's own call or, for a compound command, nothing: its children are statements too. */
+function callOf(stmt: Stmt): CallExprNode | null {
+  return stmt.cmd?.type === "CallExpr" ? stmt.cmd : null;
+}
+
+/** What one layer of a wrapper chain runs, and the commands inside it: a runner's own command, and
+ * the body of a `sh -c`, which is judged as a script of its own. */
+async function judgeLayer(
+  layer: UnwrappedCall,
+  call: CallExprNode,
+  ctx: Context,
+  exempt: Set<string>,
+): Promise<Refusal | null> {
+  const seen = effective(layer);
+  const refusal = seen === null ? null : judgeCall(seen.name, seen.args, ctx);
+  if (refusal !== null) {
+    return refusal;
+  }
+  const at = seen === null ? undefined : runnerInner(seen.name, seen.args);
+  if (seen !== null && at !== undefined) {
+    return await judgeChain({ ...call, assigns: [], args: seen.args.slice(at) }, ctx, exempt);
+  }
+  if (layer.kind === "wrapped-script") {
+    exempt.add(layer.script);
+    return await judgeSource(layer.script, { ...ctx, depth: ctx.depth + 1 });
+  }
+  return null;
+}
+
+/** One call, through its wrapper chain. */
+async function judgeChain(
+  call: CallExprNode,
+  ctx: Context,
+  exempt: Set<string>,
+): Promise<Refusal | null> {
+  for (const layer of await unwrapDeepParsed(call, parseBash)) {
+    const refusal = await judgeLayer(layer, call, ctx, exempt);
+    if (refusal !== null) {
+      return refusal;
+    }
+  }
+  return null;
+}
+
+async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> {
+  const stmts = findAll(ast, "Stmt");
+  const redirected = ctx.fd3Out || stmts.some((stmt) => stmt.redirs.some(fd3ToOutput));
+  const inner: Context = { ...ctx, fd3Out: redirected };
+  const exempt = new Set<string>();
+
+  for (const stmt of stmts) {
+    for (const redirect of stmt.redirs) {
+      const refusal = judgeRedirect(redirect, inner);
+      if (refusal !== null) {
+        return refusal;
+      }
+    }
+    const call = callOf(stmt);
+    if (call === null) {
+      continue;
+    }
+    const refusal = await judgeChain(call, inner, exempt);
+    if (refusal !== null) {
+      return refusal;
+    }
+    const heredoc = stmt.redirs.find((r) => r.hdoc !== null);
+    if (
+      heredoc?.hdoc &&
+      INTERPRETERS.test(basename(wordToLit(call.args[0] as Word) ?? "")) &&
+      KEYRING_LIBRARY.test(textOf(heredoc.hdoc))
+    ) {
+      return refuse(
+        "keyring-library",
+        "interpreter with a heredoc",
+        "a script that uses a keyring library reads a stored credential into this tool result.",
+        USE_WRAPPER,
+      );
+    }
+  }
+  return judgeQuotes(ast, exempt);
+}
+
+/** A placeholder inside single quotes is not substituted as the shell reads it: the value would be
+ * typed as the text `"$QSM_SECRET_<ID>"`. The script of a `sh -c` is the exception, judged on its own. */
+function judgeQuotes(ast: ShellFile, exempt: ReadonlySet<string>): Refusal | null {
+  for (const quoted of findAll(ast, "SglQuoted")) {
+    if (!exempt.has(quoted.value) && placeholderIds(quoted.value).length > 0) {
+      return refuse(
+        "single-quoted-placeholder",
+        `'${quoted.value}'`.slice(0, 80),
+        "a placeholder inside single quotes is never replaced, so the command would get the placeholder text.",
+        'Put it in double quotes ("...") or leave it bare.',
+      );
+    }
+  }
+  return null;
+}
+
+async function parseBash(source: string): Promise<ShellFile> {
+  return await parse(source, "bash");
+}
+
+async function judgeSource(source: string, ctx: Context): Promise<Refusal | null> {
+  if (ctx.depth > MAX_DEPTH) {
+    return refuse(
+      "unreadable-command",
+      source.slice(0, 80),
+      `shells nested deeper than ${MAX_DEPTH} levels cannot be checked.`,
+      "Write the inner command to a script and run that.",
+    );
+  }
+  let ast: ShellFile;
+  try {
+    ast = await parseBash(source);
+  } catch (error) {
+    if (error instanceof ParseSyntaxError || error instanceof ParseSizeError) {
+      return refuse(
+        "unreadable-command",
+        source.slice(0, 80),
+        `the guard cannot read this command (${error.message.slice(0, 120)}), so it cannot tell whether it reads a credential.`,
+        "Rewrite it in plain POSIX or bash syntax, or put it in a script file.",
+      );
+    }
+    throw error;
+  }
+  return await judgeFile(ast, ctx);
+}
+
+/** The refusal for a Bash command, or null when nothing in it reads a stored value. */
+export async function guardCommand(command: string, env: PathEnv): Promise<Refusal | null> {
+  return await judgeSource(command, { env, roots: protectedRoots(env), fd3Out: false, depth: 0 });
+}

@@ -67,10 +67,15 @@ vault folder; an empty name searches the whole vault by key name.
 
 ## Red flags
 
-- When you are about to run `rbw get`, `bw get`, `secret-tool lookup` or `pass show`, use a verb
-  above instead, because the guard refuses these and the refusal is right.
-- When you are about to `cat` a `.env`, `.pem`, `id_*` key, `.netrc` or `.aws/credentials`, stop,
-  because the value would land in the transcript.
+- When you are about to run `rbw`, `bw`, `pass` or `secret-tool` (any verb), or talk to the secret
+  service over the bus, use a verb above instead, because the guard refuses these through `sudo`,
+  `env`, `xargs`, `sh -c` and pipelines, and the refusal is right. `qsm-secrets set` stores,
+  `list` and `has` browse.
+- When you are about to `cat` a `.env`, `.pem`, `id_*` key, `.netrc` or `.aws/credentials`, or
+  read or Grep the keyring files, the vault's data directory or a rendered config, stop, because
+  the value would land in the transcript. Hand a rendered file's path to the command that needs it.
+- When a placeholder sits in single quotes, move it into double quotes, because inside single
+  quotes it is never replaced and the guard refuses the command.
 - When you are about to ask the person to paste a credential into the conversation, ask them to
   run `qsm-secrets set <key>`, because a pasted value outlives the task.
 - When you want to echo, truncate or "mask" a value to show you have it, say the key and verb

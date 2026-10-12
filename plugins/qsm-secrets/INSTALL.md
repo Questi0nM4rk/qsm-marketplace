@@ -26,3 +26,8 @@ qsm-secrets doctor
 ```
 
 For libsecret, a Secret Service provider (GNOME Keyring, KeePassXC) must run on the session bus.
+
+The compiled binary parses commands with `@questi0nm4rk/shell-ast`, whose published build leaves its
+WebAssembly module outside a compiled binary. The repository carries a one-line patch
+(`patches/`, applied by `bun install`) that embeds it; run `bun install` in the checkout before the
+install script, or `guard` fails with `WASM failed to load`.

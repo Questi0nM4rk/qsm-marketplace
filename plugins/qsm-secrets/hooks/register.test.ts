@@ -3,15 +3,112 @@
 import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
 
-test("a raw vault reader is denied, an ordinary command runs", async ($, on) => {
-  on("tool.call", () => ({ result: "ran" }));
+const ALLOWED = JSON.stringify({ code: "ok", exit: 0, message: "", data: { denied: false } });
+const REASON =
+  "[qsm-secrets vault-reader] `rbw` can print a stored credential. Use `qsm-secrets pipe`";
+const REFUSED = JSON.stringify({
+  code: "blocked",
+  exit: 5,
+  message: REASON,
+  data: { code: "vault-reader", command: "rbw get x", reason: REASON },
+});
+
+/** The guard verb's bottom: `process.run` answers `qsm-secrets guard` with `stdout`, and the
+ * stdin it was given is kept. */
+function guardAnswers(on: On, stdout: string): { stdin: string[]; argv: string[] } {
+  const seen = { stdin: [] as string[], argv: [] as string[] };
+  on("process.run", (_$, e) => {
+    const run = e as { argv: string[]; init: { stdin: string } };
+    seen.argv = run.argv;
+    seen.stdin.push(run.init.stdin);
+    return { value: { ...RAN, stdout } };
+  });
   on("ui.log", () => ({ value: undefined }));
+  on("ui.toast", () => ({ value: undefined }));
+  return seen;
+}
+
+test("a command the guard verb refuses is denied with its reason, one it allows runs", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  const seen = guardAnswers(on, REFUSED);
 
   const denied = await $.tool.call({ tool: "Bash", command: "rbw get github-token" });
+
+  expect(denied.deny).toBe(REASON);
+  expect(seen.argv.slice(0, 2)).toEqual(["qsm-secrets", "guard"]);
+  expect(seen.stdin).toEqual(["rbw get github-token"]);
+});
+
+test("a command the guard verb allows runs", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  guardAnswers(on, ALLOWED);
+
   const allowed = await $.tool.call({ tool: "Bash", command: "git status" });
 
-  expect(denied.deny).toContain("qsm-secrets pipe");
   expect(allowed.result).toBe("ran");
+});
+
+test("a guard that cannot answer denies the call and says why", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  guardAnswers(on, "not an envelope");
+
+  const denied = await $.tool.call({ tool: "Bash", command: "git status" });
+
+  expect(denied.result).toBeUndefined();
+  expect(denied.deny).toContain("the credential guard failed");
+  expect(denied.deny).toContain("no outcome envelope");
+});
+
+test("the guard sees a placeholder as written, before the substitution rewrites it", async ($, on) => {
+  on("tool.call", () => ({ result: "ran" }));
+  const seen = guardAnswers(on, ALLOWED);
+  const command = `echo {{${"secret"}:cap_1}}`;
+
+  await $.tool.call({ tool: "Bash", command });
+
+  expect(seen.stdin).toEqual([command]);
+});
+
+/** Read's bottom: the host environment and the file system answer, so a path is judged as the engine sees it. */
+function fileHost(on: On, real: string | undefined): void {
+  on("env.get", (_$, e) => {
+    const { name } = e as { name: string };
+    return { value: { HOME: "/home/p", XDG_RUNTIME_DIR: "/run/user/1" }[name] };
+  });
+  on("fs.stat", () =>
+    real === undefined
+      ? Promise.reject(new Error("ENOENT"))
+      : { value: { kind: "file", size: 1, mtimeMs: 0, isLink: false, realPath: real } },
+  );
+  on("tool.call", () => ({ result: "ran" }));
+  on("ui.log", () => ({ value: undefined }));
+  on("ui.toast", () => ({ value: undefined }));
+}
+
+const PROTECTED_READS: [string, string | undefined][] = [
+  ["/home/p/.local/share/keyrings/login.keyring", undefined],
+  ["/home/p/.local/share/rbw/db", undefined],
+  ["/run/user/1/qsm-secrets/s1/kubeconfig", undefined],
+  ["/tmp/harmless-name", "/home/p/.local/share/keyrings/login.keyring"],
+];
+for (const [path, real] of PROTECTED_READS) {
+  test(`a Read of ${path} is denied`, async ($, on) => {
+    fileHost(on, real);
+
+    const denied = await $.tool.call({ tool: "Read", file_path: path });
+
+    expect(denied.result).toBeUndefined();
+    expect(denied.deny).toContain("keyring-files");
+    expect(denied.deny).toContain("qsm-secrets pipe");
+  });
+}
+
+test("a Read of an ordinary file runs", async ($, on) => {
+  fileHost(on, "/home/p/project/README.md");
+
+  const read = await $.tool.call({ tool: "Read", file_path: "/home/p/project/README.md" });
+
+  expect(read.result).toBe("ran");
 });
 
 const RAN = { exitCode: 0, stderr: "", isStdoutTruncated: false, isStderrTruncated: false };
@@ -78,7 +175,7 @@ test("a command holding an id runs wrapped in qsm-secrets env, the id never in i
     ran = (e as { command: string }).command;
     return { result: { stdout: "", stderr: "", interrupted: false } };
   });
-  on("ui.log", () => ({ value: undefined }));
+  guardAnswers(on, ALLOWED);
 
   await $.tool.call({ tool: "Bash", command: "echo {{secret:cap_1}}…abcd it's" });
 
@@ -91,7 +188,7 @@ test("a named key's placeholder runs env with its own namespace and key", async 
     ran = (e as { command: string }).command;
     return { result: { stdout: "", stderr: "", interrupted: false } };
   });
-  on("ui.log", () => ({ value: undefined }));
+  guardAnswers(on, ALLOWED);
 
   await $.tool.call({ tool: "Bash", command: `echo {{${"secret"}:qsm/deploy-key}}…abcd` });
 

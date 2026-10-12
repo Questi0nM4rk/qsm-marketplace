@@ -347,6 +347,13 @@ tool's result as it came, never a copy of it.
 - **WHEN** a Bash command holds `{{secret:<id>}}` and a single quote
 - **THEN** the rewritten command runs the same words as the original
 
+#### Scenario: a placeholder inside single quotes is denied before it runs
+
+- **WHEN** a Bash command holds `{{secret:<id>}}` inside single quotes, as in `curl -H 'A: {{secret:<id>}}'`
+- **THEN** the call is denied with the code `single-quoted-placeholder` and a message to use double
+  quotes, and the same placeholder in double quotes, bare, or inside the body of `sh -c '...'` is
+  replaced as usual
+
 ### Requirement: Every row the conversation keeps is masked
 
 A function hook on `session.append` SHALL mask every row the session keeps, whatever its door (a
@@ -447,21 +454,86 @@ itself.
 - **THEN** the assistant runs that command through the wrapper's input or
   environment delivery and never asks the user to paste the value into chat
 
-### Requirement: The guard is a function hook that denies raw readers
+### Requirement: The guard reads the command's syntax tree and denies raw readers
 
-A function hook on `tool.call` for Bash SHALL deny a command that reads a stored value outside the
-wrapper (`secret-tool lookup`, `secret-tool search`, `rbw get`, `rbw code`, `bw get`) or reads the
-rendered config directory, and SHALL answer with the wrapper command to use instead. It SHALL allow
-`secret-tool store` and `secret-tool clear`.
+The verb `qsm-secrets guard` SHALL read a Bash command on stdin, parse it with shell-ast, and answer
+`ok` or `blocked` with a stable code, the reason and the `qsm-secrets` verb to use instead. It
+SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`, `xargs`, `sh -c`
+bodies, subshells, command substitutions and pipelines, so a reader is judged by the command that
+finally runs. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
+`dbus-send` naming `org.freedesktop.secrets`; a reader of the keyring directory or the vault's data
+directory, by the spelling of the path or the file it resolves to; `python -c` or `node -e` naming a
+keyring library; a reader of the rendered config directory; a reader of a credential file; and
+`qsm-secrets get` with descriptor 3 pointed at the output. It SHALL allow `qsm-secrets` itself
+otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
+allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
+the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
+answer denies the call and names the cause. The verb is a compiled binary with the parser embedded,
+because the hook sandbox cannot load WebAssembly.
 
 #### Scenario: a raw reader is denied with the wrapper to use
 
-- **WHEN** an agent runs `secret-tool lookup` or `rbw get` through Bash
-- **THEN** the call is denied and the reason names `qsm-secrets pipe` or `qsm-secrets env`
+- **WHEN** an agent runs `secret-tool lookup`, `secret-tool store` or `rbw get` through Bash
+- **THEN** the call is denied and the reason names its code and `qsm-secrets pipe` or `qsm-secrets env`
 
-#### Scenario: a store is allowed
+#### Scenario: a wrapper does not hide a reader
 
-- **WHEN** an agent runs `secret-tool store`
+- **WHEN** an agent runs `sudo env A=1 rbw get x`, `echo a | xargs rbw get`, `bash -c 'ls; rbw get x'`
+  or `echo $(rbw get x)`
+- **THEN** the call is denied as a vault reader
+
+#### Scenario: a lookup is not a run
+
+- **WHEN** an agent runs `command -v rbw`, `which rbw` or `echo rbw get`
+- **THEN** the call is not denied
+
+#### Scenario: the keyring files are not read
+
+- **WHEN** an agent runs `cat "$XDG_DATA_HOME/keyrings/login.keyring"`, or a reader on a symbolic link to
+  that file
+- **THEN** the call is denied as keyring files, and `ls` of the directory is not
+
+#### Scenario: the rendered config is handed over, never read
+
+- **WHEN** an agent runs `cat` on a file in the rendered config directory, or passes that file's path
+  to `kubectl --kubeconfig`
+- **THEN** the `cat` is denied as rendered config and the `kubectl` is not
+
+#### Scenario: a keyring library is not called inline
+
+- **WHEN** an agent runs `python3 -c 'import keyring'` or `node -e` naming `keytar`
+- **THEN** the call is denied, and `python3 -m pytest tests/test_keyring.py` is not
+
+#### Scenario: the escape-hatch descriptor is not pointed at the output
+
+- **WHEN** an agent runs `qsm-secrets get <key>` with descriptor 3 redirected to `&1`, `&2` or
+  `/dev/stdout`, in the command, around it, or around a shell that runs it
+- **THEN** the call is denied, and descriptor 3 redirected to a file is not
+
+#### Scenario: a command that cannot be read is refused
+
+- **WHEN** a command has syntax the parser rejects
+- **THEN** the call is denied with the code `unreadable-command` and the parser's message
+
+#### Scenario: a guard that cannot answer stops the call
+
+- **WHEN** the verb prints no outcome envelope
+- **THEN** the call is denied and the reason names the verb, its exit code and its stderr
+
+### Requirement: Read and Grep do not open the credential files
+
+A function hook on `tool.call` for `Read` and `Grep` SHALL deny a path inside the keyring directory,
+the vault's data directory or the rendered config directory, by its spelling or the file it resolves
+to, and a `Grep` whose path holds one of them, and SHALL answer with the wrapper to use instead.
+
+#### Scenario: a file read of the keyring is denied
+
+- **WHEN** an agent reads a file in the keyring directory, or through a link that leads there
+- **THEN** the call is denied and the reason names `qsm-secrets pipe`
+
+#### Scenario: an ordinary file is read
+
+- **WHEN** an agent reads a file outside those directories
 - **THEN** the call is not denied
 
 ### Requirement: A content denylist is generated per machine, approved, and never committed

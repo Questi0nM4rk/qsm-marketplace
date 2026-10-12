@@ -20,12 +20,13 @@ this plugin can go.
 | --- | --- | --- |
 | Skill | `qsm-secrets` | Fires when a task needs a secret, and routes it through the wrapper. |
 | Skill | `content-denylist` | Builds a machine-local gitleaks rule list of employer, client and internal names, after you approve it. |
-| Hook | `tool.call` (guard) | Denies a Bash command that reads a stored value outside the wrapper, and names the wrapper to use. |
+| Hook | `tool.call` (guard) | Denies a Bash command that reads a stored value outside the wrapper, read from its syntax tree through `sudo`, `env`, `xargs`, `sh -c`, subshells and pipelines, with a code and the verb to use instead. It also denies a placeholder inside single quotes. |
+| Hook | `tool.call` (Read, Grep) | Denies reading the keyring files, the vault's data directory and the rendered config directory. |
 | Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable. |
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
 | Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
 | Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
-| CLI | `qsm-secrets` | 14 verbs, see [USAGE.md](USAGE.md). |
+| CLI | `qsm-secrets` | 15 verbs, see [USAGE.md](USAGE.md). |
 
 ## Install
 
@@ -58,7 +59,13 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 
 ## Caveats
 
-- A guardrail, not a sandbox: the guard matches commands by name.
+- A guardrail, not a sandbox: the guard reads a command's syntax tree and names the commands it
+  runs, so it does not see a script file's body, a glob that spells a protected path, a command
+  built from a variable, or a shell function. It runs `qsm-secrets guard` once per Bash call, about
+  90 ms with the compiled binary. A command it cannot parse (zsh-only syntax such as `*(.)`) is
+  refused with the cause; rewrite it in bash syntax.
+- A placeholder goes in double quotes or bare: inside single quotes it is never replaced, so the
+  guard refuses it.
 - A rendered file is plaintext while the session lives. Another process of the same user can read
   it. An environment variable is visible to the process that holds it.
 - Capture: the terminal already showed the text, and a secret sent before the hook existed is not

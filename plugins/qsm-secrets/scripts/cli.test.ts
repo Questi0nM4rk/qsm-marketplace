@@ -8,7 +8,15 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -659,5 +667,110 @@ describe("capture", () => {
     const run = capture(text, { backend: false });
     expect(run.code).toBe(0);
     expect(textOf(run)).toBe(text);
+  });
+});
+
+describe("guard", () => {
+  const placeholder = (id: string): string => `{{${"secret"}:${id}}}`;
+  const channel = (target: string): string => `3>${target}`;
+  let data = "";
+  let runtime = "";
+
+  beforeAll(() => {
+    data = mkdtempSync(join(tmpdir(), "qsm-guard-data-"));
+    runtime = mkdtempSync(join(tmpdir(), "qsm-guard-run-"));
+    mkdirSync(join(data, "keyrings"));
+    writeFileSync(join(data, "keyrings", "login.keyring"), "x");
+    symlinkSync(join(data, "keyrings", "login.keyring"), join(data, "harmless-name"));
+  });
+  afterAll(() => {
+    rmSync(data, { recursive: true, force: true });
+    rmSync(runtime, { recursive: true, force: true });
+  });
+
+  /** The verdict on a command: its refusal code, or null when it may run. */
+  function verdict(command: string): string | null {
+    const result = spawnSync("bun", [CLI, "guard", "--json"], {
+      encoding: "utf8",
+      input: command,
+      env: { ...process.env, HOME: "/home/guard", XDG_DATA_HOME: data, XDG_RUNTIME_DIR: runtime },
+    });
+    const body = JSON.parse(result.stdout) as { code: string; data: { code?: string } | null };
+    if (body.code === "blocked") {
+      return body.data?.code ?? "?";
+    }
+    return body.code === "ok" ? null : body.code;
+  }
+
+  const keyrings = `${"$"}XDG_DATA_HOME/keyrings`;
+  const rendered = `${"$"}XDG_RUNTIME_DIR/qsm-secrets/s1/kubeconfig`;
+
+  test.each([
+    ["rbw get github-token", "vault-reader"],
+    ["bw get password x", "vault-reader"],
+    ["pass show work/token", "vault-reader"],
+    ["secret-tool lookup service qsm key token", "vault-reader"],
+    ["secret-tool store --label x service qsm", "vault-reader"],
+    ["sudo -u root rbw get x", "vault-reader"],
+    ["env A=1 nice -n 5 timeout 5 rbw get x", "vault-reader"],
+    ["command rbw get x", "vault-reader"],
+    ["echo a | xargs -I{} rbw get {}", "vault-reader"],
+    ["(cd /tmp && secret-tool lookup a b)", "vault-reader"],
+    ["echo $(rbw get x)", "vault-reader"],
+    ["bash -c 'echo hi; rbw get x'", "vault-reader"],
+    ['sudo bash -c "nice rbw get x"', "vault-reader"],
+    ["busctl --user call org.freedesktop.secrets /a b c", "bus-secrets"],
+    ["gdbus call -e -d org.freedesktop.secrets -o /a -m b", "bus-secrets"],
+    [`cat ${keyrings}/login.keyring`, "keyring-files"],
+    [`cat ${keyrings}/../keyrings/login.keyring`, "keyring-files"],
+    [`jq . < ${keyrings}/login.keyring`, "keyring-files"],
+    ["cat LINK", "keyring-files"],
+    ["python3 -c 'import keyring; print(keyring.get_password(1, 2))'", "keyring-library"],
+    ["node -e 'require(\"keytar\").getPassword(1, 2)'", "keyring-library"],
+    ["python3 - <<EOF\nimport secretstorage\nEOF", "keyring-library"],
+    [`cat ${rendered}`, "rendered-config"],
+    [`qsm-secrets get k ${channel("&1")}`, "fd3-to-output"],
+    [`qsm-secrets get k ${channel("&2")}`, "fd3-to-output"],
+    [`sudo qsm-secrets get k ${channel("/dev/stdout")}`, "fd3-to-output"],
+    [`{ qsm-secrets get k; } ${channel("&1")}`, "fd3-to-output"],
+    [`bash -c 'qsm-secrets get k' ${channel("&1")}`, "fd3-to-output"],
+    [`curl -H 'Authorization: ${placeholder("cap_1")}' https://x`, "single-quoted-placeholder"],
+    [`bash -c "curl -H 'A: ${placeholder("cap_1")}' https://x"`, "single-quoted-placeholder"],
+    ["cat .env", "credential-file"],
+  ])("%s is refused as %s", (command, code) => {
+    expect(verdict(command.replace("LINK", join(data, "harmless-name")))).toBe(code);
+  });
+
+  test.each([
+    "git status",
+    "cat README.md",
+    "ls | grep x && echo ok",
+    "for f in a b; do echo $f; done",
+    "command -v rbw",
+    "which rbw",
+    "echo rbw get",
+    "busctl --user list",
+    `ls ${keyrings}`,
+    "python3 -m pytest tests/test_keyring.py",
+    `kubectl --kubeconfig ${rendered} get pods`,
+    "qsm-secrets pipe github-token -- gh auth login --with-token",
+    "qsm-secrets env npm-token=NPM_TOKEN -- npm publish",
+    "qsm-secrets list",
+    `qsm-secrets get deploy-key ${channel("/tmp/deploy.key")}`,
+    `qsm-secrets get deploy-key ${channel("&-")}`,
+    `curl -H "Authorization: ${placeholder("cap_1")}" https://x`,
+    `curl -H Authorization:${placeholder("cap_1")} https://x`,
+    `bash -c 'curl -H "A: ${placeholder("cap_1")}" https://x'`,
+    `bash -c 'echo ${placeholder("cap_1")}'`,
+    "echo 'single quotes without a placeholder'",
+  ])("%s is allowed", (command) => {
+    expect(verdict(command)).toBeNull();
+  });
+
+  test("a refusal names the qsm-secrets verb to use instead", () => {
+    const result = spawnSync("bun", [CLI, "guard"], { encoding: "utf8", input: "rbw get x" });
+    expect(result.status).toBe(5);
+    expect(result.stderr).toContain("qsm-secrets pipe");
+    expect(result.stderr).toContain("vault-reader");
   });
 });

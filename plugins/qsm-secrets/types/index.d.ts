@@ -20,6 +20,7 @@ export type Secrets = {
     key: string;
     folder?: string;
   }): Promise<unknown>;
+  guard(): Promise<unknown>;
   capture(): Promise<unknown>;
   mask(options: {
     id?: (string)[];

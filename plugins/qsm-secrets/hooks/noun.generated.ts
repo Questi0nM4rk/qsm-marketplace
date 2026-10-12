@@ -23,6 +23,7 @@ export const verbs: Readonly<Record<string, VerbRow>> = {
   list: { words: ["qsm-secrets","list"], args: [{ name: "folder", flag: "--folder" }] },
   inspect: { words: ["qsm-secrets","inspect"], args: [{ name: "folder", flag: "--folder" }] },
   rm: { words: ["qsm-secrets","rm"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }] },
+  guard: { words: ["qsm-secrets","guard"], args: [] },
   capture: { words: ["qsm-secrets","capture"], args: [] },
   mask: { words: ["qsm-secrets","mask"], args: [{ name: "id", flag: "--id" }, { name: "all", flag: "--all", boolean: true }] },
   scrub: { words: ["qsm-secrets","scrub"], args: [{ name: "transcript", flag: null }, { name: "detach", flag: "--detach", boolean: true }] },
