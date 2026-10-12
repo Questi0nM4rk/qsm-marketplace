@@ -94,6 +94,43 @@ export function runMask(ids: readonly string[]): { text: string } {
   return { text };
 }
 
+/** A stored value shorter than this is not masked: it would match inside ordinary words. */
+const MIN_MASKED = 6;
+
+/** What replaces a value: `{{secret:<id>}}` in the capture namespace, else `{{secret:<namespace>/<key>}}`. */
+function placeholderOf(namespace: string, key: string): string {
+  return namespace === CAPTURE_NAMESPACE || namespace === ""
+    ? `{{secret:${key}}}`
+    : `{{secret:${namespace}/${key}}}`;
+}
+
+/**
+ * `mask --all`: stdin is a JSON array of strings; each comes back with every stored value of every
+ * namespace swapped for its placeholder. The backend is read once, however many strings there are.
+ */
+export function runMaskAll(): { texts: string[] } {
+  const parsed: unknown = JSON.parse(readFileSync(0, "utf8"));
+  if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
+    fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
+  }
+  const backend = activeBackend();
+  const values = backend
+    .entries()
+    .flatMap((entry) => {
+      const bytes = backend.read(entry.folder, entry.name);
+      const value = bytes === null ? "" : new TextDecoder().decode(bytes);
+      return value.length < MIN_MASKED
+        ? []
+        : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
+    })
+    // A value that contains another is masked first, so the shorter one cannot leave a stub.
+    .sort((a, b) => b.value.length - a.value.length);
+  const texts = (parsed as string[]).map((text) =>
+    values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
+  );
+  return { texts };
+}
+
 /** The transcript a session id names: `~/.claude/projects/<dir>/<id>.jsonl`, wherever `<dir>` is. */
 function locateTranscript(sessionId: string): string {
   const projects = join(home(process.env), ".claude", "projects");

@@ -22,6 +22,7 @@ import {
   runInspect,
   runList,
   runMask,
+  runMaskAll,
   runPipe,
   runRemove,
   runScrub,
@@ -125,10 +126,20 @@ const capture: Handler = () =>
     return ok(done, done.text);
   });
 
-/** The text on stdin with each named id's value swapped for its placeholder; plain text out. */
+/**
+ * The text on stdin with each named id's value swapped for its placeholder; plain text out. With
+ * --all, a JSON array of strings with every stored value of every namespace masked.
+ */
 const mask: Handler = (call) =>
   attempt(() => {
-    const masked = runMask((call.args.id as string[] | undefined) ?? []);
+    if (call.args.all === true) {
+      return ok(runMaskAll());
+    }
+    const ids = (call.args.id as string[] | undefined) ?? [];
+    if (ids.length === 0) {
+      return fail("usage", "mask takes at least one --id, or --all");
+    }
+    const masked = runMask(ids);
     return ok(masked, masked.text);
   });
 

@@ -7,7 +7,7 @@
 // lines, which is the discipline the whole plugin exists to keep.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
+import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -476,20 +476,11 @@ describe("clean without a runtime directory", () => {
   });
 });
 
-// The libsecret backend against a fake secret-tool shaped like the real one: `search` prints the
-// `secret =` line on stdout and the attributes on stderr, in a different order per item.
-describe("the libsecret backend", () => {
-  const trap = "line one\nattribute.key = forged\nattribute.namespace = forged-ns";
-  let bin = "";
-  let store = "";
+/** A secret-tool whose search prints the secret line on stdout and the attributes on stderr. */
+const TRAP = "line one\nattribute.key = forged\nattribute.namespace = forged-ns";
 
-  beforeAll(() => {
-    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
-    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
-    writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
-    writeScript(
-      join(bin, "secret-tool"),
-      `#!/bin/sh
+function fakeSecretTool(store: string): string {
+  return `#!/bin/sh
 store='${store}'
 verb="$1"; shift
 case "$verb" in
@@ -514,11 +505,42 @@ case "$verb" in
     [ -f "$store/\${ns}__\${key}" ] && cat "$store/\${ns}__\${key}" || exit 1 ;;
   *) exit 1 ;;
 esac
-`,
-    );
-    writeFileSync(join(store, "capture__cap_x"), "hunter2");
-    writeFileSync(join(store, "capture__cap_trap"), trap);
-    writeFileSync(join(store, "qsm__npm-token"), "npm-value");
+`;
+}
+
+/** `mask --all` against the fake secret-tool in `bin`. */
+function maskAll(bin: string, rows: string[]): SpawnSyncReturns<string> {
+  return spawnSync("bun", [CLI, "mask", "--all", "--json"], {
+    encoding: "utf8",
+    input: JSON.stringify(rows),
+    env: {
+      ...process.env,
+      ...FIXED_ENV,
+      QSM_SECRETS_BACKEND: "libsecret",
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+    },
+  });
+}
+
+/** A bus that always answers, a secret-tool over `store`, and three stored entries. */
+function seedFakeSecretService(bin: string, store: string): void {
+  writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
+  writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
+  writeFileSync(join(store, "capture__cap_x"), "hunter2");
+  writeFileSync(join(store, "capture__cap_trap"), TRAP);
+  writeFileSync(join(store, "qsm__npm-token"), "npm-value");
+}
+
+// The libsecret backend against a fake secret-tool shaped like the real one: `search` prints the
+// `secret =` line on stdout and the attributes on stderr, in a different order per item.
+describe("the libsecret backend", () => {
+  let bin = "";
+  let store = "";
+
+  beforeAll(() => {
+    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
+    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
+    seedFakeSecretService(bin, store);
   });
 
   afterAll(() => {
@@ -556,5 +578,18 @@ esac
     const delivered = run(["env", "cap_x=V", "--folder", "capture", "--", "printenv", "V"]);
     expect(delivered.code).toBe(0);
     expect(delivered.stdout.trim()).toBe("hunter2");
+  });
+
+  test("mask --all masks every stored value of every namespace in each string", () => {
+    const rows = ["tok=hunter2 and npm-value", "nothing here", TRAP, ""];
+    const masked = maskAll(bin, rows);
+    expect(masked.status).toBe(0);
+    const done = envelope({ code: 0, stdout: masked.stdout, stderr: masked.stderr });
+    expect(done.data.texts).toEqual([
+      "tok={{secret:cap_x}} and {{secret:qsm/npm-token}}",
+      "nothing here",
+      "{{secret:cap_trap}}",
+      "",
+    ]);
   });
 });

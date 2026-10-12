@@ -24,7 +24,7 @@ export const verbs: Readonly<Record<string, VerbRow>> = {
   inspect: { words: ["qsm-secrets","inspect"], args: [{ name: "folder", flag: "--folder" }] },
   rm: { words: ["qsm-secrets","rm"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }] },
   capture: { words: ["qsm-secrets","capture"], args: [] },
-  mask: { words: ["qsm-secrets","mask"], args: [{ name: "id", flag: "--id" }] },
+  mask: { words: ["qsm-secrets","mask"], args: [{ name: "id", flag: "--id" }, { name: "all", flag: "--all", boolean: true }] },
   scrub: { words: ["qsm-secrets","scrub"], args: [{ name: "transcript", flag: null }, { name: "detach", flag: "--detach", boolean: true }] },
   render: { words: ["qsm-secrets","render"], args: [{ name: "template", flag: null }, { name: "out", flag: "--out" }, { name: "session", flag: "--session" }] },
   clean: { words: ["qsm-secrets","clean"], args: [{ name: "session", flag: "--session" }] },

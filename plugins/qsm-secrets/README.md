@@ -21,7 +21,8 @@ this plugin can go.
 | Skill | `qsm-secrets` | Fires when a task needs a secret, and routes it through the wrapper. |
 | Skill | `content-denylist` | Builds a machine-local gitleaks rule list of employer, client and internal names, after you approve it. |
 | Hook | `tool.call` (guard) | Denies a Bash command that reads a stored value outside the wrapper, and names the wrapper to use. |
-| Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable, and masks the result. |
+| Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable. |
+| Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
 | Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` and gives the model a placeholder. |
 | Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
 | CLI | `qsm-secrets` | 14 verbs, see [USAGE.md](USAGE.md). |
@@ -61,6 +62,9 @@ instead of the value.
 - Capture: the terminal already showed the text, and a secret sent before the hook existed is not
   recalled. A failed capture lets the prompt in unchanged, with an error toast. A hex-only secret
   is not caught by the entropy floor.
+- Masking: every row is masked against every stored value of six or more characters, one process
+  per row; a value printed re-encoded (base64, escaped) is not masked, and a row the mask cannot
+  read is withheld, with a toast. Without a chosen backend every row is withheld.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.
 - `set` needs a terminal and stores one line only.
 - The default namespace is the folder `qsm` (`--folder` or `QSM_SECRETS_FOLDER`).

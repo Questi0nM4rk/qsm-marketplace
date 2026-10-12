@@ -207,6 +207,17 @@ its first operation it SHALL check, in one process, that the session bus names
 `org.freedesktop.secrets`; when it does not, the call SHALL answer `missing` naming what to start
 (a Secret Service provider such as GNOME Keyring or KeePassXC) and SHALL change nothing.
 
+#### Scenario: a stored entry is found whatever order its attributes print in
+
+- **WHEN** the choice is `libsecret`, entries are stored and `secret-tool search` prints each item's
+  attributes on stderr in any order
+- **THEN** `list`, `has` and `env` find every entry by its namespace and key
+
+#### Scenario: a value cannot forge an entry
+
+- **WHEN** a stored value contains the text `attribute.key = X`
+- **THEN** no entry named `X` is listed and the value is never printed
+
 #### Scenario: libsecret never touches the network
 
 - **WHEN** the choice is `libsecret` and any operation runs
@@ -280,13 +291,13 @@ the text, and a secret sent before this hook existed is not recalled.
 - **WHEN** the session's transcript is saved to the archive after a secret was pasted
 - **THEN** the archive holds the id and not the value
 
-### Requirement: An id is replaced at use and a stored value is masked in a result
+### Requirement: An id is replaced at use
 
 A function hook on `tool.call` for Bash SHALL rewrite a command holding `{{secret:<id>}}` into a
 call of `qsm-secrets env <id>=QSM_SECRET_<ID> -- sh -c '<command>'` in which the placeholder is the
 variable, so the value reaches that one command through its environment and never appears in the
-command text, and SHALL mask a stored value found in the command's result with its id before the
-model reads it. A command with no placeholder SHALL pass unchanged.
+command text. A command with no placeholder SHALL pass unchanged, and the hook SHALL return the
+tool's result as it came, never a copy of it.
 
 #### Scenario: an id in a command is replaced for that command only
 
@@ -298,10 +309,38 @@ model reads it. A command with no placeholder SHALL pass unchanged.
 - **WHEN** a Bash command holds `{{secret:<id>}}` and a single quote
 - **THEN** the rewritten command runs the same words as the original
 
+### Requirement: Every row the conversation keeps is masked
+
+A function hook on `session.append` SHALL mask every row the session keeps, whatever its door (a
+tool result, a response, a prompt, an attachment, a delivery), before it is stored: each text block
+and each tool result's content has every stored value of every namespace replaced by its
+placeholder, `{{secret:<id>}}` in the capture namespace and `{{secret:<namespace>/<key>}}` in any
+other. The hook SHALL run one `qsm-secrets mask --all` process per row, which reads the backend
+once. A value shorter than six characters SHALL NOT be masked, because it would match inside
+ordinary words. When the mask fails, the row's text SHALL be replaced by a notice that it was
+withheld and a toast SHALL say so, because a row that could not be masked may hold a value. The
+limit: a value printed re-encoded (base64, escaped) is not masked, and a media block is kept as it
+is.
+
 #### Scenario: a value in a tool result is masked
 
-- **WHEN** a tool result contains a stored value
-- **THEN** the model reads the id in its place
+- **WHEN** a tool result contains a stored value, whether or not its command named an id
+- **THEN** the row is stored with the placeholder in its place and the model reads the placeholder
+
+#### Scenario: a file read returns a stored value
+
+- **WHEN** the Read tool returns a file that holds a stored value
+- **THEN** the row is stored with the placeholder in its place
+
+#### Scenario: a failed mask withholds the row
+
+- **WHEN** `qsm-secrets mask --all` fails for a row
+- **THEN** the row's text is replaced by a withheld notice, a toast says so, and the log names the cause
+
+#### Scenario: one read serves a whole row
+
+- **WHEN** a row has several text blocks
+- **THEN** one `mask --all` process masks all of them
 
 ### Requirement: Config files are rendered per session in memory and removed at its end
 

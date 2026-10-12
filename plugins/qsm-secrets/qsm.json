@@ -67,9 +67,10 @@
         "description": "Read a prompt piped on stdin, store each secret in it (a known token shape, or a 32-character token of high entropy) in the active backend under a generated id, and print the text with each value replaced by {{secret:<id>}} and, for a long secret, its last four characters"
       },
       "qsm-secrets mask": {
-        "description": "Read text piped on stdin and print it with each named id's stored value replaced by its {{secret:<id>}} placeholder",
+        "description": "Read text piped on stdin and print it with each named id's stored value replaced by its {{secret:<id>}} placeholder; with --all, read a JSON array of strings and mask every stored value of every namespace in each, with one backend read",
         "args": [
-          { "name": "id", "type": "string", "repeatable": true, "required": true, "description": "a captured id whose value is masked" }
+          { "name": "id", "type": "string", "repeatable": true, "description": "a captured id whose value is masked" },
+          { "name": "all", "type": "boolean", "description": "mask every stored value of every namespace in a JSON array of strings on stdin; prints the array" }
         ]
       },
       "qsm-secrets scrub": {

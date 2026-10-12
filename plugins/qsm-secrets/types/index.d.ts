@@ -22,7 +22,8 @@ export type Secrets = {
   }): Promise<unknown>;
   capture(): Promise<unknown>;
   mask(options: {
-    id: (string)[];
+    id?: (string)[];
+    all?: boolean;
   }): Promise<unknown>;
   scrub(options: {
     transcript: string;

@@ -58,7 +58,7 @@ test("a command holding an id runs wrapped in qsm-secrets env, the id never in i
   let ran = "";
   on("tool.call", (_$, e) => {
     ran = (e as { command: string }).command;
-    return { result: { stdout: "", stderr: "" } };
+    return { result: { stdout: "", stderr: "", interrupted: false } };
   });
   on("ui.log", () => ({ value: undefined }));
 
@@ -67,26 +67,59 @@ test("a command holding an id runs wrapped in qsm-secrets env, the id never in i
   expect(ran).toBe(`${ENV_CHAIN}'echo "$QSM_SECRET_CAP_1" it'\\''s'`);
 });
 
-test("a result is masked through qsm-secrets mask, and withheld when masking fails", async ($, on) => {
-  const stdout = (text: string) => ({
+test("every row is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
+  const answer = (rows: string[]) => ({
     ...RAN,
-    stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { text } }),
+    stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts: rows } }),
   });
-  on("tool.call", () => ({ result: { stdout: "tok=VALUE", stderr: "" } }));
-  on("ui.toast", () => ({ value: undefined }));
+  let toast = "";
+  on("ui.toast", (_$, e) => {
+    toast = e.text;
+    return { value: undefined };
+  });
   on("ui.log", () => ({ value: undefined }));
   let broken = false as boolean;
-  on("process.run", () => ({
-    value: broken ? { ...RAN, stdout: "not an envelope" } : stdout("tok={{secret:cap_1}}"),
-  }));
+  let argv: string[] = [];
+  let stdin = "";
+  on("process.run", (_$, e) => {
+    const run = e as { argv: string[]; init: { stdin: string } };
+    ({
+      argv,
+      init: { stdin },
+    } = run);
+    return {
+      value: broken
+        ? { ...RAN, stdout: "not an envelope" }
+        : answer(["tok={{secret:cap_1}}", "ok"]),
+    };
+  });
+  const row = {
+    door: "tool-result" as const,
+    origin: { kind: "tool" as const, tool: "Read" },
+    uuid: "u1",
+    message: {
+      type: "user" as const,
+      content: [
+        { type: "text", text: "tok=VALUE" },
+        { type: "text", text: "ok" },
+      ],
+    },
+  };
 
-  const ok = await $.tool.call({ tool: "Bash", command: "echo {{secret:cap_1}}" });
-  expect((ok.result as { stdout: string }).stdout).toBe("tok={{secret:cap_1}}");
+  const stored = await $.session.append(row);
+  expect(argv.slice(0, 3)).toEqual(["qsm-secrets", "mask", "--all"]);
+  expect(JSON.parse(stdin)).toEqual(["tok=VALUE", "ok"]);
+  expect(stored.message?.content).toEqual([
+    { type: "text", text: "tok={{secret:cap_1}}" },
+    { type: "text", text: "ok" },
+  ]);
 
   broken = true;
-  const failed = await $.tool.call({ tool: "Bash", command: "echo {{secret:cap_1}}" });
-  expect((failed.result as { stdout: string }).stdout).toContain("withheld");
-  expect((failed.result as { stdout: string }).stdout).toContain("printed no outcome envelope");
+  const failed = await $.session.append(row);
+  const texts = (failed.message?.content ?? []).map((b) => String(b.text));
+  expect(texts.join("\n")).not.toContain("VALUE");
+  expect(texts[0]).toContain("withheld");
+  expect(toast).toContain("session.append");
 });
 
 /** Toasts are dropped and log lines kept in `logs`, so a test reads what the hook logged. */

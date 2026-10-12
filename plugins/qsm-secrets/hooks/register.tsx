@@ -3,7 +3,7 @@
 // blockedCommand, a pure function of the command line in lib/), and the capture of a pasted secret
 // before the prompt enters the session (the decision is `qsm-secrets capture`), and the use of a
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
-import type { EngineInterface, On } from "claude-code";
+import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
 import { blockedCommand } from "../lib/blocked.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
@@ -45,45 +45,85 @@ function dataOf(
   return unwrap(argv, ran);
 }
 
-/** One stream of a result with every named id's value swapped back for its placeholder. */
-async function masked($: EngineInterface, text: string, ids: string[]): Promise<string> {
-  if (text === "") {
-    return text;
-  }
-  const argv = argvOf(verbs.mask as VerbRow, { id: ids });
-  const ran = await $.process.run(argv, { stdin: text, timeoutMs: CAPTURE_TIMEOUT_MS });
-  return (dataOf(argv, ran) as { text: string }).text;
-}
-
-/** A command naming an id runs with the value in its environment; the result comes back masked. */
+/** A command naming an id runs with the value in its environment; its result is masked on the way
+ * into the conversation, by the session.append hook. */
 function registerSubstitution(on: On): void {
-  on("tool.call", { tool: "Bash" }, async ($, e, next) => {
+  on("tool.call", { tool: "Bash" }, (_$, e, next) => {
     const { command, ids } = substitute(e.command);
-    if (ids.length === 0) {
-      return next(e);
-    }
-    const done = await next({ ...e, command });
-    const out = done.result as { stdout: string; stderr: string } | null | undefined;
-    if (done.deny !== undefined || out === null || out === undefined) {
-      return done;
-    }
-    try {
-      const stdout = await masked($, out.stdout, ids);
-      const stderr = await masked($, out.stderr, ids);
-      return { ...done, result: { ...out, stdout, stderr } };
-    } catch (error) {
-      // A result that could not be masked must not reach the model: it may hold the value.
-      $.ui.toast("qsm-secrets ERROR: tool.call: the result could not be masked and was withheld");
-      $.ui.log(`mask failed (${String(error).slice(0, 400)}); the result was withheld`);
-      const withheld = `qsm-secrets: the result could not be masked and was withheld (${String(error).slice(0, 400)})`;
-      return { ...done, result: { ...out, stdout: withheld, stderr: withheld } };
-    }
+    return ids.length === 0 ? next(e) : next({ ...e, command });
   }).catch(($, _e, next) => {
     $.ui.toast(`qsm-secrets ERROR: tool.call: ${next.error.kind}`);
     $.ui.log(`the id substitution failed (${cause(next.error)}); the call was denied`);
     return {
       deny: `qsm-secrets: the id substitution failed (${cause(next.error)}); the call was not run`,
     };
+  });
+}
+
+/**
+ * Rewrites every text of a row's content, in a fixed order: a text block, a tool_result's string
+ * content, and the text blocks inside a tool_result's content. Media and other blocks are kept.
+ */
+function mapTexts(content: ApiContentBlock[], map: (text: string) => string): ApiContentBlock[] {
+  const mapBlock = (block: ApiContentBlock): ApiContentBlock => {
+    if (block.type === "text" && typeof block.text === "string") {
+      return { ...block, text: map(block.text) };
+    }
+    if (block.type === "tool_result" && typeof block.content === "string") {
+      return { ...block, content: map(block.content) };
+    }
+    if (block.type === "tool_result" && Array.isArray(block.content)) {
+      return { ...block, content: (block.content as ApiContentBlock[]).map(mapBlock) };
+    }
+    return block;
+  };
+  return content.map(mapBlock);
+}
+
+/** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
+function registerMask(on: On): void {
+  const withheld = (reason: string): string =>
+    `qsm-secrets: this text could not be masked and was withheld (${reason.slice(0, 300)})`;
+  const rewritten = (e: SessionAppendInput, content: ApiContentBlock[]): SessionAppendInput => ({
+    ...e,
+    message: { ...e.message, content },
+  });
+  on("session.append", async ($, e, next) => {
+    const texts: string[] = [];
+    mapTexts(e.message.content, (text) => {
+      texts.push(text);
+      return text;
+    });
+    if (texts.every((text) => text === "")) {
+      return next(e);
+    }
+    const argv = argvOf(verbs.mask as VerbRow, { all: true });
+    const ran = await $.process.run(argv, {
+      stdin: JSON.stringify(texts),
+      timeoutMs: CAPTURE_TIMEOUT_MS,
+    });
+    const done = (dataOf(argv, ran) as { texts: string[] }).texts;
+    if (done.length !== texts.length) {
+      throw new Error(`the mask returned ${done.length} texts for ${texts.length}`);
+    }
+
+    return next(
+      rewritten(
+        e,
+        mapTexts(e.message.content, () => done.shift() as string),
+      ),
+    );
+  }).catch(($, e, next) => {
+    // Fails closed: a row that could not be masked may hold a value, so its text is replaced.
+    $.ui.toast("qsm-secrets ERROR: session.append: a row could not be masked and was withheld");
+    $.ui.log(`the mask failed (${cause(next.error)}); the row's text was withheld`);
+    const notice = withheld(cause(next.error));
+    return next(
+      rewritten(
+        e,
+        mapTexts(e.message.content, (text) => (text === "" ? text : notice)),
+      ),
+    );
   });
 }
 
@@ -108,6 +148,7 @@ export function register(on: On): void {
   // hand-edit noun.generated.ts or types/index.d.ts.
   registerNoun(on);
   registerSubstitution(on);
+  registerMask(on);
   registerScrub(on);
 
   on("tool.call", { tool: "Bash" }, ($, e, next) => {

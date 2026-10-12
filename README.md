@@ -104,7 +104,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-book-to-skill`
 | [qsm-langdev-ts](plugins/qsm-langdev-ts/README.md) | A model left alone writes TypeScript that compiles yet leaves meaning in loose strings and numbers. | 2 skills |
 | [qsm-langdev-zsh](plugins/qsm-langdev-zsh/README.md) | A quality gate only checks a language the project says it speaks, and zsh is close enough to bash that a model writes it wrong without noticing. | 1 skill |
 | [qsm-review](plugins/qsm-review/README.md) | A change reviewed by the agent that wrote it is reviewed by the assumptions that wrote it. | 4 skills, 2 agents |
-| [qsm-secrets](plugins/qsm-secrets/README.md) | A token that enters the agent's context is a token in a transcript, a log, and every model call after it. | 2 skills, CLI, 4 hooks |
+| [qsm-secrets](plugins/qsm-secrets/README.md) | A token that enters the agent's context is a token in a transcript, a log, and every model call after it. | 2 skills, CLI, 5 hooks |
 
 ### Knowledge and web
 
