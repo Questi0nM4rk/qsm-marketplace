@@ -3,9 +3,11 @@
 
 # `qsm-marketplace`
 
-**27 small Claude Code plugins that help an agent check its own work.**
+**Small Claude Code plugins that help an agent check its own work.**
 
 [![CI](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
+[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Questi0nM4rk/qsm-marketplace?color=blue)](./LICENSE)
 
 </div>
@@ -147,14 +149,12 @@ The first serves the page on 127.0.0.1:4747. The second writes it as one HTML fi
 
 ## Quickstart
 
-Tested with Bun 1.3.14 (`mise.toml` pins it).
-
 ```bash
 git clone https://github.com/Questi0nM4rk/qsm-marketplace && cd qsm-marketplace
 bun install --frozen-lockfile && bun run validate && bun test
 ```
 
-`bun run validate` prints six `OK` gate lines. `bun test` ends with `1470 pass`, `0 fail`.
+`bun run validate` prints an `OK` line for each gate. `bun test` ends with `0 fail`.
 
 Use it in Claude Code (`qsm-setup` compiles the binaries and links them onto your `PATH`):
 
@@ -177,15 +177,17 @@ The rules are in [AGENTS.md](AGENTS.md).
 
 ## Numbers
 
-Measured 2026-10-12 on Arch Linux, Bun 1.3.14, from a fresh clone.
+[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
+[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
 
-| What | Value | How measured |
-| --- | --- | --- |
-| Plugins, skills, agents | 27, 64, 10 | `marketplace.json`, `ls -d plugins/*/skills/*/ plugins/*/agents/*.md` |
-| Tests | 1470 in 137 files, all pass, 123 to 160 s over three runs | `bun test` |
-| `bun install --frozen-lockfile`, `bun run validate` | 1.1 s, 1.8 s | `time` |
-| Code size | 49,621 TypeScript lines in 438 files | `scc` |
-| Eval pass rate, token savings, hook latency | Not measured | |
+| What | How to measure |
+| --- | --- |
+| Plugins | `jq '.plugins\|length' .claude-plugin/marketplace.json` |
+| Skills, agents | `ls -d plugins/*/skills/*/ plugins/*/agents/*.md` |
+| Tests | `bun test` |
+| Install and validate time | `time bun install --frozen-lockfile`, `time bun run validate` |
+| Code size | `scc` |
+| Eval pass rate, token savings, hook latency | Not measured |
 
 Commits include agent-authored work under my identity; design, orchestration and review are mine.
 
