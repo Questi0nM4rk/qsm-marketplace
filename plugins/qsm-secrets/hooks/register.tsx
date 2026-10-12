@@ -74,10 +74,10 @@ function refusalOf(ran: { exitCode: number; stdout: string; stderr: string }): s
   );
 }
 
-// The only commands a broken guard lets through, so a missing binary can be diagnosed and the
-// install repeated from a Bash call: each is one fixed command, no pipe, no list, no substitution.
-const RECOVERY =
-  /^\s*(?:qsm-secrets doctor|bun [\w./-]*plugins\/qsm-secrets\/scripts\/install\.ts(?: --dry-run)?)\s*$/;
+// The one command a broken guard lets through, so the cause can be read: it changes nothing and
+// reads no value. Reinstalling is the person's step in their own terminal, never the agent's: an
+// allowed path to an install script is a path the agent could write its own script to.
+const RECOVERY = /^\s*qsm-secrets doctor\s*$/;
 
 /** The guard runs first, on the command as written, so it sees a placeholder before the substitution
  * rewrites it. */

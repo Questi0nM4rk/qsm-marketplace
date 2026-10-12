@@ -59,17 +59,14 @@ test("a guard that cannot answer denies the call and says why", async ($, on) =>
   expect(denied.deny).toContain("no outcome envelope");
 });
 
-test("a broken guard lets the doctor and the installer through and nothing else", async ($, on) => {
+test("a broken guard lets the doctor through and nothing else", async ($, on) => {
   on("tool.call", () => ({ result: "ran" }));
   guardAnswers(on, "not an envelope");
 
+  expect((await $.tool.call({ tool: "Bash", command: "qsm-secrets doctor" })).result).toBe("ran");
   for (const command of [
-    "qsm-secrets doctor",
     "bun plugins/qsm-secrets/scripts/install.ts --dry-run",
-  ]) {
-    expect((await $.tool.call({ tool: "Bash", command })).result).toBe("ran");
-  }
-  for (const command of [
+    "bun /tmp/x/plugins/qsm-secrets/scripts/install.ts",
     "qsm-secrets doctor; rbw get x",
     "qsm-secrets doctor | cat",
     "rbw get x",

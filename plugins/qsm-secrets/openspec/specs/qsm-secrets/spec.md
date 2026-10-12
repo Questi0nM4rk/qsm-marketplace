@@ -541,8 +541,9 @@ keyring library; a reader of the rendered config directory; a reader of a creden
 otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
 allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
 the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
-answer denies the call and names the cause, except for exactly `qsm-secrets doctor` and the plugin's
-install script, so a broken install can be diagnosed and repeated. The verb is a compiled binary with the parser embedded,
+answer denies the call and names the cause, except for exactly `qsm-secrets doctor`, so a broken
+install can be diagnosed; the person reinstalls in their own terminal, because an allowed path to an
+install script is a path the agent could write its own script to. The verb is a compiled binary with the parser embedded,
 because the hook sandbox cannot load WebAssembly.
 
 #### Scenario: a raw reader is denied with the wrapper to use
@@ -599,7 +600,7 @@ because the hook sandbox cannot load WebAssembly.
 
 - **WHEN** the verb prints no outcome envelope
 - **THEN** the call is denied and the reason names the verb, its exit code and its stderr, unless the
-  command is exactly `qsm-secrets doctor` or the install script, which runs
+  command is exactly `qsm-secrets doctor`, which runs
 
 ### Requirement: Read and Grep do not open the credential files
 
