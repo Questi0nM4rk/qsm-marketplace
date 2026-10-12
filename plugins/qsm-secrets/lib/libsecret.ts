@@ -51,22 +51,35 @@ function ready(): void {
   }
 }
 
-/** Names and namespaces only: the `secret =` line of the search output is dropped here. */
+/**
+ * Names and namespaces only. `secret-tool search` prints each item's `secret =` line on stdout and
+ * its attributes on stderr in hash-table order, so stdout is never read: a value holding the text
+ * `attribute.key = X` cannot forge a row. Every item carries the same attributes, so an attribute
+ * name that repeats starts the next item.
+ */
 function entries(): Entry[] {
   ready();
   const found = spawnSync(BIN, ["search", "--all", "service", "qsm"], { encoding: "utf8" });
   const rows: Entry[] = [];
-  let namespace = "";
-  for (const line of found.stdout.split("\n")) {
-    const [, value] = /^attribute\.namespace = (.*)$/.exec(line) ?? [];
-    if (value !== undefined) {
-      namespace = value;
-    }
-    const [, key] = /^attribute\.key = (.*)$/.exec(line) ?? [];
+  let item = new Map<string, string>();
+  const flush = (): void => {
+    const key = item.get("key");
     if (key !== undefined) {
-      rows.push({ name: key, folder: namespace, user: WRAPPER_MARK });
+      rows.push({ name: key, folder: item.get("namespace") ?? "", user: WRAPPER_MARK });
     }
+    item = new Map();
+  };
+  for (const line of found.stderr.split("\n")) {
+    const [, name, value] = /^attribute\.(\S+) = (.*)$/.exec(line) ?? [];
+    if (name === undefined || value === undefined) {
+      continue;
+    }
+    if (item.has(name)) {
+      flush();
+    }
+    item.set(name, value);
   }
+  flush();
   return rows;
 }
 

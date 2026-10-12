@@ -475,3 +475,86 @@ describe("clean without a runtime directory", () => {
     expect(JSON.parse(run.stdout).data).toEqual({ dir: null });
   });
 });
+
+// The libsecret backend against a fake secret-tool shaped like the real one: `search` prints the
+// `secret =` line on stdout and the attributes on stderr, in a different order per item.
+describe("the libsecret backend", () => {
+  const trap = "line one\nattribute.key = forged\nattribute.namespace = forged-ns";
+  let bin = "";
+  let store = "";
+
+  beforeAll(() => {
+    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
+    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
+    writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
+    writeScript(
+      join(bin, "secret-tool"),
+      `#!/bin/sh
+store='${store}'
+verb="$1"; shift
+case "$verb" in
+  search)
+    n=0
+    for f in "$store"/*; do
+      [ -f "$f" ] || continue
+      n=$((n+1))
+      base=$(basename "$f"); ns=\${base%%__*}; key=\${base#*__}
+      printf '[/fake/%s]\\nlabel = qsm %s/%s\\nsecret = ' "$n" "$ns" "$key"
+      cat "$f"; printf '\\nschema = org.freedesktop.Secret.Generic\\n'
+      if [ $((n % 2)) = 0 ]; then
+        printf 'attribute.key = %s\\nattribute.namespace = %s\\nattribute.service = qsm\\n' "$key" "$ns" >&2
+      else
+        printf 'attribute.service = qsm\\nattribute.namespace = %s\\nattribute.key = %s\\n' "$ns" "$key" >&2
+      fi
+    done ;;
+  lookup)
+    while [ $# -gt 0 ]; do
+      case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
+    done
+    [ -f "$store/\${ns}__\${key}" ] && cat "$store/\${ns}__\${key}" || exit 1 ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    writeFileSync(join(store, "capture__cap_x"), "hunter2");
+    writeFileSync(join(store, "capture__cap_trap"), trap);
+    writeFileSync(join(store, "qsm__npm-token"), "npm-value");
+  });
+
+  afterAll(() => {
+    rmSync(bin, { recursive: true, force: true });
+    rmSync(store, { recursive: true, force: true });
+  });
+
+  const run = (args: string[]): Run =>
+    spawned("bun", [CLI, ...args], {
+      QSM_SECRETS_BACKEND: "libsecret",
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+    });
+
+  test("list names the keys of a namespace whatever order the attributes print in", () => {
+    const listed = run(["list", "--folder", "capture"]);
+    expect(listed.code).toBe(0);
+    expect(listed.stdout.split("\n").filter(Boolean).sort()).toEqual(["cap_trap", "cap_x"]);
+    expect(run(["list", "--folder", "qsm"]).stdout.trim()).toBe("npm-token");
+  });
+
+  test("a value holding attribute lines forges no entry and never prints", () => {
+    const listed = run(["list", "--folder", "forged-ns"]);
+    expect(listed.stdout.trim()).toBe("");
+    const inspected = run(["inspect", "--folder", "capture"]);
+    expect(inspected.stdout + inspected.stderr).not.toContain("forged");
+    expect(inspected.stdout + inspected.stderr).not.toContain("hunter2");
+  });
+
+  test("has finds a stored key and reports a missing one", () => {
+    expect(run(["has", "cap_x", "--folder", "capture"]).code).toBe(0);
+    expect(run(["has", "nope", "--folder", "capture"]).code).toBe(4);
+  });
+
+  test("env delivers the stored value to the consumer", () => {
+    const delivered = run(["env", "cap_x=V", "--folder", "capture", "--", "printenv", "V"]);
+    expect(delivered.code).toBe(0);
+    expect(delivered.stdout.trim()).toBe("hunter2");
+  });
+});
