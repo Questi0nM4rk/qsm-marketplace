@@ -309,9 +309,14 @@ placeholder, a path, a URL or a dotted name, an id (`session_`, `toolu_`, `cap_`
 (hex or hex and hyphens alone, a UUID, `sha256-`), a name (separators at a tenth of its length or
 more, or camelCase words of four letters or more on average), base64 of text (decoding to printable
 bytes), and when its Shannon entropy is at least 0.9 of what a random token of its length and
-alphabet averages. A hex value counts only after a credential name. On the labelled corpus in
-`lib/capture.corpus.ts` (70 positives, 98 negatives) the capture SHALL keep precision 1.0 and
-recall of at least 0.95; the test `lib/capture.test.ts` asserts both. A prompt with no secret SHALL
+alphabet averages. A hex value counts only after a credential name, and a run of digits alone is a
+number, not hex. A credential name counts only when one of its parts (`GITHUB_TOKEN`, `clientSecret`)
+is a credential word, so `authorization_mode` and `passwordless` do not; the value after a password's
+name counts from 6 characters when it mixes letters and digits or cases, and after any other
+credential name from 16. A public key (`ssh-ed25519 AAAA...`) is never captured. On the labelled
+corpus in `lib/capture.corpus.ts` (74 positives, 106 negatives) the capture SHALL keep precision 1.0
+and recall of at least 0.95; the test `lib/capture.test.ts` asserts both, as a guard against a
+regression, not a measure of precision on text the corpus does not hold. A prompt with no secret SHALL
 pass down unchanged. The person SHALL see a toast naming each id. The hook SHALL act only on a
 prompt the person typed or pasted (origin `composer`, `bridge`, `sdk` or `channel`); a prompt of any
 other origin (a task notification, a subagent hand-back, a schedule, another session) is text the

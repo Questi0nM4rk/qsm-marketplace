@@ -88,9 +88,9 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 - The content denylist is only as good as the names you approved. A name never written down on
   this machine is not found.
 - Capture catches a known token shape (`ghp_`, `glpat-`, `sk-`, `AKIA`, `xox`, JWT), a value after
-  a credential name, or a 32-character token that is random for its alphabet and is not a path, a
-  name, an id, a hash or base64 of text. Measured on a labelled corpus: precision 1.0, recall 1.0
-  (the test asserts at least 0.95). The model also sees the last four characters when the secret
+  a credential name (a password from 6 characters), or a 32-character token that is random for its alphabet and is not a path, a
+  name, an id, a hash or base64 of text. On a labelled corpus the test holds precision 1.0 and recall of at least 0.95; that guards a
+  regression and is not the precision on your own text. The model also sees the last four characters when the secret
   has 20 or more.
 - `render` writes to `$XDG_RUNTIME_DIR/qsm-secrets/<session>/<name>` (directory 0700, file 0600).
   The session end removes it.

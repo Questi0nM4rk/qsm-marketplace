@@ -127,10 +127,19 @@ const NAMED_HEX: Case[] = [
   })),
 ];
 
+/** A password has no shape, so only its name and a mix of character kinds give it away. */
+const NAMED_PASSWORDS: Case[] = [
+  { text: "password=hunter2", secrets: ["hunter2"] },
+  { text: "db_passwd: Tr0ub4dor", secrets: ["Tr0ub4dor"] },
+  { text: "userPassword = 'Zx9kqLm2'", secrets: ["Zx9kqLm2"] },
+  { text: "MYSQL_PWD=Pa55w0rdX", secrets: ["Pa55w0rdX"] },
+];
+
 export const POSITIVES: readonly Case[] = [
   ...wrapped(KNOWN, 0),
   ...wrapped(POSITIVE_BARE, 1),
   ...NAMED_HEX,
+  ...NAMED_PASSWORDS,
 ];
 
 /** A UUID, a hash, a path, an id: what a coding session is full of, and never a credential. */
@@ -242,7 +251,15 @@ const NEGATIVE_TEXTS: readonly string[] = [
   "color: #ff00aa; background: #FFFFFF; border: 1px solid rgb(12, 34, 56)",
   "ordinary text with no secret in it at all",
   "QSM_SECRETS_FOLDER=qsm QSM_SECRETS_BACKEND=rbw",
-  "password=hunter2",
+  "password=required",
+  "password: changeme",
+  "secret=true",
+  "authorization_mode=RBACNodeWebhook2x",
+  "passwordless=EnabledForAllUsers2",
+  "token_limit=1234567890123456",
+  "tokens=1024 max_tokens=4096000000000000",
+  "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl me@host",
+  "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA9Zk3q2X1pLm0sT4wYn8cUe6RfHg5JdKbNxOi2QzPvWl me@host",
   "the key is in the vault, ask for it by name",
   // names without a credential
   "name=github-token-for-ci-pipeline-and-deploys-2",

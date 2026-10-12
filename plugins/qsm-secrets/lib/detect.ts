@@ -6,6 +6,8 @@ import { type Span, shapeSpans } from "../../../lib/secret-shapes.ts";
 
 const BARE_TOKEN_MIN = 32;
 const CONTEXT_TOKEN_MIN = 16;
+/** A value after a password's name has no random-looking shape of its own, so it is judged shorter. */
+const PASSWORD_VALUE_MIN = 6;
 /** Shannon entropy over the entropy a random token of the same length and alphabet would show. */
 const RANDOMNESS_FLOOR = 0.9;
 /** Hex repeats digits, so its floor is raw bits per character, not a ratio. */
@@ -18,11 +20,17 @@ const IDENTIFIER_PIECE = 4;
 // Everything a token, a path or a dotted name is made of; a run is judged whole, never in part.
 const RUN = /[A-Za-z0-9_+/=.~-]+/g;
 const PLACEHOLDER = /\{\{secret:[^}]*\}\}(?:…[\w-]{4})?/g;
-// A name that says what follows is a credential; its value is then judged on a lower bar.
-const CONTEXT = new RegExp(
-  String.raw`(?<=\b(?:[A-Za-z0-9_-]*(?:secret|token|passw(?:or)?d|pwd|api[_-]?key|access[_-]?key|private[_-]?key|credential|auth)[A-Za-z0-9_-]*\s*[:=]\s*|bearer\s+)["']?)[A-Za-z0-9_+/=.~-]{${CONTEXT_TOKEN_MIN},}`,
-  "gi",
-);
+// A name that says what follows is a credential; its value is then judged on a lower bar. The name is
+// split into its parts (`GITHUB_TOKEN`, `clientSecret`) and one part must be a credential word, so
+// `authorization_mode` and `passwordless` are not.
+const VALUE = String.raw`["']?([A-Za-z0-9_+/=.~-]{${PASSWORD_VALUE_MIN},})`;
+const NAMED = new RegExp(String.raw`\b([A-Za-z0-9_-]+)\s*[:=]\s*${VALUE}`, "g");
+const BEARER = new RegExp(String.raw`\bbearer\s+${VALUE}`, "gi");
+const NAME_PART = /[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])/g;
+const CREDENTIAL_PART = /(?:secret|token|passw(?:or)?d|pwd|passphrase|credentials?)$|^auth$/;
+const PASSWORD_PART = /passw(?:or)?d$|^pwd$|passphrase$/;
+const CREDENTIAL_PAIRS = /^(?:api|access|private)key$/;
+const SSH_KEY_TYPE = /(?:ssh|ecdsa-sha2|sk-ssh|sk-ecdsa-sha2)-[a-z0-9@.-]*\s+$/;
 const HASH_PREFIX = /^(?:sha(?:1|224|256|384|512)|md5)[-:_]/i;
 const ID_PREFIX =
   /^(?:session|msg|toolu|req|cap|file|call|run|thread|resp|chatcmpl|agent|task|batch)[_-]/;
@@ -112,7 +120,7 @@ function isBareSecret(token: string): boolean {
 /** The value after a credential name: a hash-looking hex is a secret here, a name or a word is not. */
 function isContextSecret(token: string): boolean {
   if (HEX.test(token)) {
-    return entropy(token) >= HEX_ENTROPY_FLOOR;
+    return /[a-f]/i.test(token) && entropy(token) >= HEX_ENTROPY_FLOOR;
   }
   return classes(token) >= 2 && !isSomethingElse(token);
 }
@@ -121,26 +129,59 @@ function intersects(a: Span, b: Span): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
-/** The long runs that are none of: a path, a URL, a dotted name; each judged as a bare token. */
+/** Where the value of `NAME=value` starts in a run: after the first `=` that is not padding. */
+function valueStart(run: string): number {
+  let end = run.length;
+  while (end > 0 && run[end - 1] === "=") {
+    end -= 1;
+  }
+  return run.slice(0, end).indexOf("=") + 1;
+}
+
+/** The long runs that are none of: a path, a URL, a dotted name; each judged as a bare token. A public
+ * key is random-looking base64 and not a secret. */
 function bareRuns(text: string): Span[] {
   return [...text.matchAll(RUN)].flatMap((m) => {
-    // `NAME=value`: the value after the first `=` that is not padding is the run to judge.
-    const equals = m[0].search(/[=](?!=*$)/);
-    const start = m.index + equals + 1;
-    const token = m[0].slice(equals + 1);
+    const offset = valueStart(m[0]);
+    const start = m.index + offset;
+    const token = m[0].slice(offset);
     const plain = !(token.includes(".") || token.startsWith("/") || token.startsWith("~"));
-    return plain && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
+    const publicKey = SSH_KEY_TYPE.test(text.slice(0, m.index));
+    return plain && !publicKey && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
       ? [{ start, end: start + token.length }]
       : [];
   });
 }
 
+/** Whether a name stands for a credential, and whether it is a password, which is judged on a lower bar. */
+function nameKind(name: string | undefined): "none" | "token" | "password" {
+  if (name === undefined) {
+    return "token";
+  }
+  const parts = (name.match(NAME_PART) ?? []).map((part) => part.toLowerCase());
+  const pairs = parts.flatMap((part, at) => (at > 0 ? [`${parts[at - 1]}${part}`] : []));
+  if (parts.some((part) => PASSWORD_PART.test(part))) {
+    return "password";
+  }
+  return [...parts, ...pairs].some(
+    (part) => CREDENTIAL_PART.test(part) || CREDENTIAL_PAIRS.test(part),
+  )
+    ? "token"
+    : "none";
+}
+
 function contextSpans(text: string): Span[] {
-  return [...text.matchAll(CONTEXT)].flatMap((m) => {
-    const token = m[0].replace(/[.,;:]+$/, "");
+  const found = [...text.matchAll(NAMED), ...text.matchAll(BEARER)];
+  return found.flatMap((m) => {
+    const value = m[m.length - 1] as string;
+    const kind = nameKind(m.length === 3 ? m[1] : undefined);
+    const token = value.replace(/[.,;:]+$/, "");
     const plain = !(token.startsWith("/") || token.startsWith("~") || token.startsWith("."));
-    return plain && token.length >= CONTEXT_TOKEN_MIN && isContextSecret(token)
-      ? [{ start: m.index, end: m.index + token.length }]
+    const long = token.length >= CONTEXT_TOKEN_MIN;
+    const judged = long ? isContextSecret(token) : classes(token) >= 2 && !isSomethingElse(token);
+    const start = m.index + m[0].length - value.length;
+    return kind !== "none" && plain && (long || kind === "password") && judged
+      ? [{ start, end: start + token.length }]
       : [];
   });
 }
