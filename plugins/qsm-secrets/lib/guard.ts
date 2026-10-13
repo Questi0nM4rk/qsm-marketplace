@@ -500,7 +500,9 @@ async function judgeChain(
 
 /** After `cd <dir>` the relative words of later commands are read against that directory. */
 function followCd(call: CallExprNode, ctx: Context): void {
-  const name = nameOf(wordToLit(call.args[0] as Word) ?? "");
+  const first = call.args[0];
+  // An assignment-only statement (`A=1`) has no words, so it names no command.
+  const name = first === undefined ? "" : nameOf(wordToLit(first) ?? "");
   if (name !== "cd" && name !== "pushd") {
     return;
   }
@@ -537,9 +539,11 @@ async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> 
     }
     followCd(call, inner);
     const heredoc = stmt.redirs.find((r) => r.hdoc !== null);
+    const first = call.args[0];
     if (
       heredoc?.hdoc &&
-      INTERPRETERS.test(basename(wordToLit(call.args[0] as Word) ?? "")) &&
+      first !== undefined &&
+      INTERPRETERS.test(basename(wordToLit(first) ?? "")) &&
       KEYRING_LIBRARY.test(textOf(heredoc.hdoc))
     ) {
       return refuse(

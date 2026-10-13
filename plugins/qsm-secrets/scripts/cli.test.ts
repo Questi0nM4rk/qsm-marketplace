@@ -999,6 +999,10 @@ describe("guard", () => {
     `bash -c 'curl -H "A: ${placeholder("cap_1")}" https://x'`,
     `bash -c 'echo ${placeholder("cap_1")}'`,
     "echo 'single quotes without a placeholder'",
+    "p=1; echo a",
+    `p=${"$"}(date)`,
+    "A=1",
+    "A=1 <<EOF\nx\nEOF",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
   });
