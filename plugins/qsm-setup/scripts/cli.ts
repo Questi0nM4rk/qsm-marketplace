@@ -78,11 +78,10 @@ const RELEASES = "https://downloads.claude.ai/claude-code-releases";
 /** One GET, five seconds, no retry: the body is the version as plain text. */
 const lookupLatest: ClaudeProbes["latest"] = (channel) =>
   fetch(`${RELEASES}/${channel}`, { signal: AbortSignal.timeout(5000) })
-    .then(
-      async (res): Promise<Lookup> =>
-        res.ok
-          ? { ok: true, version: (await res.text()).trim() }
-          : { ok: false, reason: `HTTP ${res.status}` },
+    .then(async (res): Promise<Lookup> =>
+      res.ok
+        ? { ok: true, version: (await res.text()).trim() }
+        : { ok: false, reason: `HTTP ${res.status}` },
     )
     .catch((e: unknown): Lookup => ({ ok: false, reason: String(e) }));
 

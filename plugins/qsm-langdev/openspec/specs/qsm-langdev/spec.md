@@ -638,8 +638,8 @@ reason written where it would otherwise appear.
 
 #### Scenario: A rule that fires where it should not
 
-- **WHEN** a rule's findings are noise in this codebase, as biome's
-  noNodejsModules is in a CLI
+- **WHEN** a rule's findings are noise in this codebase, as oxlint's
+  import/no-nodejs-modules is in a CLI
 - **THEN** the config SHALL leave that rule out with the reason, and SHALL
   NOT enable it and suppress it at the call sites
 
@@ -681,7 +681,7 @@ get the checkers that finished.
 Before the comparison the hook, and the pre-commit gate over staged files with no unstaged changes,
 SHALL run each static fixer that covers the file and re-stage what the gate fixed. The fixers are
 the safe fix modes of the checkers langdev runs (`rumdl` and `markdownlint-cli2 --fix`,
-`biome check --write`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
+`oxlint --fix` and `oxfmt`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
 `rustfmt`, `csharpier format`, `dotnet format`), never an unsafe or code-deleting fix; a fixer whose
 binary is missing is skipped. When the pre-commit gate blocks, it names each staged file it skipped
 for unstaged changes.

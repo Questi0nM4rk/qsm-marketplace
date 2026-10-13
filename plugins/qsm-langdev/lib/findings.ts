@@ -108,31 +108,24 @@ function tallyLines(
   return tallyOf(findings);
 }
 
-/**
- * biome categories that are biome talking about its own configuration, not about the code;
- * counting one would put a number in the ratchet that nothing the author touched can move.
- */
-const BIOME_CONFIG_CATEGORIES = new Set(["deserialize", "configuration"]);
-
-interface BiomeDiagnostic {
-  category?: unknown;
-  location?: { path?: unknown };
+interface OxlintDiagnostic {
+  code?: unknown;
+  filename?: unknown;
+  labels?: readonly { span?: { line?: unknown; column?: unknown } }[];
 }
 
-function biomePath(diagnostic: BiomeDiagnostic): string {
-  const path = diagnostic.location?.path;
-  return typeof path === "string" ? path : str((path as { file?: unknown } | undefined)?.file);
-}
-
-export function countBiome(stdout: string): Tally | null {
+/** `oxlint --format json`: `{ diagnostics: [{ code, filename, labels: [{ span: { line, column } }] }] }`. */
+export function countOxlint(stdout: string): Tally | null {
   const parsed = jsonObject(stdout);
   if (!Array.isArray(parsed?.diagnostics)) {
     return null;
   }
-  const code = (parsed.diagnostics as BiomeDiagnostic[]).filter(
-    (d) => typeof d?.category !== "string" || !BIOME_CONFIG_CATEGORIES.has(d.category),
+  return tallyOf(
+    (parsed.diagnostics as OxlintDiagnostic[]).map((d) => {
+      const span = d.labels?.[0]?.span;
+      return at(str(d.code), d.filename, num(span?.line), num(span?.column));
+    }),
   );
-  return tallyOf(code.map((d) => at(str(d?.category), biomePath(d ?? {}))));
 }
 
 type Rec = Record<string, unknown>;

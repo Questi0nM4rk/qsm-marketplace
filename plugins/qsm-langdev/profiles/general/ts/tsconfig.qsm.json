@@ -3,7 +3,7 @@
   // this file. Reference it from the repo tsconfig: "extends": "./tsconfig.qsm.json"
   // — tsc always reads the repo tsconfig, so the profile ships a base, not a
   // replacement. `any` is banned two ways: noImplicitAny lives inside strict,
-  // and biome's noExplicitAny (error) catches the written-out ones.
+  // and oxlint's typescript/no-explicit-any catches the written-out ones.
   "compilerOptions": {
     "strict": true,
     "skipLibCheck": true,

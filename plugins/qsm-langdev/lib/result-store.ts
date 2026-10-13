@@ -295,7 +295,7 @@ function describeSide(use: SideUse): string {
 }
 
 /** One line per checker, then the run's total:
- * `store: biome: reference hit, shipped scored` ... `store: 3 hits, 2 scored`. */
+ * `store: oxlint: reference hit, shipped scored` ... `store: 3 hits, 2 scored`. */
 export function describeStore(report: StoreReport): string[] {
   let hits = 0;
   let scored = 0;

@@ -140,6 +140,6 @@
   "strictSetInference": false,
   "deprecateTypingAliases": false,
   // Proposed typing-spec features that can change under us: the argument that
-  // keeps biome's nursery and ruff's preview rules off.
+  // keeps oxlint's nursery and ruff's preview rules off.
   "enableExperimentalFeatures": false
 }

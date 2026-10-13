@@ -115,7 +115,7 @@ export function doingOf(tool: string, args: Record<string, unknown>): string {
  */
 function bare(command: string): string {
   let rest = command.trim();
-  for (let before = ""; before !== rest; ) {
+  for (let before = ""; before !== rest;) {
     before = rest;
     rest = rest
       .replace(/^cd\s+\S+\s*(&&|;)\s*/, "")

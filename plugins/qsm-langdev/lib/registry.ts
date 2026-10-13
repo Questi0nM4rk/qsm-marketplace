@@ -5,7 +5,6 @@ import { availableParallelism } from "node:os";
 import { basename, join } from "node:path";
 import {
   countBanditJson,
-  countBiome,
   countCheckbashisms,
   countClippy,
   countCsharpier,
@@ -19,6 +18,7 @@ import {
   countKnip,
   countLizard,
   countMarkdownlint,
+  countOxlint,
   countNonZeroExits,
   countPyright,
   countRuff,
@@ -55,7 +55,7 @@ export const JOBS = Math.max(1, availableParallelism());
  * lives.
  *
  * `nursery` is off because clippy itself calls it unstable, the argument that
- * keeps biome's nursery off. `restriction` is off because it is not a quality
+ * keeps oxlint's nursery off. `restriction` is off because it is not a quality
  * set: it holds lints that contradict each other, and clippy ships
  * `blanket_clippy_restriction_lints` to say so. */
 const CLIPPY_LINTS: readonly string[] = [
@@ -179,8 +179,8 @@ function shellQuote(arg: string): string {
   return `'${arg.replaceAll("'", `'\\''`)}'`;
 }
 
-const bunGlobal = (pkg: string): Install => ({
-  run: { command: "bun", args: ["add", "-g", pkg], prereq: "bun" },
+const bunGlobal = (...pkgs: string[]): Install => ({
+  run: { command: "bun", args: ["add", "-g", ...pkgs], prereq: "bun" },
 });
 const uvTool = (pkg: string): Install => ({
   run: { command: "uv", args: ["tool", "install", pkg], prereq: "uv" },
@@ -462,21 +462,34 @@ const SPECS: readonly CheckSpec[] = [
     count: countMarkdownlint,
   },
   {
-    name: "biome",
+    name: "oxlint",
     measures: {
-      counts:
-        "biome lint and format diagnostics about the code; biome's own configuration diagnostics are not counted",
+      counts: "oxlint diagnostics about the code, type-aware rules included, one per diagnostic",
     },
     language: "ts",
     runsAt: "pre-commit",
-    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc"],
-    binary: "biome",
-    install: bunGlobal("@biomejs/biome"),
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+    binary: "oxlint",
+    // tsgolint runs the type-aware rules; oxlint finds it beside itself.
+    install: bunGlobal("oxlint", "oxlint-tsgolint"),
     fileSet: "changed",
-    // .gitignore: biome's vcs.useIgnoreFile decides which named files it skips.
-    configFiles: ["**/biome.json", "**/biome.jsonc", ".editorconfig", ".gitignore"],
-    args: (files) => ["check", "--reporter=json", ...files],
-    count: (stdout) => countBiome(stdout),
+    configFiles: ["**/.oxlintrc.json", "**/.oxlintrc.jsonc", "**/oxlint.config.ts", ...TS_PROJECT],
+    args: (files) => ["--format", "json", ...files],
+    count: (stdout) => countOxlint(stdout),
+  },
+  {
+    name: "oxfmt",
+    measures: { counts: "files whose formatting differs from oxfmt's, one per file" },
+    language: "ts",
+    runsAt: "pre-commit",
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc"],
+    binary: "oxfmt",
+    install: bunGlobal("oxfmt"),
+    fileSet: "changed",
+    // .gitignore: oxfmt skips what it names.
+    configFiles: ["**/.oxfmtrc.json", "**/.oxfmtrc.jsonc", "**/oxfmt.config.ts", ".gitignore"],
+    args: (files) => ["--list-different", ...files],
+    count: countFileList,
   },
   {
     name: "tsc",

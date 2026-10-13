@@ -1,6 +1,6 @@
 // Static fixes run before a file is scored, so a defect a tool can rewrite away is never a finding.
 // One list, one step: each fixer rewrites the files it covers in place, with the tool's safe fix
-// mode only (never biome --unsafe, never a fixer that deletes code). A fixer whose binary is not on
+// mode only (never oxlint --fix-dangerously, never a fixer that deletes code). A fixer whose binary is not on
 // PATH is skipped and the checker reports as before. The edit hook and the pre-commit gate both
 // call `fixFiles`; a new fixer is one more entry here.
 
@@ -32,7 +32,8 @@ function tool(language: Language, extensions: RegExp, command: readonly string[]
 const FIXERS: readonly Fixer[] = [
   { language: "docs", covers: isMarkdown, fix: rewrapMarkdown },
   tool("docs", /\.(md|markdown)$/i, ["markdownlint-cli2", "--fix"]),
-  tool("ts", /\.(tsx?|jsx?|mjs|cjs|jsonc?)$/, ["biome", "check", "--write"]),
+  tool("ts", /\.(tsx?|jsx?|mjs|cjs)$/, ["oxlint", "--fix"]),
+  tool("ts", /\.(tsx?|jsx?|mjs|cjs|jsonc?)$/, ["oxfmt"]),
   tool("py", /\.pyi?$/, ["ruff", "check", "--fix"]),
   tool("py", /\.pyi?$/, ["ruff", "format"]),
   tool("shell", /\.(sh|bash)$/, ["shfmt", ...SHFMT_STYLE, "-w"]),

@@ -10,7 +10,7 @@ const unmeasured: Verdict = {
   notMeasured: true,
   summary: "semgrep-ts: not measured: timed out after 60s; retry",
 };
-const worse: Verdict = { check: "biome", pass: false, summary: "biome: 0 -> 1" };
+const worse: Verdict = { check: "oxlint", pass: false, summary: "oxlint: 0 -> 1" };
 
 test("a checker not measured blocks the langdev gate with its cause, never as worse", () => {
   const outcome = langdevOutcome([unmeasured], "file sets: changed: 1 file");
@@ -40,12 +40,17 @@ test("A regression the author allows once", () => {
 
   expect(outcome.status).toBe("pass");
   const said = outcome.status === "pass" ? (outcome.note ?? "") : "";
-  expect(said).toContain("biome: 0 -> 1");
+  expect(said).toContain("oxlint: 0 -> 1");
   expect(said).toContain("allowed once: known");
 });
 
 test("A check that could not run is not allowed", () => {
-  const missing: Verdict = { check: "biome", pass: false, missing: true, summary: "biome missing" };
+  const missing: Verdict = {
+    check: "oxlint",
+    pass: false,
+    missing: true,
+    summary: "oxlint missing",
+  };
 
   expect(allowed(langdevOutcome([missing], "sizes"), "known").status).toBe("failed");
   expect(allowed(langdevOutcome([unmeasured], "sizes"), "known").status).toBe("blocked");

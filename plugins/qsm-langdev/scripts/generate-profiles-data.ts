@@ -86,11 +86,11 @@ function main(): void {
   // JSON.stringify quotes every key and lays strings out its own way, which is
   // not what this repository's formatter prints. Formatting here rather than
   // leaving it to the next person means a regenerate is never a lint failure.
-  const formatted = spawnSync("bunx", ["biome", "format", "--write", OUT_FILE], {
+  const formatted = spawnSync("bunx", ["oxfmt", OUT_FILE], {
     stdio: ["ignore", "ignore", "inherit"],
   });
   if (formatted.status !== 0) {
-    console.error(`wrote ${OUT_FILE} but biome could not format it`);
+    console.error(`wrote ${OUT_FILE} but oxfmt could not format it`);
     process.exit(1);
   }
   console.log(`wrote ${OUT_FILE}`);

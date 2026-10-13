@@ -191,12 +191,10 @@ function normalise(value: number | Tally, root: string): Tally {
     value.findings === undefined
       ? {}
       : {
-          findings: value.findings.map(
-            (f): Finding => ({
-              identity: f.identity,
-              locations: f.locations.map((l) => ({ ...l, path: relativeTo(root, l.path) })),
-            }),
-          ),
+          findings: value.findings.map((f): Finding => ({
+            identity: f.identity,
+            locations: f.locations.map((l) => ({ ...l, path: relativeTo(root, l.path) })),
+          })),
         };
   if (value.byPath === undefined) {
     return { total: value.total, ...findings };
@@ -226,9 +224,9 @@ interface OneRun {
 }
 
 /** The repository's own copy of an npm tool wins over whatever PATH holds:
- * `bun run lint` runs node_modules/.bin/biome, so the gate must run the same
- * binary or the two disagree (seen: a system biome 2.5.14 reporting on files
- * the pinned 2.5.11 passes). The scratch tree links node_modules in, so the
+ * `bun run lint` runs node_modules/.bin/oxlint, so the gate must run the same
+ * binary or the two disagree: a system copy of another version reports on files
+ * the pinned one passes. The scratch tree links node_modules in, so the
  * lookup works on both sides of a comparison. */
 export function resolveBinary(root: string, binary: string): string {
   const local = join(root, "node_modules", ".bin", binary);
@@ -690,7 +688,7 @@ function renamedBetween(root: string, beforeRef: string, after: string | "worktr
   if (fields === null) {
     return renames;
   }
-  for (let i = 0; i < fields.length; ) {
+  for (let i = 0; i < fields.length;) {
     const status = fields[i] ?? "";
     if (/^[RC]\d*$/.test(status)) {
       const from = fields[i + 1];
@@ -1300,12 +1298,10 @@ export async function doctorRows(specs: readonly CheckSpec[] = REGISTRY): Promis
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
   const present = new Map(
     await Promise.all(
-      binaries.map(
-        async (binary): Promise<[string, boolean]> => [
-          binary,
-          (await probeBinary(binary, 10_000)).present,
-        ],
-      ),
+      binaries.map(async (binary): Promise<[string, boolean]> => [
+        binary,
+        (await probeBinary(binary, 10_000)).present,
+      ]),
     ),
   );
   return specs.map(({ name, binary, install }) => ({

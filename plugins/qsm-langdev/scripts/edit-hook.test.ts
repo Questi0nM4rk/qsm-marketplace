@@ -178,7 +178,7 @@ describe("qsm-langdev pre-commit hook: static fixers", () => {
     return root;
   };
 
-  test("a biome format defect and a markdown rule are fixed in the staged blobs, the hook passes", () => {
+  test("an oxfmt format defect and a markdown rule are fixed in the staged blobs, the hook passes", () => {
     const root = initRepo();
     writeFileSync(join(root, "a.ts"), "export const a  =  1\n");
     writeFileSync(join(root, "a.md"), "# A\n\n*   one\n*   two\n");

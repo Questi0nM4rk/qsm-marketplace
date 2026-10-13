@@ -1,0 +1,83 @@
+// qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+// file. Every rule in four categories, not a curated subset: a finding here may
+// be a defect or a smell, and both are worth an error.
+//
+// On: correctness, suspicious, pedantic and perf, with type information, so a
+// floating promise, an unsafe `any` or a `||` that should be `??` is a finding.
+// Type-aware rules run through tsgolint (the oxlint-tsgolint package) on
+// TypeScript 7.
+//
+// Off, each with why:
+// - style: ESLint's preference set. It holds rules that contradict each other
+//   (import/no-named-export against import/prefer-default-export, one-var
+//   against itself in either setting), and the layout part is the formatter's
+//   job. Measured on a 600-file tree: 23,154 findings, led by one-var,
+//   no-magic-numbers, sort-keys and id-length.
+// - restriction: not a quality set. It bans language features outright
+//   (no-ternary, no-null), the reason clippy's restriction group is off too.
+// - nursery: oxlint itself calls it unstable.
+// - Framework plugins (react, vue, nextjs, jsx-a11y, jest, vitest) are not
+//   listed in `plugins`. A rule for a framework the repository does not use
+//   does not stay quiet, it invents findings.
+// - The named rules below.
+//
+// There is no oxlint-disable comment anywhere. A finding worth suppressing at
+// a call site is evidence the rule was the wrong rule to enable, so it comes
+// out here instead.
+//
+// Target: browser. A `node:` import here is a real defect, so
+// import/no-nodejs-modules is on; `process` is caught by the type check, which
+// runs against the DOM library and not a server runtime's globals.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "env": { "browser": true, "es2024": true },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "options": { "typeAware": true },
+  "rules": {
+    // Target browser: see the header.
+    "import/no-nodejs-modules": "error",
+    // Restriction is off as a set, but `any` turns the type checker off for
+    // every value it touches, so the written-out one is a finding.
+    "typescript/no-explicit-any": "error",
+    // Base rules whose type-aware twin is on: the twin reads the types and
+    // reports the same place, so the base rule would count every finding twice.
+    "eslint/no-implied-eval": "off",
+    "eslint/require-await": "off",
+    "eslint/prefer-promise-reject-errors": "off",
+    "eslint/no-throw-literal": "off",
+    // A `u` flag changes what an escape means (`/[\-]/u` is a syntax error),
+    // so adding it to every regular expression is a behaviour change that
+    // finds no defect. Measured: 410 findings on a 600-file tree.
+    "eslint/require-unicode-regexp": "off",
+    // Length and nesting are proxies for complexity. lizard gates cyclomatic
+    // complexity per function on the same files, which is the thing itself.
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-depth": "off",
+    "import/max-dependencies": "off",
+    // It asks for deep readonly on every parameter type, a library's own
+    // types included, which the code cannot change. Measured: 1,592 findings on
+    // a 600-file tree, half of all it reported.
+    "typescript/prefer-readonly-parameter-types": "off"
+  },
+  "overrides": [
+    {
+      // bun-types declares `expect(p).rejects` as returning matchers whose
+      // methods return void, so `await expect(p).rejects.toThrow()` reads as
+      // awaiting a non-promise. At run time it is a promise, and without the
+      // await the assertion runs after the test has passed.
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": { "typescript/await-thenable": "off" }
+    }
+  ],
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**"]
+}

@@ -104,7 +104,9 @@ describe("The CLI and the MCP server are two interfaces over one library", () =>
     expect(cli.status).toBe(0);
     expect(cli.stdout).toContain(`index of ${repo}: absent`);
 
-    const mcp = await (await connected(spawnRunner, env)).callTool({
+    const mcp = await (
+      await connected(spawnRunner, env)
+    ).callTool({
       name: "status",
       arguments: { path: repo },
     });
