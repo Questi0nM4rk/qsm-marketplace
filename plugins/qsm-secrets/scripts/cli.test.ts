@@ -361,7 +361,12 @@ for (const flavor of FLAVORS) {
       test("Listing keys of a namespace", () => {
         const run = cli(["list"]);
         expect(run.code).toBe(0);
-        expect(run.stdout.trim().split("\n").sort()).toEqual(["github-token", "npm-token"]);
+        expect(
+          run.stdout
+            .trim()
+            .split("\n")
+            .sort((a, b) => a.localeCompare(b)),
+        ).toEqual(["github-token", "npm-token"]);
         expect(leaked(run)).toBeNull();
         expect(cli(["list", "--folder", "work"]).stdout.trim()).toBe("work-token");
       });
@@ -370,7 +375,10 @@ for (const flavor of FLAVORS) {
         const run = cli(["list", "--json"]);
         const data = envelope(run).data as { namespace: string; keys: string[] };
         expect(data.namespace).toBe("qsm");
-        expect([...data.keys].sort()).toEqual(["github-token", "npm-token"]);
+        expect([...data.keys].sort((a, b) => a.localeCompare(b))).toEqual([
+          "github-token",
+          "npm-token",
+        ]);
         expect(leaked(run)).toBeNull();
       });
     });
@@ -388,7 +396,10 @@ for (const flavor of FLAVORS) {
       test("--json is metadata only too", () => {
         const run = cli(["inspect", "--json"]);
         const entries = envelope(run).data.entries as { name: string }[];
-        expect(entries.map((entry) => entry.name).sort()).toEqual(["github-token", "npm-token"]);
+        expect(entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b))).toEqual([
+          "github-token",
+          "npm-token",
+        ]);
         expect(leaked(run)).toBeNull();
       });
     });
@@ -659,13 +670,23 @@ for (const flavor of FLAVORS) {
         const listed = cli(["prune", "--dry-run"]);
         expect(listed.code).toBe(0);
         // cap_x is a capture id too, and no transcript names it.
-        expect(listed.stdout.trim().split("\n").sort()).toEqual(["cap_stale", "cap_x"]);
+        expect(
+          listed.stdout
+            .trim()
+            .split("\n")
+            .sort((a, b) => a.localeCompare(b)),
+        ).toEqual(["cap_stale", "cap_x"]);
         expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(0);
       });
 
       test("removes it, leaves other namespaces alone, and a second run removes nothing", () => {
         const first = cli(["prune"]);
-        expect(first.stdout.trim().split("\n").sort()).toEqual(["cap_stale", "cap_x"]);
+        expect(
+          first.stdout
+            .trim()
+            .split("\n")
+            .sort((a, b) => a.localeCompare(b)),
+        ).toEqual(["cap_stale", "cap_x"]);
         expect(first.stdout + first.stderr).not.toContain("stale-value");
         expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(4);
         expect(cli(["has", "cap_used", "--folder", "capture"]).code).toBe(0);
@@ -833,10 +854,12 @@ describe("libsecret: the shape of secret-tool's output", () => {
     );
 
   test("a value holding attribute lines forges no entry and never prints", () => {
-    expect(run(["list", "--folder", "capture"]).stdout.split("\n").filter(Boolean).sort()).toEqual([
-      "cap_trap",
-      "cap_x",
-    ]);
+    expect(
+      run(["list", "--folder", "capture"])
+        .stdout.split("\n")
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual(["cap_trap", "cap_x"]);
     expect(run(["list", "--folder", "forged-ns"]).stdout.trim()).toBe("");
     const inspected = run(["inspect", "--folder", "capture"]);
     expect(inspected.stdout + inspected.stderr).not.toContain("forged");

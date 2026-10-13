@@ -402,7 +402,7 @@ export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
     .entries()
     .filter((e) => e.folder === CAPTURE_NAMESPACE && e.user === WRAPPER_MARK && !used.has(e.name))
     .map((e) => e.name)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   if (!dryRun) {
     for (const id of ids) {
       if (!backend.remove(CAPTURE_NAMESPACE, id)) {
