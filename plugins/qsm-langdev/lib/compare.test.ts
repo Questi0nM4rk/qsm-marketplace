@@ -463,6 +463,7 @@ describe("the registry's file sets", () => {
   test("a whole-project tool declares given, the rest changed, semgrep's per-file engine included", () => {
     const given = REGISTRY.filter((spec) => spec.fileSet === "given").map((spec) => spec.name);
     expect(given.sort()).toEqual([
+      "bun-check",
       "clippy",
       "depcruise",
       "dotnet",
@@ -470,7 +471,6 @@ describe("the registry's file sets", () => {
       "jscpd",
       "knip",
       "pyright",
-      "tsc",
     ]);
     const rest = REGISTRY.filter((spec) => spec.fileSet !== "given");
     expect(rest.every((spec) => spec.fileSet === "changed")).toBe(true);

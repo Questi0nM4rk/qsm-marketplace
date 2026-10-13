@@ -15,10 +15,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.3
       - run: bun install --frozen-lockfile
       # The tests drive these real binaries and fail loud without them (no skip hides a broken
-      # pipeline): wt, rumdl and markdownlint-cli2 and biome for qsm-langdev's markdown fixers,
+      # pipeline): wt, rumdl and markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint
+      # (with oxlint-tsgolint for its type-aware rules) and oxfmt for its TypeScript gate and fixers,
       # yamllint, taplo, semgrep and lizard because the pre-commit gate marks a checker whose
       # tool is absent `worse` and blocks the commit (init writes yaml and toml, a.ts is code),
       # imagemagick 7 for the `magick` of qsm-uix (apt ships 6, which has no `magick`), and the
@@ -26,10 +27,11 @@ jobs:
       - name: Install the tools the tests run
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew install worktrunk rumdl markdownlint-cli2 biome imagemagick yamllint taplo
+          brew install worktrunk rumdl markdownlint-cli2 imagemagick yamllint taplo
           pipx install semgrep
           pipx install lizard
           bun add -g @fission-ai/openspec
+          bun add -g oxlint@1.87.0 oxlint-tsgolint@7.0.2004 oxfmt@0.72.0
           echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -43,7 +45,7 @@ jobs:
       - run: bun run lint
       # `bun run typecheck` also typechecks the hooks modules, which needs the engine
       # declarations that only a local Claude Code session writes. CI runs the root part.
-      - run: bunx tsc --noEmit
+      - run: bun check
       - name: Test
         shell: bash
         run: |

@@ -483,7 +483,7 @@ of "generated"; this plugin keeps no list of its own. The jscpd checker is hande
 not the root. A checker whose registry row declares `guardsSafety` (semgrep, bandit, devskim,
 dotnet-vulnerable) SHALL keep the unnarrowed set, and the `secrets`, `entropy` and
 content-denylist gates read the staged files, so none of these ever skip a generated file.
-Whole-project tools (knip, depcruise, tsc) read the tree through their own configuration and are
+Whole-project tools (knip, depcruise, bun check) read the tree through their own configuration and are
 not narrowed.
 
 #### Scenario: A generated file changes
