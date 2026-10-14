@@ -164,10 +164,11 @@ nothing else.
 stored with the session and print every conversation turn in it, tool calls as `#<n> tool <name>
 <input>` and tool results as `#<n> result: <text>`, numbered by position in the file. When that
 file is gone, `--full` SHALL fail as `missing`, name the path, and say the saved text is all that
-is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at most 200 turns
-and at most 20 000 characters of turns, so a whole session never lands in the reader's context,
-and ends with `next: --lines <b+1>-<b+200>` when more remain. A first turn longer than the budget
-alone is cut there and says `[turn cut at 20000 of <n> characters]`. A session id prefix that
+is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at most 20 000
+characters of turns, so a whole session never lands in the reader's context, and ends with
+`next: --lines <b+1>-<last>` when more remain, `b` the last turn printed and `last` the last turn
+asked for. A first turn longer than the budget alone is cut there and says
+`[turn cut at 20000 of <n> characters]`; the rest of that turn is not readable through show. A session id prefix that
 matches one session SHALL be accepted.
 
 #### Scenario: show prints the conversation text
@@ -193,7 +194,7 @@ matches one session SHALL be accepted.
 #### Scenario: a long session stops at the character budget
 
 - **WHEN** a session has 46 turns of 3 000 characters each and `show <id>` runs
-- **THEN** it prints turns 1 to 6 and ends with `next: --lines 7-206`
+- **THEN** it prints turns 1 to 6 and ends with `next: --lines 7-46`
 
 ### Requirement: List answers what was done when
 

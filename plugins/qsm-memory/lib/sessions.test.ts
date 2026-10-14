@@ -81,7 +81,7 @@ describe("show", () => {
 
     const out = show(db, "long-3").split("\n");
     expect(out.filter((line) => line.startsWith("#"))).toHaveLength(6);
-    expect(out.at(-1)).toBe("next: --lines 7-206");
+    expect(out.at(-1)).toBe("next: --lines 7-46");
 
     const huge = new TranscriptBuilder({ sessionId: "huge-4" }).human("h".repeat(50_000)).text();
     writeFileSync(join(transcriptDir, "huge-4.jsonl"), huge);

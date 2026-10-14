@@ -135,19 +135,21 @@ export function openDb(path: string): Database {
  * another creator leaves the winner's file. */
 function createDb(path: string): void {
   const aside = `${path}.${process.pid}.new`;
-  const db = new Database(aside);
-  db.run("PRAGMA journal_mode = WAL");
-  applySchema(db);
-  db.close();
-  chmodSync(aside, 0o600);
   try {
+    const db = new Database(aside);
+    db.run("PRAGMA journal_mode = WAL");
+    applySchema(db);
+    db.close();
+    chmodSync(aside, 0o600);
     linkSync(aside, path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
       throw error;
     }
   } finally {
-    rmSync(aside);
+    for (const file of [aside, `${aside}-wal`, `${aside}-shm`]) {
+      rmSync(file, { force: true });
+    }
   }
 }
 

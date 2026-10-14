@@ -43,7 +43,6 @@ export interface ShowOptions {
   readonly lines?: readonly [number, number] | undefined;
 }
 
-const SHOW_WINDOW = 200;
 /** Characters of turns one show prints, so a whole session never lands in the reader's context. */
 const SHOW_CHARS = 20_000;
 
@@ -94,25 +93,23 @@ export function show(db: Database, prefix: string, options: ShowOptions = {}): s
   if (rows.length === 0) {
     return `${header(session)}\nno turns in ${from}-${to === Number.MAX_SAFE_INTEGER ? "end" : to}; the session has ${all.length}`;
   }
-  const window: [number, string][] = [];
+  const lines = [header(session)];
+  let shown = 0;
+  let lastSeq = from;
   let size = 0;
-  for (const [seq, turn] of rows.slice(0, SHOW_WINDOW)) {
+  for (const [seq, turn] of rows) {
     const line = turnLine(seq, turn);
     size += line.length;
-    if (size > SHOW_CHARS && window.length > 0) {
+    if (size > SHOW_CHARS && shown > 0) {
       break;
     }
-    window.push([
-      seq,
-      line.length > SHOW_CHARS
-        ? `${line.slice(0, SHOW_CHARS)} [turn cut at ${SHOW_CHARS} of ${line.length} characters]`
-        : line,
-    ]);
+    const cut = `${line.slice(0, SHOW_CHARS)} [turn cut at ${SHOW_CHARS} of ${line.length} characters]`;
+    lines.push(line.length > SHOW_CHARS ? cut : line);
+    shown += 1;
+    lastSeq = seq;
   }
-  const lines = [header(session), ...window.map(([, line]) => line)];
-  const lastSeq = window.at(-1)?.[0] ?? to;
-  if (rows.length > window.length) {
-    lines.push(`next: --lines ${lastSeq + 1}-${lastSeq + SHOW_WINDOW}`);
+  if (rows.length > shown) {
+    lines.push(`next: --lines ${lastSeq + 1}-${rows.at(-1)?.[0]}`);
   }
   return lines.join("\n");
 }
