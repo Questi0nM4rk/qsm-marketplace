@@ -44,6 +44,8 @@ export interface ShowOptions {
 }
 
 const SHOW_WINDOW = 200;
+/** Characters of turns one show prints, so a whole session never lands in the reader's context. */
+const SHOW_CHARS = 20_000;
 
 function turnLine(seq: number, turn: Turn): string {
   if (turn.kind === "tool_use") {
@@ -92,10 +94,24 @@ export function show(db: Database, prefix: string, options: ShowOptions = {}): s
   if (rows.length === 0) {
     return `${header(session)}\nno turns in ${from}-${to === Number.MAX_SAFE_INTEGER ? "end" : to}; the session has ${all.length}`;
   }
-  const window = rows.slice(0, SHOW_WINDOW);
-  const lines = [header(session), ...window.map(([seq, turn]) => turnLine(seq, turn))];
+  const window: [number, string][] = [];
+  let size = 0;
+  for (const [seq, turn] of rows.slice(0, SHOW_WINDOW)) {
+    const line = turnLine(seq, turn);
+    size += line.length;
+    if (size > SHOW_CHARS && window.length > 0) {
+      break;
+    }
+    window.push([
+      seq,
+      line.length > SHOW_CHARS
+        ? `${line.slice(0, SHOW_CHARS)} [turn cut at ${SHOW_CHARS} of ${line.length} characters]`
+        : line,
+    ]);
+  }
+  const lines = [header(session), ...window.map(([, line]) => line)];
   const lastSeq = window.at(-1)?.[0] ?? to;
-  if (rows.length > SHOW_WINDOW) {
+  if (rows.length > window.length) {
     lines.push(`next: --lines ${lastSeq + 1}-${lastSeq + SHOW_WINDOW}`);
   }
   return lines.join("\n");
