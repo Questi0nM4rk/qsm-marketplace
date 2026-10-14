@@ -48,7 +48,7 @@ function sweepAbandoned(prefix: string): void {
 }
 
 function fail(step: string, result: ReturnType<typeof spawnSync>): never {
-  const stderr = result.stderr ? String(result.stderr).trim() : "";
+  const stderr = result.stderr === null ? "" : String(result.stderr).trim();
   const suffix = stderr.length > 0 ? `: ${stderr}` : "";
   throw new Error(`${step} failed${suffix}`);
 }

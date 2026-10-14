@@ -32,6 +32,7 @@ import { describeSets } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { type CheckSpec, REGISTRY } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
+import { defined } from "./test-support.ts";
 
 const sandboxes: string[] = [];
 
@@ -94,6 +95,16 @@ const MARKER = "BADLINE";
 /** Every line holding the marker is one finding, identified by the text on
  * that line, never by its line number. Null on a line that is not grep's
  * `path:line:text`, so an unreadable run never reads as a clean tree. */
+/** The order `Array#sort` gives lists of paths with no compare function. */
+function byJoined(a: readonly string[], b: readonly string[]): number {
+  const left = a.join(",");
+  const right = b.join(",");
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+}
+
 function countMarkers(stdout: string): Tally | null {
   const findings: Finding[] = [];
   const byPath: Record<string, number> = {};
@@ -105,8 +116,8 @@ function countMarkers(stdout: string): Tally | null {
     if (match === null) {
       return null;
     }
-    const path = match[1] as string;
-    const text = (match[3] as string).trim();
+    const path = defined(match[1], "a path");
+    const text = defined(match[3], "a text").trim();
     findings.push({ identity: text, locations: [{ path, line: Number(match[2]) }] });
     byPath[path] = (byPath[path] ?? 0) + 1;
   }
@@ -148,7 +159,7 @@ describe("compareTrees", () => {
     const { verdicts } = await run(root, head);
 
     expect(verdicts).toHaveLength(1);
-    const only = verdicts[0] as (typeof verdicts)[number];
+    const only = defined(verdicts[0], "a verdict");
     expect(only.pass).toBe(false);
     expect(only.summary).toContain("marked: 0 -> 1");
     expect((only.lines ?? []).join("\n")).toContain("a.txt");
@@ -359,7 +370,7 @@ describe("file sets: whole project and changes", () => {
 
     const { sets } = await runWith(root, head, spec);
 
-    expect([...handed].sort()).toEqual([
+    expect([...handed].sort(byJoined)).toEqual([
       ["a.ts", "new.ts", "src/b.ts"],
       ["a.ts", "src/b.ts"],
     ]);
@@ -386,7 +397,7 @@ describe("file sets: whole project and changes", () => {
     const { changed } = await runWith(root, head, spec);
 
     expect(changed).toEqual(["b.ts", "d.ts"]);
-    expect([...handed].sort()).toEqual([["b.ts"], ["d.ts"]]);
+    expect([...handed].sort(byJoined)).toEqual([["b.ts"], ["d.ts"]]);
   });
 });
 
@@ -507,7 +518,7 @@ test("A timeout", async () => {
   expect(verdicts).toHaveLength(1);
   expect(verdicts[0]?.notMeasured).toBe(true);
   expect(verdicts[0]?.summary).toBe("slow: not measured: timed out after 0.2s; retry");
-  expect(headline(verdicts[0] as Verdict)).not.toContain("WORSE");
+  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
 });
 
 test("time limit: a checker's declared pre-push limit is the one its pre-push run gets", async () => {
@@ -835,9 +846,12 @@ test("store: an unreadable or wrong-shaped entry is a miss, never a crash", asyn
   const { spec, handed } = recorder("changed");
   await runWith(root, head, spec);
   const [one, two] = entries(root);
-  writeFileSync(join(root, RESULTS, "recorder", "pre-commit", one as string), "{not json");
   writeFileSync(
-    join(root, RESULTS, "recorder", "pre-commit", two as string),
+    join(root, RESULTS, "recorder", "pre-commit", defined(one, "an entry")),
+    "{not json",
+  );
+  writeFileSync(
+    join(root, RESULTS, "recorder", "pre-commit", defined(two, "a second entry")),
     JSON.stringify({ shape: 1, tally: { total: "many" }, output: "" }),
   );
 
@@ -896,7 +910,9 @@ function packSource(...texts: string[]) {
   const fetched: string[] = [];
   const fetchPack = (pack: string): Promise<string> => {
     fetched.push(pack);
-    return Promise.resolve(texts[Math.min(fetched.length, texts.length) - 1] as string);
+    return Promise.resolve(
+      defined(texts[Math.min(fetched.length, texts.length) - 1], "a pack text"),
+    );
   };
   return { fetchPack, fetched };
 }
@@ -1223,7 +1239,7 @@ test("Both engines fail", async () => {
   expect(verdicts.map((v) => [v.notMeasured === true, v.summary])).toEqual([
     [true, `semgrep-ts: not measured: ${REJECTED}; retry`],
   ]);
-  expect(headline(verdicts[0] as Verdict)).not.toContain("WORSE");
+  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
   expect(runOutcome(verdicts, true).code).toBe("blocked");
   expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
 });

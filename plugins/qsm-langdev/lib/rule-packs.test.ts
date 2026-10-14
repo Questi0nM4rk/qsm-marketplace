@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fetchFromRegistry, resolvePacks } from "./rule-packs.ts";
 import { OWN_RULES } from "./rules-data.ts";
+import { defined } from "./test-support.ts";
 
 const realFetch = globalThis.fetch;
 
@@ -19,7 +20,7 @@ function recordingFetch(): string[] {
   const urls: string[] = [];
   globalThis.fetch = Object.assign(
     (input: string | URL | Request) => {
-      urls.push(String(input));
+      urls.push(input instanceof Request ? input.url : String(input));
       return Promise.resolve(new Response("rules: []\n"));
     },
     { preconnect: realFetch.preconnect },
@@ -49,7 +50,7 @@ test("our own rules come from the binary, never from the network, and are keyed 
     });
 
     const bash = resolved.get("qsm/bash");
-    const text = OWN_RULES.bash as string;
+    const text = defined(OWN_RULES.bash, "the bash rules");
     expect(fetched).toEqual([]);
     expect(bash !== undefined && "path" in bash ? readFileSync(bash.path, "utf8") : null).toBe(
       text,

@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { errorMessage } from "./json.ts";
 import { OWN_RULES } from "./rules-data.ts";
 
 /** The scratch directory a run fetches its packs into is named with this,
@@ -71,7 +72,7 @@ export async function resolvePacks(
 ): Promise<Map<string, ResolvedPack>> {
   const unique = [...new Set(packs)];
   const resolved = await Promise.all(
-    unique.map(async (pack, index): Promise<ResolvedPack> => {
+    unique.map(async (pack, index): Promise<[string, ResolvedPack]> => {
       try {
         const text = await rulesText(pack, fetchPack);
         if (text.trim() === "") {
@@ -79,11 +80,11 @@ export async function resolvePacks(
         }
         const path = join(dir, `${index}.yaml`);
         writeFileSync(path, text);
-        return { path, hash: createHash("sha256").update(text).digest("hex") };
+        return [pack, { path, hash: createHash("sha256").update(text).digest("hex") }];
       } catch (error) {
-        return { reason: `${pack} could not be fetched: ${(error as Error).message}` };
+        return [pack, { reason: `${pack} could not be fetched: ${errorMessage(error)}` }];
       }
     }),
   );
-  return new Map(unique.map((pack, index) => [pack, resolved[index] as ResolvedPack]));
+  return new Map(resolved);
 }

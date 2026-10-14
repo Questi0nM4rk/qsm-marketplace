@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { findRepoRoot } from "../lib/config.ts";
 import { recordStartPoint } from "../lib/state.ts";
+import { defined } from "../lib/test-support.ts";
 
 const GATE_HOOK = resolve(import.meta.dir, "../hooks/gate-hook.ts");
 const GIT = "/usr/bin/git";
@@ -69,7 +70,10 @@ function runHook(hook: string, stateDir: string, stdin: string, env: Record<stri
 function runEditHook(stateDir: string, sessionId: string, agentId: string, filePath: string) {
   process.env.QSM_LANGDEV_STATE_DIR = stateDir;
   try {
-    recordStartPoint({ sessionId, agentId }, findRepoRoot(dirname(filePath)) as string);
+    recordStartPoint(
+      { sessionId, agentId },
+      defined(findRepoRoot(dirname(filePath)), "a repository root"),
+    );
   } finally {
     delete process.env.QSM_LANGDEV_STATE_DIR;
   }

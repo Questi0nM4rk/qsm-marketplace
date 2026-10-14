@@ -30,17 +30,18 @@ import {
 import { editFindings } from "../lib/edit-findings.ts";
 import { type GateOutcome, gatesCode, runGates, SELF_GATES } from "../lib/gate-runner.ts";
 import {
+  HOOK_LANGS,
   HOOK_NAMES,
   type HookAction,
-  type HookLang,
   type HookName,
   installHooks,
   uninstallHooks,
 } from "../lib/git-hooks.ts";
 import { resolveRef } from "../lib/gitref.ts";
+import { errorMessage } from "../lib/json.ts";
 import { profileGaps, type ScaffoldAction, scaffoldProfile } from "../lib/profiles.ts";
 import {
-  type EnforcementPoint,
+  ENFORCEMENT_POINTS,
   LANGUAGES,
   type Language,
   REGISTRY,
@@ -57,6 +58,7 @@ import {
 } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import's inferred type widens every arg `type` to string; a validating loader belongs in root lib/qsm-manifest.ts
 const manifest = manifestJson as QsmManifest;
 
 function err(line: string): void {
@@ -89,6 +91,38 @@ function guarded(handler: Handler): Handler {
   };
 }
 
+/** A string argument, or undefined when it was not given. The parser coerces each value to its
+ * manifest type, so another type here is a manifest that disagrees with this handler. */
+function optString(call: Call, name: string): string | undefined {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "string") {
+    return value;
+  }
+  return refuse("usage", `${name} expects a string`);
+}
+
+function optStrings(call: Call, name: string): string[] | undefined {
+  const value = call.args[name];
+  if (value === undefined || Array.isArray(value)) {
+    return value;
+  }
+  return refuse("usage", `${name} expects a list`);
+}
+
+/** The argument when it is one of `values`, undefined when it was not given. */
+function optOneOf<T extends string>(call: Call, name: string, values: readonly T[]): T | undefined {
+  const value = optString(call, name);
+  if (value === undefined) {
+    return undefined;
+  }
+  const match = values.find((candidate) => candidate === value);
+  return match ?? refuse("usage", `${name} must be one of ${values.join(", ")}`);
+}
+
+function required<T>(value: T | undefined, name: string): T {
+  return value ?? refuse("usage", `${name} is required`);
+}
+
 function requireRepo(target: string): string {
   const root = findRepoRoot(target);
   if (root === null) {
@@ -104,10 +138,10 @@ function parseLanguages(csv: string): Language[] {
   if (unknown.length > 0) {
     refuse("usage", `unknown language: ${unknown.join(", ")} (known: ${LANGUAGES.join(", ")})`);
   }
-  return [...new Set(resolved as Language[])];
+  return [...new Set(resolved.filter((language): language is Language => language !== null))];
 }
 
-const dirOf = (call: Call): string => (call.args.dir as string | undefined) ?? ".";
+const dirOf = (call: Call): string => optString(call, "dir") ?? ".";
 
 function printVerdicts(verdicts: readonly Verdict[], changedCount: number): void {
   if (verdicts.length === 0) {
@@ -139,16 +173,16 @@ function resolveAgainst(root: string, against: string, explicit: boolean): strin
 }
 
 const check: Handler = guarded(async (call) => {
-  const at = (call.args.at as EnforcementPoint | undefined) ?? "pre-commit";
+  const at = optOneOf(call, "at", ENFORCEMENT_POINTS) ?? "pre-commit";
   const root = requireRepo(dirOf(call));
   if (!isLangdevRepo(root)) {
     refuse("missing", `qsm-langdev is not set up in ${root}: run qsm-langdev init`);
   }
   const config = readGatesConfig(root);
-  const named = call.args.against as string | undefined;
+  const named = optString(call, "against");
   const against = named ?? "HEAD";
   const beforeRef = resolveAgainst(root, against, named !== undefined);
-  const lang = call.args.lang as string | undefined;
+  const lang = optString(call, "lang");
 
   const { changed, sets, verdicts, store, warnings } = await compareTrees(
     root,
@@ -158,7 +192,7 @@ const check: Handler = guarded(async (call) => {
       at,
       languages: lang === undefined ? config.languages : parseLanguages(lang),
       allFindings: call.args.allFindings === true,
-      given: (call.args.path as string[] | undefined) ?? [],
+      given: optStrings(call, "path") ?? [],
     },
   );
 
@@ -243,7 +277,8 @@ const doctor: Handler = guarded(async (call) => {
   return { ...(gone ? fail("missing", text, data) : ok(data, text)), warnings };
 });
 
-type LanguagesAction = "list" | "add" | "remove";
+const LANGUAGES_ACTIONS = ["list", "add", "remove"] as const;
+type LanguagesAction = (typeof LANGUAGES_ACTIONS)[number];
 
 /** `config.languages` after applying `action` on `name`; writes the config back when it changed. */
 function applyLanguagesEdit(
@@ -268,10 +303,10 @@ function applyLanguagesEdit(
 }
 
 const languages: Handler = guarded((call) => {
-  const action = (call.args.action as LanguagesAction | undefined) ?? "list";
+  const action = optOneOf(call, "action", LANGUAGES_ACTIONS) ?? "list";
   const root = requireRepo(".");
   const config = readGatesConfig(root);
-  const selected = applyLanguagesEdit(root, config, action, call.args.name as string | undefined);
+  const selected = applyLanguagesEdit(root, config, action, optString(call, "name"));
   const text =
     selected.length === 0
       ? "(none — tree-derived mode: every language with matching files runs)"
@@ -314,7 +349,7 @@ function seedProfile(
   try {
     actions = scaffoldProfile(root, profile, detected, targets);
   } catch (error) {
-    refuse("usage", (error as Error).message);
+    refuse("usage", errorMessage(error));
   }
   for (const action of actions) {
     err(`  ${action.file}: ${describeScaffold(action)}`);
@@ -349,8 +384,8 @@ const init: Handler = guarded((call) => {
   }
   err(`[qsm-langdev] detected: ${detected.join(", ")}`);
   const config = readGatesConfig(root);
-  const profile = (call.args.profile as string | undefined) ?? config.profile ?? "general";
-  const targets = { ...config.targets, ...parseTargets(call.args.target as string[] | undefined) };
+  const profile = optString(call, "profile") ?? config.profile ?? "general";
+  const targets = { ...config.targets, ...parseTargets(optStrings(call, "target")) };
   const actions = seedProfile(root, profile, detected, targets);
   const { languages: widened, added } = widenLanguages(config.languages, detected);
   const hooks = seedGates(config.hooks);
@@ -425,15 +460,6 @@ async function structureJudgeAll(trees: StructureTree[]): Promise<
     result: StructureResult | null;
   }
 > {
-  if (trees.length === 0) {
-    return {
-      tree: null,
-      result: null,
-      pass: true,
-      summary: "agent edited no tree in this session; nothing to score",
-      detail: [],
-    };
-  }
   let last: (StructureVerdict & { tree: StructureTree; result: StructureResult }) | null = null;
   for (const tree of trees) {
     const result = await compareWorktreeSince(tree.root, tree.start);
@@ -442,20 +468,28 @@ async function structureJudgeAll(trees: StructureTree[]): Promise<
       return last;
     }
   }
-  return last as NonNullable<typeof last>;
+  return (
+    last ?? {
+      tree: null,
+      result: null,
+      pass: true,
+      summary: "agent edited no tree in this session; nothing to score",
+      detail: [],
+    }
+  );
 }
 
 const structure: Handler = guarded(async (call) => {
-  const against = call.args.against as string | undefined;
-  const session = call.args.session as string | undefined;
-  const agent = call.args.agent as string | undefined;
+  const against = optString(call, "against");
+  const session = optString(call, "session");
+  const agent = optString(call, "agent");
   if (against !== undefined && session !== undefined) {
     return fail(
       "usage",
       "--against and --session both name the commit to compare against; pass one",
     );
   }
-  const trees = structureTreesToJudge(call.args.path as string | undefined, {
+  const trees = structureTreesToJudge(optString(call, "path"), {
     ...(against === undefined ? {} : { against }),
     ...(session === undefined ? {} : { session }),
     ...(agent === undefined ? {} : { agent }),
@@ -495,13 +529,16 @@ function describeInstallAction(action: HookAction): string | null {
         `${action.path} was NOT touched — ${action.why}.\n` +
         `  Add this line to it yourself:\n    ${action.line}`
       );
-    default:
-      return null;
+    case "absent":
+    case "removed":
+    case "unappended":
+      break;
   }
+  return null;
 }
 
 const installGitHooks: Handler = guarded((call) => {
-  const lang = (call.args.lang as HookLang | undefined) ?? "sh";
+  const lang = optOneOf(call, "lang", HOOK_LANGS) ?? "sh";
   const root = requireRepo(dirOf(call));
   const actions = installHooks(root, HOOK_NAMES, lang);
   const config = readGatesConfig(root);
@@ -561,14 +598,14 @@ function reportGateOutcomes(name: HookName, outcomes: readonly GateOutcome[]): v
   if (gatesCode(outcomes) === "ok") {
     return;
   }
-  if (outcomes.some((outcome) => outcome.status === "failed" && outcome.regression)) {
+  if (outcomes.some((outcome) => outcome.status === "failed" && outcome.regression === true)) {
     const verb = name === "pre-push" ? "push" : "commit";
     err(`  To let this regression pass once: QSM_LANGDEV_ALLOW="<why>" git ${verb} ...`);
   }
 }
 
 const hook: Handler = guarded(async (call) => {
-  const name = call.args.name as HookName;
+  const name = required(optOneOf(call, "name", HOOK_NAMES), "name");
   const root = requireRepo(".");
   if (!isLangdevRepo(root)) {
     return ok({ hook: name, root, outcomes: [] });
@@ -588,14 +625,14 @@ const hook: Handler = guarded(async (call) => {
   return fail(code, deciding.map((outcome) => outcome.gate).join(", "), data);
 });
 
-const edited: Handler = async (call) => {
+const edited: Handler = guarded(async (call) => {
   const editor: Editor = {
-    sessionId: call.args.session as string,
-    agentId: (call.args.agent as string | undefined) ?? MAIN_AGENT,
+    sessionId: required(optString(call, "session"), "session"),
+    agentId: optString(call, "agent") ?? MAIN_AGENT,
   };
-  const text = await editFindings(editor, call.args.file as string);
+  const text = await editFindings(editor, required(optString(call, "file"), "file"));
   return ok({ text }, text ?? "");
-};
+});
 
 if (import.meta.main) {
   process.exit(

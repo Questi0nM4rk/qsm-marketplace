@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Glob } from "bun";
 import { cacheDir, writeAtomic } from "./cache-dir.ts";
 import type { Finding, Tally } from "./findings.ts";
+import { isErrno, isRecord, recordOf } from "./json.ts";
 import type { EnforcementPoint } from "./registry.ts";
 
 /**
@@ -65,7 +66,7 @@ function contentOf(root: string, path: string): string | Buffer {
   } catch (error) {
     // A path that cannot be read hashes as its failure: the checker will
     // meet the same failure, and a later readable copy is new content.
-    return `\0unreadable ${(error as NodeJS.ErrnoException).code ?? "error"}`;
+    return `\0unreadable ${(isErrno(error) ? error.code : undefined) ?? "error"}`;
   }
 }
 
@@ -91,29 +92,28 @@ export function configHash(
 }
 
 function isFinding(value: unknown): value is Finding {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
-  const { identity, locations } = value as Record<string, unknown>;
+  const { identity, locations } = value;
   return (
     typeof identity === "string" &&
     Array.isArray(locations) &&
     locations.every(
-      (l) =>
-        typeof l === "object" &&
-        l !== null &&
-        typeof (l as Record<string, unknown>).path === "string" &&
-        ["number", "undefined"].includes(typeof (l as Record<string, unknown>).line) &&
-        ["number", "undefined"].includes(typeof (l as Record<string, unknown>).column),
+      (l: unknown) =>
+        isRecord(l) &&
+        typeof l.path === "string" &&
+        ["number", "undefined"].includes(typeof l.line) &&
+        ["number", "undefined"].includes(typeof l.column),
     )
   );
 }
 
 function isTally(value: unknown): value is Tally {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
-  const { total, byPath, findings } = value as Record<string, unknown>;
+  const { total, byPath, findings } = value;
   const countsByPath =
     byPath === undefined ||
     (typeof byPath === "object" &&
@@ -128,10 +128,11 @@ function isTally(value: unknown): value is Tally {
 function parseEntry(text: string): Score | null {
   try {
     const entry: unknown = JSON.parse(text);
-    if (typeof entry !== "object" || entry === null) {
+    const record = recordOf(entry);
+    if (record === null) {
       return null;
     }
-    const { shape, tally, output } = entry as Record<string, unknown>;
+    const { shape, tally, output } = record;
     return shape === SHAPE && isTally(tally) && typeof output === "string"
       ? { tally, output }
       : null;

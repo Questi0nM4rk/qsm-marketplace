@@ -5,7 +5,7 @@
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const PLUGIN_ROOT = join(import.meta.dir, "..");
 const PROFILES_ROOT = join(PLUGIN_ROOT, "profiles");
@@ -50,7 +50,7 @@ function readLanguage(language: string, languageDir: string, into: Record<string
     const entries = into[key] ?? [];
     for (const rel of from) {
       entries.push({
-        file: scaffoldedName(rel.split("/").pop() as string),
+        file: scaffoldedName(basename(rel)),
         content: readFileSync(join(languageDir, rel), "utf8"),
       });
     }

@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { JSONC } from "bun";
 import { readProfiles } from "../scripts/generate-profiles-data.ts";
+import { recordOf } from "./json.ts";
 import { PROFILE_DATA } from "./profiles-data.ts";
 
 test("profiles-data.ts is what profiles/** generates; run scripts/generate-profiles-data.ts", () => {
@@ -17,8 +18,10 @@ test("profiles-data.ts is what profiles/** generates; run scripts/generate-profi
 describe.each(["strict", "general"])("the %s ts knip seed", (profile) => {
   test("names hooks modules and test files as entry points", () => {
     const seed = PROFILE_DATA[profile]?.ts?.find((file) => file.file === "knip.jsonc");
-    const knip = JSONC.parse(seed?.content ?? "{}") as { entry?: string[] };
+    const knip: unknown = JSONC.parse(seed?.content ?? "{}");
 
-    expect(knip.entry).toEqual(expect.arrayContaining(["plugins/*/hooks/*.tsx", "**/*.test.ts"]));
+    expect(recordOf(knip)?.entry).toEqual(
+      expect.arrayContaining(["plugins/*/hooks/*.tsx", "**/*.test.ts"]),
+    );
   });
 });

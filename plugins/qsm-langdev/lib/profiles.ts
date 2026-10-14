@@ -130,6 +130,7 @@ function seededByAnotherProfile(
       return profile;
     }
   }
+  return undefined;
 }
 
 /**

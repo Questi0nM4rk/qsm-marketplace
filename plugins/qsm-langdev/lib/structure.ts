@@ -7,6 +7,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob, TOML } from "bun";
 import { generatedPaths, gitPaths } from "./config.ts";
+import { arrayOf, num, recordOf, recordsOf, str, type Rec } from "./json.ts";
 import { type Kept, leaveOut, withCommitTree, withWorktreeTree } from "./tree.ts";
 
 const RULES_REL = join(".sentrux", "rules.toml");
@@ -67,29 +68,30 @@ function overlayRules(root: string, dir: string): void {
  * by the one `isTestFile`. */
 async function withTree<T>(
   root: string,
-  ref: string | "worktree",
+  ref: string,
   fn: (dir: string, kept: Kept) => T,
 ): Promise<T> {
   if (ref === "worktree") {
     return withWorktreeTree(root, (dir) => fn(dir, leaveOutNonProduct(dir)));
   }
-  return await withCommitTree(root, ref, (dir) => {
+  return withCommitTree(root, ref, (dir) => {
     overlayRules(root, dir);
     return fn(dir, leaveOutNonProduct(dir));
   });
 }
 
 /** The five terms under `quality`, and what each one measures in words an agent can act on. */
+const CAUSES = ["modularity", "equality", "redundancy", "depth", "acyclicity"] as const;
+
+type Cause = (typeof CAUSES)[number];
+
 const CAUSE_GLOSS = {
   modularity: "how well the module graph clusters: edges inside a module, not across it",
   equality: "Gini of function complexity: one function far from the median size",
   redundancy: "dead or duplicate functions over total",
   depth: "the longest import chain",
   acyclicity: "files sitting in an import cycle",
-} as const;
-
-type Cause = keyof typeof CAUSE_GLOSS;
-const CAUSES = Object.keys(CAUSE_GLOSS) as Cause[];
+} satisfies Record<Cause, string>;
 
 type Causes = Record<Cause, number>;
 
@@ -104,15 +106,6 @@ interface Edge {
   to: string;
   kind: string;
 }
-interface RawCause {
-  score?: unknown;
-}
-interface CheckReport {
-  quality?: unknown;
-  cross_module_edges?: unknown;
-  root_causes?: Record<string, RawCause>;
-  rules?: { violations?: unknown };
-}
 
 /** One `[[layers]]` entry of `.sentrux/rules.toml`: which paths it owns and
  * where it sits. Lower order is lower layer. */
@@ -126,7 +119,7 @@ function isLayer(value: unknown): value is Layer {
   if (typeof value !== "object" || value === null) {
     return false;
   }
-  const { name, paths, order } = value as Record<string, unknown>;
+  const { name, paths, order } = recordOf(value) ?? {};
   return (
     typeof name === "string" &&
     typeof order === "number" &&
@@ -144,8 +137,7 @@ export function readLayers(rulesText: string): Layer[] {
   } catch {
     return [];
   }
-  const { layers } = parsed as { layers?: unknown };
-  return Array.isArray(layers) ? layers.filter(isLayer) : [];
+  return (arrayOf(recordOf(parsed)?.layers) ?? []).filter(isLayer);
 }
 
 /** `lib/*` owns `lib/cli-base.ts`: a layer path is a prefix once its
@@ -187,19 +179,26 @@ function violationName(violation: unknown): string {
 
 /** The five scores, or null when sentrux named fewer than five — a build
  * whose root causes we cannot read must not be reported as if we could. */
-function readCauses(raw: Record<string, RawCause> | undefined): Causes | null {
-  if (raw === undefined) {
+function readCauses(raw: Rec | null): Causes | null {
+  if (raw === null) {
     return null;
   }
-  const causes = {} as Causes;
-  for (const cause of CAUSES) {
-    const value = raw[cause]?.score;
-    if (typeof value !== "number") {
-      return null;
-    }
-    causes[cause] = value;
+  const scoreOf = (cause: Cause): number | undefined => num(recordOf(raw[cause])?.score);
+  const modularity = scoreOf("modularity");
+  const equality = scoreOf("equality");
+  const redundancy = scoreOf("redundancy");
+  const depth = scoreOf("depth");
+  const acyclicity = scoreOf("acyclicity");
+  if (
+    modularity === undefined ||
+    equality === undefined ||
+    redundancy === undefined ||
+    depth === undefined ||
+    acyclicity === undefined
+  ) {
+    return null;
   }
-  return causes;
+  return { modularity, equality, redundancy, depth, acyclicity };
 }
 
 interface DirReport {
@@ -223,24 +222,27 @@ function scoreDir(dir: string): ScoreDir {
   if (result.error) {
     return { reason: `sentrux could not run: ${result.error.message}` };
   }
-  let report: CheckReport;
+  let parsed: unknown;
   try {
-    report = JSON.parse(result.stdout ?? "") as CheckReport;
+    parsed = JSON.parse(result.stdout ?? "");
   } catch {
     return { reason: "sentrux printed no JSON — this needs the qsm-patched build" };
   }
-  if (typeof report.quality !== "number" || !Array.isArray(report.cross_module_edges)) {
+  const report = recordOf(parsed) ?? {};
+  const edgeList = recordsOf(report.cross_module_edges);
+  if (typeof report.quality !== "number" || edgeList === null) {
     return { reason: "sentrux's JSON carries no quality or edge list" };
   }
-  const causes = readCauses(report.root_causes);
+  const causes = readCauses(recordOf(report.root_causes));
   if (causes === null) {
     return { reason: "sentrux's JSON carries no root-cause breakdown" };
   }
-  const violations = Array.isArray(report.rules?.violations) ? report.rules.violations : [];
+  const violations = arrayOf(recordOf(report.rules)?.violations) ?? [];
   const layers = readLayers(readFileSync(join(dir, RULES_REL), "utf8"));
   return {
     score: { quality: report.quality, causes },
-    edges: (report.cross_module_edges as Edge[])
+    edges: edgeList
+      .map((edge): Edge => ({ from: str(edge.from), to: str(edge.to), kind: str(edge.kind) }))
       .filter((edge) => !isDownwardEdge(edge.from, edge.to, layers))
       .map(edgeName),
     violations: violations.map(violationName),
@@ -400,9 +402,9 @@ export function verdict(result: StructureResult): StructureVerdict {
 export async function compareStructure(
   root: string,
   before: string,
-  after: string | "worktree",
+  after: string,
 ): Promise<StructureResult> {
-  return await withTree(root, before, (referenceTree, referenceKept) =>
+  return withTree(root, before, (referenceTree, referenceKept) =>
     withTree(root, after, (shippedTree, shippedKept): StructureResult => {
       if (referenceKept.listing === shippedKept.listing) {
         return {

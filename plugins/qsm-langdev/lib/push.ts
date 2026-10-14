@@ -15,7 +15,12 @@ export function parsePushLines(text: string): PushedRef[] {
   const refs: PushedRef[] = [];
   for (const line of text.split("\n")) {
     const [localRef, localOid, remoteRef, remoteOid] = line.trim().split(/\s+/);
-    if (!(localRef && localOid && remoteRef && remoteOid)) {
+    if (
+      localRef === undefined ||
+      localOid === undefined ||
+      remoteRef === undefined ||
+      remoteOid === undefined
+    ) {
       continue;
     }
     refs.push({ localRef, localOid, remoteRef, remoteOid });
@@ -30,7 +35,7 @@ function git(root: string, ...args: string[]): string | null {
 
 function defaultBranch(root: string): string | null {
   const remote = git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD");
-  if (remote) {
+  if (remote !== null && remote !== "") {
     return remote;
   }
   for (const name of ["main", "master"]) {

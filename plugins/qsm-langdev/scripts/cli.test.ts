@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { type Rec, recordOf, recordsOf, str } from "../lib/json.ts";
+import { defined } from "../lib/test-support.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const sandboxes: string[] = [];
@@ -16,6 +18,17 @@ function sandbox(): string {
   sandboxes.push(home);
   mkdirSync(join(home, "work"), { recursive: true });
   return home;
+}
+
+/** The envelope a `--json` run printed. */
+function envelopeOf(stdout: string): Rec {
+  return defined(recordOf(JSON.parse(stdout)), "a JSON envelope on stdout");
+}
+
+/** The `check` of every verdict a `check --json` run printed. */
+function verdictChecks(stdout: string): string[] {
+  const verdicts = recordsOf(recordOf(envelopeOf(stdout).data)?.verdicts) ?? [];
+  return verdicts.map((verdict) => str(verdict.check));
 }
 
 afterEach(() => {
@@ -123,9 +136,9 @@ describe("qsm-langdev cli", () => {
   test("list --json is an envelope carrying the registry", () => {
     const r = run(["list", "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope.data.some((row: { name: string }) => row.name === "shellcheck")).toBe(true);
+    expect(recordsOf(envelope.data)?.some((row) => row.name === "shellcheck")).toBe(true);
   });
 
   test("outside a git repository is missing, exit 4", () => {
@@ -141,7 +154,7 @@ describe("qsm-langdev cli: repository state", () => {
     const r = run(["check", "--json"], { home });
     const root = join(home, "work");
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope).toMatchObject({ code: "missing", exit: 4 });
     expect(envelope.message).toBe(`qsm-langdev is not set up in ${root}: run qsm-langdev init`);
   });
@@ -150,16 +163,16 @@ describe("qsm-langdev cli: repository state", () => {
     const home = repoWithShellFile();
     const r = run(["check", "--json"], { home });
     expect(r.exit).toBe(3);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope).toMatchObject({ code: "worse", exit: 3 });
-    expect(envelope.data.verdicts.some((v: { pass: boolean }) => !v.pass)).toBe(true);
+    expect(recordsOf(recordOf(envelope.data)?.verdicts)?.some((v) => v.pass !== true)).toBe(true);
   }, 60_000);
 
   test("check hands the paths it is given to the given set and reports each set's size", () => {
     const home = repoWithShellFile();
     const r = run(["check", ".", "nowhere", "--json"], { home });
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.data.sets).toEqual([
+    const envelope = envelopeOf(r.stdout);
+    expect(recordOf(envelope.data)?.sets).toEqual([
       { set: "changed", files: 1 },
       { set: "given", files: 0 },
     ]);
@@ -261,8 +274,10 @@ describe("qsm-langdev languages: opt-in", () => {
     const r = run(["init"], { home });
 
     expect(r.exit).toBe(0);
-    const gates = JSON.parse(readFileSync(join(root, ".qsm-langdev", "gates.json"), "utf8"));
-    expect(gates.languages).toEqual(["ts"]);
+    const gates = recordOf(
+      JSON.parse(readFileSync(join(root, ".qsm-langdev", "gates.json"), "utf8")),
+    );
+    expect(gates?.languages).toEqual(["ts"]);
   });
 
   test("an explicit languages list gates only the languages it names", () => {
@@ -270,7 +285,7 @@ describe("qsm-langdev languages: opt-in", () => {
 
     const r = run(["check", "--json"], { home });
 
-    const checks = (JSON.parse(r.stdout).data.verdicts as { check: string }[]).map((v) => v.check);
+    const checks = verdictChecks(r.stdout);
     expect(checks).toContain("ts config");
     expect(checks).not.toContain("py config");
   }, 60_000);
@@ -280,7 +295,7 @@ describe("qsm-langdev languages: opt-in", () => {
 
     const r = run(["check", "--json"], { home });
 
-    const checks = (JSON.parse(r.stdout).data.verdicts as { check: string }[]).map((v) => v.check);
+    const checks = verdictChecks(r.stdout);
     expect(checks).not.toContain("ts config");
     expect(checks).not.toContain("py config");
   }, 60_000);

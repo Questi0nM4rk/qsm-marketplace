@@ -25,9 +25,12 @@ function ctx(
   };
 }
 
-const patched = async (): Promise<StructuralCheckerStatus> => ({ present: true, patched: true });
-const unpatched = async (): Promise<StructuralCheckerStatus> => ({ present: true, patched: false });
-const absent = async (): Promise<StructuralCheckerStatus> => ({ present: false, patched: false });
+const patched = (): Promise<StructuralCheckerStatus> =>
+  Promise.resolve({ present: true, patched: true });
+const unpatched = (): Promise<StructuralCheckerStatus> =>
+  Promise.resolve({ present: true, patched: false });
+const absent = (): Promise<StructuralCheckerStatus> =>
+  Promise.resolve({ present: false, patched: false });
 
 describe("qsm-langdev structural checker step", () => {
   test("A compatible checker is already present", async () => {

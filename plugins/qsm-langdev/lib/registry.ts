@@ -95,6 +95,21 @@ export interface LanguageInfo {
   configless?: true;
 }
 
+const LANGUAGE_NAMES = [
+  "docs",
+  "multi",
+  "ts",
+  "py",
+  "dotnet",
+  "shell",
+  "zsh",
+  "fish",
+  "rust",
+] as const;
+
+export type Language = (typeof LANGUAGE_NAMES)[number];
+export const LANGUAGES: readonly Language[] = LANGUAGE_NAMES;
+
 export const LANGUAGE_TABLE = {
   docs: { alwaysOn: true, module: null },
   multi: { alwaysOn: true, module: null },
@@ -109,10 +124,11 @@ export const LANGUAGE_TABLE = {
   zsh: { module: "qsm-langdev-zsh", detects: [".zsh"] },
   fish: { configless: true, module: "qsm-langdev-fish", detects: [".fish"] },
   rust: { module: null, detects: [".rs"] },
-} as const satisfies Record<string, LanguageInfo>;
+} as const satisfies Record<Language, LanguageInfo>;
 
-export type Language = keyof typeof LANGUAGE_TABLE;
-export const LANGUAGES = Object.keys(LANGUAGE_TABLE) as readonly Language[];
+export function isLanguage(name: unknown): name is Language {
+  return LANGUAGES.some((language) => language === name);
+}
 
 export function isConfigless(language: Language): boolean {
   const info: LanguageInfo = LANGUAGE_TABLE[language];
@@ -122,12 +138,12 @@ export function isConfigless(language: Language): boolean {
 /** The language a user-typed name means: the name itself or one of its
  * aliases; null when it is neither. */
 export function resolveLanguage(name: string): Language | null {
-  if (name in LANGUAGE_TABLE) {
-    return name as Language;
+  if (isLanguage(name)) {
+    return name;
   }
   for (const language of LANGUAGES) {
     const info: LanguageInfo = LANGUAGE_TABLE[language];
-    if (info.aliases?.includes(name)) {
+    if (info.aliases?.includes(name) === true) {
       return language;
     }
   }
@@ -137,7 +153,7 @@ export function resolveLanguage(name: string): Language | null {
 /** When a checker runs. Every checker runs at pre-push; the pre-commit set
  * is the subset whose question a single file can answer. */
 export type EnforcementPoint = "pre-commit" | "pre-push";
-const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = ["pre-commit", "pre-push"];
+export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = ["pre-commit", "pre-push"];
 
 /**
  * How a checker's binary gets onto a machine: `run` executes a portable
@@ -253,6 +269,14 @@ const SEMGREP_ENGINE_SET = "changed";
  * has every file it passes through.
  */
 const SEMGREP_PUSH: PrePush = { fileSet: "given", timeoutMs: 160_000 };
+
+/** A checker that writes a report is always built with the directory the run made for it. */
+function reportDirOf(reportDir: string | undefined): string {
+  if (reportDir === undefined) {
+    throw new Error("a report-writing checker was built without a report directory");
+  }
+  return reportDir;
+}
 
 /** Each rule pack a run fetched, by name, to the local file holding it. */
 export type LocalRules = ReadonlyMap<string, string>;
@@ -566,7 +590,7 @@ const SPECS: readonly CheckSpec[] = [
       "json",
       "--silent",
       "--output",
-      reportDir as string,
+      reportDirOf(reportDir),
     ],
     count: countJscpd,
   },
@@ -959,7 +983,7 @@ const SPECS: readonly CheckSpec[] = [
       "--include",
       ...files,
       "--report",
-      reportDir as string,
+      reportDirOf(reportDir),
     ],
     count: countDotnetFormatReport,
   },
@@ -1014,7 +1038,7 @@ const SPECS: readonly CheckSpec[] = [
     args: (files) => [
       "analyze",
       "--source-code",
-      files[0] as string,
+      ...files.slice(0, 1),
       "-f",
       "sarif",
       "-o",

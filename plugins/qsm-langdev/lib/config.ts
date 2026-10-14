@@ -11,7 +11,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { LANGUAGE_TABLE, LANGUAGES, type Language, type LanguageInfo } from "./registry.ts";
+import { arrayOf } from "./json.ts";
+import {
+  isLanguage,
+  LANGUAGE_TABLE,
+  LANGUAGES,
+  type Language,
+  type LanguageInfo,
+} from "./registry.ts";
 
 const INTERPRETER_EXTENSION: Readonly<Record<string, string>> = {
   sh: ".sh",
@@ -84,7 +91,7 @@ export function matchingFiles(
     if (extensions.some((suffix) => file.endsWith(suffix))) {
       return true;
     }
-    if (names?.test(basename(file))) {
+    if (names?.test(basename(file)) === true) {
       return true;
     }
     if (!hasNoExtension(file)) {
@@ -110,21 +117,31 @@ export function gitPaths(root: string, args: readonly string[], input?: string):
   return result.stdout.split("\0").filter((path) => path.length > 0);
 }
 
+/** The paths among `paths` whose git attribute `attr` has one of `values`. */
+export function pathsWithAttr(
+  root: string,
+  attr: string,
+  values: readonly string[],
+  paths: readonly string[],
+): Set<string> {
+  const found = new Set<string>();
+  if (paths.length === 0) {
+    return found;
+  }
+  const fields = gitPaths(root, ["check-attr", "-z", "--stdin", attr], paths.join("\0")) ?? [];
+  for (let at = 0; at + 2 < fields.length; at += 3) {
+    const [path, , value] = fields.slice(at, at + 3);
+    if (path !== undefined && value !== undefined && values.includes(value)) {
+      found.add(path);
+    }
+  }
+  return found;
+}
+
 /** The paths among `paths` that `.gitattributes` marks generated: the one definition of
  * "generated" here, the `linguist-generated` attribute the repository already carries. */
 export function generatedPaths(root: string, paths: readonly string[]): Set<string> {
-  if (paths.length === 0) {
-    return new Set();
-  }
-  const fields =
-    gitPaths(root, ["check-attr", "-z", "--stdin", "linguist-generated"], paths.join("\0")) ?? [];
-  const generated = new Set<string>();
-  for (let at = 0; at + 2 < fields.length; at += 3) {
-    if (fields[at + 2] === "set" || fields[at + 2] === "true") {
-      generated.add(fields[at] as string);
-    }
-  }
-  return generated;
+  return pathsWithAttr(root, "linguist-generated", ["set", "true"], paths);
 }
 
 /**
@@ -203,10 +220,7 @@ export function isLangdevRepo(repoRoot: string): boolean {
 }
 
 function knownLanguages(value: unknown): Language[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((name): name is Language => LANGUAGES.includes(name as Language));
+  return (arrayOf(value) ?? []).filter((name): name is Language => isLanguage(name));
 }
 
 /** The repository's gate selection, or the default when it has written none. */

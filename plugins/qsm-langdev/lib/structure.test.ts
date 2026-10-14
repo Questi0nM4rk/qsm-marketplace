@@ -245,7 +245,9 @@ describe("compareStructure leaves test files out of both trees", () => {
   beforeAll(() => {
     restorePath = installFakeSentrux();
   });
-  afterAll(() => restorePath());
+  afterAll(() => {
+    restorePath();
+  });
 
   afterEach(() => {
     while (sandboxes.length > 0) {

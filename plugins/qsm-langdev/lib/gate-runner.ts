@@ -9,6 +9,7 @@ import { readGatesConfig } from "./config.ts";
 import { describeSets } from "./file-sets.ts";
 import { fixFiles, isFixable } from "./fixers.ts";
 import { resolveRef } from "./gitref.ts";
+import { recordsOf } from "./json.ts";
 import { parsePushLines, pushReference } from "./push.ts";
 import type { EnforcementPoint } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
@@ -153,8 +154,8 @@ function denylistGate(root: string): GateOutcome {
 
 function findingsOf(json: string): { rule: string; file: string; line: number }[] {
   try {
-    const parsed: Record<string, string | number>[] = JSON.parse(json);
-    return parsed.map((f) => ({
+    const parsed = recordsOf(JSON.parse(json));
+    return (parsed ?? []).map((f) => ({
       rule: String(f.RuleID),
       file: String(f.File),
       line: Number(f.StartLine),
@@ -213,7 +214,9 @@ export function langdevOutcome(verdicts: readonly Verdict[], sizes: string): Gat
     return pass("langdev", sizes);
   }
   const remedy = [sizes, ...describeVerdicts(deciding)];
-  const measured = deciding.every((v) => !(v.missing || v.missingConfig)) || undefined;
+  const measured = deciding.every((v) => v.missing !== true && v.missingConfig !== true)
+    ? true
+    : undefined;
   return code === "worse"
     ? fail("langdev", `${deciding.length} checker(s) worse`, remedy, measured)
     : {
@@ -235,7 +238,7 @@ export function gatesCode(outcomes: readonly GateOutcome[]): "ok" | "failed" | "
 async function langdevAt(
   root: string,
   before: string | null,
-  after: string | "worktree",
+  after: string,
   point: EnforcementPoint,
 ): Promise<GateOutcome> {
   const { languages } = readGatesConfig(root);
@@ -291,11 +294,7 @@ function structureOutcome(result: StructureResult): GateOutcome {
   return fail("structure", summary, remedy, result.status === "scored" || undefined);
 }
 
-async function structureAt(
-  root: string,
-  before: string,
-  after: string | "worktree",
-): Promise<GateOutcome> {
+async function structureAt(root: string, before: string, after: string): Promise<GateOutcome> {
   return structureOutcome(await compareStructure(root, before, after));
 }
 
@@ -339,7 +338,7 @@ async function runGate(
 ): Promise<GateOutcome> {
   switch (name) {
     case "secrets":
-      return await secretsGate(root);
+      return secretsGate(root);
     case "entropy":
       return entropyGate(root);
     case "langdev":
@@ -358,7 +357,12 @@ async function runGate(
  * never carry the flag.
  */
 export function allowed(outcome: GateOutcome, reason: string | undefined): GateOutcome {
-  if (!reason || outcome.status !== "failed" || !outcome.regression) {
+  if (
+    reason === undefined ||
+    reason === "" ||
+    outcome.status !== "failed" ||
+    outcome.regression !== true
+  ) {
     return outcome;
   }
   return pass(

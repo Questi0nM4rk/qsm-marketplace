@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { recordOf } from "../lib/json.ts";
+import { defined } from "../lib/test-support.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const GIT = "/usr/bin/git";
@@ -69,8 +71,8 @@ function runEdited(file: string, stateDir = sandbox("qsm-langdev-edit-hook-state
     encoding: "utf8",
     env: { ...process.env, QSM_LANGDEV_STATE_DIR: stateDir },
   });
-  const { data } = JSON.parse(r.stdout) as { data: { text: string | null } };
-  return { status: r.status, text: data.text };
+  const data = defined(recordOf(recordOf(JSON.parse(r.stdout))?.data), "the verb's data");
+  return { status: r.status, text: typeof data.text === "string" ? data.text : null };
 }
 
 /** The single file under `<state>/start/<session>/<agent>/` — its name is a
@@ -111,11 +113,8 @@ describe("qsm-langdev edit hook", () => {
 
     const names = startPointFiles(stateDir, "s1", "a1");
     expect(names).toHaveLength(1);
-    const recorded = readStartPoint(stateDir, "s1", "a1", names[0] as string) as {
-      root: string;
-      start: string;
-    };
-    expect(recorded.start).toBe(head);
+    const recorded = readStartPoint(stateDir, "s1", "a1", defined(names[0], "a start point"));
+    expect(recordOf(recorded)?.start).toBe(head);
   });
 });
 
