@@ -7,8 +7,10 @@ import { dirname, join } from "node:path";
 import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
 import { spawnDetached } from "../../../lib/detach.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { stateDir } from "../../../lib/paths.ts";
+import { binDir, stateDir } from "../../../lib/paths.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { ask } from "../lib/askpass/ask.ts";
+import { argvFor, envLines, linkedKinds } from "../lib/askpass/link.ts";
 import { activeBackend } from "../lib/backend.ts";
 import { formatChecks } from "../lib/doctor.ts";
 import { SecretError } from "../lib/errors.ts";
@@ -125,14 +127,54 @@ const prune: Handler = (call) =>
     return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
   });
 
+/** attempt for a verb that waits on the person. */
+async function attemptAsync(run: () => Promise<Outcome>): Promise<Outcome> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof SecretError) {
+      return fail(error.code, `${error.message}\n  next: ${error.next}`);
+    }
+    throw error;
+  }
+}
+
+/** The consumer's words follow `--`: for sudo, ssh and git the first is the prompt it wants shown. */
+const askpass: Handler = (call) =>
+  call.json
+    ? fail("blocked", NO_JSON)
+    : attemptAsync(() =>
+        ask(call.args.kind as string, call.rest, { env: process.env, namespace: namespace(call) }),
+      );
+
+/** Only the lines print; the file the person puts them in is theirs. */
+const askpassEnable: Handler = (call) =>
+  attempt(() => {
+    const picked = linkedKinds().filter((kind) => call.args[kind] === true);
+    if (picked.length === 0) {
+      return fail(
+        "usage",
+        `askpass enable takes at least one of: ${linkedKinds()
+          .map((k) => `--${k}`)
+          .join(" ")}`,
+      );
+    }
+    const lines = envLines(picked, binDir(process.env));
+    return ok({ lines }, lines.join("\n"));
+  });
+
 const get: Handler = (call) =>
   call.json ? fail("blocked", NO_JSON) : attempt(() => ok(runGet(namespace(call), key(call))));
 
 const set: Handler = (call) =>
-  attempt(() => {
-    const stored = runSet(namespace(call), key(call));
-    return ok(stored, `stored ${stored.key}`);
-  });
+  call.args.gui === true
+    ? attemptAsync(() =>
+        ask("secret", [key(call)], { env: process.env, namespace: namespace(call) }),
+      )
+    : attempt(() => {
+        const stored = runSet(namespace(call), key(call));
+        return ok(stored, `stored ${stored.key}`);
+      });
 
 const has: Handler = (call) =>
   attempt(() => {
@@ -264,25 +306,32 @@ const doctor: Handler = (call) =>
 
 if (import.meta.main) {
   process.exit(
-    await runCli(manifest, "qsm-secrets", {
-      pipe,
-      env,
-      set,
-      has,
-      list,
-      inspect,
-      rm,
-      rename,
-      prune,
-      check: probe,
-      get,
-      doctor,
-      capture,
-      guard,
-      mask,
-      scrub,
-      render,
-      clean,
-    }),
+    await runCli(
+      manifest,
+      "qsm-secrets",
+      {
+        pipe,
+        env,
+        set,
+        askpass,
+        "askpass enable": askpassEnable,
+        has,
+        list,
+        inspect,
+        rm,
+        rename,
+        prune,
+        check: probe,
+        get,
+        doctor,
+        capture,
+        guard,
+        mask,
+        scrub,
+        render,
+        clean,
+      },
+      { argv: argvFor(process.argv0, process.argv.slice(2)) },
+    ),
   );
 }

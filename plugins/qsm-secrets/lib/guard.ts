@@ -20,6 +20,8 @@ import {
   wordToLit,
   wordToParts,
 } from "@questi0nm4rk/shell-ast";
+import { linkedKinds } from "./askpass/link.ts";
+import { LINK_PREFIX } from "./askpass/paths.ts";
 import {
   expand,
   globMentioned,
@@ -41,6 +43,7 @@ export type RefusalCode =
   | "credential-file"
   | "fd3-to-output"
   | "single-quoted-placeholder"
+  | "askpass-pane"
   | "unreadable-command";
 
 export interface Refusal {
@@ -83,6 +86,7 @@ const BUS_TOOLS: ReadonlySet<string> = new Set([
   "qdbus",
   "qdbus6",
 ]);
+const QUICKSHELL_TOOLS: ReadonlySet<string> = new Set(["qs", "quickshell"]);
 const INTERPRETERS = /^(python[\d.]*|node|nodejs|bun|deno|ruby|perl)$/;
 const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(["-c", "-e", "-p", "--eval", "--print"]);
 const KEYRING_LIBRARY = /keyring|secretstorage|keytar|libsecret|org\.freedesktop\.secret/i;
@@ -355,6 +359,38 @@ function pathHit(text: string, ctx: Context): Root | undefined {
   return real === undefined ? undefined : reaches(real, ctx.roots, ctx.env, false);
 }
 
+const ASKPASS_WHY =
+  "the askpass pane asks the person and prints the answer, so the typed text would be this tool result, or would be sent to a socket the caller names.";
+const ASKPASS_INSTEAD =
+  "Ask through `qsm-secrets set <key> --gui`; sudo, ssh, git and hook-kit run the `qsm-askpass-<kind>` links themselves, and `sudo -A <cmd>` is allowed.";
+
+/** The reply socket's directory of the pane: any command that names it could forge an answer. */
+function askpassRoot(env: PathEnv): Root[] {
+  return env.runtimeDir === undefined || env.runtimeDir === ""
+    ? []
+    : [{ path: `${env.runtimeDir}/qsm-askpass`, kind: "askpass" }];
+}
+
+/** Whether the call is a consumer-only entry point of the pane: a `qsm-askpass-<kind>` link, or
+ * `qsm-secrets askpass <kind>` for a kind that prints its answer. */
+function runsAskpass(name: string, texts: readonly string[]): boolean {
+  if (name.startsWith(LINK_PREFIX)) {
+    return true;
+  }
+  const [verb, kind] = texts.filter((t) => !t.startsWith("-"));
+  return name === "qsm-secrets" && verb === "askpass" && linkedKinds().includes(kind ?? "");
+}
+
+/** The pane's doors: its entry points, and its IPC target, which an expansion word could spell
+ * without the text saying `askpass`. */
+function judgeAskpass(name: string, texts: readonly string[], shown: string): Refusal | null {
+  const ipc = QUICKSHELL_TOOLS.has(name) && texts.includes("ipc");
+  const spelled = ipc && (texts.includes("askpass") || texts.some((t) => /[$`]/.test(t)));
+  return runsAskpass(name, texts) || spelled
+    ? refuse("askpass-pane", shown, ASKPASS_WHY, ASKPASS_INSTEAD)
+    : null;
+}
+
 function isGet(name: string, texts: readonly string[]): boolean {
   return name === "qsm-secrets" && texts.find((t) => !t.startsWith("-")) === "get";
 }
@@ -362,6 +398,10 @@ function isGet(name: string, texts: readonly string[]): boolean {
 function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal | null {
   const texts = words.map(textOf);
   const shown = `${name} ${texts.join(" ")}`.trim().slice(0, 80);
+  const pane = judgeAskpass(name, texts, shown);
+  if (pane !== null) {
+    return pane;
+  }
   if (name === "qsm-secrets") {
     return ctx.fd3Out && isGet(name, texts)
       ? refuse(
@@ -414,6 +454,9 @@ function judgePaths(
 ): Refusal | null {
   for (const text of texts) {
     const hit = pathHit(text, ctx);
+    if (hit?.kind === "askpass") {
+      return refuse("askpass-pane", shown, ASKPASS_WHY, ASKPASS_INSTEAD);
+    }
     if (hit?.kind === "store" && !NAMES_ONLY.has(name)) {
       return refuse(
         "keyring-files",
@@ -460,6 +503,14 @@ function judgeRedirect(redirect: Redirect, ctx: Context): Refusal | null {
   const target = textOf(redirect.word);
   if (INPUT_OPS.has(redirect.op)) {
     const hit = pathHit(target, ctx);
+    if (hit?.kind === "askpass") {
+      return refuse(
+        "askpass-pane",
+        `${redirect.op} ${target}`.slice(0, 80),
+        ASKPASS_WHY,
+        ASKPASS_INSTEAD,
+      );
+    }
     if (hit !== undefined) {
       return refuse(
         hit.kind === "store" ? "keyring-files" : "rendered-config",
@@ -640,7 +691,7 @@ export async function guardCommand(command: string, env: PathEnv): Promise<Refus
   return await judgeSource(command, {
     cwd: {},
     env,
-    roots: protectedRoots(env),
+    roots: [...protectedRoots(env), ...askpassRoot(env)],
     fd3Out: false,
     depth: 0,
   });

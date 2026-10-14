@@ -684,3 +684,151 @@ person approves; and SHALL never print a matched line or a credential.
 
 - **WHEN** a name was not found in a local source
 - **THEN** it is proposed only if the person added it by hand
+
+### Requirement: A new secret may be collected in a pane the person types into
+
+`qsm-secrets set <key> --gui` SHALL collect the value in the askpass pane, a Quickshell overlay the
+person types into, and SHALL hand it to the backend on stdin so the caller never receives it. The
+terminal path of `set` SHALL stay as it is. The pane's request SHALL carry no secret value, and the
+pane's answer SHALL travel on a one-shot unix socket the binary created, never in argv or stdout.
+The call SHALL fail, storing nothing, when the person cancels or denies (`failed`, "cancelled by the
+person"), when no answer arrives in 120 seconds (`failed`, "timed out waiting for the person"), or
+when the value is empty; and SHALL answer `missing`, with no terminal fallback, when `qs` is not on
+PATH or the pane is not installed.
+
+#### Scenario: the person types a value in the pane
+
+- **WHEN** the caller runs `set <key> --gui` and the person types a value and presses Save
+- **THEN** the backend holds that value under the key, the call prints `stored <key>`, and the value
+  is in no output and in no argv
+
+#### Scenario: the person cancels
+
+- **WHEN** the person presses Escape or Cancel in the pane
+- **THEN** nothing is stored and the call fails with "cancelled by the person"
+
+#### Scenario: no answer in time
+
+- **WHEN** 120 seconds pass without an answer
+- **THEN** the call fails with "timed out waiting for the person", the pane request is withdrawn and
+  the reply socket's directory is removed
+
+#### Scenario: no Quickshell
+
+- **WHEN** `qs` is not on PATH
+- **THEN** the call answers `missing`, names `qs`, and stores nothing
+
+### Requirement: Consumers that ask for a password get it from the pane
+
+`qsm-secrets askpass <kind> -- <the consumer's words>` SHALL show one request in the pane and return
+the answer in the shape the consumer reads: for `sudo`, `ssh` and `git` the typed text on stdout and
+exit 0 on Allow, and no stdout and exit 1 with the reason on Deny, Escape or a timeout; for `decide` an
+ask response of hook-kit's protocol 2 with the request's id and `allow` or `deny`, read from an ask
+request on stdin. Install SHALL link `qsm-askpass-<kind>` to the binary in the bin directory for each
+of those kinds, because the consumers' environment variables (`SUDO_ASKPASS`, `SSH_ASKPASS`,
+`GIT_ASKPASS`, `HOOK_KIT_ASKPASS`) hold one executable path with no arguments, and the binary SHALL
+read the link's name as the kind. `qsm-secrets askpass enable` SHALL print the fish lines for the
+kinds named and write nothing. The pane SHALL show the asking process (the parent): its executable
+path, the first 12 hex of the sha256 of that executable and its command line, and SHALL hide the
+typed text when the prompt asks for a password, passphrase or secret. `ssh` and `git` answers are
+asked once and never stored.
+
+#### Scenario: sudo -A through the link
+
+- **WHEN** a consumer runs `$SUDO_ASKPASS "[sudo] password for me: "` and the person types a password
+  and presses Allow
+- **THEN** the password is the consumer's stdout followed by a newline and the exit is 0
+
+#### Scenario: the person denies
+
+- **WHEN** the person presses Deny
+- **THEN** stdout is empty, stderr says "denied by the person" and the exit is 1
+
+#### Scenario: a hook-kit ask
+
+- **WHEN** hook-kit runs `$HOOK_KIT_ASKPASS` with an ask request on stdin and the person presses Allow
+- **THEN** stdout is an ask response with the same id and `allow`
+
+#### Scenario: a second run changes nothing
+
+- **WHEN** install runs twice
+- **THEN** the second run reports the pane and every link unchanged, and a link of a kind that no longer
+  exists is removed and named
+
+### Requirement: The pane is one component and a table of kinds
+
+The pane SHALL be one QML component driven by one kinds table, and a provider SHALL be one file in
+`lib/askpass/providers/` listed in one table in `lib/askpass/index.ts`. Adding a kind SHALL need one row
+in each table, a provider file and no other change. The pane SHALL run as a Quickshell instance of its
+own, started on demand with `qs -p <installed dir> -n -d` and always addressed with `-p`, so a call never
+reaches the desktop shell's instance. The guard SHALL refuse, with the code `askpass-pane`, an agent's
+Bash command that is `qs ipc ... askpass`, a `qs ipc` call with an expansion word, a call of a
+`qsm-askpass-<kind>` link or of `qsm-secrets askpass <kind>` for a kind that prints its answer (`sudo`,
+`ssh`, `git`, `decide`), and any command that names `$XDG_RUNTIME_DIR/qsm-askpass`; the links are entry
+points for the consumers that run them themselves, and `sudo -A <cmd>` stays allowed. The pane SHALL
+accept a request only when its socket path is `$XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock` for its
+own 128-bit hex nonce, SHALL give each request its own 120 seconds, and the binary SHALL withdraw the
+request and remove the directory on SIGTERM, SIGINT and SIGHUP. Install SHALL write the pane only to
+the default path, never to the path `QSM_ASKPASS_QML` names.
+
+#### Scenario: an agent calls the pane's target
+
+- **WHEN** an agent runs `qs ipc -p <dir> call askpass request '{...}'` through Bash
+- **THEN** the call is denied with `askpass-pane`, and `qs ipc call qsm toggle` is not
+
+#### Scenario: an agent runs the consumer entry point itself
+
+- **WHEN** an agent runs `qsm-askpass-sudo "[sudo] password: "` or `qsm-secrets askpass sudo -- "..."`
+  through Bash, or `nc -U $XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock`
+- **THEN** the call is denied with `askpass-pane`, while `sudo -A true` and `qsm-secrets set <key> --gui`
+  are not
+
+#### Scenario: a signal ends the call
+
+- **WHEN** the call receives SIGTERM while it waits for the person
+- **THEN** the pane request is withdrawn, the reply socket's directory is removed and the exit is 143
+
+#### Scenario: ssh asks a yes or no, or shows a notice
+
+- **WHEN** ssh runs the link with `SSH_ASKPASS_PROMPT=confirm` and the person presses Allow
+- **THEN** stdout is empty and the exit is 0; with Deny the exit is 1; with `none` the pane shows the
+  prompt as a notice and the exit is 0
+
+## Design
+
+- **One binary.** Iron Law 8 holds: `askpass` is a verb of `qsm-secrets`. A compiled bun binary reports
+  the name it was run as in `process.argv0` (measured through a symlink), so install links
+  `qsm-askpass-<kind>` to it and the binary rewrites its argv to `askpass <kind> -- <words>`. A shell
+  shim would add a file with its own path and hash for nothing; a link also keeps `/proc/<pid>/exe` the
+  verified binary.
+- **Quickshell on demand.** The pane's QML is copied by install to `$XDG_DATA_HOME/qsm/askpass/qml`
+  (Iron Law 9: nothing runs through a path into the repository). The first request starts
+  `qs -p <dir> -n -d`; later ones find it. The IPC target is `askpass` and its functions are `request` and
+  `withdraw`: `show` is a subcommand name of `qs ipc`, so a function called `show` is parsed as that
+  subcommand and the call is refused as a usage error (found in the live run, which a fake `qs` hid).
+- **Caller binding.** The binary makes the reply socket in a 0700 directory named by a 128-bit random nonce
+  under `$XDG_RUNTIME_DIR/qsm-askpass`, the socket is 0600, the first line whose nonce matches is the answer,
+  and the directory is removed in a `finally`. The guard refuses the pane's IPC target from an agent's Bash.
+  **Known gap:** peer credentials on the socket are not checked. The nonce and the socket path travel in the
+  argv of `qs ipc call`, which any process of the user can read in `/proc/<pid>/cmdline`, so a same-user
+  process outside the agent's Bash guard can connect to the real socket and write a forged answer, `allow`
+  for `decide` included, while the person still looks at the pane. The pane accepts only the one socket
+  path the binary makes, the guard refuses an agent's Bash that names that directory, and the pane's
+  display of the asking executable and its hash lets the person notice; nothing stops a determined
+  same-user process.
+- **`askpass enable` has no `--secrets`.** The secret kind has no environment variable, because it is
+  reached through `set --gui`, so `enable` takes `--sudo`, `--ssh`, `--git` and `--decide` only.
+- **ssh prompt modes.** `SSH_ASKPASS_REQUIRE=prefer` sends every ssh prompt here, so the ssh provider reads
+  `SSH_ASKPASS_PROMPT`: `confirm` is Allow or Deny with exit 0 or 1 and no text, `none` is a notice row
+  (`notice` in the kinds tables) with no answer to give.
+- **Outcome codes.** Root `lib/outcome.ts` is unchanged: a timeout and a cancel are `failed` with a reason.
+- **Theme.** `Theme.qml` is a copy of the desktop shell's Deep Night tokens, a file of this plugin; the pane
+  runs without that shell.
+- **ssh and git are Authorize-style.** Their answers are a passphrase or a password for a remote, asked once
+  and never stored; only `secret` goes to the vault.
+- **Sudo timestamp.** A cached sudo credential skips the askpass, so no pane appears; `sudo -k` or
+  `timestamp_timeout=0` is the person's setting, documented in INSTALL.md.
+- **No test-only submit.** Nothing in the IPC target answers on the person's behalf, because that is the
+  same-user bypass; the live run types into the pane with `wtype`.
+- **The asking process** is the parent of the binary. For `sudo` that is sudo, which another uid owns, so
+  its executable may be unreadable and the pane says so; its command line is the command sudo will run.

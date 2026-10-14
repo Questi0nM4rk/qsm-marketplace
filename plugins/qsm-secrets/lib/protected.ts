@@ -14,8 +14,9 @@ export interface PathEnv {
 export interface Root {
   readonly path: string;
   /** `store` holds credentials themselves; `rendered` holds config files with values filled in,
-   * which a command may be handed by path but never read. */
-  readonly kind: "store" | "rendered";
+   * which a command may be handed by path but never read; `askpass` holds the reply sockets of the
+   * askpass pane, which no command may name. */
+  readonly kind: "store" | "rendered" | "askpass";
 }
 
 /** The keyring files, the rbw data directory, the pass store and the rendered config directory. */
