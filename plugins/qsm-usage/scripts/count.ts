@@ -1,7 +1,7 @@
 // `qsm-usage count`: how big is this, before it is sent.
 
 import { readFileSync } from "node:fs";
-import type { Handler } from "../../../lib/cli-base.ts";
+import { flagArg, type Handler, optionalString, stringList } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   CountError,
@@ -10,7 +10,6 @@ import {
   countText,
   DEFAULT_MODEL,
 } from "../lib/count.ts";
-import { optionalString, stringList } from "../lib/args.ts";
 import { ESTIMATE_NOTE } from "../lib/estimate.ts";
 import { absent, messageOf } from "../lib/formats.ts";
 
@@ -75,7 +74,7 @@ function modeOf(value: string | undefined): CountMode {
 
 export const count: Handler = async (call) => {
   const files = stringList(call, "files");
-  const useStdin = call.args.stdin === true;
+  const useStdin = flagArg(call, "stdin");
   if (files.length === 0 && !useStdin) {
     return fail("usage", "no input: pass one or more files, or --stdin");
   }
@@ -96,6 +95,6 @@ export const count: Handler = async (call) => {
   }
   const total = results.reduce((sum, r) => sum + r.tokens, 0);
   const data = { mode, model, estimated: mode === "estimate", files: results, total };
-  const outcome = ok(data, render(results, call.args.total === true, total));
+  const outcome = ok(data, render(results, flagArg(call, "total"), total));
   return mode === "estimate" ? { ...outcome, warnings: [ESTIMATE_NOTE] } : outcome;
 };

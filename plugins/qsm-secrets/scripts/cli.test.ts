@@ -23,6 +23,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -92,9 +93,6 @@ function leaked(run: Run): string | null {
     null
   );
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isString = (value: unknown): value is string => typeof value === "string";
 

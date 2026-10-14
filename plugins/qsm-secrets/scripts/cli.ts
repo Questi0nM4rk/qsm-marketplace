@@ -4,14 +4,22 @@
 
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
 import { spawnDetached } from "../../../lib/detach.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import { stateDir } from "../../../lib/paths.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { activeBackend } from "../lib/backend.ts";
 import { formatChecks } from "../lib/doctor.ts";
-import { fail as raise, SecretError } from "../lib/errors.ts";
+import { SecretError } from "../lib/errors.ts";
 import { guardCommand } from "../lib/guard.ts";
 import { runClean, runRender } from "../lib/render.ts";
 import {
@@ -35,8 +43,7 @@ import {
 import { namespaceOf, parseEnvPair } from "../lib/vault.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import is typed by its literal values; a checked parse of qsm.json belongs in root lib/qsm-manifest.ts
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 /**
  * The three verbs that carry a value refuse `--json` outright: a value must never be serialised,
@@ -44,41 +51,12 @@ const manifest = manifestJson as QsmManifest;
  */
 const NO_JSON = "a secret value never prints as JSON; use pipe or env";
 
-/** A string argument, or undefined when it was not given. qsm.json declares the type, so another
- * type is a usage error rather than a cast. */
-function optionalText(call: Call, name: string): string | undefined {
-  const value = call.args[name];
-  if (value !== undefined && typeof value !== "string") {
-    return usageError(`--${name} takes text`);
-  }
-  return value;
-}
-
-/** A string argument the verb requires; the parser already refused a missing one. */
-function requiredText(call: Call, name: string): string {
-  const value = optionalText(call, name);
-  return value ?? usageError(`${name} is required`);
-}
-
-/** A repeatable argument: the list, empty when it was not given. */
-function texts(call: Call, name: string): string[] {
-  const value = call.args[name];
-  if (value === undefined) {
-    return [];
-  }
-  return Array.isArray(value) ? value : usageError(`--${name} takes text`);
-}
-
-function usageError(message: string): never {
-  return raise(message, "see qsm-secrets --help", "usage");
-}
-
 function namespace(call: Call): string {
-  return namespaceOf(optionalText(call, "folder"), process.env);
+  return namespaceOf(optionalString(call, "folder"), process.env);
 }
 
 function key(call: Call): string {
-  return requiredText(call, "key");
+  return requiredString(call, "key");
 }
 
 /** A SecretError carries its own outcome code and the next step; anything
@@ -109,7 +87,7 @@ const env: Handler = (call) => {
   if (call.json) {
     return fail("blocked", NO_JSON);
   }
-  const pair = parseEnvPair(requiredText(call, "pair"));
+  const pair = parseEnvPair(requiredString(call, "pair"));
   if (pair === null) {
     return fail("usage", "env takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -118,7 +96,7 @@ const env: Handler = (call) => {
 
 /** The probe runs like env but its output is discarded: only its exit code is the answer. */
 const probe: Handler = (call) => {
-  const pair = parseEnvPair(requiredText(call, "pair"));
+  const pair = parseEnvPair(requiredString(call, "pair"));
   if (pair === null) {
     return fail("usage", "check takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -132,10 +110,10 @@ const probe: Handler = (call) => {
 
 const rename: Handler = (call) =>
   attempt(() => {
-    const from = { namespace: namespace(call), key: requiredText(call, "from") };
+    const from = { namespace: namespace(call), key: requiredString(call, "from") };
     const to = {
-      namespace: optionalText(call, "toFolder") ?? from.namespace,
-      key: requiredText(call, "to"),
+      namespace: optionalString(call, "toFolder") ?? from.namespace,
+      key: requiredString(call, "to"),
     };
     const done = runRename(from, to);
     return ok(done, `renamed ${done.from} to ${done.to}`);
@@ -143,7 +121,7 @@ const rename: Handler = (call) =>
 
 const prune: Handler = (call) =>
   attempt(() => {
-    const done = runPrune(call.args.dryRun === true);
+    const done = runPrune(flagArg(call, "dryRun"));
     return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
   });
 
@@ -197,11 +175,11 @@ const capture: Handler = () =>
  */
 const mask: Handler = (call) =>
   attempt(() => {
-    if (call.args.all === true) {
+    if (flagArg(call, "all")) {
       const masked = runMaskAll();
       return ok(masked, JSON.stringify(masked.texts));
     }
-    const ids = texts(call, "id");
+    const ids = stringList(call, "id");
     if (ids.length === 0) {
       return fail("usage", "mask takes at least one --id, or --all");
     }
@@ -212,8 +190,8 @@ const mask: Handler = (call) =>
 /** A transcript's captured values swapped for their placeholders; detached for a hook's 1.5 s. */
 const scrub: Handler = (call) =>
   attempt(() => {
-    const target = requiredText(call, "transcript");
-    if (call.args.detach !== true) {
+    const target = requiredString(call, "transcript");
+    if (!flagArg(call, "detach")) {
       const done = runScrub(target);
       return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
     }
@@ -248,7 +226,7 @@ const guard: Handler = async () => {
 
 /** The session a render or clean belongs to: `--session`, else the id the engine sets for Bash. */
 function inSession(call: Call, run: (session: string) => Outcome): Outcome {
-  const id = optionalText(call, "session") ?? process.env.CLAUDE_CODE_SESSION_ID;
+  const id = optionalString(call, "session") ?? process.env.CLAUDE_CODE_SESSION_ID;
   return id === undefined
     ? fail("usage", "pass --session <id>; CLAUDE_CODE_SESSION_ID is not set")
     : attempt(() => run(id));
@@ -258,8 +236,8 @@ function inSession(call: Call, run: (session: string) => Outcome): Outcome {
 const render: Handler = (call) =>
   inSession(call, (id) => {
     const done = runRender(
-      requiredText(call, "template"),
-      requiredText(call, "out"),
+      requiredString(call, "template"),
+      requiredString(call, "out"),
       id,
       process.env,
     );

@@ -1,9 +1,8 @@
 // `qsm-usage drop` and `qsm-usage dropped`: the findings a person dropped, kept so a later review
 // does not offer them again.
 
-import type { Handler } from "../../../lib/cli-base.ts";
+import { type Handler, requiredString } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
-import { requiredString } from "../lib/args.ts";
 import { addDropped, droppedPath, readDropped } from "../lib/dropped.ts";
 import { messageOf } from "../lib/formats.ts";
 

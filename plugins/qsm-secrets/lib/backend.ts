@@ -59,14 +59,13 @@ export function readSetup(env: Record<string, string | undefined>): { [key: stri
   return parsed;
 }
 
-/** The `secrets.backend` of a setup object, when it is a string. */
-export function setupBackend(file: { [key: string]: Json }): string | undefined {
+/** The `secrets.backend` of a setup object as written, undefined when absent. */
+export function setupBackend(file: { [key: string]: Json }): Json | undefined {
   const secrets = file.secrets;
   if (typeof secrets !== "object" || secrets === null || Array.isArray(secrets)) {
     return undefined;
   }
-  const backend = secrets.backend;
-  return typeof backend === "string" ? backend : undefined;
+  return secrets.backend;
 }
 
 const isChoice = (name: string): name is Choice => Object.hasOwn(CHOICES, name);
@@ -77,8 +76,9 @@ function stored(env: Record<string, string | undefined>): string | undefined {
   if (choice === undefined) {
     return undefined;
   }
-  if (!isChoice(choice)) {
-    fail(`${setupConfigPath(env)} names an unknown backend: ${choice}`, `run ${ACTIVATE}`, "usage");
+  if (typeof choice !== "string" || !isChoice(choice)) {
+    const named = typeof choice === "string" ? choice : JSON.stringify(choice);
+    fail(`${setupConfigPath(env)} names an unknown backend: ${named}`, `run ${ACTIVATE}`, "usage");
   }
   return CHOICES[choice];
 }

@@ -3,9 +3,16 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   type Answer,
   checkBins,
@@ -13,7 +20,6 @@ import {
   formatDoctorReport,
   probeList,
 } from "../lib/doctor.ts";
-import { optionalString, requiredString } from "../lib/args.ts";
 import { InputError, messageOf, readData } from "../lib/formats.ts";
 import { extractFrontmatter, extractTable, frontmatterText, tableText } from "../lib/markdown.ts";
 import { formatSizeReport, sizeReport } from "../lib/size.ts";
@@ -26,8 +32,7 @@ import { filter } from "./filter.ts";
 import { report as reportVerb } from "./report.ts";
 import { wrap } from "./wrap.ts";
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import types `type` as string; only a root lib/qsm-manifest.ts validator could check it, and every plugin cli.ts casts the same way
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 /**
  * A refusal raised from a helper: `usage` for a broken call, `failed` for a call that was fine and
@@ -85,17 +90,17 @@ function select(call: Call): Selection {
   const file = requiredString(call, "file");
   const section = optionalString(call, "section");
   const source = read(file);
-  if (call.args.frontmatter === true && call.args.table === true) {
+  if (flagArg(call, "frontmatter") && flagArg(call, "table")) {
     badCall("--frontmatter and --table name two different things; pass one");
   }
-  if (call.args.frontmatter === true) {
+  if (flagArg(call, "frontmatter")) {
     return {
       label: `${file} (frontmatter)`,
       original: frontmatterText(source),
       value: extractFrontmatter(source),
     };
   }
-  if (call.args.table === true) {
+  if (flagArg(call, "table")) {
     if (section === undefined || section.length === 0) {
       badCall("--table needs --section <heading>");
     }

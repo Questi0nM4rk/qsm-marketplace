@@ -95,18 +95,85 @@ export function newSession(id: string, at: number): SessionRecord {
   };
 }
 
+const isNum = (value: unknown): value is number => typeof value === "number";
+const isStr = (value: unknown): value is string => typeof value === "string";
+const isNumOrNull = (value: unknown): value is number | null => value === null || isNum(value);
+const isStrOrNull = (value: unknown): value is string | null => value === null || isStr(value);
+
+function everyRow(value: unknown, row: (item: Record<string, unknown>) => boolean): boolean {
+  return Array.isArray(value) && value.every((item: unknown) => isPlainObject(item) && row(item));
+}
+
+function isCounts(value: unknown): boolean {
+  return isPlainObject(value) && Object.values(value).every((count) => isNum(count));
+}
+
+function isBreakdown(value: unknown): boolean {
+  return (
+    isPlainObject(value) &&
+    isNum(value.at) &&
+    isNumOrNull(value.tokens) &&
+    isNum(value.window) &&
+    everyRow(value.categories, (c) => isStr(c.name) && isNum(c.tokens) && isStr(c.kind)) &&
+    everyRow(value.mcpServers, (m) => isStr(m.server) && isNum(m.tokens) && isNum(m.tools)) &&
+    everyRow(value.memoryFiles, (f) => isStr(f.path) && isNum(f.tokens)) &&
+    everyRow(value.skills, (s) => isStr(s.name) && isStrOrNull(s.plugin) && isNum(s.tokens)) &&
+    everyRow(value.agents, (a) => isStr(a.name) && isNum(a.tokens))
+  );
+}
+
+function isTurn(turn: Record<string, unknown>): boolean {
+  const { usage } = turn;
+  return (
+    isNum(turn.at) &&
+    isNum(turn.durationMs) &&
+    isStr(turn.reason) &&
+    isStrOrNull(turn.agentId) &&
+    isNumOrNull(turn.costUsd) &&
+    (usage === null ||
+      (isPlainObject(usage) &&
+        isStr(usage.model) &&
+        isNum(usage.input_tokens) &&
+        isNum(usage.output_tokens) &&
+        isNum(usage.cache_read_input_tokens) &&
+        isNum(usage.cache_creation_input_tokens)))
+  );
+}
+
+const isInjectionSource = (value: unknown): value is InjectionSource =>
+  value === "prompt.attachment" || value === "tool.describe" || value === "skill.prompt";
+
+function isInjection(row: Record<string, unknown>): boolean {
+  return (
+    isInjectionSource(row.source) &&
+    isStr(row.name) &&
+    isNum(row.count) &&
+    isNum(row.chars) &&
+    isNum(row.lastChars)
+  );
+}
+
+function isSaving(row: Record<string, unknown>): boolean {
+  return isStr(row.pattern) && isNum(row.count) && isNum(row.fromTokens) && isNum(row.toTokens);
+}
+
+/** Checks every field the ledger reads from a stored record, down to the rows. */
 function isSessionRecord(value: unknown): value is SessionRecord {
   return (
     isPlainObject(value) &&
-    typeof value.id === "string" &&
-    typeof value.startedAt === "number" &&
-    (value.start === null || isPlainObject(value.start)) &&
-    Array.isArray(value.turns) &&
-    (value.costUsd === null || typeof value.costUsd === "number") &&
-    Array.isArray(value.injected) &&
+    isStr(value.id) &&
+    isNum(value.startedAt) &&
+    (value.start === null || isBreakdown(value.start)) &&
+    everyRow(value.turns, isTurn) &&
+    isNumOrNull(value.costUsd) &&
+    everyRow(value.injected, isInjection) &&
     isPlainObject(value.uses) &&
-    Array.isArray(value.toon) &&
-    typeof value.toolMessagesSeen === "number"
+    isCounts(value.uses.skills) &&
+    isCounts(value.uses.commands) &&
+    isCounts(value.uses.agents) &&
+    isCounts(value.uses.tools) &&
+    everyRow(value.toon, isSaving) &&
+    isNum(value.toolMessagesSeen)
   );
 }
 

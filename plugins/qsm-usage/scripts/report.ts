@@ -2,9 +2,8 @@
 // self-contained HTML file (lib/report.ts).
 
 import { readFileSync, writeFileSync } from "node:fs";
-import type { Handler } from "../../../lib/cli-base.ts";
+import { type Handler, requiredString } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
-import { requiredString } from "../lib/args.ts";
 import { describeFailure, validateFindings } from "../lib/findings.ts";
 import { absent, messageOf } from "../lib/formats.ts";
 import { renderReport } from "../lib/report.ts";
