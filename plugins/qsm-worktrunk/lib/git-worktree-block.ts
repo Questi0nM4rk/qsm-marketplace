@@ -132,6 +132,11 @@ const QUOTED = /\\(.)|'([^']*)'|"([^"]*)"/g;
 function unquote(word: string): string {
   return word.replace(
     QUOTED,
-    (_match, escaped, single, double) => escaped ?? single ?? double ?? "",
+    (
+      _match: string,
+      escaped: string | undefined,
+      single: string | undefined,
+      double: string | undefined,
+    ) => escaped ?? single ?? double ?? "",
   );
 }

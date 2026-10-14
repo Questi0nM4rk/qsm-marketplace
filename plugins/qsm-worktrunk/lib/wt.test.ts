@@ -32,6 +32,15 @@ import {
 
 // Every sandbox this file makes is removed after the test that made it,
 // passing or failing: a `finally` inside one test would leave the rest.
+async function rejection(promise: Promise<unknown>): Promise<Error | undefined> {
+  try {
+    await promise;
+  } catch (error: unknown) {
+    return error instanceof Error ? error : undefined;
+  }
+  return undefined;
+}
+
 const sandboxes: string[] = [];
 
 function sandbox(): string {
@@ -218,9 +227,8 @@ describe("against a wt on PATH", () => {
 
   test("wt exits 0 but git lists no worktree on the branch: a WtError naming the branch", async () => {
     const { run } = fakeWt();
-    await expect(createWorkspace(run, "ghost")).rejects.toThrow(
-      "wt exited 0 but git lists no worktree on branch ghost",
-    );
+    const error = await rejection(createWorkspace(run, "ghost"));
+    expect(error?.message).toContain("wt exited 0 but git lists no worktree on branch ghost");
   });
 
   test("removing a workspace resolves its branch from git and passes the branch to wt", async () => {
@@ -231,9 +239,8 @@ describe("against a wt on PATH", () => {
 
   test("removing a path git does not list is a WtError", async () => {
     const { run } = fakeWt();
-    await expect(removeWorkspace(run, "/elsewhere")).rejects.toThrow(
-      "no worktree with a branch at /elsewhere",
-    );
+    const error = await rejection(removeWorkspace(run, "/elsewhere"));
+    expect(error?.message).toContain("no worktree with a branch at /elsewhere");
   });
 });
 
@@ -275,9 +282,12 @@ describe("with no wt on PATH", () => {
   test("the version check answers null, the marker answers false, create and remove throw a WtError with the exit", async () => {
     expect(await wtVersion(missing)).toBeNull();
     expect(await setMarker(missing, "working")).toBe(false);
-    await expect(createWorkspace(missing, "feature")).rejects.toBeInstanceOf(WtError);
-    await expect(createWorkspace(missing, "feature")).rejects.toThrow("exit 127: not found");
-    await expect(removeWorkspace(missing, "/workspaces/feature")).rejects.toBeInstanceOf(WtError);
+    const created = await rejection(createWorkspace(missing, "feature"));
+    expect(created).toBeInstanceOf(WtError);
+    expect(created?.message).toContain("exit 127: not found");
+    expect(await rejection(removeWorkspace(missing, "/workspaces/feature"))).toBeInstanceOf(
+      WtError,
+    );
   });
 
   test("a runner that rejects is still no version, not a crash", async () => {
