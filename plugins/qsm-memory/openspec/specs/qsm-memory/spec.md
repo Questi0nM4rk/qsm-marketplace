@@ -443,7 +443,7 @@ it saves more than it costs.
 | Secret shapes | ~10 regexes, ours | Only `note` refuses; the archive holds only the text a person and the model wrote. |
 | Tests | `bun test`, `:memory:` database, `mkdtempSync`, a transcript builder, a stub task tool | Nothing touches the real archive or the real transcript directory. |
 
-Two dependencies, the MCP SDK with `zod`, in the root `package.json`. Everything else is stdlib or
+Two dependencies, the MCP SDK with `zod`, in the plugin's own `package.json`. Everything else is stdlib or
 ours. A `bun build --compile` binary is about 90 MB because it embeds the runtime.
 
 ## Extension points
