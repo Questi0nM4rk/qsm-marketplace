@@ -71,6 +71,16 @@ Before a non-trivial change, name in one place: the behaviour, the interface, th
 the failure behaviour, and the real run that proves it. Then code, in phases that each end in
 working code.
 
+## Tests prove real edge cases and the intended use
+
+A test earns its place by proving one of two things: that the full intended use works, or that a
+real edge case holds, such as a boundary, a failure the system must survive, or a rule the business
+states. It never proves the language, the runtime, or the platform: a function that adds two numbers
+needs no tests of how addition works, because that tests the `+` operator. Test-driven development
+is not the rule; write the test that proves the behaviour, whenever it is cheapest to run the real
+path. An agent that has read the code must not decide what is tested, because it ends by testing
+what it just wrote; the behaviours come from the requirements, the intent, and the spec.
+
 ## Clean before and after
 
 A tool leaves the machine as it found it, plus only what it was asked to add. Before it writes, an
