@@ -26,7 +26,8 @@ this plugin can go.
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
 | Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
 | Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
-| CLI | `qsm-secrets` | 18 verbs, see [USAGE.md](USAGE.md). |
+| CLI | `qsm-secrets` | 20 verbs, see [USAGE.md](USAGE.md). |
+| Pane | `qml/askpass/` | A Quickshell pane that asks the person for a secret, a `sudo -A`, ssh or git answer, or an allow or deny, and returns it to the asker. |
 
 ## Install
 
@@ -46,6 +47,8 @@ works until you choose one. See [INSTALL.md](INSTALL.md).
 
 ```bash
 qsm-secrets set github-token                                 # you type the value at the backend's prompt
+qsm-secrets set github-token --gui                           # you type it in the askpass pane instead
+qsm-secrets askpass enable --sudo --git                      # prints the fish lines for SUDO_ASKPASS and GIT_ASKPASS
 qsm-secrets pipe github-token -- gh auth login --with-token  # value on stdin
 qsm-secrets env npm-token=NPM_TOKEN -- npm publish           # value in one variable
 qsm-secrets list                                             # key names, never a value
@@ -81,7 +84,15 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 - `prune` trusts the transcripts: run it after your sessions end, since a capture made in a live
   session is named in its transcript only once the prompt is rewritten.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.
-- `set` needs a terminal and stores one line only.
+- `set` needs a terminal, or `--gui`, and stores one line only.
+- The askpass pane runs on Quickshell (`qs` on PATH) as an instance of its own, started on demand and
+  addressed by its config path. Without `qs` or the installed pane the call answers `missing`; there
+  is no terminal fallback. 120 seconds without an answer, or Escape, is `failed` with the reason.
+- The pane names the parent process that asked, with its executable and the first 12 hex of its
+  sha256, so you see which binary wants the answer. It is not proof: another process of your user
+  can call the pane's `askpass` target itself, so the guard refuses `qs ipc ... askpass` from an
+  agent's Bash, which a determined agent can still route around. Peer credentials on the reply
+  socket are not checked.
 - The default namespace is the folder `qsm` (`--folder` or `QSM_SECRETS_FOLDER`).
 - libsecret needs a Secret Service on the session bus (GNOME Keyring, KeePassXC). Without one the
   call answers `missing`. It never falls back to Bitwarden.

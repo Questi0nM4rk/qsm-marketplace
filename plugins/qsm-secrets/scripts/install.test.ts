@@ -3,9 +3,9 @@
 // a sandbox home, because the verdict is the base's upstream step.
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { install } from "./install.ts";
 
@@ -53,4 +53,37 @@ describe("install", () => {
     expect(r.detail).toContain("would run cargo install rbw");
     expect(log).toHaveLength(0);
   });
+});
+
+describe("install: the askpass pane and its links", () => {
+  const bins = join(sandbox, "bin");
+  const pane = join(sandbox, ".local", "share", "qsm", "askpass", "qml", "shell.qml");
+  const links = ["sudo", "ssh", "git", "decide"].map((k) => join(bins, `qsm-askpass-${k}`));
+
+  test("copies the pane and links each consumer, a second run changes nothing, a stale link goes", async () => {
+    rmSync(dirname(pane), { recursive: true, force: true });
+    const stale = join(bins, "qsm-askpass-old");
+    symlinkSync("qsm-secrets", stale);
+    const first = await install(context({ present: ["bun", "rbw"] }));
+    expect(first.steps.find((s) => s.name === "askpass pane")?.status).toBe("installed");
+    expect(existsSync(pane)).toBe(true);
+    for (const link of links) {
+      expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    }
+    expect(lstatSync(stale, { throwIfNoEntry: false })).toBeUndefined();
+    expect(first.steps.find((s) => s.name === "link qsm-askpass-old")?.detail).toContain("removed");
+
+    const second = await install(context({ present: ["bun", "rbw"] }));
+    const askpass = second.steps.filter(
+      (s) => s.name === "askpass pane" || s.name.startsWith("link "),
+    );
+    expect(askpass.every((s) => s.status === "already")).toBe(true);
+  }, 60_000);
+
+  test("a file that is not our link is reported and left alone", async () => {
+    rmSync(links[0] as string);
+    writeFileSync(links[0] as string, "mine");
+    const r = await install(context({ present: ["bun", "rbw"] }));
+    expect(r.steps.find((s) => s.name === "link qsm-askpass-sudo")?.status).toBe("error");
+  }, 60_000);
 });

@@ -41,6 +41,7 @@ export type RefusalCode =
   | "credential-file"
   | "fd3-to-output"
   | "single-quoted-placeholder"
+  | "askpass-pane"
   | "unreadable-command";
 
 export interface Refusal {
@@ -67,6 +68,7 @@ const BUS_TOOLS: ReadonlySet<string> = new Set([
   "qdbus",
   "qdbus6",
 ]);
+const QUICKSHELL_TOOLS: ReadonlySet<string> = new Set(["qs", "quickshell"]);
 const INTERPRETERS = /^(python[\d.]*|node|nodejs|bun|deno|ruby|perl)$/;
 const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(["-c", "-e", "-p", "--eval", "--print"]);
 const KEYRING_LIBRARY = /keyring|secretstorage|keytar|libsecret|org\.freedesktop\.secret/i;
@@ -349,6 +351,14 @@ function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal 
           `${USE_WRAPPER} Open descriptor 3 on a file or a pipe to the consumer instead.`,
         )
       : null;
+  }
+  if (QUICKSHELL_TOOLS.has(name) && texts.includes("ipc") && texts.includes("askpass")) {
+    return refuse(
+      "askpass-pane",
+      shown,
+      "the askpass pane's target would hand whatever the person types to the socket the caller names.",
+      "Ask through `qsm-secrets set <key> --gui`, or the `qsm-askpass-<kind>` link a consumer runs; the pane's reply goes to a socket only that call listens on.",
+    );
   }
   if (VAULT_TOOLS.has(name)) {
     return refuse(

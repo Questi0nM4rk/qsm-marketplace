@@ -5,7 +5,9 @@ claude plugin install qsm-secrets@qsm-marketplace
 bun plugins/qsm-secrets/scripts/install.ts
 ```
 
-Compiles `qsm-secrets`, writes the fish completion, and runs
+Compiles `qsm-secrets`, links `qsm-askpass-sudo`, `-ssh`, `-git` and `-decide` to it in the bin
+directory, copies the askpass pane to `$XDG_DATA_HOME/qsm/askpass/qml` (default
+`~/.local/share/qsm/askpass/qml`), writes the fish completion, and runs
 `cargo install rbw` when rbw is missing. `--dry-run` previews. Put `$QSM_BIN_DIR` (default
 `~/.local/bin`) on `PATH`.
 
@@ -24,6 +26,11 @@ rbw login
 export EDITOR=nvim
 qsm-secrets doctor
 ```
+
+The askpass pane needs Quickshell (`qs`) and a Wayland session. To use it for sudo, ssh or git, run
+`qsm-secrets askpass enable --sudo --ssh --git` and put the lines it prints in your fish config;
+sudo then needs `sudo -A`, and a cached sudo timestamp skips the pane (`sudo -k` or
+`Defaults timestamp_timeout=0`).
 
 For libsecret, a Secret Service provider (GNOME Keyring, KeePassXC) must run on the session bus.
 

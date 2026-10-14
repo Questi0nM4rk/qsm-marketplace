@@ -23,8 +23,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { FAKE_QS } from "../lib/askpass/fake-qs.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
+const PANE = resolve(import.meta.dir, "../qml/askpass");
 
 const VALUE = "gh0st-token-value-1";
 const NPM_VALUE = "npm-value-1";
@@ -308,6 +310,7 @@ for (const flavor of FLAVORS) {
       } else {
         writeScript(join(bin, "rbw"), flavor.fake(store));
       }
+      writeScript(join(bin, "qs"), FAKE_QS);
       const project = join(home, ".claude", "projects", "p");
       mkdirSync(project, { recursive: true });
       writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
@@ -539,6 +542,46 @@ for (const flavor of FLAVORS) {
         expect(run.code).toBe(1);
         expect(run.stdout).toContain("came back empty");
         expect(cli(["has", "empty-key"]).code).toBe(4);
+      });
+    });
+
+    describe("set --gui", () => {
+      const gui = (key: string, extra: Record<string, string>): Run =>
+        cli(["set", key, "--gui"], {
+          env: { QSM_ASKPASS_QML: PANE, FAKE_QS_LOG: join(runtime, "qs.log"), ...extra },
+        });
+
+      test("stores what the pane sends, and the value is in no output and no request", () => {
+        const run = gui("gui-key", { FAKE_ACTION: "allow", FAKE_VALUE: "gui-value-1" });
+        expect(run.code).toBe(0);
+        expect(run.stdout).toBe("stored gui-key\n");
+        expect(readFileSync(file("qsm", "gui-key"), "utf8").trim()).toBe("gui-value-1");
+        expect(run.stdout + run.stderr).not.toContain("gui-value-1");
+        expect(readFileSync(join(runtime, "qs.log"), "utf8")).not.toContain("gui-value-1");
+        expect(cli(["has", "gui-key"]).code).toBe(0);
+        expect(existsSync(join(runtime, "qsm-askpass"))).toBe(false);
+      });
+
+      test("cancel in the pane stores nothing and fails with the reason", () => {
+        const run = gui("gui-key", { FAKE_ACTION: "cancel" });
+        expect(run.code).toBe(1);
+        expect(run.stderr).toContain("cancelled by the person");
+        expect(cli(["has", "gui-key"]).code).toBe(4);
+      });
+
+      test("an empty answer stores nothing", () => {
+        const run = gui("gui-key", { FAKE_ACTION: "allow", FAKE_VALUE: "" });
+        expect(run.code).toBe(1);
+        expect(cli(["has", "gui-key"]).code).toBe(4);
+      });
+
+      test("without qs it is missing and asks nothing", () => {
+        const run = cli(["set", "gui-key", "--gui"], {
+          backend: false,
+          env: { QSM_ASKPASS_QML: PANE },
+        });
+        expect(run.code).toBe(4);
+        expect(run.stderr).toContain("quickshell (qs) is not on PATH");
       });
     });
 
@@ -969,6 +1012,9 @@ describe("guard", () => {
     [`cd ${keyrings} && cat login.keyring`, "keyring-files"],
     [`cat ${"$"}XDG_DATA_HOME/keyr*/login.keyring`, "keyring-files"],
     [`cat ${"$"}XDG_DATA_HOME/k?yrings/login.keyring`, "keyring-files"],
+    ["qs ipc -p /x call askpass show '{}'", "askpass-pane"],
+    ["env A=1 quickshell ipc call askpass dismiss n", "askpass-pane"],
+    ["bash -c 'qs -p /x ipc call askpass show {}'", "askpass-pane"],
   ])("%s is refused as %s", (command, code) => {
     expect(verdict(command.replace("LINK", join(data, "harmless-name")))).toBe(code);
   });
@@ -1003,6 +1049,8 @@ describe("guard", () => {
     `p=${"$"}(date)`,
     "A=1",
     "A=1 <<EOF\nx\nEOF",
+    "qs ipc -p /x call qsm toggle",
+    "qs list --all",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
   });

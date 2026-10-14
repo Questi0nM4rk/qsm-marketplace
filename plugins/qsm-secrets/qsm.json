@@ -26,7 +26,26 @@
         "description": "Store a new key; the value is typed into the vault's own prompt and is never an argument or stdin",
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the key name to store under" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" },
+          { "name": "gui", "type": "boolean", "description": "collect the value in the askpass pane instead of the terminal; the value goes to the backend and never to the caller" }
+        ]
+      },
+      "qsm-secrets askpass": {
+        "noNoun": true,
+        "description": "Ask the person for one answer in the askpass pane and give it to the consumer that asked: sudo -A, ssh and git take the typed text on stdout, decide takes a hook-kit ask request on stdin and answers allow or deny; run through the qsm-askpass-<kind> links the install makes, the consumer's words follow a -- separator",
+        "passthrough": true,
+        "args": [
+          { "name": "kind", "type": "string", "positional": true, "required": true, "description": "secret, sudo, ssh, git or decide" },
+          { "name": "folder", "type": "string", "description": "the rbw folder to write, for the secret kind (default: qsm)" }
+        ]
+      },
+      "qsm-secrets askpass enable": {
+        "description": "Print the fish lines that point SUDO_ASKPASS, SSH_ASKPASS, GIT_ASKPASS or HOOK_KIT_ASKPASS at the installed links; it writes nothing, the person puts them in their own config",
+        "args": [
+          { "name": "sudo", "type": "boolean", "description": "SUDO_ASKPASS, for sudo -A" },
+          { "name": "ssh", "type": "boolean", "description": "SSH_ASKPASS, preferred over the terminal" },
+          { "name": "git", "type": "boolean", "description": "GIT_ASKPASS" },
+          { "name": "decide", "type": "boolean", "description": "HOOK_KIT_ASKPASS, for hook-kit's escalation" }
         ]
       },
       "qsm-secrets has": {
