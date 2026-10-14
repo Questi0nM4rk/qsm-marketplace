@@ -3,6 +3,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
@@ -194,7 +195,7 @@ describe("qsm-memory cli, contract", () => {
   test("a client lists five tools", async () => {
     const box = sandbox();
     const server = spawnServer(["bun", CLI, "mcp"], { env: env(box), cwd: box.work });
-    await server.request(initialize(1));
+    await server.request(initialize(1, LATEST_PROTOCOL_VERSION));
     server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
     const reply = (await server.request({
       jsonrpc: "2.0",

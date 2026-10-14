@@ -3,6 +3,7 @@
 // qsm-memory: the per-machine archive of Claude Code sessions and the short-term notes.
 
 import type { Database } from "bun:sqlite";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { type Handler, runCli } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
@@ -193,7 +194,7 @@ const runDoctor: Handler = () => {
 
 /** The MCP server: a long-running stdio verb, so it carries no data. */
 const runMcp: Handler = async () => {
-  await serveStdio(buildServer());
+  await serveStdio(buildServer(), new StdioServerTransport());
   return ok();
 };
 
