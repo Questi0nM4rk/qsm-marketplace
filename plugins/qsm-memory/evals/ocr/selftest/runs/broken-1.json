@@ -1,0 +1,10 @@
+{
+  "X": {
+    "messages": [
+      { "sender": "ME", "sender_key": "me", "quote": null, "text": "Ne, na stage to pujde, dokud nebude hotové PRJ-1243." },
+      { "sender": "ME", "sender_key": "me", "quote": null, "text": "ok, beru, MR !88 mergnu" },
+      { "sender": "ME", "sender_key": "me", "quote": null, "text": "invented" }
+    ],
+    "decisions": []
+  }
+}

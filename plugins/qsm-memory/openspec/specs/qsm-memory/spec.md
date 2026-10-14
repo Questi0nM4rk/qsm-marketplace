@@ -194,6 +194,27 @@ catch-up preview.
 - **WHEN** three sessions ended this week and one ended last month
 - **THEN** `list --since 7d` prints three lines and the month-old session is absent
 
+### Requirement: The blob store keeps the bytes of images and file snapshots
+
+`qsm-memory blob put <file>` SHALL store the file's bytes at
+`blobs/sha256/<first two hex>/<sha256>` beside the archive (so `QSM_MEMORY_DB` moves both),
+directories 0700 and the file 0600, and print `<sha256>  <path>`. The same bytes a second time
+SHALL store nothing and say `(already stored)`. A stored blob SHALL never change: the write goes
+to a partial file that is renamed into place, so a reader never sees half a blob, and no verb
+deletes a blob. `qsm-memory blob path <sha256>` SHALL print the stored path, fail `missing` when
+there is no such blob, and fail `usage` when the argument is not 64 hex characters. Text read out
+of a blob (an OCR transcription) is derived and never replaces the blob.
+
+#### Scenario: the same screenshot stored twice is one blob
+
+- **WHEN** `blob put a.png` runs twice on the same bytes
+- **THEN** both print the same sha256, the second says `(already stored)`, and one file exists
+
+#### Scenario: an unknown blob is missing
+
+- **WHEN** `blob path <64 hex>` runs and no blob has that sha256
+- **THEN** it exits `missing` and the next step names `qsm-memory blob put <file>`
+
 ### Requirement: Notes are the one thing an agent writes
 
 `qsm-memory note <text>` SHALL write a short-term note for the working directory's project (the

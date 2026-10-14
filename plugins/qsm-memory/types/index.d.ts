@@ -24,6 +24,12 @@ export type Memory = {
     project?: string;
     unsaved?: boolean;
   }): Promise<unknown>;
+  blobPut(options: {
+    file: string;
+  }): Promise<unknown>;
+  blobPath(options: {
+    sha256: string;
+  }): Promise<unknown>;
   note(options: {
     text?: string;
     expires?: number;
