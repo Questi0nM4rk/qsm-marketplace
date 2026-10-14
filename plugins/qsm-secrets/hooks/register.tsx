@@ -103,19 +103,21 @@ function registerGuard(on: On): void {
   });
 }
 
-/** Read and Grep put a file's lines into the tool result as surely as `cat` does. A Grep also walks
- * everything under its path, so a path above a protected directory is refused too. */
+/** Read and Grep put a file's lines into the tool result as surely as `cat` does, and a Glob names
+ * the files of the store. A Grep or a Glob also walks everything under its path, so a path above a
+ * protected directory is refused too. */
 function registerFileGuard(on: On): void {
-  // The shipped types list no Grep (a build without the tool has nothing to guard), so its name is
-  // cast; a build that has the tool routes its calls here.
+  // The shipped types list no Grep or Glob (a build without the tool has nothing to guard), so their
+  // names are cast; a build that has the tool routes its calls here.
   const guarded = [
-    { tool: "Read" as const, ancestors: false },
-    { tool: "Grep" as "Read", ancestors: true },
+    { tool: "Read" as const, ancestors: false, globs: false },
+    { tool: "Grep" as "Read", ancestors: true, globs: false },
+    { tool: "Glob" as "Read", ancestors: true, globs: true },
   ];
-  for (const { tool, ancestors } of guarded) {
+  for (const { tool, ancestors, globs } of guarded) {
     on("tool.call", { tool }, async ($, e, next) => {
-      const input = e as { file_path?: string; path?: string };
-      // A Grep with no path searches the working directory, so that is its path.
+      const input = e as { file_path?: string; path?: string; pattern?: string };
+      // A Grep or a Glob with no path searches the working directory, so that is its path.
       const target =
         input.file_path ?? input.path ?? (ancestors ? await $.session.cwd() : undefined);
       if (target === undefined) {
@@ -124,7 +126,8 @@ function registerFileGuard(on: On): void {
       const home = await $.env.get("HOME");
       const dataHome = await $.env.get("XDG_DATA_HOME");
       const runtimeDir = await $.env.get("XDG_RUNTIME_DIR");
-      const env: PathEnv = { home, dataHome, runtimeDir };
+      const passwordStore = await $.env.get("PASSWORD_STORE_DIR");
+      const env: PathEnv = { home, dataHome, runtimeDir, passwordStore };
       const roots = protectedRoots(env);
       let real: string | undefined;
       try {
@@ -132,7 +135,12 @@ function registerFileGuard(on: On): void {
       } catch {
         // a path that is not there is judged by its spelling
       }
-      const spellings = [target, real].filter((path): path is string => path !== undefined);
+      // A Glob's own pattern may start at a protected directory (`~/.password-store/**`): its part
+      // before the first wildcard is a path too.
+      const lead = globs ? input.pattern?.split(/[*?[{]/)[0] : undefined;
+      const spellings = [target, real, lead].filter(
+        (path): path is string => path !== undefined && path !== "",
+      );
       if (!spellings.some((path) => reaches(path, roots, env, ancestors) !== undefined)) {
         return next(e);
       }

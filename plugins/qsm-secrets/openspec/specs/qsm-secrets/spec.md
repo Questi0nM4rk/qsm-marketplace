@@ -533,11 +533,18 @@ SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`,
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
-`dbus-send` naming `org.freedesktop.secrets`; a reader of the keyring directory or the vault's data
-directory, by the spelling of the path or the file it resolves to; `python -c` or `node -e` naming a
-keyring library; a reader of the rendered config directory; a reader of a credential file; and
-`qsm-secrets get` with descriptor 3 pointed at the output. It SHALL allow `qsm-secrets` itself
+directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`,
+`kwallet-query` and `op`; `busctl`, `gdbus`, `dbus-send`, `dbus-monitor` and `qdbus` when a word names
+the secrets service by bus name or object path (`org.freedesktop.secrets`, `org.freedesktop.Secret`,
+`/org/freedesktop/secrets`) or holds an expansion, because a destination the guard cannot read could
+be that service; a reader of the keyring directory, the vault's data directory or the pass store
+(`~/.password-store` and `$PASSWORD_STORE_DIR`), `gpg` included, by the spelling of the path or the
+file it resolves to; `python -c` or `node -e` naming a keyring library; a reader of the rendered
+config directory; a reader of a credential file; and `qsm-secrets get` with descriptor 3 pointed at
+the output. Every refusal names the `qsm-secrets` verb to use instead. The guard is a denylist of
+doors to the stored credentials: it does not judge an interpreter's script file (`python3 x.py`),
+which is a named gap, not a verdict. A statement with no words (`A=1`) and a redirect with no word
+name nothing and are judged as nothing. It SHALL allow `qsm-secrets` itself
 otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
 allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
 the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
@@ -562,6 +569,14 @@ because the hook sandbox cannot load WebAssembly.
 
 - **WHEN** an agent runs `cd <data dir> && cat keyrings/login.keyring` or `cat <data dir>/keyr*/login.keyring`
 - **THEN** the call is denied as keyring files
+
+#### Scenario: every door to a store is closed
+
+- **WHEN** an agent runs `gopass show x`, `keepassxc-cli show db e`, `kwallet-query -r e w`,
+  `op read op://v/i/f`, `secret-tool search --all service qsm`, `gpg -d ~/.password-store/x.gpg`,
+  or `busctl call <dest> /org/freedesktop/secrets b c`, or a bus tool with `"$DEST"` as its destination
+- **THEN** the call is denied, the reason names the `qsm-secrets` verb to use instead, and
+  `busctl --user list`, `ls ~/.password-store` and `gpg --list-keys` are not denied
 
 #### Scenario: a lookup is not a run
 
@@ -602,17 +617,23 @@ because the hook sandbox cannot load WebAssembly.
 - **THEN** the call is denied and the reason names the verb, its exit code and its stderr, unless the
   command is exactly `qsm-secrets doctor`, which runs
 
-### Requirement: Read and Grep do not open the credential files
+### Requirement: Read, Grep and Glob do not open the credential files
 
-A function hook on `tool.call` for `Read` and `Grep` SHALL deny a path inside the keyring directory,
-the vault's data directory or the rendered config directory, by its spelling or the file it resolves
-to, and a `Grep` whose path holds one of them (a `Grep` with no path is judged by the session's
-working directory), and SHALL answer with the wrapper to use instead.
+A function hook on `tool.call` for `Read`, `Grep` and `Glob` SHALL deny a path inside the keyring
+directory, the vault's data directory, the pass store or the rendered config directory, by its
+spelling or the file it resolves to, and a `Grep` or `Glob` whose path holds one of them (with no
+path, the session's working directory is judged; a `Glob` pattern that starts inside one is judged
+by its part before the first wildcard), and SHALL answer with the wrapper to use instead.
 
 #### Scenario: a file read of the keyring is denied
 
 - **WHEN** an agent reads a file in the keyring directory, or through a link that leads there
 - **THEN** the call is denied and the reason names `qsm-secrets pipe`
+
+#### Scenario: a Glob of the pass store is denied
+
+- **WHEN** an agent globs inside `~/.password-store`, or with a pattern that starts there
+- **THEN** the call is denied, and a Glob of `src/**/*.ts` is not
 
 #### Scenario: an ordinary file is read
 

@@ -212,6 +212,7 @@ const guard: Handler = async () => {
     home: process.env.HOME,
     dataHome: process.env.XDG_DATA_HOME,
     runtimeDir: process.env.XDG_RUNTIME_DIR,
+    passwordStore: process.env.PASSWORD_STORE_DIR,
   });
   return refusal === null ? ok({ denied: false }) : fail("blocked", refusal.reason, refusal);
 };

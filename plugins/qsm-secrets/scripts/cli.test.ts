@@ -913,7 +913,13 @@ describe("guard", () => {
     const result = spawnSync("bun", [CLI, "guard", "--json"], {
       encoding: "utf8",
       input: command,
-      env: { ...process.env, HOME: "/home/guard", XDG_DATA_HOME: data, XDG_RUNTIME_DIR: runtime },
+      env: {
+        ...process.env,
+        HOME: "/home/guard",
+        XDG_DATA_HOME: data,
+        XDG_RUNTIME_DIR: runtime,
+        PASSWORD_STORE_DIR: join(data, "pass"),
+      },
     });
     const body = JSON.parse(result.stdout) as { code: string; data: { code?: string } | null };
     if (body.code === "blocked") {
@@ -924,6 +930,7 @@ describe("guard", () => {
 
   const keyrings = `${"$"}XDG_DATA_HOME/keyrings`;
   const rendered = `${"$"}XDG_RUNTIME_DIR/qsm-secrets/s1/kubeconfig`;
+  const passStore = `${"$"}HOME/.password-store`;
 
   test.each([
     ["rbw get github-token", "vault-reader"],
@@ -939,7 +946,33 @@ describe("guard", () => {
     ["echo $(rbw get x)", "vault-reader"],
     ["bash -c 'echo hi; rbw get x'", "vault-reader"],
     ['sudo bash -c "nice rbw get x"', "vault-reader"],
+    ["gopass show work/token", "vault-reader"],
+    ["keepassxc-cli show db.kdbx entry", "vault-reader"],
+    ["kwallet-query -r entry kdewallet", "vault-reader"],
+    ["op read op://vault/item/field", "vault-reader"],
+    ["secret-tool search --all service qsm", "vault-reader"],
+    ["secret-tool clear service qsm key x", "vault-reader"],
+    ["sudo -u root gopass show x", "vault-reader"],
+    [`gpg -d ${passStore}/work/token.gpg`, "keyring-files"],
+    ["gpg -d ~/.password-store/work/token.gpg", "keyring-files"],
+    [`cat ${"$"}PASSWORD_STORE_DIR/work/token.gpg`, "keyring-files"],
+    [`gpg -d < ${passStore}/work/token.gpg`, "keyring-files"],
+    [`cd ${passStore} && gpg -d work/token.gpg`, "keyring-files"],
     ["busctl --user call org.freedesktop.secrets /a b c", "bus-secrets"],
+    [
+      "busctl --user call org.freedesktop.Secret.Service /org/freedesktop/secrets b c",
+      "bus-secrets",
+    ],
+    ["busctl --user introspect :1.5 /org/freedesktop/secrets/collection/login", "bus-secrets"],
+    [
+      "dbus-send --session --dest=org.freedesktop.secrets /org/freedesktop/secrets x.y",
+      "bus-secrets",
+    ],
+    ["dbus-send --session --dest=org.free''desktop.secrets /a x.y", "bus-secrets"],
+    ["qdbus org.freedesktop.secrets /org/freedesktop/secrets", "bus-secrets"],
+    [`gdbus call -e -d ${"$"}DEST -o /a -m b`, "bus-secrets"],
+    [`d=org.freedesktop.secrets; busctl --user call ${"$"}{d} /a b c`, "bus-secrets"],
+    [`busctl --user call ${"$"}(printf x) /a b c`, "bus-secrets"],
     ["gdbus call -e -d org.freedesktop.secrets -o /a -m b", "bus-secrets"],
     [`cat ${keyrings}/login.keyring`, "keyring-files"],
     [`cat ${keyrings}/../keyrings/login.keyring`, "keyring-files"],
@@ -982,6 +1015,12 @@ describe("guard", () => {
     "which rbw",
     "echo rbw get",
     "busctl --user list",
+    "dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames",
+    "gdbus call -e -d org.freedesktop.Notifications -o /org/freedesktop/Notifications -m org.freedesktop.Notifications.GetCapabilities",
+    "ls ~/.password-store",
+    "pass-git-helper --help",
+    "gpg --list-keys",
+    "echo gopass op",
     `ls ${keyrings}`,
     "python3 -m pytest tests/test_keyring.py",
     `kubectl --kubeconfig ${rendered} get pods`,
@@ -1003,6 +1042,8 @@ describe("guard", () => {
     `p=${"$"}(date)`,
     "A=1",
     "A=1 <<EOF\nx\nEOF",
+    'dir=$(mktemp -d) && git archive HEAD | tar -x -C "$dir"',
+    "out=$(git archive HEAD | tar -t); echo $out",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
   });

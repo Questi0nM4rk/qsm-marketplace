@@ -69,12 +69,12 @@ vault folder; an empty name searches the whole vault by key name.
 
 ## Red flags
 
-- When you are about to run `rbw`, `bw`, `pass` or `secret-tool` (any verb), or talk to the secret
-  service over the bus, use a verb above instead, because the guard refuses these through `sudo`,
+- When you are about to run `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`, `kwallet-query`, `op` or
+  `secret-tool` (any verb), or talk to the secret service over the bus, use a verb above instead, because the guard refuses these through `sudo`,
   `env`, `xargs`, `sh -c` and pipelines, and the refusal is right. `qsm-secrets set` stores,
   `list` and `has` browse.
 - When you are about to `cat` a `.env`, `.pem`, `id_*` key, `.netrc` or `.aws/credentials`, or
-  read or Grep the keyring files, the vault's data directory or a rendered config, stop, because
+  read, Grep or Glob the keyring files, the vault's data directory, the pass store or a rendered config, stop, because
   the value would land in the transcript. Hand a rendered file's path to the command that needs it.
 - When a placeholder sits in single quotes, move it into double quotes, because inside single
   quotes it is never replaced and the guard refuses the command.

@@ -58,7 +58,20 @@ function refuse(code: RefusalCode, command: string, why: string, instead: string
   return { code, command, reason: `[qsm-secrets ${code}] ${why} ${instead}` };
 }
 
-const VAULT_TOOLS: ReadonlySet<string> = new Set(["secret-tool", "rbw", "bw", "pass"]);
+const VAULT_TOOLS: ReadonlySet<string> = new Set([
+  "secret-tool",
+  "rbw",
+  "bw",
+  "pass",
+  "gopass",
+  "keepassxc-cli",
+  "kwallet-query",
+  "op",
+]);
+/** The secrets service by its bus name or its object path, either of which names it to a bus tool. */
+const SECRETS_SERVICE = /org[./]freedesktop[./]secret/i;
+/** A word whose value the shell decides later, so the guard cannot read where it points. */
+const EXPANDS = /[$`]/;
 const BUS_TOOLS: ReadonlySet<string> = new Set([
   "busctl",
   "gdbus",
@@ -263,8 +276,13 @@ function innerStarts(name: string, args: readonly Word[]): number[] {
   return name === "xargs" || name === "command" ? flagged(name, words) : [];
 }
 
-/** A word as the shell would hand it on, with an expansion left as written. */
-function textOf(word: Word): string {
+/** A word as the shell would hand it on, with an expansion left as written. The types say a
+ * redirect always has a word, the processor serializes a missing one as null, and a missing word
+ * names nothing, so it reads as empty text rather than throwing. */
+function textOf(word: Word | null | undefined): string {
+  if (word === null || word === undefined) {
+    return "";
+  }
   return wordToParts(word)
     .map((part) => (part.kind === "literal" ? part.value : part.sourceText))
     .join("");
@@ -358,11 +376,11 @@ function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal 
       `${USE_WRAPPER} To store one, \`qsm-secrets set <key>\`; to browse, \`qsm-secrets list\` or \`qsm-secrets has <key>\`.`,
     );
   }
-  if (BUS_TOOLS.has(name) && texts.some((t) => /org\.freedesktop\.secret/i.test(t))) {
+  if (BUS_TOOLS.has(name) && texts.some((t) => SECRETS_SERVICE.test(t) || EXPANDS.test(t))) {
     return refuse(
       "bus-secrets",
       shown,
-      "this talks to the secret service over the bus, which can return a stored credential.",
+      "this talks over the bus to the secret service, or to a destination the guard cannot read, and the secret service can return a stored credential.",
       `${USE_WRAPPER} To browse, \`qsm-secrets list\`.`,
     );
   }
