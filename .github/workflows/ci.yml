@@ -12,8 +12,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2.2.0
         with:
           bun-version: 1.4.3
       - run: bun install --frozen-lockfile
@@ -31,7 +31,7 @@ jobs:
           pipx install semgrep
           pipx install lizard
           bun add -g @fission-ai/openspec
-          bun add -g oxlint@1.87.0 oxlint-tsgolint@7.0.2004 oxfmt@0.72.0
+          bun add -g oxlint@1.88.0 oxlint-tsgolint@7.0.2004 oxfmt@0.73.0
           echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
