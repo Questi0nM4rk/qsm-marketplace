@@ -114,6 +114,8 @@ function purgeHarnessTurns(db: Database): void {
 export function applySchema(db: Database): void {
   db.run(SCHEMA_SQL);
   purgeHarnessTurns(db);
+  // A skip written before the session gained its first typed prompt; save deletes it now.
+  db.run("DELETE FROM skipped WHERE id IN (SELECT id FROM sessions)");
 }
 
 /** Opens (creating if absent) the database at `path`: owner-only file and

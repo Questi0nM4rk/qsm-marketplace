@@ -77,12 +77,14 @@ export function recentlyClosed(cwd: string, env: Env = process.env): Closed[] {
   );
 }
 
-export function inProgress(cwd: string, env: Env = process.env): Bead[] {
+/** At most `limit` in-progress tasks, each resolved with its epic: a `br show` per task and per
+ * parent, so the list is cut first. */
+export function inProgress(cwd: string, limit: number, env: Env = process.env): Bead[] {
   if (!hasTracker(cwd)) {
     return [];
   }
   const listed = br(["list", "-s", "in_progress", "--json"], cwd, env) as { issues?: Issue[] };
-  return (listed.issues ?? []).flatMap((item) => {
+  return (listed.issues ?? []).slice(0, limit).flatMap((item) => {
     if (item.id === undefined) {
       return [];
     }

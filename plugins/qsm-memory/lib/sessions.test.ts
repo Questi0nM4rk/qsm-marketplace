@@ -66,7 +66,7 @@ describe("show", () => {
 
   test("a window past the end says so", () => {
     expect(show(archive(), "abc-1", { lines: [20, 30] })).toContain(
-      "no turns in 20-30; the session has 2",
+      "no turns in 20-30; the last turn is #2",
     );
   });
 
@@ -97,6 +97,33 @@ describe("show", () => {
 });
 
 describe("list", () => {
+  test("a long list stops at the limit and says how many more", () => {
+    const db = archive();
+    for (let i = 0; i < 23; i++) {
+      db.query("INSERT INTO sessions VALUES (?, '/w', '/w/repo', ?, ?, ?, '/gone', ?, 1)").run(
+        `many-${i}`,
+        `t${i}`,
+        "2026-09-29T00:00:00.000Z",
+        `2026-09-29T00:${String(i).padStart(2, "0")}:00.000Z`,
+        "2026-09-29T00:00:00.000Z",
+      );
+    }
+    const rows = listSessions(db, { now: NOW });
+    const out = formatList(rows).split("\n");
+    expect(rows).toHaveLength(25);
+    expect(out).toHaveLength(21);
+    expect(out.at(-1)).toBe("5 more: --limit 25");
+    expect(formatList(rows, 25).split("\n")).toHaveLength(25);
+  });
+
+  test("a --since nobody can parse is refused, never read as no filter", () => {
+    for (const since of ["last week", "7days", "2w"]) {
+      expect(() => listSessions(archive(), { since, now: NOW })).toThrow(
+        `--since takes Nd or a date (got '${since}')`,
+      );
+    }
+  });
+
   test("list --since 7d prints one line per session of the week", () => {
     const rows = listSessions(archive(), { since: "7d", now: NOW });
     expect(rows.map((r) => r.id)).toEqual(["abc-1"]);

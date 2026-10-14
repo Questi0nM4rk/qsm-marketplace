@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder } from "./fixtures/transcript.ts";
@@ -147,7 +147,7 @@ describe("catch-up", () => {
     utimesSync(path, new Date("2026-09-30T11:00:00Z"), new Date("2026-09-30T11:00:00Z"));
 
     expect(unsavedTranscripts(d, root)).toEqual([path]);
-    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0 });
+    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
   });
 
   test("catch-up stops at twenty and says how many remain", () => {
@@ -160,7 +160,42 @@ describe("catch-up", () => {
       );
     }
 
-    expect(catchUp(d, root)).toEqual({ saved: 20, skipped: 0, remain: 5 });
-    expect(catchUp(d, root)).toEqual({ saved: 5, skipped: 0, remain: 0 });
+    expect(catchUp(d, root)).toEqual({ saved: 20, skipped: 0, remain: 5, failed: [] });
+    expect(catchUp(d, root)).toEqual({ saved: 5, skipped: 0, remain: 0, failed: [] });
+  });
+
+  test("a session skipped before its first prompt is saved once, not on every catch-up", () => {
+    const d = db();
+    const { root, dir } = projects();
+    const path = write(
+      join(dir, "aaa.jsonl"),
+      new TranscriptBuilder({ sessionId: "aaa" }).headless("run it").assistant("done").text(),
+    );
+    const at = (iso: string) => utimesSync(path, new Date(iso), new Date(iso));
+    at("2026-09-30T09:00:00Z");
+    expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 1, remain: 0, failed: [] });
+
+    write(path, new TranscriptBuilder({ sessionId: "aaa" }).human("now a person types").text());
+    at("2026-09-30T10:00:00Z");
+
+    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
+    expect(unsavedTranscripts(d, root)).toEqual([]);
+    expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 0, remain: 0, failed: [] });
+  });
+
+  test("a transcript that vanished is not pending, and one that cannot be read does not stop the rest", () => {
+    const d = db();
+    const { root, dir } = projects();
+    const good = write(join(dir, "good.jsonl"), new TranscriptBuilder().human("a").text());
+    symlinkSync(join(dir, "nowhere.jsonl"), join(dir, "gone.jsonl"));
+    mkdirSync(join(dir, "bad.jsonl"));
+
+    expect(new Set(unsavedTranscripts(d, root))).toEqual(new Set([good, join(dir, "bad.jsonl")]));
+    const r = catchUp(d, root);
+
+    expect([r.saved, r.skipped, r.remain]).toEqual([1, 0, 0]);
+    expect(r.failed).toHaveLength(1);
+    expect(r.failed[0]).toStartWith(`${join(dir, "bad.jsonl")}: `);
+    expect(d.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 1 });
   });
 });

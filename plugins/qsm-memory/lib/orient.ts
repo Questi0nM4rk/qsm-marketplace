@@ -120,7 +120,7 @@ export interface OrientOptions {
 export function orient(db: Database, cwd: string, options: OrientOptions = {}): string {
   const project = projectOf(cwd);
   const sessions = sessionLines(sessionsOf(db, project), cwd, options.env);
-  const beads = inProgress(cwd, options.env).slice(0, BEADS);
+  const beads = inProgress(cwd, BEADS, options.env);
   const head = [
     ...(sessions.length === 0 ? [] : ["Last sessions here:", ...sessions]),
     ...(beads.length === 0 ? [] : ["In progress:", ...beads.map(beadLine)]),

@@ -9,7 +9,7 @@ import { addNote, currentNotes, dropNote, formatNotes, NOTE_DEFAULT_DAYS } from 
 import { projectOf } from "./project.ts";
 import { projectsDir, unsavedTranscripts } from "./save.ts";
 import { formatHits, search } from "./search.ts";
-import { formatList, listSessions, show } from "./sessions.ts";
+import { bounded, formatList, listSessions, show } from "./sessions.ts";
 import { openArchive } from "./store.ts";
 
 // The SDK's own CallToolResult carries an index signature; a plain
@@ -96,17 +96,22 @@ function registerList(server: McpServer): void {
     "list",
     {
       description:
-        "One line per saved session, newest first: date, project, id, turns, title. unsaved lists transcripts on disk the archive lacks.",
-      inputSchema: { since, project, unsaved: z.boolean().optional() },
+        "One line per saved session, newest first: date, project, id, turns, title; at most limit lines (default 20), then 'N more'. unsaved lists transcripts on disk the archive lacks.",
+      inputSchema: {
+        since,
+        project,
+        unsaved: z.boolean().optional(),
+        limit: z.number().int().positive().optional(),
+      },
     },
     (args) =>
       guarded(() => {
         const db = openArchive(process.env);
         if (args.unsaved === true) {
           const paths = unsavedTranscripts(db, projectsDir(process.env));
-          return paths.length === 0 ? "nothing unsaved" : paths.join("\n");
+          return paths.length === 0 ? "nothing unsaved" : bounded(paths, args.limit);
         }
-        return formatList(listSessions(db, args));
+        return formatList(listSessions(db, args), args.limit);
       }),
   );
 }

@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { addNote } from "./notes.ts";
@@ -125,6 +125,34 @@ describe("orient, what a session left behind", () => {
 });
 
 describe("orient, limits", () => {
+  test("only the three tasks it shows are resolved with br show", () => {
+    const { cwd, env } = tracker();
+    const db = archive(cwd, ["one"]);
+    const bin = (env.PATH ?? "").split(":")[0] as string;
+    const log = join(bin, "calls");
+    const items = Array.from({ length: 8 }, (_, i) => `{"id":"x-${i}","title":"t${i}"}`).join(",");
+    writeFileSync(
+      join(bin, "br"),
+      `#!/bin/sh
+echo "$*" >> ${log}
+case "$1 $2 $3" in
+  "list -s in_progress") echo '{"issues":[${items}]}' ;;
+  "list -s closed") echo '{"issues":[]}' ;;
+  *) echo '[{"id":"x","title":"t"}]' ;;
+esac
+`,
+    );
+
+    const block = orient(db, cwd, { env });
+
+    const shows = readFileSync(log, "utf8")
+      .split("\n")
+      .filter((l) => l.startsWith("show"));
+    expect(shows).toEqual(["show x-0 --json", "show x-1 --json", "show x-2 --json"]);
+    expect(block).toContain("x-2");
+    expect(block).not.toContain("x-3");
+  });
+
   test("a long title, many notes: still under the limit, the newest note first", () => {
     const { cwd, env } = tracker();
     const db = archive(
