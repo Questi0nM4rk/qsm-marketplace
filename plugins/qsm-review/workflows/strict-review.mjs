@@ -1,3 +1,4 @@
+/// <reference path="./strict-review.runtime.d.ts" />
 export const meta = {
   name: "strict-review",
   description:
@@ -10,7 +11,8 @@ export const meta = {
     },
     {
       title: "Review",
-      detail: "correctness anchor on the strong model plus lens slots on the small one, capped by the rating",
+      detail:
+        "correctness anchor on the strong model plus lens slots on the small one, capped by the rating",
       model: "opus",
     },
     {
@@ -31,20 +33,67 @@ export const meta = {
 // diff path and a worktree of ".", which reviews nothing and says nothing. The
 // `typeof args === "undefined"` lead is load-bearing: a bare reference throws a
 // ReferenceError when this file is imported without the global bound.
+/**
+ * @typedef {{ file: string, line: number, description: string, evidence: string, reaches: string }} Finding
+ * @typedef {{ refuted: boolean, reason: string }} Verdict
+ * @typedef {{ difficulty: number, category: string, overview: string, lenses: Lens[], isQuestion: boolean, answer: string }} Rating
+ * @typedef {{ title: string, repo: string, platform: string, number: string, headSha: string, baseRef: string, body: string, files: string[], changedLines: Record<string, unknown> | undefined }} Ctx
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} fallback
+ * @returns {string}
+ */
+function text(value, fallback) {
+  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+}
+
+/** @returns {Record<string, unknown>} */
 const ARGS = (() => {
   if (typeof args === "undefined") return {};
-  if (args && typeof args === "object") return args;
+  if (isRecord(args)) return args;
   if (typeof args === "string" && args.trim()) {
     try {
+      /** @type {unknown} */
       const parsed = JSON.parse(args);
-      return parsed && typeof parsed === "object" ? parsed : {};
+      return isRecord(parsed) ? parsed : {};
     } catch {
       return {};
     }
   }
   return {};
 })();
-const CTX = ARGS.ctx && typeof ARGS.ctx === "object" ? ARGS.ctx : {};
+
+/**
+ * @param {unknown} raw
+ * @returns {Ctx}
+ */
+function parseCtx(raw) {
+  const ctx = isRecord(raw) ? raw : {};
+  const files = Array.isArray(ctx.files) ? ctx.files : [];
+  return {
+    title: text(ctx.title, "(no title)"),
+    repo: text(ctx.repo, "(unknown repo)"),
+    platform: text(ctx.platform, ""),
+    number: text(ctx.number, "?"),
+    headSha: text(ctx.headSha, "unknown"),
+    baseRef: text(ctx.baseRef, "the base"),
+    body: text(ctx.body, "(none)"),
+    files: files.map((f) => (isRecord(f) ? text(f.path, "undefined") : text(f, "undefined"))),
+    changedLines: isRecord(ctx.changedLines) ? ctx.changedLines : undefined,
+  };
+}
+
+const CTX = parseCtx(ARGS.ctx);
 const DIFF = typeof ARGS.diffPath === "string" ? ARGS.diffPath : "";
 const TREE = typeof ARGS.worktree === "string" ? ARGS.worktree : ".";
 const QUESTION = typeof ARGS.userMessage === "string" ? ARGS.userMessage.trim() : "";
@@ -66,15 +115,29 @@ const LENSES = {
   architecture: "module boundaries, duplication, dead code, coupling",
   performance: "hot paths, query patterns, allocation, avoidable input and output",
 };
-const LENS_NAMES = Object.keys(LENSES);
+
+/** @typedef {keyof typeof LENSES} Lens */
+
+/**
+ * @param {unknown} value
+ * @returns {value is Lens}
+ */
+function isLens(value) {
+  return typeof value === "string" && Object.hasOwn(LENSES, value);
+}
+
+const LENS_NAMES = Object.keys(LENSES).filter((name) => isLens(name));
 
 // The rating caps how many lens slots run and how many anchors read the whole
 // change. The cap is a table rather than an agent's judgement because it is
 // computable: an over-long pick is truncated, never sent back for another turn.
 // The anchor runs at every rating, so an honest empty pick still costs one
 // reviewer, and a typo fix costs a typo fix's worth of review.
+/** @type {Record<number, number>} */
 const SLOTS = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 5 };
+/** @type {Record<number, number>} */
 const ANCHORS = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 2 };
+/** @type {Record<number, number>} */
 const VOTES = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 2 };
 
 // Every dispatch names its model, because the default is whatever the session
@@ -87,7 +150,9 @@ const VOTES = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 2 };
 // expensive enough to be worth the better reader.
 const RATING_MODEL = "opus";
 const LENS_MODEL = "sonnet";
+/** @type {Record<number, string>} */
 const ANCHOR_MODEL = { 1: "sonnet", 2: "opus", 3: "opus", 4: "opus", 5: "opus" };
+/** @type {Record<number, string>} */
 const CHECK_MODEL = { 1: "sonnet", 2: "sonnet", 3: "opus", 4: "opus", 5: "opus" };
 
 const RATING_SCHEMA = {
@@ -138,17 +203,14 @@ suggestions, no "consider". Write every description in the imperative mood, with
 and no emoji anywhere in it. A finding you cannot support with a line of code is not a finding.`;
 
 function changeBrief() {
-  const files = Array.isArray(CTX.files) ? CTX.files : [];
-  const names = files
-    .slice(0, 60)
-    .map((f) => (typeof f === "string" ? f : f.path))
-    .join(", ");
+  const files = CTX.files;
+  const names = files.slice(0, 60).join(", ");
   const more = files.length > 60 ? ` and ${files.length - 60} more` : "";
-  return `Change under review: ${CTX.title ?? "(no title)"} on ${CTX.repo ?? "(unknown repo)"}, ${
+  return `Change under review: ${CTX.title} on ${CTX.repo}, ${
     CTX.platform === "gitlab" ? "merge request" : "pull request"
-  } ${CTX.number ?? "?"}, head ${CTX.headSha ?? "unknown"} against ${CTX.baseRef ?? "the base"}.
+  } ${CTX.number}, head ${CTX.headSha} against ${CTX.baseRef}.
 Description as the author wrote it:
-${CTX.body ?? "(none)"}
+${CTX.body}
 Files touched (${files.length}): ${names}${more}
 The full diff is the file ${DIFF}. Read it with a shell command. The working tree checked out at
 the reviewed head is ${TREE}: read whole files there when the diff alone cannot answer a question.`;
@@ -206,6 +268,7 @@ Return findings only. Return an empty list when the change is correct: that is t
 for most small changes, and padding it with weak observations makes the review worth less.`;
 }
 
+/** @param {Lens} lens */
 function lensPrompt(lens) {
   return `You review this change through one lens: ${lens}. ${LENSES[lens]}.
 
@@ -219,6 +282,7 @@ line, the evidence in the code, and the path that reaches it. Put every finding 
 line the diff itself changed. Return an empty list when this lens has nothing on this change.`;
 }
 
+/** @param {Finding} f */
 function refutePrompt(f) {
   return `Refute this review finding, or fail to.
 
@@ -239,6 +303,10 @@ sure: a wrong finding costs the author more than a missed one costs this review.
 // Two reviewers reading the same diff land on the same line. Keying on file,
 // line and the first words of the description collapses those without an agent
 // turn, and keeps two genuinely different findings on one line apart.
+/**
+ * @param {Finding[]} raw
+ * @returns {Finding[]}
+ */
 function dedupe(raw) {
   const seen = new Set();
   const out = [];
@@ -257,8 +325,12 @@ function dedupe(raw) {
 // and zero votes and then reports approve. A rating that arrived outside 1-5, or
 // not as a number at all, is clamped into the ladder rather than falling through
 // it.
+/**
+ * @param {number} n
+ * @returns {number}
+ */
 function clampDifficulty(n) {
-  const rounded = Math.round(Number(n));
+  const rounded = Math.round(n);
   if (!Number.isFinite(rounded)) return 3;
   return Math.min(5, Math.max(1, rounded));
 }
@@ -268,13 +340,15 @@ function clampDifficulty(n) {
 // the diff changed, per file, so a finding outside them is folded into the body
 // where it stays visible instead of riding inline and taking everything with it.
 // No map passed means the caller cannot tell us, so every finding rides inline.
+/** @param {Finding} f */
 function inDiff(f) {
   const map = CTX.changedLines;
-  if (!map || typeof map !== "object") return true;
+  if (map === undefined) return true;
   const lines = map[f.file];
   return Array.isArray(lines) && lines.includes(f.line);
 }
 
+/** @param {Finding} f */
 function findingText(f) {
   return `${f.description}\n\n${f.evidence}\n\nReached by: ${f.reaches}`;
 }
@@ -283,9 +357,66 @@ function findingText(f) {
 // refuted one. It keeps its place with the prefix that says what the reader has
 // to do, because dropping it silently is the failure this pass was built to
 // prevent, and asserting it as fact is worse still.
+/**
+ * @param {Finding} f
+ * @returns {Finding}
+ */
 function unverified(f) {
   if (f.description.startsWith("Verify:")) return f;
   return { ...f, description: `Verify: ${f.description}` };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Finding}
+ */
+function isFinding(value) {
+  return (
+    isRecord(value) &&
+    typeof value.file === "string" &&
+    typeof value.line === "number" &&
+    typeof value.description === "string" &&
+    typeof value.evidence === "string" &&
+    typeof value.reaches === "string"
+  );
+}
+
+// An agent that died returns nothing, which is not the same as an agent that
+// found nothing: null means no answer, an empty list means a clean read.
+
+/**
+ * @param {unknown} value
+ * @returns {Rating | null}
+ */
+function parseRating(value) {
+  if (!isRecord(value)) return null;
+  return {
+    difficulty: Number(value.difficulty),
+    category: text(value.category, "undefined"),
+    overview: text(value.overview, "undefined"),
+    lenses: Array.isArray(value.lenses) ? value.lenses.filter(isLens) : [],
+    isQuestion: Boolean(value.is_question),
+    answer: text(value.answer, ""),
+  };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Finding[] | null}
+ */
+function parseFindings(value) {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value) || !Array.isArray(value.findings)) return [];
+  return value.findings.filter(isFinding);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Verdict | null}
+ */
+function parseVerdict(value) {
+  if (!isRecord(value)) return null;
+  return { refuted: Boolean(value.refuted), reason: text(value.reason, "") };
 }
 
 async function run() {
@@ -298,48 +429,58 @@ async function run() {
   }
 
   phase("Rate");
-  const rating = await agent(ratingPrompt(), {
-    schema: RATING_SCHEMA,
-    model: RATING_MODEL,
-    phase: "Rate",
-  });
-  if (!rating) {
+  const rating = parseRating(
+    await agent(ratingPrompt(), {
+      schema: RATING_SCHEMA,
+      model: RATING_MODEL,
+      phase: "Rate",
+    }),
+  );
+  if (rating === null) {
     return { mode: "aborted", verdict: "aborted", reason: "the rating agent returned nothing" };
   }
-  if (rating.is_question && QUESTION) {
-    return { mode: "answer", answer: rating.answer ?? "", overview: rating.overview };
+  if (rating.isQuestion && QUESTION !== "") {
+    return { mode: "answer", answer: rating.answer, overview: rating.overview };
   }
 
   const difficulty = clampDifficulty(rating.difficulty);
   if (difficulty !== rating.difficulty) {
     log(`rating ${JSON.stringify(rating.difficulty)} is outside 1-5: reviewing at ${difficulty}`);
   }
-  const pickedRaw = Array.isArray(rating.lenses) ? rating.lenses : [];
-  const picked = pickedRaw.filter((l) => l !== "correctness" && LENS_NAMES.includes(l));
+  const picked = rating.lenses.filter((l) => l !== "correctness");
   const cap = SLOTS[difficulty];
   const slots = picked.slice(0, cap);
   if (picked.length > cap) {
-    log(`rating ${difficulty} caps the pick at ${cap}: ${picked.slice(cap).join(", ")} not reviewed`);
+    log(
+      `rating ${difficulty} caps the pick at ${cap}: ${picked.slice(cap).join(", ")} not reviewed`,
+    );
   }
 
   phase("Review");
   const anchorCount = ANCHORS[difficulty];
   const anchorModel = ANCHOR_MODEL[difficulty];
-  const anchors = Array.from({ length: anchorCount }, (_, i) => () =>
-    agent(anchorPrompt(), {
-      schema: FINDINGS_SCHEMA,
-      model: anchorModel,
-      phase: "Review",
-      label: anchorCount > 1 ? `anchor ${i + 1}` : "anchor",
-    }),
+  const anchors = Array.from(
+    { length: anchorCount },
+    (_, i) => async () =>
+      parseFindings(
+        await agent(anchorPrompt(), {
+          schema: FINDINGS_SCHEMA,
+          model: anchorModel,
+          phase: "Review",
+          label: anchorCount > 1 ? `anchor ${i + 1}` : "anchor",
+        }),
+      ),
   );
-  const lensRuns = slots.map((lens) => () =>
-    agent(lensPrompt(lens), {
-      schema: FINDINGS_SCHEMA,
-      model: LENS_MODEL,
-      phase: "Review",
-      label: lens,
-    }),
+  const lensRuns = slots.map(
+    (lens) => async () =>
+      parseFindings(
+        await agent(lensPrompt(lens), {
+          schema: FINDINGS_SCHEMA,
+          model: LENS_MODEL,
+          phase: "Review",
+          label: lens,
+        }),
+      ),
   );
 
   const results = await parallel([...anchors, ...lensRuns]);
@@ -358,7 +499,7 @@ async function run() {
     log(`lens slot(s) returned nothing: ${skippedLenses.join(", ")} not reviewed`);
   }
 
-  const raw = results.filter(Boolean).flatMap((r) => (Array.isArray(r.findings) ? r.findings : []));
+  const raw = results.flatMap((r) => r ?? []);
   const candidates = dedupe(raw);
   log(
     `${raw.length} raw finding(s) from ${anchorCount} anchor(s) and ${slots.length} lens slot(s), ${candidates.length} after dedup`,
@@ -368,17 +509,22 @@ async function run() {
   const votes = VOTES[difficulty];
   const checkModel = CHECK_MODEL[difficulty];
   const checked = await parallel(
-    candidates.map((f) => () =>
-      parallel(
-        Array.from({ length: votes }, () => () =>
-          agent(refutePrompt(f), {
-            schema: VERDICT_SCHEMA,
-            model: checkModel,
-            phase: "Check",
-            label: `${f.file}:${f.line}`,
-          }),
-        ),
-      ).then((vs) => vs.filter(Boolean)),
+    candidates.map(
+      (f) => () =>
+        parallel(
+          Array.from(
+            { length: votes },
+            () => async () =>
+              parseVerdict(
+                await agent(refutePrompt(f), {
+                  schema: VERDICT_SCHEMA,
+                  model: checkModel,
+                  phase: "Check",
+                  label: `${f.file}:${f.line}`,
+                }),
+              ),
+          ),
+        ).then((vs) => vs.filter((v) => v !== null)),
     ),
   );
 
@@ -386,7 +532,7 @@ async function run() {
   const refuted = [];
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
-    const cast = Array.isArray(checked[i]) ? checked[i] : [];
+    const cast = checked[i] ?? [];
     const killers = cast.filter((v) => v.refuted);
     // One refutation is enough at every rating. The check pass exists to keep a
     // plausible-but-wrong finding off the author's screen, and a finding nobody
@@ -410,7 +556,9 @@ async function run() {
 
   const verdict = findings.length === 0 ? "approve" : "request-changes";
   const header =
-    verdict === "approve" ? "No findings." : `${findings.length} finding(s), each a required change.`;
+    verdict === "approve"
+      ? "No findings."
+      : `${findings.length} finding(s), each a required change.`;
   const tail = offDiff.length
     ? `\n\n## Outside the diff\n\n${offDiff
         .map((f) => `- ${f.file}:${f.line} - ${findingText(f)}`)

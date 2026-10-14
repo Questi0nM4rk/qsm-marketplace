@@ -79,9 +79,20 @@ ${source}
 }`;
 const wrappedPath = join(sandbox, "flow.mjs");
 writeFileSync(wrappedPath, wrapped, "utf8");
-const loaded = (await import(pathToFileURL(wrappedPath).href)) as {
-  readonly reviewRun: (inj: Injection) => Promise<Result>;
-};
+const mod: unknown = await import(pathToFileURL(wrappedPath).href);
+
+function hasReviewRun(
+  value: unknown,
+): value is { readonly reviewRun: (inj: Injection) => Promise<Result> } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "reviewRun" in value &&
+    typeof value.reviewRun === "function"
+  );
+}
+if (!hasReviewRun(mod)) throw new Error("the wrapped workflow exports no reviewRun function");
+const loaded = mod;
 
 const CTX = {
   platform: "github",
