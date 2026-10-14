@@ -149,6 +149,10 @@ function dependencyStep(pluginRoot: string): Step | null {
     const detail = `bun install failed in ${pluginRoot}: ${lastLine(done.stderr)}; run \`bun install\` in the plugin and commit its bun.lock`;
     return { name, status: "error", detail };
   }
+  // bun prints "(no changes)" when node_modules already matched the lockfile.
+  if (done.stdout.includes("(no changes)")) {
+    return { name, status: "already", detail: "node_modules matches bun.lock" };
+  }
   return { name, status: "installed", detail: "ran bun install --frozen-lockfile" };
 }
 
