@@ -65,7 +65,8 @@ export const bunActivationReader: ActivationReader = (activation) => {
     stdio: ["ignore", "pipe", "pipe"],
   });
   try {
-    return (JSON.parse(r.stdout) as { data: ActivationReport }).data;
+    const envelope = JSON.parse(r.stdout) as { data: ActivationReport | null; message: string };
+    return envelope.data ?? envelope.message;
   } catch {
     const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
     return `status exited ${r.status} and printed no envelope: ${last}`;

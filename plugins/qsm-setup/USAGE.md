@@ -19,13 +19,20 @@ Exit codes: 0 done, 1 a plugin failed or doctor found a FAIL (or `relink --check
 `rules/git.md` and `output-styles/qsm.md` into `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and selects the
 `qsm` output style. In every file the generated text sits between a `<!-- qsm-setup-begin: ... -->`
 and a `<!-- qsm-setup-end: ... -->` line: qsm-setup owns that area and rewrites it; text outside it is
-yours. The output style keeps its frontmatter first, above the area.
+yours. The output style keeps its frontmatter first, above the area, and the frontmatter is qsm's
+too: an edit to it is replaced, and the result says `replaced the frontmatter`.
 
 `--instructions` applies to every file. `replace` rewrites only the marked area and keeps every byte
-outside it. `overwrite` rewrites the whole file. `skip` leaves every file alone. A file without
-markers that a past activation wrote (or that equals the source) is replaced by the area; any other
-text in it is kept above the area, and the result says `kept your text`. Broken markers are an
-error naming the file, and nothing is written.
+outside it. `overwrite` rewrites the whole file. `skip` leaves every file, `settings.json` and the
+history of the Claude home alone. A file without markers that any past activation wrote (or that
+equals the source) is replaced by the area; any other text in it, its own frontmatter included, is
+kept above the area, and the result says `kept your text`. If that text is an old generated copy, it
+now repeats the area: delete it.
+
+A marker line may be indented, and text after its `-->` stays. A line that looks like a marker
+inside a code fence in your own text counts as one: keep such lines out of fences. Broken markers
+are an error naming the file, nothing is written, and `doctor` shows the same error instead of
+`differs`.
 
 `activate` removes the block qsm-essentials wrote before. First it makes the Claude home a local
 git repository (never a remote), completes its `.gitignore`, and commits what is uncommitted as

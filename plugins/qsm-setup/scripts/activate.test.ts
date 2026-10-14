@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { YAML } from "bun";
 import { sandboxDir, writeIn } from "../../../lib/fixtures/sandbox.ts";
+import { bunActivationReader } from "../lib/run-installers.ts";
 import { activation, instructionsStep } from "./activate.ts";
 
 /** The activation's one step is the whole result. */
@@ -196,10 +197,12 @@ describe("every generated file is one marked area qsm-setup owns", () => {
       `${front}Answer in Czech.\n\n${style.slice(front.length)}\nSign off with my name.\n`,
     );
   });
+});
 
+describe("a file without markers", () => {
   test("an old whole-file install, committed by a past activation or equal to the source, becomes the area alone", async () => {
     const { home, claudeHome } = sandbox();
-    const env = context(home, claudeHome).env;
+    const { env } = context(home, claudeHome);
     const inHome = (...args: string[]) => spawnSync("git", args, { cwd: claudeHome, env });
     inHome("init", "--quiet");
     writeIn(claudeHome, "rules/git.md", "# Git rule\n\nan older generated version\n");
@@ -230,7 +233,9 @@ describe("every generated file is one marked area qsm-setup owns", () => {
       "kept your text above the qsm-setup area in rules/implementation.md",
     );
   });
+});
 
+describe("a file with older or broken markers", () => {
   test.each([
     ["a begin without an end", "<!-- qsm-setup-begin -->\nhalf\n", "1 begin and 0 end"],
     [
@@ -284,7 +289,130 @@ describe("every generated file is one marked area qsm-setup owns", () => {
     expect(text).not.toContain("qsm-essentials-begin");
     expect(text).toStartWith("# mine\n\n<!-- qsm-setup-begin");
   });
+});
 
+const front = (text: string) => /^---\r?\n[\s\S]*?\r?\n---\r?\n/.exec(text)?.[0] ?? "";
+
+describe("the person's own text and the generated area meet at their edges", () => {
+  test("an unmarked style with the person's own frontmatter is kept whole, frontmatter included", async () => {
+    const { home, claudeHome } = sandbox();
+    const mine = "---\ndescription: MY OWN STYLE\n---\nAnswer in Czech.\n";
+    writeIn(claudeHome, "output-styles/qsm.md", mine);
+
+    const result = await install(context(home, claudeHome));
+
+    const text = read(claudeHome, "output-styles/qsm.md");
+    expect(text).toStartWith(`${mine}\n<!-- qsm-setup-begin`);
+    expect(text.match(/^---$/gm)).toHaveLength(2);
+    expect(result.detail).toContain(
+      "kept your text above the qsm-setup area in output-styles/qsm.md",
+    );
+  });
+
+  test("in a marked style the frontmatter is qsm's: the marker says so, an edit is replaced and the result names it", async () => {
+    const { home, claudeHome } = sandbox();
+    await install(context(home, claudeHome));
+    const style = read(claudeHome, "output-styles/qsm.md");
+    expect(style).toMatch(/qsm-setup-begin:[^\n]*frontmatter/);
+    writeIn(
+      claudeHome,
+      "output-styles/qsm.md",
+      style.replace("\n---\n", "\nkeep-coding-instructions: true\n---\n"),
+    );
+
+    const result = await install(context(home, claudeHome));
+
+    expect(read(claudeHome, "output-styles/qsm.md")).toBe(style);
+    expect(result.detail).toContain("replaced the frontmatter of output-styles/qsm.md");
+  });
+
+  test("a style written with CRLF line endings ends with one frontmatter and one area", async () => {
+    const { home, claudeHome } = sandbox();
+    await install(context(home, claudeHome));
+    const style = read(claudeHome, "output-styles/qsm.md");
+    writeIn(claudeHome, "output-styles/qsm.md", style.replace(/\n/g, "\r\n"));
+
+    await install(context(home, claudeHome));
+
+    const text = read(claudeHome, "output-styles/qsm.md");
+    expect(text.match(/^---\r?$/gm)).toHaveLength(2);
+    expect(text.match(/^name: qsm/gm)).toHaveLength(1);
+    expect(text.match(/qsm-setup-begin/g)).toHaveLength(1);
+    expect(front(text)).toBe(front(style));
+  });
+});
+
+describe("line endings and marker shape", () => {
+  test("a CRLF file keeps its text below the area with no extra blank line, and is stable", async () => {
+    const { home, claudeHome } = sandbox();
+    await install(context(home, claudeHome));
+    const rule = read(claudeHome, "rules/git.md");
+    writeIn(
+      claudeHome,
+      "rules/git.md",
+      `above\r\n\r\n${rule.replace(/\n/g, "\r\n")}\r\nmine below\r\n`,
+    );
+
+    await install(context(home, claudeHome));
+    const first = read(claudeHome, "rules/git.md");
+    const again = await install(context(home, claudeHome));
+
+    expect(first).toBe(`above\r\n\r\n${rule}\r\nmine below\r\n`);
+    expect(again.status).toBe("already");
+  });
+
+  test("an indented marker line, or text after the end marker, is still a marker and the text stays", async () => {
+    const { home, claudeHome } = sandbox();
+    writeIn(
+      claudeHome,
+      "rules/git.md",
+      "mine\n  <!-- qsm-setup-begin -->\nold\n\t<!-- qsm-setup-end --> and more\nbelow\n",
+    );
+
+    await install(context(home, claudeHome));
+
+    const text = read(claudeHome, "rules/git.md");
+    expect(text).toStartWith("mine\n<!-- qsm-setup-begin: generated");
+    expect(text.match(/qsm-setup-begin/g)).toHaveLength(1);
+    expect(text).not.toContain("\nold\n");
+    expect(text).toEndWith("-->\n and more\nbelow\n");
+  });
+});
+
+describe("an old generated file the person kept", () => {
+  test("a file equal to any earlier qsm-setup activate commit, not only the newest, becomes the area alone", async () => {
+    const { home, claudeHome } = sandbox();
+    const { env } = context(home, claudeHome);
+    const inHome = (...args: string[]) => spawnSync("git", args, { cwd: claudeHome, env });
+    inHome("init", "--quiet");
+    const commitVersion = (content: string) => {
+      writeIn(claudeHome, "rules/git.md", content);
+      inHome("add", "-A");
+      inHome("commit", "--quiet", "-m", "qsm-setup activate: rules/git.md");
+    };
+    commitVersion("# Git rule\n\nthe first generated version\n");
+    commitVersion("# Git rule\n\nthe second generated version\n");
+    writeIn(claudeHome, "rules/git.md", "# Git rule\n\nthe first generated version\n");
+
+    const result = await install(context(home, claudeHome));
+
+    const text = read(claudeHome, "rules/git.md");
+    expect(text).toStartWith("<!-- qsm-setup-begin");
+    expect(text).not.toContain("generated version");
+    expect(result.detail).not.toContain("kept your text");
+  });
+
+  test("a kept text that may be an old generated copy is named as one that now repeats the area", async () => {
+    const { home, claudeHome } = sandbox();
+    writeIn(claudeHome, "rules/git.md", "# Git rule\n\na lightly edited old copy\n");
+
+    const result = await install(context(home, claudeHome));
+
+    expect(result.detail).toContain("old generated copy");
+  });
+});
+
+describe("overwrite, skip and a broken marker seen by doctor", () => {
   test("overwrite leaves only the area, and the style its frontmatter and the area", async () => {
     const { home, claudeHome } = sandbox();
     writeIn(claudeHome, "CLAUDE.md", "# mine\n");
@@ -298,14 +426,38 @@ describe("every generated file is one marked area qsm-setup owns", () => {
     );
   });
 
-  test("skip leaves every file alone", async () => {
+  test("skip leaves the Claude home alone: no repository, no ignore file, no commit, no file", async () => {
     const { home, claudeHome } = sandbox();
     writeIn(claudeHome, "CLAUDE.md", "# mine\n");
 
     const result = await install(context(home, claudeHome, "skip"));
 
+    expect(result.status).toBe("skipped");
+    expect(result.steps).toMatchObject([{ name: "instructions", status: "skipped" }]);
     expect(read(claudeHome, "CLAUDE.md")).toBe("# mine\n");
     expect(existsSync(join(claudeHome, "rules/context.md"))).toBe(false);
-    expect(result.steps?.[1]).toMatchObject({ name: "instructions", status: "skipped" });
+    expect(existsSync(join(claudeHome, ".git"))).toBe(false);
+    expect(existsSync(join(claudeHome, ".gitignore"))).toBe(false);
+  });
+
+  test("doctor's reader gets the broken-marker cause, not a bare 'differs'", () => {
+    const { claudeHome } = sandbox();
+    writeIn(claudeHome, "rules/implementation.md", "x\n");
+    writeIn(claudeHome, "rules/git.md", "<!-- qsm-setup-begin -->\nhalf\n");
+    const was = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = claudeHome;
+    try {
+      const report = bunActivationReader(resolve(import.meta.dir, "activate.ts"));
+
+      expect(typeof report).toBe("string");
+      expect(report).toContain("broken qsm-setup markers");
+      expect(report).toContain(join(claudeHome, "rules/git.md"));
+    } finally {
+      if (was === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = was;
+      }
+    }
   });
 });
