@@ -40,8 +40,8 @@ Run the verb the user named, read the per-plugin lines, report them.
    activation writes into the Claude home. Doctor shows which plugins are activated.
    - qsm-setup: `qsm-setup activate qsm-setup -- --instructions <replace|overwrite|skip>`.
      Replace is the default: the plugin is the source of the instructions, and the activation
-     rewrites only its own marked block, keeping everything outside the markers, where text
-     specific to this device lives. Overwrite rewrites the whole file and runs only when the person
+     rewrites only its own marked area in every file it writes (CLAUDE.md, the rules, the output
+     style), keeping everything outside the markers, where text specific to this device lives. Overwrite rewrites the whole file and runs only when the person
      asks for it.
    - qsm-memory, when installed: "Use the qsm session archive as the one memory? Claude Code's own
      memory is then turned off (`autoMemoryEnabled: false`) and its transcripts are deleted a week
