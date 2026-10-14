@@ -146,8 +146,17 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     expect(text).toHaveLength(4);
     expect(text.at(-1)).toBe("1 more: --limit 4");
     const json = JSON.parse(run(box, ["list", "--limit", "3", "--json"]).stdout);
-    expect(json.data).toHaveLength(3);
+    expect(json.data.rows).toHaveLength(3);
+    expect(json.data.more).toBe(1);
     expect(run(box, ["list", "--limit", "0"]).exit).toBe(2);
+    expect(run(box, ["list", "--limit", "2.5"]).exit).toBe(2);
+  });
+
+  test("--log stamps only save: another verb's usage error stays plain", () => {
+    const box = sandbox();
+    const out = run(box, ["search", "--log", "x"]).stderr;
+    expect(out).toContain("unknown flag --log");
+    expect(out).not.toMatch(/^\d{4}-\d\d-\d\dT/);
   });
 
   test("an unparseable --since is usage, not the whole archive", () => {

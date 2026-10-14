@@ -108,8 +108,8 @@ const runSave: Handler = (call) => {
 
 const runSearch: Handler = (call) => {
   const limit = num(call.args.limit);
-  if (limit !== undefined && limit <= 0) {
-    return fail("usage", `--limit must be a positive number (got '${limit}')`);
+  if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
+    return fail("usage", `--limit must be a positive whole number (got '${limit}')`);
   }
   const hits = search(openArchive(env()), call.args.query as string, {
     ...(limit === undefined ? {} : { limit }),
@@ -133,14 +133,14 @@ const runShow: Handler = (call) => {
 
 const runList: Handler = (call) => {
   const limit = num(call.args.limit) ?? LIST_LIMIT;
-  if (limit <= 0) {
-    return fail("usage", `--limit must be a positive number (got '${limit}')`);
+  if (!Number.isInteger(limit) || limit <= 0) {
+    return fail("usage", `--limit must be a positive whole number (got '${limit}')`);
   }
   const db = openArchive(env());
   if (call.args.unsaved === true) {
     const paths = unsavedTranscripts(db, projectsDir(env()));
     return ok(
-      paths.slice(0, limit),
+      { rows: paths.slice(0, limit), more: Math.max(0, paths.length - limit) },
       paths.length === 0 ? "nothing unsaved" : bounded(paths, limit),
     );
   }
@@ -148,7 +148,10 @@ const runList: Handler = (call) => {
     ...(str(call.args.since) === undefined ? {} : { since: str(call.args.since) as string }),
     ...(str(call.args.project) === undefined ? {} : { project: str(call.args.project) as string }),
   });
-  return ok(rows.slice(0, limit), formatList(rows, limit));
+  return ok(
+    { rows: rows.slice(0, limit), more: Math.max(0, rows.length - limit) },
+    formatList(rows, limit),
+  );
 };
 
 const runNote: Handler = (call) => {
@@ -240,7 +243,7 @@ if (import.meta.main) {
         doctor: runDoctor,
         mcp: runMcp,
       }),
-      process.argv.includes("--log") ? { io: stamped() } : {},
+      process.argv[2] === "save" && process.argv.includes("--log") ? { io: stamped() } : {},
     ),
   );
 }

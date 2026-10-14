@@ -183,6 +183,23 @@ describe("catch-up", () => {
     expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 0, remain: 0, failed: [] });
   });
 
+  test("transcripts that always fail do not use up the catch-up budget", () => {
+    const d = db();
+    const { root, dir } = projects();
+    for (let i = 0; i < 2; i += 1) {
+      mkdirSync(join(dir, `a${i}.jsonl`));
+      utimesSync(join(dir, `a${i}.jsonl`), new Date("2020-01-01"), new Date("2020-01-01"));
+    }
+    for (let i = 0; i < 4; i += 1) {
+      write(join(dir, `z${i}.jsonl`), new TranscriptBuilder().human(`n${i}`).text());
+    }
+
+    const r = catchUp(d, root, 2);
+
+    expect([r.saved, r.skipped, r.failed.length]).toEqual([2, 0, 2]);
+    expect(r.remain).toBe(2);
+  });
+
   test("a transcript that vanished is not pending, and one that cannot be read does not stop the rest", () => {
     const d = db();
     const { root, dir } = projects();

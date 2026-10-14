@@ -193,11 +193,17 @@ const CATCH_UP_MAX = 20;
  * named in `failed` and the rest still save; it stays unsaved for the next run. */
 export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): CatchUpResult {
   const pending = unsavedTranscripts(db, projects);
-  const batch = pending.slice(0, max);
   let saved = 0;
   let skipped = 0;
+  let tried = 0;
   const failed: string[] = [];
-  for (const path of batch) {
+  // Only saved and skipped files use up the budget, so a file that always fails (it sorts first,
+  // being old) cannot starve the new ones; `max * 2` attempts is the hard stop.
+  for (const path of pending) {
+    if (saved + skipped >= max || tried >= max * 2) {
+      break;
+    }
+    tried += 1;
     try {
       const r = saveTranscript(db, path);
       if (r.status === "saved") {
@@ -209,5 +215,5 @@ export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): Cat
       failed.push(`${path}: ${(error as Error).message}`);
     }
   }
-  return { saved, skipped, remain: pending.length - batch.length, failed };
+  return { saved, skipped, remain: pending.length - tried, failed };
 }

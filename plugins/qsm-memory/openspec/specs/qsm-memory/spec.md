@@ -50,7 +50,8 @@ recorded with its mtime so `list --unsaved` and `doctor` do not count it again u
 changes; saving the session once it has a human turn SHALL delete that record, and opening an
 archive SHALL delete a record whose session is already saved. The title SHALL be the last `ai-title` record's `aiTitle`, else the first human turn cut to
 80 characters. The project SHALL be the main checkout root of `cwd` (the parent of
-`git rev-parse --git-common-dir`), or `cwd` itself outside git.
+`git rev-parse --git-common-dir`, run with `LC_ALL=C` so the refusals it reads are English in any
+locale), or `cwd` itself outside git.
 
 #### Scenario: a transcript saves as text and nothing else
 
@@ -92,7 +93,9 @@ archive SHALL delete a record whose session is already saved. The title SHALL be
 `qsm-memory save --catch-up` SHALL scan Claude Code's main transcripts (`$CLAUDE_CONFIG_DIR/
 projects/<dir>/<session-id>.jsonl`, default `~/.claude/projects`, never `subagents/`), save every
 one the archive lacks or whose file is newer than its saved-at or its skip, at most twenty per
-run, and report how many were saved, how many skipped, how many failed and how many remain. A
+run, and report how many were saved, how many skipped, how many failed and how many remain. Only
+saved and skipped files SHALL count against the twenty, so a file that always fails cannot starve
+the newer ones; the run gives up after forty attempts. A
 transcript that vanishes during the scan is not pending, and one that cannot be read or saved
 SHALL be named in the outcome (`partial`, one warning each, exit 0) while the others still save;
 it stays unsaved for the next run. `qsm-memory list
@@ -122,6 +125,11 @@ JSON SHALL be saved without that line, never refused.
   runs
 - **THEN** it answers `saved 2, 1 failed, 0 remain`, the code is `partial`, a warning names the
   unreadable file, and the other two are in the archive
+
+#### Scenario: files that always fail do not starve the new ones
+
+- **WHEN** two unreadable transcripts sort before four saveable ones and the limit is two
+- **THEN** two are saved, the two failures are named, and two remain
 
 #### Scenario: catch-up stops at twenty and says how many remain
 
@@ -225,7 +233,9 @@ matches one session SHALL be accepted.
 `<date> <project> <session-id> <turns> <title>`. `--since <Nd|date>` SHALL narrow by ended-at,
 `--project <path>` by project (any directory of it, a worktree included), `--unsaved` is the
 catch-up preview. At most `--limit` lines are printed (default 20); when there are more, the last
-line is `<n> more: --limit <total>`. The MCP `list` tool takes the same `limit`.
+line is `<n> more: --limit <total>`. `--limit` SHALL be a positive whole number, else a usage
+error. With `--json` the data is `{ rows, more }`, so a reader of the data also learns how many
+were left out. The MCP `list` tool takes the same `limit`.
 
 #### Scenario: a long list stops at the limit and says how many more
 
@@ -346,7 +356,7 @@ session, and the first after a `/clear` or a `session.compact`, SHALL run `orien
 and attach its text as hidden `context` on `prompt.submit`, never on a `classic.*` event,
 `prompt.section` or `prompt.compose`. `save --detach` SHALL start the same save in a detached
 `qsm-memory` process and return at once, the child's outcome appended to `save.log` beside the
-archive, every line led by an ISO timestamp (`save --log`), so the 1.5 s the engine gives the session-end chain covers only the start. No hook SHALL
+archive, every line led by an ISO timestamp (`save --log`, which stamps no other verb), so the 1.5 s the engine gives the session-end chain covers only the start. No hook SHALL
 block the event: any failure SHALL be toasted as `qsm-memory ERROR: <event>: <reason>` and the
 event goes on; a failed save leaves the transcript for the next start.
 
