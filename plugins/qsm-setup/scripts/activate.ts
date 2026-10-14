@@ -14,6 +14,7 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
+import { isRecord } from "../lib/json.ts";
 
 const NAME = "instructions";
 const SRC = resolve(import.meta.dir, "../instructions");
@@ -28,7 +29,12 @@ function claudeHome(env: ActivationContext["env"]): string {
   return env.CLAUDE_CONFIG_DIR ?? resolve(env.HOME ?? homedir(), ".claude");
 }
 
-export type InstructionsChoice = "replace" | "overwrite" | "skip";
+const INSTRUCTIONS_CHOICES = ["replace", "overwrite", "skip"] as const;
+export type InstructionsChoice = (typeof INSTRUCTIONS_CHOICES)[number];
+
+function isInstructionsChoice(s: string | undefined): s is InstructionsChoice {
+  return INSTRUCTIONS_CHOICES.some((c) => c === s);
+}
 
 /** CLAUDE.md without the older qsm-essentials block, or unchanged when it has none. */
 function withoutOldBlock(text: string): string {
@@ -67,7 +73,11 @@ export function mergeBlock(
 
 /** settings.json with outputStyle set. Everything else untouched. */
 export function selectStyle(existing: string | null): string {
-  const settings: Record<string, unknown> = existing ? JSON.parse(existing) : {};
+  const parsed: unknown = existing !== null && existing !== "" ? JSON.parse(existing) : {};
+  if (!isRecord(parsed)) {
+    throw new Error("settings.json is not a JSON object");
+  }
+  const settings = parsed;
   settings.outputStyle = STYLE;
   return `${JSON.stringify(settings, null, 2)}\n`;
 }
@@ -212,7 +222,10 @@ export function instructionsStep(ctx: ActivationContext): Step {
 
 function writeInstructions(ctx: ActivationContext): { step: Step; written: string[] } {
   const home = claudeHome(ctx.env);
-  const choice = ctx.choices.instructions as InstructionsChoice;
+  const choice = ctx.choices.instructions;
+  if (!isInstructionsChoice(choice)) {
+    throw new Error(`--instructions must be one of ${INSTRUCTIONS_CHOICES.join(", ")}`);
+  }
   const changes = targets(home, choice).filter(
     (t) => !existsSync(t.path) || readFileSync(t.path, "utf8") !== t.content,
   );

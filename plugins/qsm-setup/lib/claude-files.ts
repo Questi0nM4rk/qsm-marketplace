@@ -6,6 +6,7 @@ import { join, relative } from "node:path";
 import { YAML } from "bun";
 import type { Check } from "./doctor.ts";
 import { jsonErrorAt } from "./json-position.ts";
+import { isRecord } from "./json.ts";
 
 export interface ClaudePaths {
   /** `CLAUDE_CONFIG_DIR`, else `~/.claude` */
@@ -67,8 +68,8 @@ function readFrontmatter(text: string): Frontmatter {
   const where = `1-${end + 1}`;
   try {
     const data: unknown = YAML.parse(lines.slice(1, end).join("\n"));
-    if (data !== null && typeof data === "object" && !Array.isArray(data)) {
-      return { kind: "ok", data: data as Record<string, unknown> };
+    if (isRecord(data)) {
+      return { kind: "ok", data };
     }
     return end === 1 ? { kind: "ok", data: {} } : { kind: "broken", lines: where };
   } catch {

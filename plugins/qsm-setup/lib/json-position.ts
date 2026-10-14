@@ -44,7 +44,9 @@ class Scanner {
         this.value();
       });
     } else if (c === "[") {
-      this.list("]", () => this.value());
+      this.list("]", () => {
+        this.value();
+      });
     } else if (c === '"') {
       this.string();
     } else if (c === "-" || (c >= "0" && c <= "9")) {
@@ -156,7 +158,7 @@ export function jsonErrorAt(text: string): JsonError | null {
   try {
     scanner.document();
   } catch (e) {
-    return { ...lineColumn(text, scanner.i), reason: (e as Error).message };
+    return { ...lineColumn(text, scanner.i), reason: e instanceof Error ? e.message : String(e) };
   }
   return { line: 1, column: 1, reason: "rejected by the JSON parser" };
 }

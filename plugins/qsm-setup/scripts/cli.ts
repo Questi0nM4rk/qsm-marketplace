@@ -4,14 +4,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
-import {
-  type Envelope,
-  exitOf,
-  fail,
-  OUTCOME_CODES,
-  type Outcome,
-  ok,
-} from "../../../lib/outcome.ts";
+import { exitOf, fail, OUTCOME_CODES, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   binDir,
   buildRecordPath,
@@ -27,6 +20,7 @@ import { discoverPlugins, type PluginNode } from "../lib/discover.ts";
 import { doctor, type Probe, qsmBinsIn, readInstalled } from "../lib/doctor.ts";
 import { declaredBins, type FarmReport, relink, removeUndeclaredBins } from "../lib/farm.ts";
 import { installOrder, requiredBy } from "../lib/graph.ts";
+import { isQsmManifest, isRecord, parseEnvelope } from "../lib/json.ts";
 import { type PurgeReport, purge } from "../lib/purge.ts";
 import {
   bunActivationReader,
@@ -37,7 +31,40 @@ import {
 import { compareTools, describeTools, type ToolsProbes } from "../lib/tools.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+function bundledManifest(raw: unknown): QsmManifest {
+  if (!isQsmManifest(raw)) {
+    throw new Error("qsm.json is not a qsm manifest");
+  }
+  return raw;
+}
+const manifest = bundledManifest(manifestJson);
+
+/** An optional string arg. parseCall coerces every arg to its declared type, so another type is a bug. */
+function optString(call: Call, name: string): string | undefined {
+  const v = call.args[name];
+  if (v === undefined || typeof v === "string") {
+    return v;
+  }
+  throw new Error(`arg ${name} is not a string`);
+}
+
+/** A required string arg. */
+function reqString(call: Call, name: string): string {
+  const v = optString(call, name);
+  if (v === undefined) {
+    throw new Error(`arg ${name} is missing`);
+  }
+  return v;
+}
+
+/** An optional repeatable arg. */
+function optList(call: Call, name: string): string[] | undefined {
+  const v = call.args[name];
+  if (v === undefined || Array.isArray(v)) {
+    return v;
+  }
+  throw new Error(`arg ${name} is not a list`);
+}
 const env: Env = process.env;
 
 /** The checkout every verb works on, or why there is none. A root that holds no plugin is a wrong
@@ -47,10 +74,7 @@ function withRoot<T extends Outcome | Promise<Outcome>>(
   verb: (nodes: readonly PluginNode[], root: string) => T,
   allowEmpty = false,
 ): T | Outcome {
-  const root =
-    (call.args.root as string | undefined) ??
-    env.QSM_MARKETPLACE ??
-    readConfig(env).marketplaceRoot;
+  const root = optString(call, "root") ?? env.QSM_MARKETPLACE ?? readConfig(env).marketplaceRoot;
   if (root === undefined) {
     return fail(
       "missing",
@@ -104,8 +128,8 @@ const claudeProbes: ClaudeProbes = {
 };
 
 function selectPlugins(call: Call, nodes: readonly PluginNode[]): string[] | undefined | Outcome {
-  const names = (call.args.plugins as string[] | undefined) ?? [];
-  const profile = call.args.profile as string | undefined;
+  const names = optList(call, "plugins") ?? [];
+  const profile = optString(call, "profile");
   const modes = [call.args.all === true, names.length > 0, profile !== undefined].filter(
     Boolean,
   ).length;
@@ -162,13 +186,19 @@ function collected<T>(
   return fail(failed === outcomes.length ? "failed" : "partial", lines, outcomes);
 }
 
+function marketplaceName(path: string): string {
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!isRecord(parsed) || typeof parsed.name !== "string") {
+    throw new Error(`${path} has no name`);
+  }
+  return parsed.name;
+}
+
 /** What an older qsm left on this machine, as `purge` finds it; `check` only reports. */
 function purgeMachine(nodes: readonly PluginNode[], dir: string, check: boolean): PurgeReport {
   const root = resolve(dir);
   const marketplace = join(root, ".claude-plugin", "marketplace.json");
-  const name = existsSync(marketplace)
-    ? (JSON.parse(readFileSync(marketplace, "utf8")) as { name: string }).name
-    : "qsm-marketplace";
+  const name = existsSync(marketplace) ? marketplaceName(marketplace) : "qsm-marketplace";
   return purge({
     env,
     root,
@@ -241,7 +271,7 @@ function activateAtTerminal(argv: string[]): Outcome {
 /** The activation's own envelope, passed on: its code is the verb's code. */
 const activateVerb: Handler = (call) =>
   withRoot(call, (nodes) => {
-    const name = call.args.plugin as string;
+    const name = reqString(call, "plugin");
     const node = nodes.find((n) => n.name === name);
     if (node === undefined) {
       return fail(
@@ -258,21 +288,20 @@ const activateVerb: Handler = (call) =>
     }
     const argv = [node.activation, "--json", ...flags];
     const r = spawnSync("bun", argv, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    try {
-      const envelope = JSON.parse(r.stdout) as Envelope;
+    const envelope = parseEnvelope(r.stdout);
+    if (envelope !== null) {
       return { code: envelope.code, message: envelope.message, data: envelope.data };
-    } catch {
-      const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
-      return fail(
-        "failed",
-        `${name}'s activation exited ${r.status} and printed no envelope: ${last}`,
-      );
     }
+    const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
+    return fail(
+      "failed",
+      `${name}'s activation exited ${r.status} and printed no envelope: ${last}`,
+    );
   });
 
 const doctorVerb: Handler = (call) =>
   withRoot(call, async (nodes, root) => {
-    const only = (call.args.plugin as string | undefined) ?? null;
+    const only = optString(call, "plugin") ?? null;
     const claude = only === null ? await claudeChecks(claudeProbes) : [];
     const verbose = call.args.verbose === true;
     const report = doctor(nodes, {

@@ -105,10 +105,9 @@ export function removeUndeclaredBins(
 export function relink(nodes: readonly PluginNode[], opts: RelinkOptions): FarmReport {
   const declared = declaredBins(nodes);
   const declaredNames = new Set(declared.map((d) => d.bin));
-  const commands = Object.assign({}, ...nodes.map((n) => n.commands)) as Record<
-    string,
-    CommandDecl
-  >;
+  const commands = Object.fromEntries(
+    nodes.flatMap((n): [string, CommandDecl][] => Object.entries(n.commands)),
+  );
   const missingBins = declared
     .filter((d) => !existsSync(join(opts.binDir, d.bin)))
     .map((d) => d.bin);

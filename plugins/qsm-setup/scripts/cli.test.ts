@@ -1,10 +1,41 @@
 // qsm-setup through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, test } from "bun:test";
 import { execSync, spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { readRelinkOutput } from "../hooks/relink-output.ts";
+import { isRecord, parseEnvelope } from "../lib/json.ts";
+import setupManifest from "../qsm.json" with { type: "json" };
+
+interface CheckRow {
+  readonly name: string;
+  readonly status: string;
+  readonly output: string;
+}
+
+/** The --json envelope a verb printed; the test fails when stdout is not one. */
+function envelopeOf(stdout: string) {
+  const envelope = parseEnvelope(stdout);
+  if (envelope === null) {
+    throw new Error(`stdout is not an envelope: ${stdout}`);
+  }
+  return envelope;
+}
+
+/** The doctor report's check rows, read from its envelope. */
+function checksOf(stdout: string): CheckRow[] {
+  const { data } = envelopeOf(stdout);
+  if (!isRecord(data) || !Array.isArray(data.checks)) {
+    throw new Error("doctor data has no checks");
+  }
+  return data.checks.map((c): CheckRow => {
+    if (!isRecord(c) || typeof c.name !== "string" || typeof c.status !== "string") {
+      throw new Error("a check row is malformed");
+    }
+    return { name: c.name, status: c.status, output: typeof c.output === "string" ? c.output : "" };
+  });
+}
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const ROOT = resolve(import.meta.dir, "../../..");
@@ -69,11 +100,7 @@ describe("qsm-setup cli", () => {
       QSM_SETUP_STATE_DIR: state,
       QSM_SETUP_CONFIG: join(home, "none.json"),
     });
-    const checks = JSON.parse(r.stdout).data.checks as {
-      name: string;
-      status: string;
-      output: string;
-    }[];
+    const checks = checksOf(r.stdout);
     expect(checks.find((c) => c.name === "qsm-memory")?.status).toBe("PASS");
     const toolbox = checks.find((c) => c.name === "qsm-toolbox");
     expect(toolbox?.status).toBe("FAIL");
@@ -85,12 +112,15 @@ describe("qsm-setup cli", () => {
       QSM_BIN_DIR: "/nonexistent/bin",
     });
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope.code).toBe("ok");
     // qsm-setup requires qsm-essentials, so both plan; requirements come first
-    const outcome = envelope.data.find((o: { plugin: string }) => o.plugin === "qsm-setup");
+    const rows: unknown[] = Array.isArray(envelope.data) ? envelope.data : [];
+    const outcome = rows.find((o) => isRecord(o) && o.plugin === "qsm-setup");
     expect(outcome).toMatchObject({ plugin: "qsm-setup", status: "skipped" });
-    expect(outcome.detail).toContain("compile scripts/cli.ts to /nonexistent/bin/qsm-setup");
+    expect(isRecord(outcome) ? outcome.detail : null).toContain(
+      "compile scripts/cli.ts to /nonexistent/bin/qsm-setup",
+    );
   }, 30_000);
 });
 
@@ -98,8 +128,8 @@ describe("install selection", () => {
   test("An unknown plugin name", () => {
     const r = run(["install", "nope", "--root", ROOT, "--json"]);
     expect(r.exit).toBe(2);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope).toMatchObject({ code: "usage", exit: 2 });
+    const envelope = envelopeOf(r.stdout);
+    expect(envelope.code).toBe("usage");
     expect(envelope.message).toStartWith("unknown plugin: nope; known: ");
     expect(envelope.message).toContain("qsm-setup");
   });
@@ -136,15 +166,15 @@ describe("activate runs a plugin's activation only with every choice given", () 
       { CLAUDE_CONFIG_DIR: claudeHome },
     );
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.data.detail).toContain("would write CLAUDE.md");
+    const { data } = envelopeOf(r.stdout);
+    expect(isRecord(data) ? data.detail : null).toContain("would write CLAUDE.md");
     expect(readdirSync(claudeHome)).toEqual([]);
   });
 
   test("a plugin without an activation says so", () => {
     const r = run(["activate", "qsm-usage", "--root", ROOT, "--json"]);
     expect(r.exit).toBe(4);
-    expect(JSON.parse(r.stdout).message).toBe("qsm-usage has no activation: nothing to activate");
+    expect(envelopeOf(r.stdout).message).toBe("qsm-usage has no activation: nothing to activate");
   });
 });
 
@@ -155,7 +185,7 @@ describe("doctor ends with the Claude Code group", () => {
       QSM_SETUP_STATE_DIR: state,
       QSM_SETUP_CONFIG: join(state, "none.json"),
     });
-    const checks = JSON.parse(r.stdout).data.checks as { name: string; status: string }[];
+    const checks = checksOf(r.stdout);
     const names = checks.map((c) => c.name);
     for (const name of ["claude installs", "claude path", "claude config", "claude version"]) {
       expect(names).toContain(name);
@@ -258,10 +288,6 @@ describe("an empty root", () => {
 
 describe("qsm-setup probes itself", () => {
   test("its own probe never runs its doctor verb, which would probe itself without end", () => {
-    const manifest = JSON.parse(
-      readFileSync(join(ROOT, "plugins", "qsm-setup", "qsm.json"), "utf8"),
-    );
-    expect(manifest.qsm.doctor).toBeString();
-    expect(manifest.qsm.doctor).not.toContain("doctor");
+    expect(setupManifest.qsm.doctor).not.toContain("doctor");
   });
 });
