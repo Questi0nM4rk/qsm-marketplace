@@ -136,7 +136,7 @@ async function recentSessions($: EngineInterface, n: number): Promise<SessionRec
   const index = Array.isArray(stored)
     ? stored.filter((i): i is string => typeof i === "string")
     : [];
-  const ids = index.slice(-n).reverse();
+  const ids = index.slice(-n).toReversed();
   const out: SessionRecord[] = [];
   for (const id of ids) {
     const rec = id === current?.id ? current : asSession(await $.store.get(sessionKey(id)));

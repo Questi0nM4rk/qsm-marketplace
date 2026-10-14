@@ -75,7 +75,7 @@ describe("Index a local path", () => {
 
     buildIndex(repo, deps(fakeRunner(), cache));
 
-    expect(Object.keys(statusOf(files.status).changed_at_build).sort()).toEqual([
+    expect(Object.keys(statusOf(files.status).changed_at_build).toSorted()).toEqual([
       "new.ts",
       "src/a.ts",
     ]);

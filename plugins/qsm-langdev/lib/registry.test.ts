@@ -171,7 +171,7 @@ describe("measures", () => {
       expect(spec.measures.counts.length).toBeGreaterThan(10);
     }
     const overlapping = REGISTRY.filter((spec) => (spec.measures.overlaps ?? []).length > 0);
-    expect(overlapping.map((spec) => spec.name).sort()).toEqual([
+    expect(overlapping.map((spec) => spec.name).toSorted()).toEqual([
       "bash-syntax",
       "csharpier",
       "dotnet-format",

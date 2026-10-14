@@ -148,7 +148,7 @@ const dirs = (path: string): string[] =>
     ? readdirSync(path, { withFileTypes: true })
         .filter((d) => d.isDirectory())
         .map((d) => d.name)
-        .sort()
+        .toSorted()
     : [];
 
 const parseFailure = (label: string, cause: unknown): ModelError =>
@@ -371,8 +371,8 @@ function resultOf(
   if (results.length === 0) {
     return none("not read (no aggregate-result.json)");
   }
-  const latest = [...results]
-    .reverse()
+  const latest = results
+    .toReversed()
     .map((r) => ({ r, arms: r.agg.cases?.find((x) => x.name === name)?.arms }))
     .find(({ arms }) => (arms?.with ?? []).length > 0);
   if (latest === undefined) {
@@ -416,7 +416,7 @@ function gradersOf(dir: string): Grader[] {
   return existsSync(gdir)
     ? readdirSync(gdir)
         .filter((f) => f.endsWith(".md"))
-        .sort()
+        .toSorted()
         .map((f) => graderOf(join(gdir, f)))
     : [];
 }
@@ -500,7 +500,7 @@ function attach(items: readonly Item[], cases: readonly Case[]): { items: Item[]
   const owner = (c: Case): Item | undefined =>
     items
       .filter((i) => c.name === i.name || c.name.startsWith(`${i.name}-`))
-      .sort((a, b) => b.name.length - a.name.length)[0];
+      .toSorted((a, b) => b.name.length - a.name.length)[0];
   const loose = cases.filter((c) => owner(c) === undefined);
   return { items: items.map((i) => ({ ...i, cases: cases.filter((c) => owner(c) === i) })), loose };
 }
@@ -587,7 +587,7 @@ function itemsOf(dir: string, root: string, scope: Scope): Item[] {
       .map((d) => itemOf("skill", join(skills, d, "SKILL.md"), root, scope)),
     ...(existsSync(agents) ? readdirSync(agents) : [])
       .filter((f) => f.endsWith(".md"))
-      .sort()
+      .toSorted()
       .map((f) => itemOf("agent", join(agents, f), root, scope)),
   ];
 }

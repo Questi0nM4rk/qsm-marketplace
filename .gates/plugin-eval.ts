@@ -140,7 +140,7 @@ function brokenGraders(cases: Entry[]): string[] {
   return cases.flatMap((c) => {
     const graders = join(c.dir, "graders");
     const files = existsSync(graders) ? readdirSync(graders).filter((f) => f.endsWith(".md")) : [];
-    return files.sort().flatMap((g) => brokenGrader(c, g));
+    return files.toSorted().flatMap((g) => brokenGrader(c, g));
   });
 }
 
@@ -148,7 +148,7 @@ function brokenGraders(cases: Entry[]): string[] {
 function caseHash(dir: string): string {
   const h = createHash("sha256");
   for (const d of [dir, ...["skills", "agents", "instructions"].map((s) => join(plugin, s))]) {
-    for (const f of [...walk(d)].sort()) {
+    for (const f of [...walk(d)].toSorted()) {
       h.update(`${relative(plugin, f)}\0`);
       h.update(readFileSync(f));
     }
@@ -297,7 +297,7 @@ try {
   }
   const fresh = (existsSync(results) ? readdirSync(results) : [])
     .filter((d) => !seen.has(d) && existsSync(join(results, d, "aggregate-result.json")))
-    .sort()
+    .toSorted()
     .map((d) => join(results, d, "aggregate-result.json"));
   const got = verdicts(fresh);
   if (todo.length > 0 && got.length === 0) {

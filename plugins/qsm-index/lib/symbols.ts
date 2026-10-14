@@ -47,7 +47,7 @@ export function symbolsOf(graph: Graph, file: string): CodeSymbol[] {
     .filter((node) => node.source_file === file)
     .map((node) => ({ label: node.label ?? "", line: Number(node.source_location?.slice(1)) }))
     .filter((symbol) => Number.isInteger(symbol.line))
-    .sort((a, b) => a.line - b.line);
+    .toSorted((a, b) => a.line - b.line);
 }
 
 /** The last symbol starting at or above `line`. */

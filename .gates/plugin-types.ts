@@ -15,7 +15,7 @@ import { isRecord } from "../lib/outcome.ts";
 import { pluginDirs, rel, root } from "./walk.ts";
 
 const engineGlob = `/tmp/claude-${process.getuid?.()}/bundled-skills/*/*/plugin-authoring/types/claude-code.d.ts`;
-const [engine] = globSync(engineGlob).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+const [engine] = globSync(engineGlob).toSorted((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
 /** The `types` path a plugin.json names, or null for a plugin without a noun. */
 function typesOf(dir: string): string | null {
   const manifest: unknown = JSON.parse(

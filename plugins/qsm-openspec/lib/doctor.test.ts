@@ -74,7 +74,7 @@ describe("generatedPrompts", () => {
     const root = sandbox();
     const skill = makeDir(root, ".claude", "skills", "openspec-apply");
     const command = makeFile(root, [".claude", "commands"], "opsx-archive.md");
-    expect(generatedPrompts(root)).toEqual([command, skill].sort((a, b) => a.localeCompare(b)));
+    expect(generatedPrompts(root)).toEqual([command, skill].toSorted((a, b) => a.localeCompare(b)));
   });
 
   test("ignores an openspec- name that is not under a skills directory", () => {

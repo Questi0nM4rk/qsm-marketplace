@@ -105,7 +105,7 @@ export function editedTrees(editor: Editor): EditedTree[] {
     return [];
   }
   return names
-    .sort()
+    .toSorted()
     .map((name) => readTree(join(editorDir("start", editor), name)))
     .filter((tree): tree is EditedTree => tree !== null);
 }

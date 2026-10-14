@@ -31,7 +31,7 @@ function subdirectories(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort();
+    .toSorted();
 }
 
 /** One language directory's files, keyed by the language and its targets. */
@@ -40,11 +40,11 @@ function readLanguage(language: string, languageDir: string, into: Record<string
   // runs on, which is a different question from how strict the profile is.
   // `ts/` is the language's default target and `ts/browser/` carries only
   // the files that differ, so nothing is duplicated to stay in sync by hand.
-  for (const source of readdirSync(languageDir, { withFileTypes: true }).sort(byName)) {
+  for (const source of readdirSync(languageDir, { withFileTypes: true }).toSorted(byName)) {
     const key = source.isDirectory() ? `${language}@${source.name}` : language;
     const from = source.isDirectory()
       ? readdirSync(join(languageDir, source.name))
-          .sort()
+          .toSorted()
           .map((file) => join(source.name, file))
       : [source.name];
     const entries = into[key] ?? [];

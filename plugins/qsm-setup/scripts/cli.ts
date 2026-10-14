@@ -148,7 +148,7 @@ function rememberInstalled(outcomes: readonly { plugin: string; status: string }
     }
   }
   mkdirSync(stateDir(env), { recursive: true });
-  writeFileSync(path, `${JSON.stringify({ plugins: [...kept].sort() }, null, 2)}\n`);
+  writeFileSync(path, `${JSON.stringify({ plugins: [...kept].toSorted() }, null, 2)}\n`);
 }
 
 /** ok when nothing failed, else failed (all of them) or partial (some). */

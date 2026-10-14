@@ -287,7 +287,7 @@ function score(referenceTree: string, shippedTree: string, testFiles: number): S
   }
   const added = (before: string[], after: string[]): string[] => {
     const had = new Set(before);
-    return after.filter((entry) => !had.has(entry)).sort((a, b) => a.localeCompare(b));
+    return after.filter((entry) => !had.has(entry)).toSorted((a, b) => a.localeCompare(b));
   };
   return {
     status: "scored",
@@ -303,7 +303,7 @@ function score(referenceTree: string, shippedTree: string, testFiles: number): S
 function movedCauses(reference: Causes, shipped: Causes): string[] {
   return CAUSES.map((cause) => ({ cause, delta: shipped[cause] - reference[cause] }))
     .filter((moved) => Math.abs(moved.delta) >= 0.001)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .toSorted((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 2)
     .map(({ cause }) => `${cause} ${reference[cause].toFixed(3)} -> ${shipped[cause].toFixed(3)}`);
 }

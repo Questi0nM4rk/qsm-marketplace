@@ -721,7 +721,7 @@ function shownNames(held: ReadonlyMap<string, readonly Reference[]>): Reference[
       count.set(`${r.kind}:${r.name}`, { ref: r, n: at.n + 1 });
     }
   }
-  const sorted = [...count.values()].sort(
+  const sorted = [...count.values()].toSorted(
     (a, b) => b.n - a.n || a.ref.name.localeCompare(b.ref.name),
   );
   return (["tool", "mcp", "web"] as const).flatMap((k) =>

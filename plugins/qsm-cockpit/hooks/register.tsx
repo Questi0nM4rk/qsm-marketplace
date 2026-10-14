@@ -345,7 +345,7 @@ async function agentsCard($: EngineInterface, els: Elements) {
   const running = all.filter((run) => run.outcome === "running");
   const finished = all
     .filter((run) => run.outcome !== "running")
-    .reverse()
+    .toReversed()
     .slice(0, 12);
   return card(
     els,

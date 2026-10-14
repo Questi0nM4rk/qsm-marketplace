@@ -171,7 +171,7 @@ export function compareTools(
   }
   const local = readLocal(nodes);
   const installed = p.installed();
-  const names = [...new Set([...main.keys(), ...installed])].sort();
+  const names = [...new Set([...main.keys(), ...installed])].toSorted();
   const binaries = names.map((bin) =>
     compare(bin, main.get(bin), local.get(bin), installed.has(bin)),
   );

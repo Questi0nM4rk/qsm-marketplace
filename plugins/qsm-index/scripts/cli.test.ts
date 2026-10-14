@@ -175,7 +175,7 @@ describe("qsm-index mcp serve", () => {
       server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
       const listed = await server.request({ jsonrpc: "2.0", id: 2, method: "tools/list" });
       const tools = toolNamesOf(listed.result);
-      expect([...tools].sort((a, b) => a.localeCompare(b))).toEqual([
+      expect(tools.toSorted((a, b) => a.localeCompare(b))).toEqual([
         "context",
         "impact",
         "reindex",

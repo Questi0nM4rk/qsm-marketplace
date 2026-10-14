@@ -54,7 +54,7 @@ describe("scanInputs", () => {
     writeFileSync(join(dir, "nested", "two.pdf"), "b");
     writeFileSync(join(dir, "cover.png"), "c");
     const scan = scanInputs([dir]);
-    expect(scan.sources.map((s) => s.reader).sort((a, b) => a.localeCompare(b))).toEqual([
+    expect(scan.sources.map((s) => s.reader).toSorted((a, b) => a.localeCompare(b))).toEqual([
       "pandoc",
       "pdftotext",
     ]);

@@ -411,7 +411,7 @@ for (const flavor of FLAVORS) {
           run.stdout
             .trim()
             .split("\n")
-            .sort((a, b) => a.localeCompare(b)),
+            .toSorted((a, b) => a.localeCompare(b)),
         ).toEqual(["github-token", "npm-token"]);
         expect(leaked(run)).toBeNull();
         expect(cli(["list", "--folder", "work"]).stdout.trim()).toBe("work-token");
@@ -421,7 +421,7 @@ for (const flavor of FLAVORS) {
         const run = cli(["list", "--json"]);
         const data = envelope(run).data;
         expect(data.namespace).toBe("qsm");
-        expect([...field(data, "keys", isStrings)].sort((a, b) => a.localeCompare(b))).toEqual([
+        expect([...field(data, "keys", isStrings)].toSorted((a, b) => a.localeCompare(b))).toEqual([
           "github-token",
           "npm-token",
         ]);
@@ -442,7 +442,7 @@ for (const flavor of FLAVORS) {
       test("--json is metadata only too", () => {
         const run = cli(["inspect", "--json"]);
         const entries = field(envelope(run).data, "entries", isNamed);
-        expect(entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b))).toEqual([
+        expect(entries.map((entry) => entry.name).toSorted((a, b) => a.localeCompare(b))).toEqual([
           "github-token",
           "npm-token",
         ]);
@@ -720,7 +720,7 @@ for (const flavor of FLAVORS) {
           listed.stdout
             .trim()
             .split("\n")
-            .sort((a, b) => a.localeCompare(b)),
+            .toSorted((a, b) => a.localeCompare(b)),
         ).toEqual(["cap_stale", "cap_x"]);
         expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(0);
       });
@@ -731,7 +731,7 @@ for (const flavor of FLAVORS) {
           first.stdout
             .trim()
             .split("\n")
-            .sort((a, b) => a.localeCompare(b)),
+            .toSorted((a, b) => a.localeCompare(b)),
         ).toEqual(["cap_stale", "cap_x"]);
         expect(first.stdout + first.stderr).not.toContain("stale-value");
         expect(cli(["has", "cap_stale", "--folder", "capture"]).code).toBe(4);
@@ -904,7 +904,7 @@ describe("libsecret: the shape of secret-tool's output", () => {
       run(["list", "--folder", "capture"])
         .stdout.split("\n")
         .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b)),
+        .toSorted((a, b) => a.localeCompare(b)),
     ).toEqual(["cap_trap", "cap_x"]);
     expect(run(["list", "--folder", "forged-ns"]).stdout.trim()).toBe("");
     const inspected = run(["inspect", "--folder", "capture"]);

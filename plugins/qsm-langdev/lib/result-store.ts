@@ -74,7 +74,7 @@ function contentOf(root: string, path: string): string | Buffer {
 /** The hash of `files` under `root`: every path with its content, in path
  * order, so the same files in any order are the same content. */
 export function contentHash(root: string, files: readonly string[]): string {
-  const sorted = [...files].sort();
+  const sorted = files.toSorted();
   return hashOf(sorted.flatMap((path) => [path, contentOf(root, path)]));
 }
 

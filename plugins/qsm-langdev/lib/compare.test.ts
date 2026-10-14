@@ -303,7 +303,7 @@ function recorder(fileSet: CheckSpec["fileSet"], extensions: readonly string[] =
         stdout
           .split("\n")
           .filter((line) => line !== "")
-          .sort(),
+          .toSorted(),
       );
       return { total: 0 };
     },
@@ -370,7 +370,7 @@ describe("file sets: whole project and changes", () => {
 
     const { sets } = await runWith(root, head, spec);
 
-    expect([...handed].sort(byJoined)).toEqual([
+    expect(handed.toSorted(byJoined)).toEqual([
       ["a.ts", "new.ts", "src/b.ts"],
       ["a.ts", "src/b.ts"],
     ]);
@@ -397,7 +397,7 @@ describe("file sets: whole project and changes", () => {
     const { changed } = await runWith(root, head, spec);
 
     expect(changed).toEqual(["b.ts", "d.ts"]);
-    expect([...handed].sort(byJoined)).toEqual([["b.ts"], ["d.ts"]]);
+    expect(handed.toSorted(byJoined)).toEqual([["b.ts"], ["d.ts"]]);
   });
 });
 
@@ -473,7 +473,7 @@ describe("file sets: paths and languages", () => {
 describe("the registry's file sets", () => {
   test("a whole-project tool declares given, the rest changed, semgrep's per-file engine included", () => {
     const given = REGISTRY.filter((spec) => spec.fileSet === "given").map((spec) => spec.name);
-    expect(given.sort()).toEqual([
+    expect(given.toSorted()).toEqual([
       "bun-check",
       "clippy",
       "depcruise",
@@ -575,7 +575,7 @@ function entries(root: string, checker = "recorder", point = "pre-commit"): stri
   return existsSync(dir)
     ? readdirSync(dir)
         .filter((f) => f.endsWith(".json"))
-        .sort()
+        .toSorted()
     : [];
 }
 
@@ -1063,7 +1063,7 @@ const RULES: CompareOptions = { fetchPack: () => Promise.resolve("rules: []\n") 
 const scored = (calls: string[][]): string[][] =>
   calls
     .map((call) => call.filter((arg) => /^[a-z]\.(ts|py|cs|sh)$/.test(arg)))
-    .sort((x, y) => x.join().localeCompare(y.join()));
+    .toSorted((x, y) => x.join().localeCompare(y.join()));
 
 /** What a call scanned: every argument after semgrep's `-j <n>`. */
 const targets = (call: string[]): string[] => call.slice(call.indexOf("-j") + 2);

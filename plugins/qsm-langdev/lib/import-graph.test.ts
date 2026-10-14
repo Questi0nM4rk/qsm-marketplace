@@ -69,7 +69,7 @@ describe("the TypeScript and JavaScript extractor", () => {
       "lib/y.tsx": "export const y = 1;\n",
       "src/d.js": "export {};\n",
     });
-    expect([...importsOf(graph, "src/main.ts")].sort()).toEqual([
+    expect([...importsOf(graph, "src/main.ts")].toSorted()).toEqual([
       "lib/y.tsx",
       "src/c.cjs",
       "src/d.js",
@@ -115,7 +115,10 @@ describe("the Python extractor", () => {
       "pkg/sub/x.py": "y = 1\n",
       "pkg/core.py": "z = 1\n",
     });
-    expect([...importsOf(graph, "pkg/sub/mod.py")].sort()).toEqual(["pkg/core.py", "pkg/sub/x.py"]);
+    expect([...importsOf(graph, "pkg/sub/mod.py")].toSorted()).toEqual([
+      "pkg/core.py",
+      "pkg/sub/x.py",
+    ]);
   });
 
   test("an absolute import resolves against the repository root", async () => {
@@ -124,7 +127,7 @@ describe("the Python extractor", () => {
       "util/text.py": "",
       "util/io.py": "def read(): pass\n",
     });
-    expect([...importsOf(graph, "app/main.py")].sort()).toEqual(["util/io.py", "util/text.py"]);
+    expect([...importsOf(graph, "app/main.py")].toSorted()).toEqual(["util/io.py", "util/text.py"]);
   });
 
   test("a package import resolves to its __init__.py", async () => {
@@ -133,7 +136,7 @@ describe("the Python extractor", () => {
       "pkg/__init__.py": "",
       "helpers/__init__.py": "",
     });
-    expect([...importsOf(graph, "main.py")].sort()).toEqual([
+    expect([...importsOf(graph, "main.py")].toSorted()).toEqual([
       "helpers/__init__.py",
       "pkg/__init__.py",
     ]);
@@ -145,7 +148,10 @@ describe("the Python extractor", () => {
       "pkg/__init__.py": "",
       "pkg/tools.py": "",
     });
-    expect([...importsOf(graph, "main.py")].sort()).toEqual(["pkg/__init__.py", "pkg/tools.py"]);
+    expect([...importsOf(graph, "main.py")].toSorted()).toEqual([
+      "pkg/__init__.py",
+      "pkg/tools.py",
+    ]);
   });
 
   test("a standard library or installed package import is no edge", async () => {
@@ -195,7 +201,7 @@ describe("the cache per file content", () => {
     const root = treeWith(files);
 
     const first = await buildGraph(root, Object.keys(files));
-    expect([...first.parsed].sort()).toEqual(["a.ts", "b.ts"]);
+    expect(first.parsed.toSorted()).toEqual(["a.ts", "b.ts"]);
 
     const second = await buildGraph(root, Object.keys(files));
     expect(second.parsed).toEqual([]);
@@ -235,7 +241,7 @@ describe("a language with no extractor", () => {
       "lib.sh": "",
       "main.ts": "export {};\n",
     });
-    expect([...graph.noExtractor].sort()).toEqual(["fish", "rust", "shell"]);
+    expect(graph.noExtractor.toSorted()).toEqual(["fish", "rust", "shell"]);
     expect(graph.edges.has("main.rs")).toBe(false);
   });
 

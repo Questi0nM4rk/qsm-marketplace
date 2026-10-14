@@ -214,7 +214,7 @@ describe("qsm-memory cli, contract", () => {
       );
     server.closeStdin();
     await server.exited;
-    expect(reply.result.tools.map((t) => t.name).sort((a, b) => a.localeCompare(b))).toEqual([
+    expect(reply.result.tools.map((t) => t.name).toSorted((a, b) => a.localeCompare(b))).toEqual([
       "list",
       "note",
       "notes",

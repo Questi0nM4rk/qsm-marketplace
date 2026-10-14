@@ -159,7 +159,7 @@ export function unsavedTranscripts(db: Database, projects: string): string[] {
       const seenAt = seen.get(sessionIdOf(path));
       return seenAt === undefined || statSync(path).mtimeMs > seenAt;
     })
-    .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
+    .toSorted((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
 }
 
 export interface CatchUpResult {

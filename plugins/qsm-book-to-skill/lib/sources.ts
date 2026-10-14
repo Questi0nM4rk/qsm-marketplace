@@ -88,7 +88,7 @@ function expandGlob(pattern: string, cwd: string): string[] {
   const glob = new Glob(resolve(cwd, pattern));
   return [...filesUnder(base)]
     .filter((path) => glob.match(path))
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 }
 
 function resolveInput(input: string, cwd: string): { files: string[]; rejected: Rejected[] } {
@@ -103,7 +103,7 @@ function resolveInput(input: string, cwd: string): { files: string[]; rejected: 
     return { files: [], rejected: [{ path, reason: "does not exist" }] };
   }
   if (statSync(path).isDirectory()) {
-    const files = [...filesUnder(path)].sort((a, b) => a.localeCompare(b));
+    const files = [...filesUnder(path)].toSorted((a, b) => a.localeCompare(b));
     return files.length === 0
       ? { files, rejected: [{ path, reason: "directory holds no file" }] }
       : { files, rejected: [] };

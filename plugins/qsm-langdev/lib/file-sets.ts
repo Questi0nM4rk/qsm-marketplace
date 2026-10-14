@@ -34,7 +34,7 @@ export function givenSet(listed: readonly string[], named: readonly string[]): s
   const prefixes = named.length === 0 ? [""] : named.map(prefixOf);
   const under = (path: string): boolean =>
     prefixes.some((p) => p === "" || path === p || path.startsWith(`${p}/`));
-  return [...new Set(listed)].filter(under).sort((a, b) => a.localeCompare(b));
+  return [...new Set(listed)].filter(under).toSorted((a, b) => a.localeCompare(b));
 }
 
 /** A tree a checker scores: its directory and the paths it holds. */
@@ -57,8 +57,8 @@ export async function changedPlusSet(
   const files = new Set(graphs.flatMap((graph) => within(graph, changed, n)));
   const noExtractor = new Set(graphs.flatMap((graph) => graph.noExtractor));
   return {
-    files: [...files].sort((a, b) => a.localeCompare(b)),
-    noExtractor: [...noExtractor].sort((a, b) => a.localeCompare(b)),
+    files: [...files].toSorted((a, b) => a.localeCompare(b)),
+    noExtractor: [...noExtractor].toSorted((a, b) => a.localeCompare(b)),
   };
 }
 

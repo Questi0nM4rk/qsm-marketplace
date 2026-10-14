@@ -19,7 +19,7 @@ const RULES_SUFFIX = ".yaml";
  * nothing, which reads as a clean file. */
 export function readOwnRules(rulesRoot: string): Record<string, string> {
   const rules: Record<string, string> = {};
-  for (const file of readdirSync(rulesRoot).sort()) {
+  for (const file of readdirSync(rulesRoot).toSorted()) {
     if (!file.endsWith(RULES_SUFFIX)) {
       continue;
     }

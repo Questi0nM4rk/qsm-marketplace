@@ -6,7 +6,7 @@ import { PROFILE_DATA } from "./profiles-data.ts";
 import { isConfigless, LANGUAGES, type Language } from "./registry.ts";
 
 function listProfiles(): string[] {
-  return Object.keys(PROFILE_DATA).sort();
+  return Object.keys(PROFILE_DATA).toSorted();
 }
 
 interface ProfileFile {

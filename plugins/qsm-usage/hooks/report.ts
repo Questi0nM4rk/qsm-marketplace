@@ -19,7 +19,7 @@ export function used(b: Breakdown): number {
 export function breakdownText(b: Breakdown): string {
   return encode({
     context: { used: used(b), window: b.window },
-    categories: [...b.categories].sort((x, y) => y.tokens - x.tokens),
+    categories: b.categories.toSorted((x, y) => y.tokens - x.tokens),
   });
 }
 

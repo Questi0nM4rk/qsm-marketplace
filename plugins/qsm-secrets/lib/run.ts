@@ -141,7 +141,7 @@ export function runMaskAll(): { texts: string[] } {
         : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
     })
     // A value that contains another is masked first, so the shorter one cannot leave a stub.
-    .sort((a, b) => b.value.length - a.value.length);
+    .toSorted((a, b) => b.value.length - a.value.length);
   const texts = parsed.map((text) =>
     values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
   );
@@ -403,7 +403,7 @@ export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
     .entries()
     .filter((e) => e.folder === CAPTURE_NAMESPACE && e.user === WRAPPER_MARK && !used.has(e.name))
     .map((e) => e.name)
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
   if (!dryRun) {
     for (const id of ids) {
       if (!backend.remove(CAPTURE_NAMESPACE, id)) {

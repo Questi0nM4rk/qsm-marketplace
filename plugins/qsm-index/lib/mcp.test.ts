@@ -58,7 +58,7 @@ function fakePath(root: string, fakes: Readonly<Record<string, string>>): string
 describe("the server lists its tools", () => {
   test("the server lists exactly the six tools", async () => {
     const listed = await (await connected()).listTools();
-    expect(listed.tools.map((tool) => tool.name).sort()).toEqual([
+    expect(listed.tools.map((tool) => tool.name).toSorted()).toEqual([
       "context",
       "impact",
       "reindex",
@@ -73,11 +73,16 @@ describe("the server lists its tools", () => {
     const schemas = new Map(listed.tools.map((tool) => [tool.name, tool.inputSchema]));
 
     const search = schemas.get("search");
-    expect(Object.keys(search?.properties ?? {}).sort()).toEqual(["path", "query", "top_k"]);
+    expect(Object.keys(search?.properties ?? {}).toSorted()).toEqual(["path", "query", "top_k"]);
     expect(search?.required).toEqual(["path", "query"]);
 
     const structure = schemas.get("structure");
-    expect(Object.keys(structure?.properties ?? {}).sort()).toEqual(["node", "op", "repo", "to"]);
+    expect(Object.keys(structure?.properties ?? {}).toSorted()).toEqual([
+      "node",
+      "op",
+      "repo",
+      "to",
+    ]);
     expect(structure?.required).toEqual(["repo", "op", "node"]);
 
     for (const [name, args] of [
@@ -97,8 +102,8 @@ describe("The CLI and the MCP server are two interfaces over one library", () =>
     for (const tool of listed.tools) {
       const verb = commands[`qsm-index ${tool.name}`];
       expect(verb).toBeDefined();
-      const cliArgs = (verb?.args ?? []).map((arg) => arg.name).sort();
-      expect(Object.keys(tool.inputSchema.properties ?? {}).sort()).toEqual(cliArgs);
+      const cliArgs = (verb?.args ?? []).map((arg) => arg.name).toSorted();
+      expect(Object.keys(tool.inputSchema.properties ?? {}).toSorted()).toEqual(cliArgs);
     }
   });
 

@@ -105,7 +105,7 @@ function rank(rows: readonly Row[], now: number, limit: number): Hit[] {
       snippet: row.snippet.replaceAll(/\s+/g, " ").trim(),
       score: -row.bm + FRESH_WEIGHT * freshness(row.ended_at, now),
     }))
-    .sort((a, b) => b.score - a.score)
+    .toSorted((a, b) => b.score - a.score)
     .slice(0, limit);
 }
 

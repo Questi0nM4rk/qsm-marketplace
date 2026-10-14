@@ -384,11 +384,11 @@ function worsePaths(previous: Tally, current: Tally, renames: Renames): WorsePat
       out.push({ path, before, after });
     }
   }
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return out.toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
 function occurrenceKey(finding: Finding, renames: Renames): string {
-  const files = finding.locations.map((l) => renames.get(l.path) ?? l.path).sort();
+  const files = finding.locations.map((l) => renames.get(l.path) ?? l.path).toSorted();
   return [finding.identity, ...files].join("\0");
 }
 
@@ -688,7 +688,7 @@ function changedBetween(root: string, beforeRef: string, after: string): string[
   if (changed === null || untracked === null) {
     return null;
   }
-  return scoredPaths(root, [...new Set([...changed, ...untracked])].sort());
+  return scoredPaths(root, [...new Set([...changed, ...untracked])].toSorted());
 }
 
 function renamedBetween(root: string, beforeRef: string, after: string): Renames {
@@ -956,7 +956,7 @@ async function setsFor(
       typeof spec.fileSet === "string" ? [] : [spec.fileSet.changedPlus],
     ),
   );
-  for (const n of [...depths].sort((a, b) => a - b)) {
+  for (const n of [...depths].toSorted((a, b) => a - b)) {
     const plus = await changedPlusSet(base.root, trees, base.changed, n);
     const { only } = base;
     const files = only === undefined ? plus.files : plus.files.filter((f) => only.includes(f));

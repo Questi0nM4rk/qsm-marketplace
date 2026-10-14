@@ -50,7 +50,7 @@ function meanRow(n: Vertex, col: readonly Vertex[], edges: readonly Link[]): num
 function sortBy(col: readonly Vertex[], by: readonly Vertex[], edges: readonly Link[]): Vertex[] {
   return col
     .map((n, i) => ({ n, i, k: meanRow(n, by, edges) ?? Number.POSITIVE_INFINITY }))
-    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .toSorted((a, b) => a.k - b.k || a.i - b.i)
     .map((x) => x.n);
 }
 
@@ -123,7 +123,7 @@ function waypoints(a: Placed, b: Placed, columns: readonly Column[]): [number, n
   const between = columns.filter((c) =>
     forward ? c.x > a.x && c.x < b.x : c.x < a.x && c.x > b.x,
   );
-  const lanes = (forward ? between : [...between].reverse()).flatMap((c): [number, number][] => {
+  const lanes = (forward ? between : between.toReversed()).flatMap((c): [number, number][] => {
     const t = (c.x + c.w / 2 - start[0]) / (end[0] - start[0]);
     const want = start[1] + t * (end[1] - start[1]);
     const y = c.gaps.reduce((best, g) => (Math.abs(g - want) < Math.abs(best - want) ? g : best));

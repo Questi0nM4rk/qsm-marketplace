@@ -148,7 +148,7 @@ test("Two turns: the second counts only the tool_use blocks its own messages add
   });
 
   const rec = sessionIn(store, "s2");
-  expect(Object.entries(rec.uses.tools).sort(([a], [b]) => a.localeCompare(b))).toEqual([
+  expect(Object.entries(rec.uses.tools).toSorted(([a], [b]) => a.localeCompare(b))).toEqual([
     ["Bash", 2],
     ["Read", 1],
   ]);

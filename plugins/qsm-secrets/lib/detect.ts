@@ -197,7 +197,7 @@ export function secretSpans(text: string): Span[] {
   }));
   const all = [...shapeSpans(text), ...contextSpans(text), ...bareRuns(text)]
     .filter((span) => !placeholders.some((p) => intersects(span, p)))
-    .sort((a, b) => a.start - b.start || b.end - a.end);
+    .toSorted((a, b) => a.start - b.start || b.end - a.end);
   const kept: Span[] = [];
   for (const span of all) {
     if (span.start >= (kept.at(-1)?.end ?? 0)) {

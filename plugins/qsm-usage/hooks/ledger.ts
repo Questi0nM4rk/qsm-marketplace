@@ -278,7 +278,7 @@ export function addToon(
  * lands on the turn that just ended, once, and on the session always. */
 export function addCost(rec: SessionRecord, usd: number): void {
   rec.costUsd = usd;
-  const last = [...rec.turns].reverse().find((t) => t.agentId === null);
+  const last = rec.turns.toReversed().find((t) => t.agentId === null);
   if (last !== undefined && last.costUsd === null) {
     last.costUsd = usd;
   }

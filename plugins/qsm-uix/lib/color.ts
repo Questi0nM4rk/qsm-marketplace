@@ -158,7 +158,7 @@ export function summarizeRegion(pixels: readonly Pixel[], top: number): RegionSu
   // finding that cites "the dominant colour" must not depend on which pixel the dump happened to
   // reach first.
   const palette = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, top)
     .map(([hex, count]) => ({
       hex,

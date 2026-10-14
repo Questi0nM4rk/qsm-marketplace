@@ -42,7 +42,7 @@ export function searchedNames(root: string): ReadonlySet<string> {
 /** A whole word: a letter, digit, underscore or hyphen on either side continues it. */
 function wordsOf(names: ReadonlySet<string>): RegExp | null {
   const alt = [...names]
-    .sort((a, b) => b.length - a.length)
+    .toSorted((a, b) => b.length - a.length)
     .map((n) => n.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return alt.length === 0 ? null : new RegExp(`(?<![\\w-])(?:${alt.join("|")})(?![\\w-])`, "g");
 }
@@ -121,7 +121,7 @@ function scan(text: string, found: Found, { self, known, words }: Scope): void {
 
 const plain = (kind: RefKind, names: Iterable<string>): Reference[] =>
   [...names]
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
     .map((name) => ({ name, kind, dependency: false, items: [] }));
 
 /** The names found in `files`; `mcp` are servers the plugin declares beyond what the text names. */
@@ -145,9 +145,9 @@ export function refsOfFiles(
       name,
       kind: "plugin" as const,
       dependency: dependencies.includes(name),
-      items: [...set].filter((x) => x !== "").sort((a, b) => a.localeCompare(b)),
+      items: [...set].filter((x) => x !== "").toSorted((a, b) => a.localeCompare(b)),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .toSorted((a, b) => a.name.localeCompare(b.name));
   return [
     ...pluginRefs,
     ...plain("tool", found.tools),

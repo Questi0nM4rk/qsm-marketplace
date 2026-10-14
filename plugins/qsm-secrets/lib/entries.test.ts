@@ -61,7 +61,7 @@ describe("namespaceMetadata", () => {
       .split("\n")
       .filter((line) => line.includes(":"))
       .map((line) => line.slice(0, line.indexOf(":")));
-    expect([...new Set(labels)].sort()).toEqual([
+    expect([...new Set(labels)].toSorted()).toEqual([
       "folder",
       "name",
       "namespace",

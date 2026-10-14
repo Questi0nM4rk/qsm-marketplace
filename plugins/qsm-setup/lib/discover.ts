@@ -67,5 +67,5 @@ export function discoverPlugins(root: string): PluginNode[] {
       ...readQsm(dir),
     });
   }
-  return nodes.sort((a, b) => a.name.localeCompare(b.name));
+  return nodes.toSorted((a, b) => a.name.localeCompare(b.name));
 }

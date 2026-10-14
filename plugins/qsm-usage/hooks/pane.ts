@@ -49,7 +49,7 @@ export function largestItems(b: Breakdown, rec: SessionRecord | null, count = 3)
     ...b.skills.map((s) => unusedLine("skill", s.name, s.tokens, rec?.uses.skills[s.name] ?? 0)),
     ...b.agents.map((a) => unusedLine("agent", a.name, a.tokens, rec?.uses.agents[a.name] ?? 0)),
   ];
-  return items.sort((x, y) => y.tokens - x.tokens).slice(0, count);
+  return items.toSorted((x, y) => y.tokens - x.tokens).slice(0, count);
 }
 
 /** The recorded start breakdown while no main-thread turn has run, else null. */
@@ -64,8 +64,8 @@ export function paneMarkdown(b: Breakdown, rec: SessionRecord | null): string {
   const u = used(b);
   const left = Math.max(0, b.window - u);
   const percent = b.window > 0 ? Math.round((u / b.window) * 100) : 0;
-  const rows = [...b.categories]
-    .sort((x, y) => y.tokens - x.tokens)
+  const rows = b.categories
+    .toSorted((x, y) => y.tokens - x.tokens)
     .map((c) => `| ${c.name} | ${kTokens(c.tokens)} |`);
   const items = largestItems(b, rec).map((item, i) => `${i + 1}. ${item.line}`);
   const turns = rec?.turns.filter((t) => t.agentId === null).length ?? 0;

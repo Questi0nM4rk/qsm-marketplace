@@ -72,7 +72,7 @@ test("pull makes one task per untaken row, marks it taken, and a second pull mak
   expect(first.rejected[0]?.reason).toContain("qsm-nope");
   expect(rows.map((r) => r.data.taken)).toEqual([true, true, true, false]);
   const made = tasks(root);
-  expect(made.map((t) => t.title).sort((a, b) => a.localeCompare(b))).toEqual([
+  expect(made.map((t) => t.title).toSorted((a, b) => a.localeCompare(b))).toEqual([
     "qsm-a:one: first",
     "qsm-a:one: second",
   ]);
