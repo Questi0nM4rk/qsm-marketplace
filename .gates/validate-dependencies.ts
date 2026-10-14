@@ -4,7 +4,8 @@
 // lists must be the same set. Every mismatch of every plugin is reported in one run.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { isRecord, pluginDirs, readJson, rel, report } from "./walk.ts";
+import { isRecord } from "../lib/outcome.ts";
+import { pluginDirs, readJson, rel, report } from "./walk.ts";
 
 const HEADING = "### Requirement: Dependencies";
 const BULLET = /^- `([^`]+)`:/;

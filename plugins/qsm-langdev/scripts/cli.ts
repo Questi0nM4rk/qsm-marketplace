@@ -3,9 +3,16 @@
 // qsm-langdev: per-language quality checks over one declarative registry.
 
 import { readFileSync } from "node:fs";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   compareTrees,
   type DoctorRow,
@@ -58,8 +65,7 @@ import {
 } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import's inferred type widens every arg `type` to string; a validating loader belongs in root lib/qsm-manifest.ts
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 function err(line: string): void {
   process.stderr.write(`${line}\n`);
@@ -91,27 +97,9 @@ function guarded(handler: Handler): Handler {
   };
 }
 
-/** A string argument, or undefined when it was not given. The parser coerces each value to its
- * manifest type, so another type here is a manifest that disagrees with this handler. */
-function optString(call: Call, name: string): string | undefined {
-  const value = call.args[name];
-  if (value === undefined || typeof value === "string") {
-    return value;
-  }
-  return refuse("usage", `${name} expects a string`);
-}
-
-function optStrings(call: Call, name: string): string[] | undefined {
-  const value = call.args[name];
-  if (value === undefined || Array.isArray(value)) {
-    return value;
-  }
-  return refuse("usage", `${name} expects a list`);
-}
-
 /** The argument when it is one of `values`, undefined when it was not given. */
 function optOneOf<T extends string>(call: Call, name: string, values: readonly T[]): T | undefined {
-  const value = optString(call, name);
+  const value = optionalString(call, name);
   if (value === undefined) {
     return undefined;
   }
@@ -141,7 +129,7 @@ function parseLanguages(csv: string): Language[] {
   return [...new Set(resolved.filter((language): language is Language => language !== null))];
 }
 
-const dirOf = (call: Call): string => optString(call, "dir") ?? ".";
+const dirOf = (call: Call): string => optionalString(call, "dir") ?? ".";
 
 function printVerdicts(verdicts: readonly Verdict[], changedCount: number): void {
   if (verdicts.length === 0) {
@@ -179,10 +167,10 @@ const check: Handler = guarded(async (call) => {
     refuse("missing", `qsm-langdev is not set up in ${root}: run qsm-langdev init`);
   }
   const config = readGatesConfig(root);
-  const named = optString(call, "against");
+  const named = optionalString(call, "against");
   const against = named ?? "HEAD";
   const beforeRef = resolveAgainst(root, against, named !== undefined);
-  const lang = optString(call, "lang");
+  const lang = optionalString(call, "lang");
 
   const { changed, sets, verdicts, store, warnings } = await compareTrees(
     root,
@@ -191,8 +179,8 @@ const check: Handler = guarded(async (call) => {
     {
       at,
       languages: lang === undefined ? config.languages : parseLanguages(lang),
-      allFindings: call.args.allFindings === true,
-      given: optStrings(call, "path") ?? [],
+      allFindings: flagArg(call, "allFindings"),
+      given: stringList(call, "path"),
     },
   );
 
@@ -306,7 +294,7 @@ const languages: Handler = guarded((call) => {
   const action = optOneOf(call, "action", LANGUAGES_ACTIONS) ?? "list";
   const root = requireRepo(".");
   const config = readGatesConfig(root);
-  const selected = applyLanguagesEdit(root, config, action, optString(call, "name"));
+  const selected = applyLanguagesEdit(root, config, action, optionalString(call, "name"));
   const text =
     selected.length === 0
       ? "(none — tree-derived mode: every language with matching files runs)"
@@ -323,9 +311,9 @@ function describeScaffold(action: ScaffoldAction): string {
 }
 
 /** `--target ts=browser`, repeatable, as the map gates.json records. */
-function parseTargets(raw: readonly string[] | undefined): Record<string, string> {
+function parseTargets(raw: readonly string[]): Record<string, string> {
   const parsed: Record<string, string> = {};
-  for (const pair of raw ?? []) {
+  for (const pair of raw) {
     const sep = pair.indexOf("=");
     if (sep < 1) {
       refuse(
@@ -384,8 +372,8 @@ const init: Handler = guarded((call) => {
   }
   err(`[qsm-langdev] detected: ${detected.join(", ")}`);
   const config = readGatesConfig(root);
-  const profile = optString(call, "profile") ?? config.profile ?? "general";
-  const targets = { ...config.targets, ...parseTargets(optStrings(call, "target")) };
+  const profile = optionalString(call, "profile") ?? config.profile ?? "general";
+  const targets = { ...config.targets, ...parseTargets(stringList(call, "target")) };
   const actions = seedProfile(root, profile, detected, targets);
   const { languages: widened, added } = widenLanguages(config.languages, detected);
   const hooks = seedGates(config.hooks);
@@ -480,16 +468,16 @@ async function structureJudgeAll(trees: StructureTree[]): Promise<
 }
 
 const structure: Handler = guarded(async (call) => {
-  const against = optString(call, "against");
-  const session = optString(call, "session");
-  const agent = optString(call, "agent");
+  const against = optionalString(call, "against");
+  const session = optionalString(call, "session");
+  const agent = optionalString(call, "agent");
   if (against !== undefined && session !== undefined) {
     return fail(
       "usage",
       "--against and --session both name the commit to compare against; pass one",
     );
   }
-  const trees = structureTreesToJudge(optString(call, "path"), {
+  const trees = structureTreesToJudge(optionalString(call, "path"), {
     ...(against === undefined ? {} : { against }),
     ...(session === undefined ? {} : { session }),
     ...(agent === undefined ? {} : { agent }),
@@ -627,10 +615,10 @@ const hook: Handler = guarded(async (call) => {
 
 const edited: Handler = guarded(async (call) => {
   const editor: Editor = {
-    sessionId: required(optString(call, "session"), "session"),
-    agentId: optString(call, "agent") ?? MAIN_AGENT,
+    sessionId: required(optionalString(call, "session"), "session"),
+    agentId: optionalString(call, "agent") ?? MAIN_AGENT,
   };
-  const text = await editFindings(editor, required(optString(call, "file"), "file"));
+  const text = await editFindings(editor, required(optionalString(call, "file"), "file"));
   return ok({ text }, text ?? "");
 });
 

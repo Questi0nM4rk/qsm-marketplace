@@ -158,7 +158,8 @@ function noStatus(binary: string): SpawnFailure {
   return { reason: `${binary} exited with no status`, failedRun: true };
 }
 
-function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
+/** The exit status of a run that finished normally, else why it did not. */
+function spawnStatus(result: Spawned, binary: string): number | SpawnFailure {
   if (result.error) {
     const code = isErrno(result.error) ? result.error.code : undefined;
     if (code === "ENOENT") {
@@ -175,7 +176,12 @@ function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
   if (result.status === null) {
     return noStatus(binary);
   }
-  return null;
+  return result.status;
+}
+
+function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
+  const status = spawnStatus(result, binary);
+  return typeof status === "number" ? null : status;
 }
 
 /** Tool output names a file however it likes; one form, relative to the
@@ -244,14 +250,9 @@ async function readOne(run: OneRun): Promise<Score> {
   const { binary } = spec;
   const where = run.where ?? "";
   const result = await spawnAsync(root, resolveBinary(root, binary), args, timeoutMs);
-  const failure = spawnFailure(result, binary);
-  if (failure !== null) {
-    return { ...failure, reason: `${where}${failure.reason}` };
-  }
-  const exitCode = result.status;
-  if (exitCode === null) {
-    const unread = noStatus(binary);
-    return { ...unread, reason: `${where}${unread.reason}` };
+  const exitCode = spawnStatus(result, binary);
+  if (typeof exitCode !== "number") {
+    return { ...exitCode, reason: `${where}${exitCode.reason}` };
   }
   const stdout = readReport ? readReport() : (result.stdout ?? "");
   const stderr = result.stderr ?? "";

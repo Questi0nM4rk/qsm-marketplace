@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { Glob } from "bun";
 import { cacheDir, writeAtomic } from "./cache-dir.ts";
 import type { Finding, Tally } from "./findings.ts";
-import { isErrno, isRecord, recordOf } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { isErrno, recordOf } from "./json.ts";
 import type { EnforcementPoint } from "./registry.ts";
 
 /**

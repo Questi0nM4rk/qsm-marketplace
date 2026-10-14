@@ -8,9 +8,6 @@ export function rel(path: string): string {
   return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
 }
 
-export const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-
 /** The parsed JSON file at path, to be narrowed by the caller, or null when there is none. */
 export function readJson(path: string): unknown {
   if (!existsSync(path)) {

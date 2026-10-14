@@ -2,7 +2,8 @@
 // Plugin manifests, marketplace entries, skill/agent/command frontmatter, hooks.json shape.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { isRecord, manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
+import { isRecord } from "../lib/outcome.ts";
+import { manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
 
 const findings: string[] = [];
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);

@@ -1,12 +1,9 @@
 // Narrowing for values of unknown shape (JSON.parse, a spawn's stdout): a guard checks what the
 // caller reads, so no cast stands in for the check.
 
-export type Rec = Record<string, unknown>;
+import { isRecord } from "../../../lib/outcome.ts";
 
-/** An object that is neither null nor an array. */
-export function isRecord(value: unknown): value is Rec {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export type Rec = Record<string, unknown>;
 
 export function recordOf(value: unknown): Rec | null {
   return isRecord(value) ? value : null;
