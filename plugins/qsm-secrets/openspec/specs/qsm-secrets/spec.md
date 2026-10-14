@@ -118,7 +118,7 @@ failure, not a silent success, when the key was not stored.
 
 ### Requirement: Rename a stored key without exposing its value
 
-The wrapper SHALL rename a stored key, optionally into another folder, on both backends, with the
+The wrapper SHALL rename a stored key, optionally into another namespace, on both backends, with the
 value read and written inside its own process and never printed. It SHALL write the new entry and
 read it back equal before it removes the old one, and SHALL refuse, as blocked, a target that is
 already stored.
@@ -133,6 +133,19 @@ already stored.
 
 - **WHEN** the caller renames a key to a name that is already stored
 - **THEN** the wrapper refuses with `blocked` and both entries are unchanged
+
+#### Scenario: A libsecret entry stored before namespaces existed is moved
+
+- **WHEN** an entry with no namespace is stored and the caller runs `rename <key> <new> --legacy`
+- **THEN** the entry is stored under `qsm` (or `--to-folder`) with the same value, the old one is
+  gone, no value is printed, and the error that `list` and `mask` raise for such an entry names
+  `qsm-secrets rename <key> <new> --legacy`
+
+#### Scenario: A legacy entry shares its name with a namespaced one
+
+- **WHEN** `rename --legacy` names a key that another namespace also holds
+- **THEN** the wrapper refuses with `blocked`, naming that namespace, and both entries are unchanged,
+  because the old entry is found and removed by its key alone and would take the other with it
 
 #### Scenario: The copy does not read back equal
 
@@ -290,6 +303,12 @@ its first operation it SHALL check, in one process, that the session bus names
 
 `list` SHALL print the names of stored keys for both backends. A value SHALL NOT appear in its
 output, its error text, or its JSON envelope, whatever the backend's own listing prints.
+
+#### Scenario: list with no namespace named shows every namespace
+
+- **WHEN** `list` runs with no `--folder` and `QSM_SECRETS_FOLDER` unset, on either backend
+- **THEN** it prints every key this wrapper stored as `<namespace>/<key>`, the capture namespace
+  included, and with a namespace named it prints that namespace's bare key names only
 
 #### Scenario: list never prints a value
 

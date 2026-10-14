@@ -4,8 +4,8 @@
 qsm-secrets pipe <key> -- <cmd> [args...]
 qsm-secrets env <key>=<ENVVAR> -- <cmd> [args...]
 qsm-secrets has <key>
-qsm-secrets list
-qsm-secrets rename <from> <to> [--folder <f>] [--to-folder <f>]
+qsm-secrets list [--folder <ns>]
+qsm-secrets rename <from> <to> [--folder <ns>] [--to-folder <ns>] [--legacy]
 qsm-secrets prune [--dry-run]
 qsm-secrets check <key>=<ENVVAR> -- <probe> [args...]
 qsm-secrets render <template> --out <name>
@@ -22,6 +22,11 @@ in a transcript. Neither prints a value.
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,
 `keyring-library`, `credential-file`, `fd3-to-output`, `single-quoted-placeholder` or
 `unreadable-command`. The `tool.call` hook calls it; run it by hand to see why a command was refused.
+
+`list` with no `--folder` and no `QSM_SECRETS_FOLDER` prints every namespace, each key as
+`<namespace>/<key>`. `rename --legacy` moves an entry that libsecret stored before namespaces
+existed (it has none) into `qsm`, or into `--to-folder`; it is blocked when another namespace holds
+the same name, because the old entry cannot be told apart from it by its attributes.
 
 `rename` writes the new name, reads it back equal, then removes the old one; an existing target is
 refused (exit 5). `prune` removes the capture entries whose id no transcript under

@@ -32,7 +32,7 @@ import {
   runScrub,
   runSet,
 } from "../lib/run.ts";
-import { namespaceOf, parseEnvPair } from "../lib/vault.ts";
+import { LEGACY_NAMESPACE, listScopeOf, namespaceOf, parseEnvPair } from "../lib/vault.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
 const manifest = manifestJson as QsmManifest;
@@ -102,9 +102,17 @@ const probe: Handler = (call) => {
 
 const rename: Handler = (call) =>
   attempt(() => {
-    const from = { namespace: namespace(call), key: call.args.from as string };
+    if (call.args.legacy === true && call.args.folder !== undefined) {
+      return fail("usage", "--legacy names the entry that has no folder; drop --folder");
+    }
+    const from = {
+      namespace: call.args.legacy === true ? LEGACY_NAMESPACE : namespace(call),
+      key: call.args.from as string,
+    };
     const to = {
-      namespace: (call.args.toFolder as string | undefined) ?? from.namespace,
+      namespace:
+        (call.args.toFolder as string | undefined) ??
+        (call.args.legacy === true ? namespace(call) : from.namespace),
       key: call.args.to as string,
     };
     const done = runRename(from, to);
@@ -138,7 +146,7 @@ const has: Handler = (call) =>
 
 const list: Handler = (call) =>
   attempt(() => {
-    const listed = runList(namespace(call));
+    const listed = runList(listScopeOf(call.args.folder as string | undefined, process.env));
     return ok(listed, listed.keys.length === 0 ? undefined : listed.keys.join("\n"));
   });
 

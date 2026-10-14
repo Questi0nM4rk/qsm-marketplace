@@ -41,14 +41,14 @@ is your output.
 | Question | Verb | Comes back |
 | --- | --- | --- |
 | Is it stored? | `qsm-secrets has <key>` | ok when stored, missing when not |
-| What did we store? | `qsm-secrets list` | key names only |
+| What did we store? | `qsm-secrets list` | key names only, `<namespace>/<key>` across every namespace when no `--folder` is given |
 | What else is in there? | `qsm-secrets inspect` | name, username, folder per entry |
 | Does the stored token still work? | `qsm-secrets check <key>=<VAR> -- <probe>` | ok, or failed with the probe's exit code |
 | Is the tooling usable? | `qsm-secrets doctor` | every prerequisite, with a fix |
 
 Run `has` before building a command around a key, because a failed `has` is cheap and a deployment
 that stopped half-way on a missing credential is not. `--folder <name>` points any verb at another
-vault folder; an empty name searches the whole vault by key name.
+namespace; an empty name searches the whole vault by key name.
 
 ## Rules and their reasons
 
