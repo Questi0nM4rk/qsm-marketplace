@@ -48,7 +48,7 @@ works until you choose one. See [INSTALL.md](INSTALL.md).
 qsm-secrets set github-token                                 # you type the value at the backend's prompt
 qsm-secrets pipe github-token -- gh auth login --with-token  # value on stdin
 qsm-secrets env npm-token=NPM_TOKEN -- npm publish           # value in one variable
-qsm-secrets list                                             # key names, never a value
+qsm-secrets list                                             # key names of every namespace, never a value
 qsm-secrets check npm-token=NPM_TOKEN -- npm whoami          # does the stored token still work: ok or failed
 qsm-secrets rename old-name new-name                         # value never printed, old name removed last
 qsm-secrets prune --dry-run                                  # captures no transcript names; drop --dry-run to remove
@@ -82,7 +82,9 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   session is named in its transcript only once the prompt is rewritten.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.
 - `set` needs a terminal and stores one line only.
-- The default namespace is the folder `qsm` (`--folder` or `QSM_SECRETS_FOLDER`).
+- The default namespace is `qsm` (`--folder` or `QSM_SECRETS_FOLDER`); `list` with neither shows every
+  namespace. A libsecret entry stored before namespaces existed fails `list` and `mask` until
+  `qsm-secrets rename <key> <new> --legacy` moves it into one.
 - libsecret needs a Secret Service on the session bus (GNOME Keyring, KeePassXC). Without one the
   call answers `missing`. It never falls back to Bitwarden.
 - The content denylist is only as good as the names you approved. A name never written down on

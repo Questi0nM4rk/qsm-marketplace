@@ -130,20 +130,26 @@ case "$verb" in
       fi
     done ;;
   lookup)
+    ns=""
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
+    if [ -z "$ns" ]; then
+      for f in "$store"/*__"$key"; do [ -f "$f" ] && { cat "$f"; exit 0; }; done; exit 1
+    fi
     [ -f "$store/\${ns}__\${key}" ] && cat "$store/\${ns}__\${key}" || exit 1 ;;
   store)
+    ns=none
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
     if [ -t 0 ]; then printf '%s' "$FAKE_TYPED" > "$store/\${ns}__\${key}"; else cat > "$store/\${ns}__\${key}"; fi ;;
   clear)
+    ns=""
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
-    rm -f "$store/\${ns}__\${key}" ;;
+    if [ -z "$ns" ]; then rm -f "$store"/*__"$key"; else rm -f "$store/\${ns}__\${key}"; fi ;;
   *) exit 1 ;;
 esac
 `;
@@ -369,6 +375,18 @@ for (const flavor of FLAVORS) {
         ).toEqual(["github-token", "npm-token"]);
         expect(leaked(run)).toBeNull();
         expect(cli(["list", "--folder", "work"]).stdout.trim()).toBe("work-token");
+      });
+
+      test("with no --folder and no QSM_SECRETS_FOLDER lists every namespace, capture included", () => {
+        const run = spawned("env", ["-u", "QSM_SECRETS_FOLDER", "bun", CLI, "list"], environment());
+        expect(run.code).toBe(0);
+        expect(
+          run.stdout
+            .trim()
+            .split("\n")
+            .sort((a, b) => a.localeCompare(b)),
+        ).toEqual(["capture/cap_x", "qsm/github-token", "qsm/npm-token", "work/work-token"]);
+        expect(leaked(run)).toBeNull();
       });
 
       test("--json carries the same names inside the envelope", () => {
@@ -821,6 +839,11 @@ describe("rbw: an entry another tool stored", () => {
     expect(inspected.stdout).toContain("stored-by: other");
     expect(leaked(inspected)).toBeNull();
   });
+
+  test("rename --legacy finds nothing: rbw entries always have a folder", () => {
+    const env = { QSM_SECRETS_BACKEND: "rbw", PATH: pathWith(bin) };
+    expect(spawned("bun", [CLI, "rename", "legacy-key", "x", "--legacy"], env).code).toBe(4);
+  });
 });
 
 /** `search` stdout carries the secret line, so a value shaped like attribute lines is the trap. */
@@ -883,10 +906,74 @@ describe("libsecret: the shape of secret-tool's output", () => {
       const listed = run(["list", "--folder", "capture"]);
       expect(listed.code).not.toBe(0);
       expect(listed.stderr).toContain("has no namespace: OLD_TOKEN");
+      expect(listed.stderr).toContain("qsm-secrets rename OLD_TOKEN <new> --legacy");
+      expect(listed.stderr).not.toContain("secret-tool clear");
       expect(run(["mask", "--all"], JSON.stringify(["tok=hunter2"])).code).not.toBe(0);
     } finally {
       rmSync(legacy);
     }
+  });
+
+  describe("rename --legacy moves an entry that has no namespace", () => {
+    const legacy = (key: string): string => join(store, `none__${key}`);
+
+    test("into the default namespace, under the same or a new name, with the value intact", () => {
+      writeFileSync(legacy("OLD_TOKEN"), "old-value");
+      try {
+        const done = run(["rename", "OLD_TOKEN", "OLD_TOKEN", "--legacy"]);
+        expect(done.code).toBe(0);
+        expect(done.stdout).toContain("renamed legacy/OLD_TOKEN to qsm/OLD_TOKEN");
+        expect(done.stdout + done.stderr).not.toContain("old-value");
+        expect(existsSync(legacy("OLD_TOKEN"))).toBe(false);
+        expect(readFileSync(join(store, "qsm__OLD_TOKEN"), "utf8")).toBe("old-value");
+        expect(run(["list", "--folder", "capture"]).code).toBe(0);
+      } finally {
+        rmSync(join(store, "qsm__OLD_TOKEN"), { force: true });
+      }
+    });
+
+    test("with --to-folder and a new name", () => {
+      writeFileSync(legacy("OLD_TOKEN"), "old-value");
+      try {
+        expect(run(["rename", "OLD_TOKEN", "fresh", "--legacy", "--to-folder", "work"]).code).toBe(
+          0,
+        );
+        expect(readFileSync(join(store, "work__fresh"), "utf8")).toBe("old-value");
+      } finally {
+        rmSync(join(store, "work__fresh"), { force: true });
+      }
+    });
+
+    test("is blocked when the name is also stored in a namespace, and changes nothing", () => {
+      writeFileSync(legacy("npm-token"), "old-value");
+      try {
+        const blocked = run(["rename", "npm-token", "x", "--legacy"]);
+        expect(blocked.code).toBe(5);
+        expect(blocked.stderr).toContain("also stored in namespace qsm");
+        expect(readFileSync(legacy("npm-token"), "utf8")).toBe("old-value");
+        expect(readFileSync(join(store, "qsm__npm-token"), "utf8")).toBe("npm-value");
+      } finally {
+        rmSync(legacy("npm-token"), { force: true });
+      }
+    });
+
+    test("with the same name, the value is never held only in the process", () => {
+      writeFileSync(legacy("OLD_TOKEN"), "old-value");
+      writeFileSync(join(store, "qsm__OLD_TOKEN.qsm-rename"), "leftover");
+      try {
+        const blocked = run(["rename", "OLD_TOKEN", "OLD_TOKEN", "--legacy"]);
+        expect(blocked.code).toBe(5);
+        expect(readFileSync(legacy("OLD_TOKEN"), "utf8")).toBe("old-value");
+      } finally {
+        rmSync(legacy("OLD_TOKEN"), { force: true });
+        rmSync(join(store, "qsm__OLD_TOKEN.qsm-rename"), { force: true });
+      }
+    });
+
+    test("a name that is not a legacy entry is missing, and --folder cannot join --legacy", () => {
+      expect(run(["rename", "npm-token", "x", "--legacy"]).code).toBe(4);
+      expect(run(["rename", "a", "b", "--legacy", "--folder", "qsm"]).code).toBe(2);
+    });
   });
 });
 
@@ -913,7 +1000,13 @@ describe("guard", () => {
     const result = spawnSync("bun", [CLI, "guard", "--json"], {
       encoding: "utf8",
       input: command,
-      env: { ...process.env, HOME: "/home/guard", XDG_DATA_HOME: data, XDG_RUNTIME_DIR: runtime },
+      env: {
+        ...process.env,
+        HOME: "/home/guard",
+        XDG_DATA_HOME: data,
+        XDG_RUNTIME_DIR: runtime,
+        PASSWORD_STORE_DIR: join(data, "pass"),
+      },
     });
     const body = JSON.parse(result.stdout) as { code: string; data: { code?: string } | null };
     if (body.code === "blocked") {
@@ -924,6 +1017,7 @@ describe("guard", () => {
 
   const keyrings = `${"$"}XDG_DATA_HOME/keyrings`;
   const rendered = `${"$"}XDG_RUNTIME_DIR/qsm-secrets/s1/kubeconfig`;
+  const passStore = `${"$"}HOME/.password-store`;
 
   test.each([
     ["rbw get github-token", "vault-reader"],
@@ -939,7 +1033,33 @@ describe("guard", () => {
     ["echo $(rbw get x)", "vault-reader"],
     ["bash -c 'echo hi; rbw get x'", "vault-reader"],
     ['sudo bash -c "nice rbw get x"', "vault-reader"],
+    ["gopass show work/token", "vault-reader"],
+    ["keepassxc-cli show db.kdbx entry", "vault-reader"],
+    ["kwallet-query -r entry kdewallet", "vault-reader"],
+    ["op read op://vault/item/field", "vault-reader"],
+    ["secret-tool search --all service qsm", "vault-reader"],
+    ["secret-tool clear service qsm key x", "vault-reader"],
+    ["sudo -u root gopass show x", "vault-reader"],
+    [`gpg -d ${passStore}/work/token.gpg`, "keyring-files"],
+    ["gpg -d ~/.password-store/work/token.gpg", "keyring-files"],
+    [`cat ${"$"}PASSWORD_STORE_DIR/work/token.gpg`, "keyring-files"],
+    [`gpg -d < ${passStore}/work/token.gpg`, "keyring-files"],
+    [`cd ${passStore} && gpg -d work/token.gpg`, "keyring-files"],
     ["busctl --user call org.freedesktop.secrets /a b c", "bus-secrets"],
+    [
+      "busctl --user call org.freedesktop.Secret.Service /org/freedesktop/secrets b c",
+      "bus-secrets",
+    ],
+    ["busctl --user introspect :1.5 /org/freedesktop/secrets/collection/login", "bus-secrets"],
+    [
+      "dbus-send --session --dest=org.freedesktop.secrets /org/freedesktop/secrets x.y",
+      "bus-secrets",
+    ],
+    ["dbus-send --session --dest=org.free''desktop.secrets /a x.y", "bus-secrets"],
+    ["qdbus org.freedesktop.secrets /org/freedesktop/secrets", "bus-secrets"],
+    [`gdbus call -e -d ${"$"}DEST -o /a -m b`, "bus-secrets"],
+    [`d=org.freedesktop.secrets; busctl --user call ${"$"}{d} /a b c`, "bus-secrets"],
+    [`busctl --user call ${"$"}(printf x) /a b c`, "bus-secrets"],
     ["gdbus call -e -d org.freedesktop.secrets -o /a -m b", "bus-secrets"],
     [`cat ${keyrings}/login.keyring`, "keyring-files"],
     [`cat ${keyrings}/../keyrings/login.keyring`, "keyring-files"],
@@ -982,6 +1102,12 @@ describe("guard", () => {
     "which rbw",
     "echo rbw get",
     "busctl --user list",
+    "dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.ListNames",
+    "gdbus call -e -d org.freedesktop.Notifications -o /org/freedesktop/Notifications -m org.freedesktop.Notifications.GetCapabilities",
+    "ls ~/.password-store",
+    "pass-git-helper --help",
+    "gpg --list-keys",
+    "echo gopass op",
     `ls ${keyrings}`,
     "python3 -m pytest tests/test_keyring.py",
     `kubectl --kubeconfig ${rendered} get pods`,
@@ -1003,6 +1129,8 @@ describe("guard", () => {
     `p=${"$"}(date)`,
     "A=1",
     "A=1 <<EOF\nx\nEOF",
+    'dir=$(mktemp -d) && git archive HEAD | tar -x -C "$dir"',
+    "out=$(git archive HEAD | tar -t); echo $out",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
   });

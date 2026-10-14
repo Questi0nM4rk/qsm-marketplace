@@ -10,8 +10,12 @@ import { rbw } from "./rbw.ts";
 
 export interface Backend {
   readonly name: string;
-  /** Name, folder and marker of every entry. Never a value. A backend that cannot list fails loud. */
-  entries: () => Entry[];
+  /**
+   * Name, folder and marker of every entry. Never a value. A backend that cannot list fails loud.
+   * An entry stored before namespaces existed fails loud too, unless `allowLegacy`, where it comes
+   * back in `LEGACY_NAMESPACE`: only `rename` asks, to move it into a namespace.
+   */
+  entries: (allowLegacy?: boolean) => Entry[];
   /** The value as bytes, or null when the key is not stored. */
   read: (namespace: string, key: string) => Uint8Array | null;
   /**

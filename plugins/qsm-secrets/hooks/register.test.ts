@@ -107,6 +107,7 @@ const PROTECTED_READS: [string, string | undefined][] = [
   ["/home/p/.local/share/keyrings/login.keyring", undefined],
   ["/home/p/.local/share/rbw/db", undefined],
   ["/run/user/1/qsm-secrets/s1/kubeconfig", undefined],
+  ["/home/p/.password-store/work/token.gpg", undefined],
   ["/tmp/harmless-name", "/home/p/.local/share/keyrings/login.keyring"],
 ];
 for (const [path, real] of PROTECTED_READS) {
@@ -132,6 +133,39 @@ test("a Grep with no path is judged by the working directory", async ($, on) => 
   cwd = "/home/p/project";
   const ran = await $.tool.call({ tool: "Grep", pattern: "x" } as never);
   expect(ran.result).toBe("ran");
+});
+
+test("a Glob under the pass store, or with a pattern that starts there, is denied", async ($, on) => {
+  fileHost(on, undefined);
+  on("session.cwd", () => ({ value: "/home/p/project" }));
+
+  const byPath = await $.tool.call({
+    tool: "Glob",
+    pattern: "**/*.gpg",
+    path: "/home/p/.password-store",
+  } as never);
+  expect(byPath.deny).toContain("keyring-files");
+  const byPattern = await $.tool.call({
+    tool: "Glob",
+    pattern: "/home/p/.password-store/**",
+  } as never);
+  expect(byPattern.deny).toContain("keyring-files");
+  const ordinary = await $.tool.call({ tool: "Glob", pattern: "src/**/*.ts" } as never);
+  expect(ordinary.result).toBe("ran");
+  const relative = await $.tool.call({
+    tool: "Glob",
+    pattern: "../.password-store/**",
+    path: "/home/p/project",
+  } as never);
+  expect(relative.deny).toContain("keyring-files");
+});
+
+test("a Glob from the home directory lists names and is not denied", async ($, on) => {
+  fileHost(on, undefined);
+  on("session.cwd", () => ({ value: "/home/p" }));
+
+  const listed = await $.tool.call({ tool: "Glob", pattern: "*.md" } as never);
+  expect(listed.result).toBe("ran");
 });
 
 test("a Read of an ordinary file runs", async ($, on) => {

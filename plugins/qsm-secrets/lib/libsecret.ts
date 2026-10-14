@@ -6,7 +6,7 @@ import { binCheck, binPath } from "./bin.ts";
 import type { Check } from "./doctor.ts";
 import type { Entry } from "./entries.ts";
 import { fail } from "./errors.ts";
-import { WRAPPER_MARK } from "./vault.ts";
+import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
 const BIN = "secret-tool";
 const BUS_CLI = "busctl";
@@ -18,7 +18,12 @@ const INSTALL_FIX = "install libsecret (it ships secret-tool)";
 
 /** The attributes every entry of ours carries; `secret-tool` matches on all of them. */
 function attributes(namespace: string, key?: string): string[] {
-  return ["service", "qsm", "namespace", namespace, ...(key === undefined ? [] : ["key", key])];
+  return [
+    "service",
+    "qsm",
+    ...(namespace === LEGACY_NAMESPACE ? [] : ["namespace", namespace]),
+    ...(key === undefined ? [] : ["key", key]),
+  ];
 }
 
 /** Whether something owns the Secret Service name on the session bus, in one process. */
@@ -56,9 +61,10 @@ function ready(): void {
  * its attributes on stderr in hash-table order, so stdout is never read: a value holding the text
  * `attribute.key = X` cannot forge a row. stderr has no item delimiter, so an attribute name that
  * repeats starts the next item; that holds only while every item carries the same three attributes,
- * so an item without a namespace (an older schema) fails loud instead of shifting its neighbours.
+ * so an item without a namespace (an older schema) fails loud instead of shifting its neighbours,
+ * unless the caller is the migration that moves it.
  */
-function entries(): Entry[] {
+function entries(allowLegacy = false): Entry[] {
   ready();
   const found = spawnSync(BIN, ["search", "--all", "service", "qsm"], { encoding: "utf8" });
   const rows: Entry[] = [];
@@ -66,15 +72,15 @@ function entries(): Entry[] {
   const flush = (): void => {
     const key = item.get("key");
     const namespace = item.get("namespace");
-    if (key !== undefined && namespace === undefined) {
+    if (key !== undefined && namespace === undefined && !allowLegacy) {
       fail(
         `a stored entry has no namespace: ${key} (an older schema)`,
-        `remove it with secret-tool clear service qsm key ${key} in your own terminal`,
+        `move it into a namespace with qsm-secrets rename ${key} <new> --legacy`,
         "failed",
       );
     }
-    if (key !== undefined && namespace !== undefined) {
-      rows.push({ name: key, folder: namespace, user: WRAPPER_MARK });
+    if (key !== undefined) {
+      rows.push({ name: key, folder: namespace ?? LEGACY_NAMESPACE, user: WRAPPER_MARK });
     }
     item = new Map();
   };
@@ -101,7 +107,7 @@ function read(namespace: string, key: string): Uint8Array | null {
 /** `secret-tool store` reads the secret from stdin when that is not a terminal. */
 function store(namespace: string, key: string, value?: Uint8Array): void {
   ready();
-  const label = `--label=qsm ${namespace}/${key}`;
+  const label = `--label=qsm ${namespace === LEGACY_NAMESPACE ? "" : `${namespace}/`}${key}`;
   const stored = spawnSync(BIN, ["store", label, ...attributes(namespace, key)], {
     input: value,
     stdio: value === undefined ? "inherit" : ["pipe", "ignore", "pipe"],

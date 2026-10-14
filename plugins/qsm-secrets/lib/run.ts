@@ -23,7 +23,7 @@ import {
 } from "./entries.ts";
 import { fail } from "./errors.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
-import { WRAPPER_MARK } from "./vault.ts";
+import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
 /** The file descriptor `get` writes to. */
 const CHANNEL_FD = 3;
@@ -31,7 +31,12 @@ const CHANNEL_FD = 3;
 const PIPE_HINT = "use qsm-secrets pipe <key> -- <cmd> or qsm-secrets env <key>=<VAR> -- <cmd>";
 
 function missing(namespace: string, key: string): never {
-  const where = namespace === "" ? "the vault" : `namespace ${namespace}`;
+  const where =
+    namespace === ""
+      ? "the vault"
+      : namespace === LEGACY_NAMESPACE
+        ? "the entries stored before namespaces"
+        : `namespace ${namespace}`;
   fail(
     `not stored: ${key}`,
     `check ${where} with qsm-secrets list or qsm-secrets inspect`,
@@ -336,22 +341,40 @@ export function runGet(namespace: string, key: string): { namespace: string; key
 /**
  * `rename`: the value is read into this process and written under the new name, never printed.
  * The new entry is read back and compared before the old one goes, so a failed step leaves the old
- * name intact; a target that exists is refused, never overwritten.
+ * name intact; a target that exists is refused, never overwritten. An entry stored before
+ * namespaces existed is the source when `from.namespace` is `LEGACY_NAMESPACE`.
  */
 export function runRename(
   from: { namespace: string; key: string },
   to: { namespace: string; key: string },
 ): { from: string; to: string } {
+  const legacy = from.namespace === LEGACY_NAMESPACE;
   const label = (side: { namespace: string; key: string }): string =>
-    `${side.namespace}/${side.key}`;
+    side.namespace === LEGACY_NAMESPACE ? `legacy/${side.key}` : `${side.namespace}/${side.key}`;
   if (from.namespace === to.namespace && from.key === to.key) {
     fail("rename needs two different names", "pass a new <to> or --to-folder", "usage");
   }
-  const backend = backendHolding(from.namespace, from.key);
-  if (keyExists(backend.entries(), to.namespace, to.key)) {
+  const backend = activeBackend();
+  const rows = backend.entries(true);
+  if (!keyExists(rows, from.namespace, from.key)) {
+    missing(from.namespace, from.key);
+  }
+  if (keyExists(rows, to.namespace, to.key)) {
     fail(
       `already stored: ${label(to)}`,
       "pick another name, or remove it with qsm-secrets rm",
+      "blocked",
+    );
+  }
+  // An entry with no namespace is found and removed by its key alone, which matches every entry of
+  // that key in every namespace too, so it moves only when nothing else carries the name.
+  const shared = rows.find(
+    (row) => legacy && row.name === from.key && row.folder !== from.namespace,
+  );
+  if (shared !== undefined) {
+    fail(
+      `${from.key} is also stored in namespace ${shared.folder}, and the old entry cannot be told apart from it`,
+      `rename the one in ${shared.folder} to another name first`,
       "blocked",
     );
   }
@@ -359,20 +382,43 @@ export function runRename(
   if (value === null) {
     missing(from.namespace, from.key);
   }
-  backend.store(to.namespace, to.key, value);
-  const copy = backend.read(to.namespace, to.key);
-  if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
-    backend.remove(to.namespace, to.key);
+  // Removing the old entry matches by key alone, so with the same key in the target it would take
+  // the new entry too. Then the value waits under a spare key until the old entry is gone; either
+  // way the value is stored before anything is removed.
+  const holds = legacy && to.key === from.key ? `${to.key}.qsm-rename` : to.key;
+  if (holds !== to.key && keyExists(rows, to.namespace, holds)) {
     fail(
-      `the copy at ${label(to)} did not read back equal, nothing renamed`,
-      `${label(from)} is untouched`,
+      `${label({ namespace: to.namespace, key: holds })} is stored`,
+      "remove that leftover with qsm-secrets rm, then rename again",
+      "blocked",
     );
   }
-  if (!backend.remove(from.namespace, from.key)) {
+  const copyTo = (key: string): void => {
+    try {
+      backend.store(to.namespace, key, value);
+    } catch (error) {
+      backend.remove(to.namespace, key);
+      throw error;
+    }
+    const copy = backend.read(to.namespace, key);
+    if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
+      backend.remove(to.namespace, key);
+      fail(
+        `the copy at ${label({ namespace: to.namespace, key })} did not read back equal, nothing renamed`,
+        `${label(from)} is untouched`,
+      );
+    }
+  };
+  copyTo(holds);
+  if (!backend.remove(from.namespace, from.key) && !legacy) {
     fail(
       `copied to ${label(to)} but could not remove ${label(from)}`,
       `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
     );
+  }
+  if (holds !== to.key) {
+    copyTo(to.key);
+    backend.remove(to.namespace, holds);
   }
   return { from: label(from), to: label(to) };
 }

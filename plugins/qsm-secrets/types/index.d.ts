@@ -25,6 +25,7 @@ export type Secrets = {
     to: string;
     folder?: string;
     toFolder?: string;
+    legacy?: boolean;
   }): Promise<unknown>;
   prune(options: {
     dryRun?: boolean;

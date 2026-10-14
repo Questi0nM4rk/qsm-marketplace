@@ -118,7 +118,7 @@ failure, not a silent success, when the key was not stored.
 
 ### Requirement: Rename a stored key without exposing its value
 
-The wrapper SHALL rename a stored key, optionally into another folder, on both backends, with the
+The wrapper SHALL rename a stored key, optionally into another namespace, on both backends, with the
 value read and written inside its own process and never printed. It SHALL write the new entry and
 read it back equal before it removes the old one, and SHALL refuse, as blocked, a target that is
 already stored.
@@ -133,6 +133,26 @@ already stored.
 
 - **WHEN** the caller renames a key to a name that is already stored
 - **THEN** the wrapper refuses with `blocked` and both entries are unchanged
+
+#### Scenario: A libsecret entry stored before namespaces existed is moved
+
+- **WHEN** an entry with no namespace is stored and the caller runs `rename <key> <new> --legacy`
+- **THEN** the entry is stored under `qsm` (or `--to-folder`) with the same value, the old one is
+  gone, no value is printed, and the error that `list` and `mask` raise for such an entry names
+  `qsm-secrets rename <key> <new> --legacy`
+
+#### Scenario: A legacy entry shares its name with a namespaced one
+
+- **WHEN** `rename --legacy` names a key that another namespace also holds
+- **THEN** the wrapper refuses with `blocked`, naming that namespace, and both entries are unchanged,
+  because the old entry is found and removed by its key alone and would take the other with it
+
+#### Scenario: A legacy entry keeps its name
+
+- **WHEN** `rename --legacy` gives the new entry the same key as the old one
+- **THEN** the value is stored under a spare key in the target and read back, the old entry is
+  removed, the final key is stored and read back, and the spare one is removed, so at no point is
+  the value held only in the process; a leftover spare key is refused as `blocked`
 
 #### Scenario: The copy does not read back equal
 
@@ -290,6 +310,12 @@ its first operation it SHALL check, in one process, that the session bus names
 
 `list` SHALL print the names of stored keys for both backends. A value SHALL NOT appear in its
 output, its error text, or its JSON envelope, whatever the backend's own listing prints.
+
+#### Scenario: list with no namespace named shows every namespace
+
+- **WHEN** `list` runs with no `--folder` and `QSM_SECRETS_FOLDER` unset, on either backend
+- **THEN** it prints every key this wrapper stored as `<namespace>/<key>`, the capture namespace
+  included, and with a namespace named it prints that namespace's bare key names only
 
 #### Scenario: list never prints a value
 
@@ -533,11 +559,18 @@ SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`,
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
-`dbus-send` naming `org.freedesktop.secrets`; a reader of the keyring directory or the vault's data
-directory, by the spelling of the path or the file it resolves to; `python -c` or `node -e` naming a
-keyring library; a reader of the rendered config directory; a reader of a credential file; and
-`qsm-secrets get` with descriptor 3 pointed at the output. It SHALL allow `qsm-secrets` itself
+directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`,
+`kwallet-query` and `op`; `busctl`, `gdbus`, `dbus-send`, `dbus-monitor` and `qdbus` when a word names
+the secrets service by bus name or object path (`org.freedesktop.secrets`, `org.freedesktop.Secret`,
+`/org/freedesktop/secrets`) or holds an expansion, because a destination the guard cannot read could
+be that service; a reader of the keyring directory, the vault's data directory or the pass store
+(`~/.password-store` and `$PASSWORD_STORE_DIR`), `gpg` included, by the spelling of the path or the
+file it resolves to; `python -c` or `node -e` naming a keyring library; a reader of the rendered
+config directory; a reader of a credential file; and `qsm-secrets get` with descriptor 3 pointed at
+the output. Every refusal names the `qsm-secrets` verb to use instead. The guard is a denylist of
+doors to the stored credentials: it does not judge an interpreter's script file (`python3 x.py`),
+which is a named gap, not a verdict. A statement with no words (`A=1`) and a redirect with no word
+name nothing and are judged as nothing. It SHALL allow `qsm-secrets` itself
 otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
 allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
 the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
@@ -562,6 +595,14 @@ because the hook sandbox cannot load WebAssembly.
 
 - **WHEN** an agent runs `cd <data dir> && cat keyrings/login.keyring` or `cat <data dir>/keyr*/login.keyring`
 - **THEN** the call is denied as keyring files
+
+#### Scenario: every door to a store is closed
+
+- **WHEN** an agent runs `gopass show x`, `keepassxc-cli show db e`, `kwallet-query -r e w`,
+  `op read op://v/i/f`, `secret-tool search --all service qsm`, `gpg -d ~/.password-store/x.gpg`,
+  or `busctl call <dest> /org/freedesktop/secrets b c`, or a bus tool with `"$DEST"` as its destination
+- **THEN** the call is denied, the reason names the `qsm-secrets` verb to use instead, and
+  `busctl --user list`, `ls ~/.password-store` and `gpg --list-keys` are not denied
 
 #### Scenario: a lookup is not a run
 
@@ -602,17 +643,25 @@ because the hook sandbox cannot load WebAssembly.
 - **THEN** the call is denied and the reason names the verb, its exit code and its stderr, unless the
   command is exactly `qsm-secrets doctor`, which runs
 
-### Requirement: Read and Grep do not open the credential files
+### Requirement: Read, Grep and Glob do not open the credential files
 
-A function hook on `tool.call` for `Read` and `Grep` SHALL deny a path inside the keyring directory,
-the vault's data directory or the rendered config directory, by its spelling or the file it resolves
-to, and a `Grep` whose path holds one of them (a `Grep` with no path is judged by the session's
-working directory), and SHALL answer with the wrapper to use instead.
+A function hook on `tool.call` for `Read`, `Grep` and `Glob` SHALL deny a path inside the keyring
+directory, the vault's data directory, the pass store or the rendered config directory, by its
+spelling or the file it resolves to, and a `Grep` whose path holds one of them (with no path, the
+session's working directory is judged), and SHALL deny a `Glob` whose path is inside one or whose
+pattern starts inside one, judged by its part before the first wildcard and, when that part is
+relative, joined to the Glob's path (a `Glob` lists names, like `ls`, so a path above a store is
+allowed), and SHALL answer with the wrapper to use instead.
 
 #### Scenario: a file read of the keyring is denied
 
 - **WHEN** an agent reads a file in the keyring directory, or through a link that leads there
 - **THEN** the call is denied and the reason names `qsm-secrets pipe`
+
+#### Scenario: a Glob of the pass store is denied
+
+- **WHEN** an agent globs inside `~/.password-store`, or with a pattern that starts there
+- **THEN** the call is denied, and a Glob of `src/**/*.ts` is not
 
 #### Scenario: an ordinary file is read
 
