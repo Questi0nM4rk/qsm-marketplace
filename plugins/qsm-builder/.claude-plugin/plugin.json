@@ -1,6 +1,5 @@
 {
   "name": "qsm-builder",
-  "version": "0.1.0",
   "types": "./types/index.d.ts",
   "description": "The one path for extending this marketplace: a skill that scaffolds a plugin or places content in the one that already owns the concept, a skill that holds the quality bar and the eval a skill must pass to be kept, a skill with the per-model prompting tables, and a hook that checks every plugin.json the agent writes before the write lands.",
   "keywords": [

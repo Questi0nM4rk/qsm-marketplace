@@ -1,6 +1,5 @@
 {
   "name": "qsm-langdev-shell",
-  "version": "0.1.0",
   "description": "Bash idioms for an agent about to write a script, beside the qsm-langdev gate that checks it.",
   "keywords": [
     "bash",

@@ -4,7 +4,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { CommandArg, QsmManifest } from "../../../lib/qsm-manifest.ts";
-import plugin from "../.claude-plugin/plugin.json" with { type: "json" };
 import manifestJson from "../qsm.json" with { type: "json" };
 import type { Env } from "./paths.ts";
 import { type Runner, spawnRunner } from "./run.ts";
@@ -58,7 +57,7 @@ const SERVER_NAME = "qsm-index";
 
 /** The tools `TOOLS` names, and nothing else, each calling local commands through `run`. */
 export function buildServer(run: Runner = spawnRunner, env: Env = process.env): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: plugin.version });
+  const server = new McpServer({ name: SERVER_NAME, version: "beta" });
   for (const [name, tool] of Object.entries(TOOLS)) {
     const verb = manifest.qsm.commands[`${SERVER_NAME} ${name}`];
     if (verb === undefined) {

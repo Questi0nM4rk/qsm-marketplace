@@ -1,6 +1,5 @@
 {
   "name": "qsm-toolbox",
-  "version": "0.1.0",
   "description": "The index of third-party command-line tools on this machine: one skill whose description is the whole list at a fixed always-on cost, a body that carries the install command, the version probe and our caveat per tool, an installer that walks the same table, and a doctor that says which of them are actually here.",
   "types": "./types/index.d.ts",
   "keywords": [

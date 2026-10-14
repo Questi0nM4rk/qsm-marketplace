@@ -1,6 +1,5 @@
 {
   "name": "qsm-openspec",
-  "version": "0.1.0",
   "description": "Spec-first development on top of the OpenSpec CLI: three skills carry one change from an unresolved idea through an apply-ready proposal, implementation, and spec sync with archive, and a compiled binary reports the installed OpenSpec version and any upstream prompts that duplicate the skills.",
   "types": "./types/index.d.ts",
   "keywords": [

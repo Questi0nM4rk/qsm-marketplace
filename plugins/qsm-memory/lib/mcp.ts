@@ -3,7 +3,6 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import plugin from "../.claude-plugin/plugin.json" with { type: "json" };
 import { MemError } from "./errors.ts";
 import { addNote, currentNotes, dropNote, formatNotes, NOTE_DEFAULT_DAYS } from "./notes.ts";
 import { projectOf } from "./project.ts";
@@ -157,7 +156,7 @@ function registerNotes(server: McpServer): void {
 
 /** Builds the `qsm-memory` MCP server: search, show, list, notes, note. */
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "qsm-memory", version: plugin.version });
+  const server = new McpServer({ name: "qsm-memory", version: "beta" });
   registerSearch(server);
   registerShow(server);
   registerList(server);

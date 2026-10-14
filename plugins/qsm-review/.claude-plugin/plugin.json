@@ -1,6 +1,5 @@
 {
   "name": "qsm-review",
-  "version": "0.1.0",
   "description": "One strict review standard at three depths: a solo pass over a change that stays in the session, a difficulty-scaled workflow pass over a pull or merge request that posts under the caller's own forge account, and a fresh-reader readability score. Plus the rule for answering findings you receive.",
   "keywords": [
     "review",

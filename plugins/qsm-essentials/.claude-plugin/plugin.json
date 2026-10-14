@@ -1,6 +1,5 @@
 {
   "name": "qsm-essentials",
-  "version": "0.1.0",
   "description": "The method every session can draw on: how to look at work before building it, the method skills for design, testing, debugging, refactoring, modelling, architecture, distribution, running and verifying, writing and delegation, and four agents for bounded work.",
   "keywords": [
     "essentials",
