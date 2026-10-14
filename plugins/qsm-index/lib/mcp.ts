@@ -3,14 +3,14 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { CommandArg, QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { type CommandArg, parseManifest } from "../../../lib/qsm-manifest.ts";
 import plugin from "../.claude-plugin/plugin.json" with { type: "json" };
 import manifestJson from "../qsm.json" with { type: "json" };
 import type { Env } from "./paths.ts";
 import { type Runner, spawnRunner } from "./run.ts";
 import { TOOLS, type ToolOutcome } from "./tools.ts";
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 // The SDK's own result type carries an index signature (`_meta` and friends live outside the
 // declared fields), so a plain `{content, isError?}` interface is structurally narrower and TS

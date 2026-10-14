@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type Envelope, OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
+import { type Envelope, isRecord, OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
 import { type CacheFiles, cacheFiles, type Env } from "./paths.ts";
 import { type RunResult, spawnRunner } from "./run.ts";
 import { liveHolder, readStatus } from "./state.ts";
@@ -156,21 +156,17 @@ function isOutcomeCode(value: unknown): value is OutcomeCode {
   return OUTCOME_CODES.some((code) => code === value);
 }
 
-function field(record: object, name: string): unknown {
-  return Reflect.get(record, name);
-}
-
 /** The outcome envelope a CLI printed under `--json`; anything else fails the test. */
 export function parseEnvelope(stdout: string): Envelope {
   const parsed: unknown = JSON.parse(stdout);
-  if (typeof parsed !== "object" || parsed === null) {
+  if (!isRecord(parsed)) {
     throw new Error(`not an envelope: ${stdout}`);
   }
-  const code = field(parsed, "code");
-  const exit = field(parsed, "exit");
-  const reason = field(parsed, "reason");
-  const message = field(parsed, "message");
-  const warnings = field(parsed, "warnings");
+  const code = parsed.code;
+  const exit = parsed.exit;
+  const reason = parsed.reason;
+  const message = parsed.message;
+  const warnings = parsed.warnings;
   if (
     !isOutcomeCode(code) ||
     typeof exit !== "number" ||
@@ -181,7 +177,7 @@ export function parseEnvelope(stdout: string): Envelope {
   ) {
     throw new Error(`not an envelope: ${stdout}`);
   }
-  return { code, exit, reason, message, warnings, data: field(parsed, "data") };
+  return { code, exit, reason, message, warnings, data: parsed.data };
 }
 
 /** Waits for a build that started after `before` to finish. */

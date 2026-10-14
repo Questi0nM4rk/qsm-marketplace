@@ -1,6 +1,7 @@
 // What the structural graph file says: the symbols of one file.
 
 import { readFileSync } from "node:fs";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface CodeSymbol {
   readonly label: string;
@@ -8,7 +9,6 @@ export interface CodeSymbol {
 }
 
 interface GraphNode {
-  readonly id: string;
   readonly label?: string | undefined;
   readonly source_file?: string | undefined;
   /** "L<start line>" */
@@ -19,20 +19,15 @@ export interface Graph {
   readonly nodes: readonly GraphNode[];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
 function parseNode(value: unknown): GraphNode {
-  if (!isRecord(value) || typeof value.id !== "string") {
-    throw new Error("graph node without a string id");
+  if (!isRecord(value)) {
+    throw new Error("graph node is not an object");
   }
   return {
-    id: value.id,
     label: optionalString(value.label),
     source_file: optionalString(value.source_file),
     source_location: optionalString(value.source_location),

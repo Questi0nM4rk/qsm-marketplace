@@ -38,7 +38,7 @@ function parseSettings(text: string): Record<string, unknown> {
  * untouched, or null when it already says so.
  */
 export function withHarnessMemoryOff(existing: string | null): string | null {
-  const settings = existing === null ? {} : parseSettings(existing);
+  const settings = existing === null || existing === "" ? {} : parseSettings(existing);
   const days = settings.cleanupPeriodDays;
   const daysFine = typeof days === "number" && days <= CLEANUP_DAYS;
   if (settings.autoMemoryEnabled === false && daysFine) {

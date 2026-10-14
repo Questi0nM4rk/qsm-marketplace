@@ -11,7 +11,7 @@ import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { which } from "bun";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import manifest from "../qsm.json" with { type: "json" };
 import { GRAPH_DIR, GRAPH_FILE } from "./build.ts";
 import { buildServer } from "./mcp.ts";
@@ -92,7 +92,7 @@ describe("the server lists its tools", () => {
 
 describe("The CLI and the MCP server are two interfaces over one library", () => {
   test("every MCP tool has a CLI verb with the same arguments", async () => {
-    const { commands } = (manifest as QsmManifest).qsm;
+    const { commands } = parseManifest(manifest).qsm;
     const listed = await (await connected()).listTools();
     for (const tool of listed.tools) {
       const verb = commands[`qsm-index ${tool.name}`];

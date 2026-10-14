@@ -5,11 +5,11 @@
 
 import { type Handler, runCli } from "../../../lib/cli-base.ts";
 import { type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { lines, realProber, statuses } from "../lib/doctor.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 /** doctor reports; it never gates. A toolbox tool is optional, and turning a
  * missing one into a failure would fail pipelines nobody asked it to. */

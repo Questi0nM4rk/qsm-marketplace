@@ -3,14 +3,11 @@
 
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface Lock {
   readonly pid: number;
   readonly started_at: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** The errno code of a caught error, or undefined when it carries none. */

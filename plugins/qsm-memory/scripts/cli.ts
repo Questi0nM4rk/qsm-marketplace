@@ -3,11 +3,16 @@
 // qsm-memory: the per-machine archive of Claude Code sessions and the short-term notes.
 
 import type { Database } from "bun:sqlite";
-import { z } from "zod";
-import { type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  flagArg,
+  type Handler,
+  optionalNumber,
+  optionalString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { startDetached } from "../lib/detach.ts";
 import { type ErrorCode, MemError, messageOf } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
@@ -22,34 +27,7 @@ import { openArchive, resolveDbPath } from "../lib/store.ts";
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const argSchema = z.object({
-  name: z.string(),
-  type: z.enum(["string", "number", "boolean"]),
-  positional: z.literal(true).exactOptional(),
-  required: z.literal(true).exactOptional(),
-  repeatable: z.literal(true).exactOptional(),
-  choices: z.array(z.string()).exactOptional(),
-  description: z.string(),
-});
-
-const manifestSchema = z.object({
-  name: z.string().exactOptional(),
-  qsm: z.object({
-    bin: z.record(z.string(), z.string()).exactOptional(),
-    noun: z.string().exactOptional(),
-    commands: z.record(
-      z.string(),
-      z.object({
-        description: z.string(),
-        args: z.array(argSchema).exactOptional(),
-        passthrough: z.literal(true).exactOptional(),
-        noNoun: z.literal(true).exactOptional(),
-      }),
-    ),
-  }),
-});
-
-const manifest: QsmManifest = manifestSchema.parse(manifestJson);
+const manifest = parseManifest(manifestJson);
 
 const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   "not-found": "missing",
@@ -87,8 +65,6 @@ function guarded(handlers: Readonly<Record<string, Handler>>): Record<string, Ha
 }
 
 const env = () => process.env;
-const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-const num = (v: unknown) => (typeof v === "number" ? v : undefined);
 
 /** The same save in a detached qsm-memory process, its outcome appended to the save log. */
 function saveDetached(transcript: string | undefined, catchUpAll: boolean, cwd?: string): Outcome {
@@ -107,13 +83,13 @@ function saveDetached(transcript: string | undefined, catchUpAll: boolean, cwd?:
 }
 
 const runSave: Handler = (call) => {
-  const transcript = str(call.args.transcript);
-  const catchUpAll = call.args.catchUp === true;
-  const cwd = str(call.args.cwd);
+  const transcript = optionalString(call, "transcript");
+  const catchUpAll = flagArg(call, "catchUp");
+  const cwd = optionalString(call, "cwd");
   if (transcript === undefined && !catchUpAll) {
     return fail("usage", "save needs a transcript path or --catch-up");
   }
-  if (call.args.detach === true) {
+  if (flagArg(call, "detach")) {
     return saveDetached(transcript, catchUpAll, cwd);
   }
   const db = openArchive(env());
@@ -132,16 +108,16 @@ const runSave: Handler = (call) => {
 };
 
 const runSearch: Handler = (call) => {
-  const limit = num(call.args.limit);
+  const limit = optionalNumber(call, "limit");
   if (limit !== undefined && limit <= 0) {
     return fail("usage", `--limit must be a positive number (got '${limit}')`);
   }
-  const query = str(call.args.query);
+  const query = optionalString(call, "query");
   if (query === undefined) {
     return fail("usage", "search needs a query");
   }
-  const since = str(call.args.since);
-  const project = str(call.args.project);
+  const since = optionalString(call, "since");
+  const project = optionalString(call, "project");
   const hits = search(openArchive(env()), query, {
     ...(limit === undefined ? {} : { limit }),
     ...(since === undefined ? {} : { since }),
@@ -151,16 +127,16 @@ const runSearch: Handler = (call) => {
 };
 
 const runShow: Handler = (call) => {
-  const spec = str(call.args.lines);
+  const spec = optionalString(call, "lines");
   if (spec !== undefined && !/^\d+-\d+$/.test(spec)) {
     return fail("usage", `--lines takes a-b (got '${spec}')`);
   }
-  const session = str(call.args.session);
+  const session = optionalString(call, "session");
   if (session === undefined) {
     return fail("usage", "show needs a session");
   }
   const text = show(openArchive(env()), session, {
-    full: call.args.full === true,
+    full: flagArg(call, "full"),
     ...(spec === undefined ? {} : { lines: parseLines(spec) }),
   });
   return ok({ text }, text);
@@ -168,12 +144,12 @@ const runShow: Handler = (call) => {
 
 const runList: Handler = (call) => {
   const db = openArchive(env());
-  if (call.args.unsaved === true) {
+  if (flagArg(call, "unsaved")) {
     const paths = unsavedTranscripts(db, projectsDir(env()));
     return ok(paths, paths.length === 0 ? "nothing unsaved" : paths.join("\n"));
   }
-  const since = str(call.args.since);
-  const project = str(call.args.project);
+  const since = optionalString(call, "since");
+  const project = optionalString(call, "project");
   const rows = listSessions(db, {
     ...(since === undefined ? {} : { since }),
     ...(project === undefined ? {} : { project }),
@@ -183,32 +159,32 @@ const runList: Handler = (call) => {
 
 const runNote: Handler = (call) => {
   const db = openArchive(env());
-  const drop = str(call.args.drop);
+  const drop = optionalString(call, "drop");
   if (drop !== undefined) {
     dropNote(db, drop);
     return ok({ dropped: drop }, `dropped ${drop}`);
   }
-  const expires = num(call.args.expires);
+  const expires = optionalNumber(call, "expires");
   if (expires !== undefined && expires <= 0) {
     return fail("usage", `--expires must be a positive number of days (got '${expires}')`);
   }
   const row = addNote(db, {
-    text: str(call.args.text) ?? "",
-    project: call.args.global === true ? null : projectOf(process.cwd()),
-    expiresDays: call.args.keep === true ? null : (expires ?? NOTE_DEFAULT_DAYS),
+    text: optionalString(call, "text") ?? "",
+    project: flagArg(call, "global") ? null : projectOf(process.cwd()),
+    expiresDays: flagArg(call, "keep") ? null : (expires ?? NOTE_DEFAULT_DAYS),
   });
   return ok(row, `noted ${row.id}`);
 };
 
 const runNotes: Handler = (call) => {
-  const all = call.args.all === true;
+  const all = flagArg(call, "all");
   const rows = currentNotes(openArchive(env()), projectOf(process.cwd()), { all });
   return ok(rows, formatNotes(rows, all));
 };
 
 /** The session-start block; the hook shows its text to the model. */
 const runOrient: Handler = (call) =>
-  orientOutcome(openArchive(env()), str(call.args.cwd) ?? process.cwd(), { env: env() });
+  orientOutcome(openArchive(env()), optionalString(call, "cwd") ?? process.cwd(), { env: env() });
 
 const count = (db: Database, table: string) =>
   db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n ?? 0;
