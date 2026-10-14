@@ -44,12 +44,9 @@ function callCli(args: string[], options: { path?: string } = {}): Said {
   return { stdout: done.stdout ?? "", stderr: done.stderr ?? "", code: done.status ?? 1 };
 }
 
-function envelope(said: Said): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(said.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
-  };
+function envelope(said: Said): unknown {
+  const parsed: unknown = JSON.parse(said.stdout);
+  return parsed;
 }
 
 describe("an unrecognized verb", () => {
@@ -240,9 +237,7 @@ describe("a11y-tree", () => {
       path: pathWith("gdbus"),
     });
     expect(said.code).toBe(0);
-    const tree = envelope(said).data.tree as { name: string; children: unknown[] }[];
-    expect(tree).toHaveLength(1);
-    expect(tree[0]?.children).toHaveLength(0);
+    expect(envelope(said)).toMatchObject({ data: { tree: [{ children: [] }] } });
   });
 
   test("an app that is not on the bus is failed, exit 1, and nothing on stdout", () => {

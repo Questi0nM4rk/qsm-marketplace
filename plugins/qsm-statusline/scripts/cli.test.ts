@@ -99,13 +99,9 @@ describe("render", () => {
     const result = run(["render", "--json"], dir);
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain(ESCAPE);
-    const envelope = JSON.parse(result.stdout) as {
-      code: string;
-      exit: number;
-      data: { lines: string[] };
-    };
+    const envelope: unknown = JSON.parse(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope.data.lines[1]).toContain("git main: clean");
+    expect(result.stdout).toContain("git main: clean");
   });
 });
 
@@ -116,13 +112,9 @@ describe("doctor", () => {
     writeFileSync(settings, "{ not json\n");
     const result = run(["doctor", "--settings", settings, "--json"], dir);
     expect(result.status).toBe(0);
-    const envelope = JSON.parse(result.stdout) as {
-      code: string;
-      data: { state: { kind: string }; entry: unknown };
-    };
-    expect(envelope.code).toBe("ok");
-    expect(envelope.data.state.kind).toBe("unreadable");
-    expect(envelope.data.entry).toBeDefined();
+    const envelope: unknown = JSON.parse(result.stdout);
+    expect(envelope).toMatchObject({ code: "ok", data: { state: { kind: "unreadable" } } });
+    expect(envelope).toHaveProperty("data.entry");
   });
 
   test("settings that already run the renderer report wired and exit 0", () => {

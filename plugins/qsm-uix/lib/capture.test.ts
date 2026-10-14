@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CaptureError } from "./errors.ts";
 import { burst, contrast, crop, diff, IMAGE_TOOL, pixelSample, regionStats } from "./capture.ts";
 
 import { type Command, run } from "./run.ts";
@@ -46,7 +47,23 @@ function paint(into: string, name: string, colors: readonly string[]): string {
 /** Calling through here makes a verb's failure a rejection whether the verb
  * itself is synchronous or not, so every test states its expectation once. */
 async function verb<T>(fn: (input: T) => object | Promise<object>, input: T): Promise<object> {
-  return await fn(input);
+  return fn(input);
+}
+
+/** What the verb throws; a verb that returns is a failed test. */
+async function failure<T>(
+  fn: (input: T) => object | Promise<object>,
+  input: T,
+): Promise<CaptureError> {
+  try {
+    await fn(input);
+  } catch (error) {
+    if (error instanceof CaptureError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error("the verb returned instead of throwing");
 }
 
 let dir = "";
@@ -71,13 +88,13 @@ describe("pixel-sample", () => {
   });
 
   test("refuses a coordinate outside the image instead of reporting filler", async () => {
-    await expect(verb(pixelSample, { image: pair, at: "9,0" })).rejects.toThrow(/runs outside/);
+    expect((await failure(pixelSample, { image: pair, at: "9,0" })).message).toMatch(
+      /runs outside/,
+    );
   });
 
   test("refuses a coordinate that is not X,Y", async () => {
-    await expect(verb(pixelSample, { image: pair, at: "1" })).rejects.toMatchObject({
-      code: "usage",
-    });
+    expect((await failure(pixelSample, { image: pair, at: "1" })).code).toBe("usage");
   });
 });
 
@@ -136,15 +153,15 @@ describe("region-stats", () => {
   });
 
   test("refuses a region that runs off the edge of the image", async () => {
-    await expect(verb(regionStats, { image: quarters, rect: "0,0,40,1" })).rejects.toThrow(
+    expect((await failure(regionStats, { image: quarters, rect: "0,0,40,1" })).message).toMatch(
       /runs outside/,
     );
   });
 
   test("refuses a region too large to be a measurement", async () => {
-    await expect(verb(regionStats, { image: quarters, rect: "0,0,4000,4000" })).rejects.toThrow(
-      /tighter rect/,
-    );
+    expect(
+      (await failure(regionStats, { image: quarters, rect: "0,0,4000,4000" })).message,
+    ).toMatch(/tighter rect/);
   });
 });
 
@@ -188,9 +205,9 @@ describe("diff", () => {
 
   test("refuses two images of different sizes instead of measuring them", async () => {
     const one = paint(dir, "single.png", ["#000000"]);
-    await expect(verb(diff, { a: one, b: pair, out: join(dir, "mismatch.png") })).rejects.toThrow(
-      /same size/,
-    );
+    expect(
+      (await failure(diff, { a: one, b: pair, out: join(dir, "mismatch.png") })).message,
+    ).toMatch(/same size/);
   });
 });
 
@@ -198,15 +215,11 @@ describe("diff", () => {
 // argument contract is proved on a machine with no display attached.
 describe("burst", () => {
   test("refuses a burst of one frame, which is a screenshot", async () => {
-    await expect(verb(burst, { count: 1, interval: 100, outDir: dir })).rejects.toMatchObject({
-      code: "usage",
-    });
+    expect((await failure(burst, { count: 1, interval: 100, outDir: dir })).code).toBe("usage");
   });
 
   test("refuses a negative interval", async () => {
-    await expect(verb(burst, { count: 3, interval: -5, outDir: dir })).rejects.toMatchObject({
-      code: "usage",
-    });
+    expect((await failure(burst, { count: 3, interval: -5, outDir: dir })).code).toBe("usage");
   });
 });
 

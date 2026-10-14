@@ -5,7 +5,7 @@
 import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
-import { accessibilityTree, busFinding, renderTree, type TreeNode } from "../lib/atspi.ts";
+import { accessibilityTree, busFinding, renderTree } from "../lib/atspi.ts";
 import {
   burst,
   contrast,
@@ -34,23 +34,23 @@ function num(call: Call, name: string): number | undefined {
   return call.args[name] as number | undefined;
 }
 
-type Say = (result: object) => string;
+type Say<R> = (result: R) => string;
 
 /** The one line a reader gets in text mode; `--json` carries the whole
  * result as data either way. */
-function line(result: object, keys: readonly string[] | Say): string {
+function line<R extends object>(result: R, keys: readonly string[] | Say<R>): string {
   if (typeof keys === "function") {
     return keys(result);
   }
-  const said = result as Record<string, unknown>;
-  return keys.map((key) => `${key}: ${JSON.stringify(said[key])}`).join("  ");
+  const said = new Map<string, unknown>(Object.entries(result));
+  return keys.map((key) => `${key}: ${JSON.stringify(said.get(key))}`).join("  ");
 }
 
 /** A CaptureError carries the outcome code its own thrower chose: a missing
  * tool, a call that does not hold, or the capture going wrong. */
-function captured(
-  run: (call: Call) => object | Promise<object>,
-  keys: readonly string[] | Say,
+function captured<R extends object>(
+  run: (call: Call) => R | Promise<R>,
+  keys: readonly string[] | Say<R>,
 ): Handler {
   return async (call): Promise<Outcome> => {
     try {
@@ -90,8 +90,8 @@ if (import.meta.main) {
       burst: captured(
         (call) =>
           burst({
-            count: num(call, "count") as number,
-            interval: num(call, "interval") as number,
+            count: num(call, "count"),
+            interval: num(call, "interval"),
             outDir: str(call, "outDir"),
             output: optionalStr(call, "output"),
           }),
@@ -122,7 +122,7 @@ if (import.meta.main) {
           );
           return { action: "a11y-tree", tree };
         },
-        (result) => renderTree((result as { tree: TreeNode[] }).tree).join("\n"),
+        (result) => renderTree(result.tree).join("\n"),
       ),
       doctor: () => {
         const finding = busFinding();

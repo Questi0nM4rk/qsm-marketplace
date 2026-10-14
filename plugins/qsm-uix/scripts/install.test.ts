@@ -11,7 +11,9 @@ import { IMAGE_TOOL, SCREENSHOT_TOOL } from "../lib/capture.ts";
 import { install } from "./install.ts";
 
 const sandbox = mkdtempSync(join(tmpdir(), "qsm-uix-install-"));
-afterAll(() => rmSync(sandbox, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
 
 function context(present: readonly string[]): InstallContext {
   return {

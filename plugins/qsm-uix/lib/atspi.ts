@@ -114,12 +114,17 @@ function quoted(out: string): string {
 
 function childrenOf(address: string, ref: NodeRef): NodeRef[] {
   // the reply is an array of (bus name, object path) pairs: every quoted string, two by two
-  const strings = [...call(address, ref, `${ACCESSIBLE}.GetChildren`).matchAll(/'([^']*)'/g)].map(
-    (m) => m[1] as string,
-  );
+  const strings = [
+    ...call(address, ref, `${ACCESSIBLE}.GetChildren`).matchAll(/'([^']*)'/g),
+  ].flatMap((m) => (m[1] === undefined ? [] : [m[1]]));
   const pairs: NodeRef[] = [];
   for (let i = 0; i + 1 < strings.length; i += 2) {
-    pairs.push({ bus: strings[i] as string, path: strings[i + 1] as string });
+    const bus = strings[i];
+    const path = strings[i + 1];
+    if (bus === undefined || path === undefined) {
+      throw new CaptureError("a gdbus children reply held a name without its path");
+    }
+    pairs.push({ bus, path });
   }
   return pairs;
 }

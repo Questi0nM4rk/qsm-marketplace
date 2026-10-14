@@ -57,9 +57,10 @@ export function parseFrontmatter(text: string): Record<string, FrontmatterValue>
     const entry = BLOCK_ENTRY.exec(line);
     if (openKey !== null && entry?.[1] !== undefined) {
       const collected = fields[openKey];
-      fields[openKey] = Array.isArray(collected)
-        ? [...collected, unquote(entry[1])]
-        : [unquote(entry[1])];
+      fields[openKey] =
+        typeof collected === "string" || collected === undefined
+          ? [unquote(entry[1])]
+          : [...collected, unquote(entry[1])];
       continue;
     }
     const separator = line.indexOf(":");

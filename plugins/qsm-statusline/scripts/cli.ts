@@ -70,7 +70,7 @@ function startRefresh(dir: string, cwd: string, now: number): void {
  * payload.
  */
 function readStdin(): string {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     return "";
   }
   try {

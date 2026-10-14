@@ -22,20 +22,17 @@ export const DEFAULT_CONTEXT_SIZE = 200_000;
 const MILLIS_PER_SECOND = 1000;
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function at(value: unknown, ...path: string[]): unknown {
   let here: unknown = value;
   for (const key of path) {
-    const holder = record(here);
-    if (holder === null) {
-      return;
+    if (!isRecord(here)) {
+      return undefined;
     }
-    here = holder[key];
+    here = here[key];
   }
   return here;
 }

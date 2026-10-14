@@ -72,34 +72,33 @@ describe("qsm-knowledge", () => {
   test("a good note is ok, exit 0, and its report is the data", () => {
     const r = run(["validate", note(GOOD), "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.code).toBe("ok");
-    expect(envelope.data.ok).toBe(true);
-    expect(envelope.data.errors).toEqual([]);
+    const envelope: unknown = JSON.parse(r.stdout);
+    expect(envelope).toMatchObject({ code: "ok", data: { ok: true, errors: [] } });
   });
 
   test("a note with an error is failed, exit 1", () => {
     const r = run(["validate", note(GOOD.replace("type: concept", "type: journal")), "--json"]);
     expect(r.exit).toBe(1);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.code).toBe("failed");
-    expect(envelope.data.errors.length).toBeGreaterThan(0);
+    const envelope: unknown = JSON.parse(r.stdout);
+    expect(envelope).toMatchObject({ code: "failed" });
+    expect(envelope).not.toMatchObject({ data: { errors: [] } });
   });
 
   test("a note whose only finding is a warning stays ok and carries it", () => {
     const body = GOOD.replace("See [[branch-by-abstraction]].", "Nothing links out.");
     const r = run(["validate", note(body), "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.code).toBe("ok");
-    expect(envelope.warnings.join(" ")).toContain("[[wikilink]]");
+    const envelope: unknown = JSON.parse(r.stdout);
+    expect(envelope).toMatchObject({ code: "ok" });
+    expect(envelope).not.toMatchObject({ warnings: [] });
+    expect(r.stdout).toContain("[[wikilink]]");
   });
 
   test("doctor with the notebook binary off PATH is missing, exit 4", () => {
     const r = run(["doctor", "--json"], { PATH: BARE_PATH });
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope.code).toBe("missing");
-    expect(envelope.data.findings.length).toBeGreaterThan(0);
+    const envelope: unknown = JSON.parse(r.stdout);
+    expect(envelope).toMatchObject({ code: "missing" });
+    expect(envelope).not.toMatchObject({ data: { findings: [] } });
   });
 });

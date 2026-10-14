@@ -55,10 +55,29 @@ interface Monitor {
   readonly focused: boolean;
 }
 
+function isMonitor(value: unknown): value is Monitor {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "focused" in value &&
+    typeof value.focused === "boolean"
+  );
+}
+
 /** The monitor the user is looking at, when they did not name one. */
 function focusedMonitor(): string {
   const { stdout } = runOrThrow([MONITOR_TOOL, "monitors", "-j"]);
-  const monitors: Monitor[] = JSON.parse(stdout);
+  const parsed: unknown = JSON.parse(stdout);
+  const monitors: Monitor[] = [];
+  if (Array.isArray(parsed)) {
+    for (const item of parsed as readonly unknown[]) {
+      if (isMonitor(item)) {
+        monitors.push(item);
+      }
+    }
+  }
   const focused = monitors.find((monitor) => monitor.focused);
   if (focused === undefined) {
     throw new CaptureError(`no focused monitor reported by ${MONITOR_TOOL}`);
@@ -207,9 +226,9 @@ export function diff(call: DiffCall): object {
 }
 
 export interface BurstCall {
-  readonly count: number;
+  readonly count: number | undefined;
   /** milliseconds between frames */
-  readonly interval: number;
+  readonly interval: number | undefined;
   readonly outDir: string;
   readonly output?: string | undefined;
 }
