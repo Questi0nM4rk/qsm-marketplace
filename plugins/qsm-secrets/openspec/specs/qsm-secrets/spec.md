@@ -712,13 +712,38 @@ The pane SHALL be one QML component driven by one kinds table, and a provider SH
 `lib/askpass/providers/` listed in one table in `lib/askpass/index.ts`. Adding a kind SHALL need one row
 in each table, a provider file and no other change. The pane SHALL run as a Quickshell instance of its
 own, started on demand with `qs -p <installed dir> -n -d` and always addressed with `-p`, so a call never
-reaches the desktop shell's instance. The guard SHALL refuse `qs ipc ... askpass` from an agent's Bash with
-the code `askpass-pane`.
+reaches the desktop shell's instance. The guard SHALL refuse, with the code `askpass-pane`, an agent's
+Bash command that is `qs ipc ... askpass`, a `qs ipc` call with an expansion word, a call of a
+`qsm-askpass-<kind>` link or of `qsm-secrets askpass <kind>` for a kind that prints its answer (`sudo`,
+`ssh`, `git`, `decide`), and any command that names `$XDG_RUNTIME_DIR/qsm-askpass`; the links are entry
+points for the consumers that run them themselves, and `sudo -A <cmd>` stays allowed. The pane SHALL
+accept a request only when its socket path is `$XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock` for its
+own 128-bit hex nonce, SHALL give each request its own 120 seconds, and the binary SHALL withdraw the
+request and remove the directory on SIGTERM, SIGINT and SIGHUP. Install SHALL write the pane only to
+the default path, never to the path `QSM_ASKPASS_QML` names.
 
 #### Scenario: an agent calls the pane's target
 
 - **WHEN** an agent runs `qs ipc -p <dir> call askpass request '{...}'` through Bash
 - **THEN** the call is denied with `askpass-pane`, and `qs ipc call qsm toggle` is not
+
+#### Scenario: an agent runs the consumer entry point itself
+
+- **WHEN** an agent runs `qsm-askpass-sudo "[sudo] password: "` or `qsm-secrets askpass sudo -- "..."`
+  through Bash, or `nc -U $XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock`
+- **THEN** the call is denied with `askpass-pane`, while `sudo -A true` and `qsm-secrets set <key> --gui`
+  are not
+
+#### Scenario: a signal ends the call
+
+- **WHEN** the call receives SIGTERM while it waits for the person
+- **THEN** the pane request is withdrawn, the reply socket's directory is removed and the exit is 143
+
+#### Scenario: ssh asks a yes or no, or shows a notice
+
+- **WHEN** ssh runs the link with `SSH_ASKPASS_PROMPT=confirm` and the person presses Allow
+- **THEN** stdout is empty and the exit is 0; with Deny the exit is 1; with `none` the pane shows the
+  prompt as a notice and the exit is 0
 
 ## Design
 
@@ -735,9 +760,18 @@ the code `askpass-pane`.
 - **Caller binding.** The binary makes the reply socket in a 0700 directory named by a 128-bit random nonce
   under `$XDG_RUNTIME_DIR/qsm-askpass`, the socket is 0600, the first line whose nonce matches is the answer,
   and the directory is removed in a `finally`. The guard refuses the pane's IPC target from an agent's Bash.
-  **Known gap:** peer credentials on the socket are not checked, and a same-user process can call the target
-  with a socket of its own; the pane's display of the asking executable and its hash lets the person notice,
-  and nothing stops a determined same-user process.
+  **Known gap:** peer credentials on the socket are not checked. The nonce and the socket path travel in the
+  argv of `qs ipc call`, which any process of the user can read in `/proc/<pid>/cmdline`, so a same-user
+  process outside the agent's Bash guard can connect to the real socket and write a forged answer, `allow`
+  for `decide` included, while the person still looks at the pane. The pane accepts only the one socket
+  path the binary makes, the guard refuses an agent's Bash that names that directory, and the pane's
+  display of the asking executable and its hash lets the person notice; nothing stops a determined
+  same-user process.
+- **`askpass enable` has no `--secrets`.** The secret kind has no environment variable, because it is
+  reached through `set --gui`, so `enable` takes `--sudo`, `--ssh`, `--git` and `--decide` only.
+- **ssh prompt modes.** `SSH_ASKPASS_REQUIRE=prefer` sends every ssh prompt here, so the ssh provider reads
+  `SSH_ASKPASS_PROMPT`: `confirm` is Allow or Deny with exit 0 or 1 and no text, `none` is a notice row
+  (`notice` in the kinds tables) with no answer to give.
 - **Outcome codes.** Root `lib/outcome.ts` is unchanged: a timeout and a cancel are `failed` with a reason.
 - **Theme.** `Theme.qml` is a copy of the desktop shell's Deep Night tokens, a file of this plugin; the pane
   runs without that shell.

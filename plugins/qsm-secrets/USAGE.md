@@ -41,7 +41,9 @@ prints but the key. `askpass enable` prints the fish lines that point `SUDO_ASKP
 the link (`sudo -A`, ssh, git, hook-kit), which is `qsm-secrets askpass <kind> -- <its prompt>`:
 the typed text goes to its stdout on Allow, and Deny, Escape or 120 s without an answer exits 1
 with the reason (`denied by the person`, `cancelled by the person`, `timed out waiting for the
-person`). `decide` reads a hook-kit ask request on stdin and answers an ask response. Without `qs`
+person`). ssh with `SSH_ASKPASS_PROMPT=confirm` gets Allow as exit 0 with no text, and with `none` a
+notice. The guard refuses an agent's Bash that runs a link or `askpass <kind>` itself (`askpass-pane`).
+`decide` reads a hook-kit ask request on stdin and answers an ask response. Without `qs`
 on PATH or the installed pane the exit is 4.
 
 Other verbs: `set`, `inspect`, `rm`, `get`, `mask`, `doctor`. `qsm-secrets --help` lists them.

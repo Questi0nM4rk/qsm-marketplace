@@ -9,6 +9,8 @@ import { dismissPane, showPane } from "./pane.ts";
 import { openReplySocket } from "./socket.ts";
 import type { Input } from "./types.ts";
 
+const SIGNALS = { SIGHUP: 1, SIGINT: 2, SIGTERM: 15 } as const;
+
 /** How long the person has before the call fails, matching the pane's own clock. */
 export const TIMEOUT_MS = 120_000;
 
@@ -31,6 +33,7 @@ export async function ask(
   const read = options.stdin ?? (() => readFileSync(0, "utf8"));
   const input: Input = {
     argv,
+    env: options.env,
     namespace: options.namespace,
     stdin: () => {
       text ??= read();
@@ -39,6 +42,17 @@ export async function ask(
   };
   const request = provider.request(input);
   const socket = openReplySocket(options.env);
+  // ssh kills its askpass after a notice, and Ctrl-C reaches it at a prompt: the request leaves the
+  // screen and the socket directory goes, as on any other exit.
+  const stops = Object.entries(SIGNALS).map(([name, number]) => {
+    const onSignal = (): void => {
+      dismissPane(options.env, socket.nonce);
+      socket.close();
+      process.exit(128 + number);
+    };
+    process.on(name, onSignal);
+    return () => process.off(name, onSignal);
+  });
   try {
     const caller = callerOf(options.callerPid ?? process.ppid);
     await showPane(options.env, {
@@ -53,6 +67,9 @@ export async function ask(
       ? stop("failed", "timed out waiting for the person")
       : provider.finish(input, reply);
   } finally {
+    for (const release of stops) {
+      release();
+    }
     dismissPane(options.env, socket.nonce);
     socket.close();
   }

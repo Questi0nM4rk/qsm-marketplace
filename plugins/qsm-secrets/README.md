@@ -89,10 +89,14 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   addressed by its config path. Without `qs` or the installed pane the call answers `missing`; there
   is no terminal fallback. 120 seconds without an answer, or Escape, is `failed` with the reason.
 - The pane names the parent process that asked, with its executable and the first 12 hex of its
-  sha256, so you see which binary wants the answer. It is not proof: another process of your user
-  can call the pane's `askpass` target itself, so the guard refuses `qs ipc ... askpass` from an
-  agent's Bash, which a determined agent can still route around. Peer credentials on the reply
+  sha256, so you see which binary wants the answer. It is not proof: the request's nonce is in the
+  argv of `qs ipc call`, which any process of your user can read, so one outside the guard can write
+  a forged answer to the reply socket. The guard refuses an agent's Bash that calls the pane's
+  target, runs a `qsm-askpass-<kind>` link or `qsm-secrets askpass <kind>` itself, or names the
+  socket directory; a determined agent can still route around it. Peer credentials on the reply
   socket are not checked.
+- With `SSH_ASKPASS_PROMPT=confirm` ssh gets a yes or no (Allow is exit 0), with `none` the pane shows
+  the prompt as a notice.
 - The default namespace is the folder `qsm` (`--folder` or `QSM_SECRETS_FOLDER`).
 - libsecret needs a Secret Service on the session bus (GNOME Keyring, KeePassXC). Without one the
   call answers `missing`. It never falls back to Bitwarden.

@@ -27,6 +27,8 @@ export interface PaneRequest {
 export interface Input {
   /** the words after the kind: sudo, ssh and git put the prompt text first */
   readonly argv: readonly string[];
+  /** the consumer's environment: ssh says what kind of prompt this is in `SSH_ASKPASS_PROMPT` */
+  readonly env: Record<string, string | undefined>;
   readonly namespace: string;
   /** stdin, read when a provider asks (decide); never read otherwise */
   readonly stdin: () => string;

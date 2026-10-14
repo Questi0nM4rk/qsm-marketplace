@@ -36,7 +36,7 @@
         "passthrough": true,
         "args": [
           { "name": "kind", "type": "string", "positional": true, "required": true, "description": "secret, sudo, ssh, git or decide" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to write, for the secret kind (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to write, for the secret kind (default: qsm)" }
         ]
       },
       "qsm-secrets askpass enable": {

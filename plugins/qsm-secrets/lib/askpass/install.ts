@@ -19,7 +19,7 @@ import { join } from "node:path";
 import type { InstallContext, Step } from "../../../../lib/install-contract.ts";
 import { binDir } from "../../../../lib/paths.ts";
 import { linkedKinds } from "./link.ts";
-import { LINK_PREFIX, paneDir } from "./paths.ts";
+import { installedPaneDir, LINK_PREFIX } from "./paths.ts";
 
 const BIN = "qsm-secrets";
 
@@ -47,7 +47,7 @@ function treeHash(dir: string): string | null {
 
 function paneStep(ctx: InstallContext, source: string): Step {
   const name = "askpass pane";
-  const target = paneDir(ctx.env);
+  const target = installedPaneDir(ctx.env);
   if (treeHash(source) === treeHash(target)) {
     return { name, status: "already", detail: `${target} unchanged` };
   }

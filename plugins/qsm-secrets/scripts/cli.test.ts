@@ -1015,6 +1015,13 @@ describe("guard", () => {
     ["qs ipc -p /x call askpass show '{}'", "askpass-pane"],
     ["env A=1 quickshell ipc call askpass dismiss n", "askpass-pane"],
     ["bash -c 'qs -p /x ipc call askpass show {}'", "askpass-pane"],
+    ['qsm-askpass-sudo "[sudo] password: "', "askpass-pane"],
+    ["env A=1 ~/.local/bin/qsm-askpass-decide", "askpass-pane"],
+    ['qsm-secrets askpass sudo -- "[sudo] password: "', "askpass-pane"],
+    ["sudo qsm-secrets askpass ssh -- Passphrase:", "askpass-pane"],
+    ["qs ipc -p /x call ask$(echo pass) request x", "askpass-pane"],
+    [`nc -U ${"$"}XDG_RUNTIME_DIR/qsm-askpass/abc/reply.sock`, "askpass-pane"],
+    [`ls ${"$"}XDG_RUNTIME_DIR/qsm-askpass`, "askpass-pane"],
   ])("%s is refused as %s", (command, code) => {
     expect(verdict(command.replace("LINK", join(data, "harmless-name")))).toBe(code);
   });
@@ -1051,6 +1058,9 @@ describe("guard", () => {
     "A=1 <<EOF\nx\nEOF",
     "qs ipc -p /x call qsm toggle",
     "qs list --all",
+    "sudo -A true",
+    "qsm-secrets askpass enable --sudo",
+    "qsm-secrets set my-key --gui",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
   });

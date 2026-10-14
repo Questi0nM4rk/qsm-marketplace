@@ -7,6 +7,7 @@ var kinds = {
     sudo: { title: "Authorize sudo", icon: "icons/shield.svg", tone: "warning", field: true, allow: "Allow", deny: "Deny" },
     ssh: { title: "Authorize ssh", icon: "icons/key.svg", tone: "warning", field: true, allow: "Allow", deny: "Deny" },
     git: { title: "Authorize git", icon: "icons/key.svg", tone: "accent", field: true, allow: "Allow", deny: "Deny" },
+    notice: { title: "ssh says", icon: "icons/key.svg", tone: "accent", field: false, allow: "OK", deny: "Dismiss" },
     decide: { title: "Allow this action?", icon: "icons/shield.svg", tone: "danger", field: false, allow: "Allow", deny: "Deny" }
 }
 

@@ -14,11 +14,19 @@ ShellRoot {
     property var queue: []
     readonly property var current: queue.length > 0 ? queue[0] : null
 
+    // Each request has its own clock, so the next one in the queue starts afresh.
+    onCurrentChanged: if (current !== null) timer.restart()
+
+    // The reply goes only to the one place the binary makes it: no argv can point the pane's answer
+    // at a socket of another process's choosing.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") ?? ""
+
     function validRequest(request: var): bool {
         return request !== null && typeof request === "object"
             && Kinds.has(request.kind)
-            && typeof request.nonce === "string" && request.nonce !== ""
-            && typeof request.socketPath === "string" && request.socketPath !== ""
+            && typeof request.nonce === "string" && /^[0-9a-f]{32}$/.test(request.nonce)
+            && root.runtimeDir !== ""
+            && request.socketPath === root.runtimeDir + "/qsm-askpass/" + request.nonce + "/reply.sock"
             && typeof request.prompt === "string" && typeof request.subject === "string"
             && typeof request.requestedBy === "object" && request.requestedBy !== null
     }
@@ -82,6 +90,7 @@ ShellRoot {
 
     // The request's own clock: the binary stops waiting at the same time.
     Timer {
+        id: timer
         interval: root.current === null ? 1000 : Math.max(1000, root.current.timeoutMs)
         running: root.current !== null
         repeat: false

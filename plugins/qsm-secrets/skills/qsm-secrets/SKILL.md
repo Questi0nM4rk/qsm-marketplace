@@ -58,7 +58,7 @@ vault folder; an empty name searches the whole vault by key name.
   them means they paste the value into chat, and the paste is the leak; `set` refuses without a
   terminal for the same reason. `qsm-secrets set <key> --gui` opens the askpass pane where the
   person types it, and nothing returns to you but the key; never call the pane's `qs ipc` target
-  yourself, the guard refuses it.
+  yourself, and never run a `qsm-askpass-<kind>` link: the guard refuses both.
 - A locked vault: run `qsm-secrets doctor`, report the failed check and its fix, and wait. The
   unlock is a master password that belongs to the person at their own prompt.
 - A value that reached a file makes that file a secret: do not open or `cat` it, remove it when the

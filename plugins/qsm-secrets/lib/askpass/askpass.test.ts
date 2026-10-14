@@ -17,6 +17,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { sleep, spawn } from "bun";
 import { ask } from "./ask.ts";
 import { FAKE_QS } from "./fake-qs.ts";
 import { providerOf } from "./index.ts";
@@ -113,8 +114,9 @@ describe("the reply socket", () => {
 });
 
 describe("providers", () => {
-  const input = (argv: string[], stdin = ""): Input => ({
+  const input = (argv: string[], stdin = "", asked: Record<string, string> = {}): Input => ({
     argv,
+    env: asked,
     namespace: "qsm",
     stdin: () => stdin,
   });
@@ -236,6 +238,47 @@ describe("ask", () => {
       ask("sudo", ["p"], options({ env: env({ QSM_ASKPASS_QML: empty }) })),
     ).rejects.toThrow("not installed");
     expect(readdirSync(runtime)).toEqual([]);
+  });
+});
+
+describe("ssh prompt modes", () => {
+  const input = (asked: Record<string, string>): Input => ({
+    argv: ["Are you sure?"],
+    env: asked,
+    namespace: "qsm",
+    stdin: () => "",
+  });
+  const reply = (action: "allow" | "deny" | "cancel") => ({ nonce: "n", action, value: "" });
+
+  test("confirm is a yes or no with no text, and none is a notice", () => {
+    const ssh = providerOf("ssh");
+    const confirm = input({ SSH_ASKPASS_PROMPT: "confirm" });
+    expect(ssh.request(confirm)).toMatchObject({ kind: "decide", masked: false });
+    expect(ssh.finish(confirm, reply("allow"))).toMatchObject({ code: "ok", message: "" });
+    expect(ssh.finish(confirm, reply("deny"))).toMatchObject({ code: "failed" });
+    const none = input({ SSH_ASKPASS_PROMPT: "none" });
+    expect(ssh.request(none)).toMatchObject({ kind: "notice" });
+    expect(ssh.finish(none, reply("cancel"))).toMatchObject({ code: "ok" });
+  });
+});
+
+describe("a signal", () => {
+  test("SIGTERM withdraws the request and removes the socket directory", async () => {
+    rmSync(log, { force: true });
+    const child = spawn(["bun", CLI, "askpass", "sudo", "--", "p"], {
+      env: env({ FAKE_ACTION: "none" }) as Record<string, string>,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const dir = join(runtime, "qsm-askpass");
+    for (let tries = 0; tries < 100 && !existsSync(dir); tries += 1) {
+      await sleep(50);
+    }
+    expect(existsSync(dir)).toBe(true);
+    child.kill("SIGTERM");
+    expect(await child.exited).toBe(143);
+    expect(existsSync(dir)).toBe(false);
+    expect(readFileSync(log, "utf8")).toContain('"withdraw"');
   });
 });
 
