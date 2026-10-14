@@ -11,7 +11,7 @@ and straightforward: we value each other's time and do not overcomplicate. Singl
 
 ```text
 .claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
+lib/                              # layer 0, imports no third-party package (a plugin's packages are in its own package.json, installed by its installer): install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI

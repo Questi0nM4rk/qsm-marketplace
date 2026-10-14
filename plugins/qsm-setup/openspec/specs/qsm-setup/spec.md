@@ -306,7 +306,8 @@ free-text line.
 - **WHEN** the install base runs for a plugin that has a `package.json`
 - **THEN** it SHALL run `bun install --frozen-lockfile` in the plugin root as its own step before
   it compiles, and SHALL report an error step naming the cause and the fix, compiling nothing, when
-  that install fails
+  that install fails; root `lib/` imports no third-party package, so every package a plugin imports is
+  in that plugin's own `package.json`
 
 #### Scenario: A compilable command with no build step
 
