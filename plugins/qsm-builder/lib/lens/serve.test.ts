@@ -195,10 +195,10 @@ async function served(): Promise<{ root: string; url: string; html: string }> {
 
 const unescapeHtml = (s: string): string =>
   s
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
+    .replaceAll("&quot;", '"')
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
 
 test("the served page puts a pen on a skill's description, with the file's sha256 as rendered", async () => {
   const { root, html } = await served();

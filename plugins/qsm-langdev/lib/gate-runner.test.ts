@@ -54,5 +54,5 @@ test("A check that could not run is not allowed", () => {
 
   expect(allowed(langdevOutcome([missing], "sizes"), "known").status).toBe("failed");
   expect(allowed(langdevOutcome([unmeasured], "sizes"), "known").status).toBe("blocked");
-  expect(allowed(langdevOutcome([worse], "sizes"), undefined).status).toBe("failed");
+  expect(allowed(langdevOutcome([worse], "sizes")).status).toBe("failed");
 });

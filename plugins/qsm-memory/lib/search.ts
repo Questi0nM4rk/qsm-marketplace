@@ -102,7 +102,7 @@ function rank(rows: readonly Row[], now: number, limit: number): Hit[] {
       date: row.ended_at.slice(0, 10),
       project: row.project,
       title: row.title,
-      snippet: row.snippet.replace(/\s+/g, " ").trim(),
+      snippet: row.snippet.replaceAll(/\s+/g, " ").trim(),
       score: -row.bm + FRESH_WEIGHT * freshness(row.ended_at, now),
     }))
     .sort((a, b) => b.score - a.score)

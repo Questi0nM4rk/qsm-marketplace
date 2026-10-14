@@ -24,7 +24,7 @@ import type { Field, Spec } from "./spec.ts";
 import { CSS, FONTS, PEN_CSS, SCRIPT, WAIT_CSS } from "./style.ts";
 import type { Task } from "./tasks.ts";
 
-const slug = (name: string): string => name.replace(/[^a-zA-Z0-9-]/g, "-");
+const slug = (name: string): string => name.replaceAll(/[^a-zA-Z0-9-]/g, "-");
 const pluginRoute = (p: Plugin): string => slug(p.name);
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
@@ -96,7 +96,7 @@ function itemRoute(p: Plugin, i: Item): string {
 }
 
 /** Escaped text with `code` spans. */
-const inline = (s: string): string => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const inline = (s: string): string => esc(s).replaceAll(/`([^`]+)`/g, "<code>$1</code>");
 
 /** Paragraphs of a markdown text, headings dropped. */
 function prose(text: string): string {
@@ -104,7 +104,7 @@ function prose(text: string): string {
     .split(/\r?\n\s*\r?\n/)
     .map((p) => p.trim())
     .filter((p) => p !== "" && !p.startsWith("#"))
-    .map((p) => `<p>${inline(p.replace(/\s*\r?\n\s*/g, " "))}</p>`)
+    .map((p) => `<p>${inline(p.replaceAll(/\s*\r?\n\s*/g, " "))}</p>`)
     .join("");
 }
 

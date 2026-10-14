@@ -81,9 +81,9 @@ export function htmlToText(html: string): string {
   const decoded = ENTITIES.reduce((text, [pattern, char]) => text.replace(pattern, char), stripped);
   return decoded
     .split("\n")
-    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .map((line) => line.replaceAll(/[ \t]+/g, " ").trim())
     .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .replaceAll(/\n{3,}/g, "\n\n")
     .trim();
 }
 

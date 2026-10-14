@@ -356,7 +356,7 @@ async function runGate(
  * The gates whose measured regression QSM_LANGDEV_ALLOW lets pass for one run; the leak gates
  * never carry the flag.
  */
-export function allowed(outcome: GateOutcome, reason: string | undefined): GateOutcome {
+export function allowed(outcome: GateOutcome, reason?: string): GateOutcome {
   if (
     reason === undefined ||
     reason === "" ||

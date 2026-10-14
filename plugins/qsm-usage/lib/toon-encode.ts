@@ -74,8 +74,10 @@ function emitItem(value: unknown, indent: number, out: string[]): void {
     throw new TypeError("a TOON list element is a scalar, an array or a plain object");
   }
   const [first, ...rest] = body;
-  out.push(first === undefined ? `${pad(indent)}-` : `${pad(indent)}- ${first.slice(inner)}`);
-  out.push(...rest);
+  out.push(
+    first === undefined ? `${pad(indent)}-` : `${pad(indent)}- ${first.slice(inner)}`,
+    ...rest,
+  );
 }
 
 function emitObject(value: Record<string, unknown>, indent: number, out: string[]): void {

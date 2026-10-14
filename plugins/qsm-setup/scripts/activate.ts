@@ -43,7 +43,7 @@ function withoutOldBlock(text: string): string {
   if (start === -1 || end < start) {
     return text;
   }
-  return (text.slice(0, start) + text.slice(end + OLD_END.length).replace(/^\n/, "")).replace(
+  return (text.slice(0, start) + text.slice(end + OLD_END.length).replace(/^\n/, "")).replaceAll(
     /\n{3,}/g,
     "\n\n",
   );

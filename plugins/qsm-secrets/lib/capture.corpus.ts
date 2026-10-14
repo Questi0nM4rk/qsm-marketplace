@@ -103,7 +103,7 @@ const BARE: string[] = [
   ...many(3, () => random(LOWER + DIGITS, 40)),
 ];
 
-const POSITIVE_BARE = BARE.map((secret) => secret.replace(/^[-_+/]+|[-_+/]+$/g, "A"));
+const POSITIVE_BARE = BARE.map((secret) => secret.replaceAll(/^[-_+/]+|[-_+/]+$/g, "A"));
 
 /** Hex alone is a hash unless a name says credential. */
 const NAMED_HEX: Case[] = [

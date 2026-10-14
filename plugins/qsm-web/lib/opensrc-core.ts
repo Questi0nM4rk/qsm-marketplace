@@ -9,7 +9,7 @@ export function classifyTarget(s: string): TargetKind {
   if (/^https?:\/\//.test(t)) {
     return "address";
   }
-  if (/^ssh:\/\//.test(t)) {
+  if (t.startsWith("ssh://")) {
     return "address";
   }
   if (/^git@[^:]+:/.test(t)) {

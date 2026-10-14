@@ -1082,7 +1082,7 @@ function hasNoExtension(file: string): boolean {
 /** A file semgrep picks no language for by its name: `bin/deploy`, chosen
  * by its shebang, or `Dockerfile.prod`, chosen by its base name. */
 function namedUnknown(file: string): boolean {
-  return hasNoExtension(file) || /^Dockerfile\./.test(basename(file));
+  return hasNoExtension(file) || basename(file).startsWith("Dockerfile.");
 }
 
 /**

@@ -18,7 +18,7 @@ const CAPTURE_TIMEOUT_MS = 10_000;
 // What a person typed or pasted: the terminal, the remote bridge, the SDK host, a channel's human. Every
 // other origin is text the engine, another session or a model wrote (a task notification, a subagent
 // hand-back, a schedule): it holds ids and paths that look like tokens, and a capture would replace them.
-const PERSON_ORIGINS: readonly string[] = ["composer", "bridge", "sdk", "channel"];
+const PERSON_ORIGINS: ReadonlySet<string> = new Set(["composer", "bridge", "sdk", "channel"]);
 
 /** What a failed hook says about itself in the log: the kind and the message, which names the verb,
  * the exit code, the outcome code or stderr; never a stdout, which may hold the prompt. */
@@ -343,7 +343,7 @@ export function register(on: On): void {
   registerScrub(on);
 
   on("prompt.submit", async ($, e, next) => {
-    if (!PERSON_ORIGINS.includes(e.origin.kind)) {
+    if (!PERSON_ORIGINS.has(e.origin.kind)) {
       $.ui.log(`a ${e.origin.kind} prompt is not the person's own; it was not captured`);
       return next(e);
     }

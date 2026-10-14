@@ -17,7 +17,6 @@ export function formatChecks(checks: readonly Check[]): string {
     }
   }
   const failed = checks.filter((check) => !check.ok).length;
-  lines.push("");
-  lines.push(failed === 0 ? "every check passed" : `${failed} check(s) need fixing`);
+  lines.push("", failed === 0 ? "every check passed" : `${failed} check(s) need fixing`);
   return lines.join("\n");
 }

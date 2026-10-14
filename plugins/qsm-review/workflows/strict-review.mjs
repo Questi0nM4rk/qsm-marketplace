@@ -559,11 +559,12 @@ async function run() {
     verdict === "approve"
       ? "No findings."
       : `${findings.length} finding(s), each a required change.`;
-  const tail = offDiff.length
-    ? `\n\n## Outside the diff\n\n${offDiff
-        .map((f) => `- ${f.file}:${f.line} - ${findingText(f)}`)
-        .join("\n")}`
-    : "";
+  const tail =
+    offDiff.length > 0
+      ? `\n\n## Outside the diff\n\n${offDiff
+          .map((f) => `- ${f.file}:${f.line} - ${findingText(f)}`)
+          .join("\n")}`
+      : "";
 
   return {
     mode: "review",

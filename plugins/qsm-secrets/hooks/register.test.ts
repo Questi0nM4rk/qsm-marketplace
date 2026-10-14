@@ -90,7 +90,7 @@ test("the guard sees a placeholder as written, before the substitution rewrites 
 });
 
 /** Read's bottom: the host environment and the file system answer, so a path is judged as the engine sees it. */
-function fileHost(on: On, real: string | undefined): void {
+function fileHost(on: On, real?: string): void {
   on("env.get", (_$, e) => {
     const { name } = e as { name: string };
     return { value: { HOME: "/home/p", XDG_RUNTIME_DIR: "/run/user/1" }[name] };
@@ -124,7 +124,7 @@ for (const [path, real] of PROTECTED_READS) {
 }
 
 test("a Grep with no path is judged by the working directory", async ($, on) => {
-  fileHost(on, undefined);
+  fileHost(on);
   let cwd = "/home/p";
   on("session.cwd", () => ({ value: cwd }));
 

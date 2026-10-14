@@ -139,10 +139,10 @@ export function matchGroup(
 
 /** camelCase -> kebab-case ("fromStdin" -> "from-stdin"). */
 export function toKebab(camel: string): string {
-  return camel.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+  return camel.replaceAll(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
 
 /** kebab-case -> camelCase ("stage-session" -> "stageSession"). */
 export function toCamel(kebab: string): string {
-  return kebab.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+  return kebab.replaceAll(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 }

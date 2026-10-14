@@ -102,7 +102,7 @@ if (import.meta.main) {
       outcome: (call) => {
         const code = call.args.code;
         if (typeof code !== "string") {
-          throw new Error("outcome needs --code");
+          throw new TypeError("outcome needs --code");
         }
         const raw = call.args.warn;
         const warnings = Array.isArray(raw) ? raw : [];

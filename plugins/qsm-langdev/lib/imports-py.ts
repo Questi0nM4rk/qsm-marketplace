@@ -22,7 +22,7 @@ function names(list: string): string[] {
     .map((part) =>
       (
         part
-          .replace(/[()\\]/g, "")
+          .replaceAll(/[()\\]/g, "")
           .trim()
           .split(/\s+/)[0] ?? ""
       ).trim(),

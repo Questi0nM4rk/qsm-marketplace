@@ -68,7 +68,7 @@ function afterGit(tokens: readonly string[]): string[] | null {
   if (executable === undefined || basename(executable) !== "git") {
     return null;
   }
-  return [...tokens.slice(skipGitOptions(tokens, start + 1))];
+  return tokens.slice(skipGitOptions(tokens, start + 1));
 }
 
 /** The index of the first word that is not an assignment or a wrapper. */

@@ -65,12 +65,7 @@ afterAll(() => {
   rmSync(sandbox, { recursive: true, force: true });
 });
 
-const script = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "workflows",
-  "strict-review.mjs",
-);
+const script = join(import.meta.dirname, "..", "workflows", "strict-review.mjs");
 const source = readFileSync(script, "utf8").replace(/^export const meta/m, "const meta");
 const wrapped = `export async function reviewRun(inj) {
   const { agent, parallel, phase, log } = inj;

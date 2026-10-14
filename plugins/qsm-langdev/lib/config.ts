@@ -158,14 +158,14 @@ export function repoFiles(root: string): string[] | null {
 }
 
 /** Languages that never toggle (`alwaysOn` in LANGUAGE_TABLE): docs, multi. */
-const ALWAYS_ON: readonly Language[] = LANGUAGES.filter(
-  (language) => (LANGUAGE_TABLE[language] as LanguageInfo).alwaysOn,
+const ALWAYS_ON: ReadonlySet<Language> = new Set(
+  LANGUAGES.filter((language) => (LANGUAGE_TABLE[language] as LanguageInfo).alwaysOn),
 );
 
 /** True when a language never toggles, so gates.json naming it would claim
  * a control that is not there. */
 export function alwaysOn(language: Language): boolean {
-  return ALWAYS_ON.includes(language);
+  return ALWAYS_ON.has(language);
 }
 
 /**
@@ -173,7 +173,7 @@ export function alwaysOn(language: Language): boolean {
  * when gates.json names it.
  */
 export function languageEnabled(language: Language, enabled: readonly Language[]): boolean {
-  return ALWAYS_ON.includes(language) || enabled.includes(language);
+  return ALWAYS_ON.has(language) || enabled.includes(language);
 }
 
 /** The languages whose `detects` extensions `files` match, by name or by

@@ -188,7 +188,7 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const numberOrText = (v: unknown, fallback: string): string =>
   typeof v === "string" || typeof v === "number" ? String(v) : fallback;
-const squash = (s: string): string => s.replace(/\s+/g, " ").trim();
+const squash = (s: string): string => s.replaceAll(/\s+/g, " ").trim();
 
 /** The first paragraph that is not a heading, on one line. */
 function opening(body: string): string {

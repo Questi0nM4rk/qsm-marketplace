@@ -168,7 +168,7 @@ export function parseEdit(body: unknown, root: string): EditRequest {
   return edit;
 }
 
-const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim().slice(0, 120);
+const oneLine = (s: string): string => s.replaceAll(/\s+/g, " ").trim().slice(0, 120);
 
 const titleOf = (e: EditRequest): string => `${e.where}: ${oneLine(e.what)}`;
 

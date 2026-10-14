@@ -31,7 +31,7 @@ describe("parseEntries", () => {
   });
 
   test("a field carrying a control byte is dropped", () => {
-    expect(parseEntries("nor\u001b[2Kmal\tqsm\tqsm-secrets")).toEqual([]);
+    expect(parseEntries("nor\u001B[2Kmal\tqsm\tqsm-secrets")).toEqual([]);
   });
 });
 

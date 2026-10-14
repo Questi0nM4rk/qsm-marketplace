@@ -47,7 +47,7 @@ function stateDir(): string {
 }
 
 function sessionKey(sessionId: string): string {
-  return sessionId.replace(/[^A-Za-z0-9._-]/g, "_") || "unknown";
+  return sessionId.replaceAll(/[^A-Za-z0-9._-]/g, "_") || "unknown";
 }
 
 function editorDir(kind: string, editor: Editor): string {

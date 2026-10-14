@@ -60,12 +60,12 @@ function numberedAgents(on: On, model: string): void {
 
 /** The engine's Bash: `reached` settles once `count` calls arrived; each call returns after `release`. */
 function heldBash(on: On, count: number) {
-  let release: () => void = () => undefined;
+  let release: () => void = () => {};
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
   let arrived = 0;
-  let reachedAll: () => void = () => undefined;
+  let reachedAll: () => void = () => {};
   const reached = new Promise<void>((resolve) => {
     reachedAll = resolve;
   });

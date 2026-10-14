@@ -66,11 +66,11 @@ describe("resolveInstance", () => {
       "https://flag.test",
     );
     expect(resolveInstance(config, undefined, "https://env.test")).toBe("https://env.test");
-    expect(resolveInstance(config, undefined, undefined)).toBe("https://file.test");
+    expect(resolveInstance(config)).toBe("https://file.test");
   });
 
   test("nothing configured anywhere is the empty string", () => {
-    expect(resolveInstance(DEFAULT_CONFIG, undefined, undefined)).toBe("");
+    expect(resolveInstance(DEFAULT_CONFIG)).toBe("");
   });
 });
 

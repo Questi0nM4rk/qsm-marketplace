@@ -27,7 +27,7 @@ export function spawnDetached(
       env: { ...env },
     });
     // A spawn error after this point lands in no one's hands; it must not crash the caller.
-    child.on("error", () => undefined);
+    child.on("error", () => {});
     child.unref();
   } finally {
     closeSync(fd);

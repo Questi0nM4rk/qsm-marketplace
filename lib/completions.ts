@@ -7,7 +7,7 @@ import { type CommandArg, type CommandDecl, declOf, toKebab } from "./qsm-manife
 export const MARKER = "qsm-generated-fish-completion";
 
 function q(s: string): string {
-  return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  return `'${s.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
 }
 
 /** The condition that every word of a verb has been typed. */

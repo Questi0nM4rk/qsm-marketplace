@@ -112,7 +112,7 @@ export function writeRecord(path: string, record: BuildRecord): void {
 /** Whoever compiles a bin records its hash, so the record is current after any install. */
 function recordBin(env: Env, plugin: string, bin: string, binPath: string): void {
   const path = buildRecordPath(env);
-  const bins = { ...(readRecord(path)?.bins ?? {}), [bin]: { plugin, sha256: sha256(binPath) } };
+  const bins = { ...readRecord(path)?.bins, [bin]: { plugin, sha256: sha256(binPath) } };
   writeRecord(path, { bins });
 }
 

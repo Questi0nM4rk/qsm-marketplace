@@ -146,6 +146,8 @@ export function execDefinition(name: string): string[] {
 
 /** A command line as a reader would type it, for --dry-run output. */
 export function renderCommand(runtime: string, argv: readonly string[]): string {
-  const quoted = argv.map((a) => (/[^\w@%+=:,./-]/.test(a) ? `'${a.replace(/'/g, "'\\''")}'` : a));
+  const quoted = argv.map((a) =>
+    /[^\w@%+=:,./-]/.test(a) ? `'${a.replaceAll("'", "'\\''")}'` : a,
+  );
   return [runtime, ...quoted].join(" ");
 }

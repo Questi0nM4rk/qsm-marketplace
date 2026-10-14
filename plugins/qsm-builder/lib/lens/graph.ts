@@ -29,14 +29,20 @@ const PAD = 10;
 const CHAR = 8;
 
 export const esc = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 
 const clip = (s: string): string => (s.length > 28 ? `${s.slice(0, 27)}…` : s);
 
 /** The mean row of a node's neighbours in `col`, or `null` when it has none there. */
 function meanRow(n: Vertex, col: readonly Vertex[], edges: readonly Link[]): number | null {
-  const near = edges.flatMap((e) => [e.from === n.id ? e.to : "", e.to === n.id ? e.from : ""]);
-  const at = col.map((b, i) => (near.includes(b.id) ? i : -1)).filter((i) => i >= 0);
+  const near = new Set(
+    edges.flatMap((e) => [e.from === n.id ? e.to : "", e.to === n.id ? e.from : ""]),
+  );
+  const at = col.map((b, i) => (near.has(b.id) ? i : -1)).filter((i) => i >= 0);
   return at.length === 0 ? null : at.reduce((a, b) => a + b, 0) / at.length;
 }
 

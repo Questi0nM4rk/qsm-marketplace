@@ -4,10 +4,10 @@
 export function slugify(raw: string): string {
   return raw
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/gu, "")
+    .replaceAll(/[̀-ͯ]/gu, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 const MINIMUM_LENGTH = 3;

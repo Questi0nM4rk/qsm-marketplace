@@ -32,7 +32,7 @@ function commentText(lines: readonly string[]): string | null {
     .map((l) => l.replace(/^\s*(\/\/+|\/\*+|\*+\/?)\s?/, "").replace(/\s*\*\/\s*$/, ""))
     .join(" ")
     .replace(MARKER, "")
-    .replace(/\s+/g, " ")
+    .replaceAll(/\s+/g, " ")
     .trim();
   return text === "" ? null : text;
 }

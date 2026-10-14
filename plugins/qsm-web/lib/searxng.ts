@@ -136,8 +136,8 @@ export async function runSetup(path: string, io: SetupIo): Promise<number> {
 /** The instance to query. */
 export function resolveInstance(
   config: SearxngConfig,
-  flag: string | undefined,
-  env: string | undefined,
+  flag?: string,
+  env?: string,
 ): string {
   if (flag !== undefined && flag.length > 0) {
     return flag;

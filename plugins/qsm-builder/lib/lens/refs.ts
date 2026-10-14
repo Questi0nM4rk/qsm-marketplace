@@ -43,7 +43,7 @@ export function searchedNames(root: string): ReadonlySet<string> {
 function wordsOf(names: ReadonlySet<string>): RegExp | null {
   const alt = [...names]
     .sort((a, b) => b.length - a.length)
-    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    .map((n) => n.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return alt.length === 0 ? null : new RegExp(`(?<![\\w-])(?:${alt.join("|")})(?![\\w-])`, "g");
 }
 

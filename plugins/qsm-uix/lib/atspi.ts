@@ -109,7 +109,7 @@ export function busFinding(): string | null {
 
 /** The text between the first and the last single quote of a gdbus reply. */
 function quoted(out: string): string {
-  return out.slice(out.indexOf("'") + 1, out.lastIndexOf("'")).replace(/\\(.)/g, "$1");
+  return out.slice(out.indexOf("'") + 1, out.lastIndexOf("'")).replaceAll(/\\(.)/g, "$1");
 }
 
 function childrenOf(address: string, ref: NodeRef): NodeRef[] {

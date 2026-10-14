@@ -6,7 +6,7 @@ import type { Caught, EngineInterface, On } from "claude-code";
 import { gitDecision } from "../lib/blocked-git.ts";
 import { registerNoun } from "./noun.generated.ts";
 
-const EDIT_TOOLS: readonly string[] = ["Write", "Edit", "NotebookEdit"];
+const EDIT_TOOLS: ReadonlySet<string> = new Set(["Write", "Edit", "NotebookEdit"]);
 
 /** What every `.catch` here does first: a toast and a log for the person. */
 function failed($: EngineInterface, event: string, error: Caught["error"]): string {
@@ -56,7 +56,7 @@ function registerGuard(on: On): void {
 function registerEditFindings(on: On): void {
   on("tool.call", async ($, e, next) => {
     const result = await next(e);
-    if (result.deny !== undefined || result.isError === true || !EDIT_TOOLS.includes(e.tool)) {
+    if (result.deny !== undefined || result.isError === true || !EDIT_TOOLS.has(e.tool)) {
       return result;
     }
     const file = stringField(e, "file_path") ?? stringField(e, "notebook_path");

@@ -115,7 +115,7 @@ for (const dir of pluginDirs()) {
   }
   for (const path of walk(dir)) {
     const r = rel(path);
-    if (/\/hooks\/hooks\.json$/.test(r)) {
+    if (r.endsWith("/hooks/hooks.json")) {
       const json = readJson(path);
       // "hooks" (classic command hooks) alone, or with "modules" (function
       // hooks) beside it: `claude plugin validate` accepts a hooks.json that

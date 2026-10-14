@@ -67,7 +67,7 @@ export const PEN_SCRIPT = `
   function dismiss(){toasts.textContent="";}
   function toast(text){
     dismiss();
-    var t=el("div","pen-toast"),x=el("button","pen-toast-x","\u00d7");
+    var t=el("div","pen-toast"),x=el("button","pen-toast-x","\u00D7");
     t.appendChild(el("span",null,text));
     x.type="button";x.setAttribute("aria-label","Close");
     x.addEventListener("click",dismiss);t.appendChild(x);toasts.appendChild(t);

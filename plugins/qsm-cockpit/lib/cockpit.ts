@@ -120,7 +120,7 @@ export function doingOf(tool: string, args: Record<string, unknown>): string {
     return name;
   }
   const short = tool === "Bash" ? bare(pick) : shortArg(pick);
-  return `${name} ${short.replace(/\s+/g, " ").slice(0, 48)}`;
+  return `${name} ${short.replaceAll(/\s+/g, " ").slice(0, 48)}`;
 }
 
 /**
@@ -172,5 +172,5 @@ export function closedIds(command: string): string[] {
 
 /** A typed prompt said as the title of its decisions. */
 export function askTitle(text: string): string {
-  return text.trim().replace(/\s+/g, " ").slice(0, 200);
+  return text.trim().replaceAll(/\s+/g, " ").slice(0, 200);
 }

@@ -33,7 +33,7 @@ export function remotePath(url: string): string | null {
 function segmentsOf(spec: string): string[] {
   return spec
     .trim()
-    .replace(/^\/+|\/+$/g, "")
+    .replaceAll(/^\/+|\/+$/g, "")
     .split("/")
     .filter((part) => part.length > 0);
 }

@@ -15,7 +15,7 @@ const FILE_PRINTERS = new Set(["cat", "head", "tail"]);
 export function globMatches(pattern: string, text: string): boolean {
   const body = pattern
     .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .map((part) => part.replaceAll(/[.+?^${}()|[\]\\]/g, "\\$&"))
     .join(".*");
   return new RegExp(`^${body}$`, "s").test(text);
 }
