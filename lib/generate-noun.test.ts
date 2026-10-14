@@ -16,6 +16,16 @@ interface Wrapper {
   readonly argvOf: (row: unknown, options?: Record<string, unknown>) => string[];
 }
 
+function isWrapper(value: unknown): value is Wrapper {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "verbs" in value &&
+    "argvOf" in value &&
+    typeof value.argvOf === "function"
+  );
+}
+
 /** Writes a generated wrapper into a sandbox and imports it: its type-only
  * imports erase, so argvOf runs exactly as the engine would run it. */
 async function loadWrapper(manifest: QsmManifest): Promise<Wrapper> {
@@ -24,7 +34,11 @@ async function loadWrapper(manifest: QsmManifest): Promise<Wrapper> {
   const generated = generateNoun(manifest, dir);
   mkdirSync(join(dir, "hooks"), { recursive: true });
   writeFileSync(generated.hooksPath, generated.hooksContent);
-  return (await import(generated.hooksPath)) as Wrapper;
+  const mod: unknown = await import(generated.hooksPath);
+  if (!isWrapper(mod)) {
+    throw new Error("the generated hooks module does not export the wrapper");
+  }
+  return mod;
 }
 
 const fixture: QsmManifest = {

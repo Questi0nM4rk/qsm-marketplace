@@ -1,47 +1,65 @@
 // qsm.json, the one source of truth for a plugin's binaries and their verbs.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { z } from "zod";
 
-type ArgType = "string" | "number" | "boolean";
-
-export interface CommandArg {
+const commandArgSchema = z.object({
   /** camelCase; a flag is `--kebab-case` on the command line */
-  readonly name: string;
-  readonly type: ArgType;
-  readonly positional?: true;
-  readonly required?: true;
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean"]),
+  positional: z.literal(true).optional(),
+  required: z.literal(true).optional(),
   /** every occurrence is collected into a list (a flag or a positional) */
-  readonly repeatable?: true;
+  repeatable: z.literal(true).optional(),
   /** the only values accepted */
-  readonly choices?: readonly string[];
-  readonly description: string;
-}
+  choices: z.array(z.string()).readonly().optional(),
+  description: z.string(),
+});
 
-export interface CommandDecl {
-  readonly description: string;
-  readonly args?: readonly CommandArg[];
+const commandDeclSchema = z.object({
+  description: z.string(),
+  args: z.array(commandArgSchema).readonly().optional(),
   /** everything after `--` reaches the handler untouched */
-  readonly passthrough?: true;
+  passthrough: z.literal(true).optional(),
   /**
    * the verb is reached from a shell only, never as a noun method: it carries a value or a stream
    * that has no JSON form.
    */
-  readonly noNoun?: true;
-}
+  noNoun: z.literal(true).optional(),
+});
 
-export interface QsmManifest {
-  readonly name?: string;
-  readonly qsm: {
+const manifestSchema = z.object({
+  name: z.string().optional(),
+  qsm: z.object({
     /** bin name -> entry script, relative to the plugin root */
-    readonly bin?: Readonly<Record<string, string>>;
-    readonly noun?: string;
+    bin: z.record(z.string(), z.string()).optional(),
+    noun: z.string().optional(),
     /** "<bin> <verb>" -> its declaration */
-    readonly commands: Readonly<Record<string, CommandDecl>>;
-  };
+    commands: z.record(z.string(), commandDeclSchema),
+  }),
+});
+
+export type CommandArg = z.infer<typeof commandArgSchema>;
+export type CommandDecl = z.infer<typeof commandDeclSchema>;
+export type QsmManifest = z.infer<typeof manifestSchema>;
+
+/** Checks the shape of a parsed qsm.json and returns it typed; throws a ZodError naming the field. */
+export function parseManifest(raw: unknown): QsmManifest {
+  return manifestSchema.parse(raw);
 }
 
 export function loadManifest(pluginRoot: string): QsmManifest {
-  return JSON.parse(readFileSync(resolve(pluginRoot, "qsm.json"), "utf8")) as QsmManifest;
+  const raw: unknown = JSON.parse(readFileSync(resolve(pluginRoot, "qsm.json"), "utf8"));
+  return parseManifest(raw);
+}
+
+/** The declaration of a verb that matchVerb or verbsOf already named; a missing one is a defect. */
+export function declOf(verbs: ReadonlyMap<string, CommandDecl>, verb: string): CommandDecl {
+  const decl = verbs.get(verb);
+  if (decl === undefined) {
+    throw new Error(`no declaration for verb "${verb}"`);
+  }
+  return decl;
 }
 
 /** The verbs of one binary, in declaration order: "qsm-memory recall" -> "recall". */

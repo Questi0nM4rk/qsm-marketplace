@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { z } from "zod";
 import { MARKER } from "./completions.ts";
 import { installBase, installScript } from "./install-base.ts";
 import type { InstallContext, InstallResult } from "./install-contract.ts";
@@ -55,6 +56,16 @@ function fake(
   return { ctx, runs, home };
 }
 
+const installEnvelope = z.object({
+  data: z.object({ steps: z.array(z.object({ name: z.string(), status: z.string() })) }),
+});
+
+/** The steps of an install --json envelope; a stdout of any other shape throws. */
+function stepsOf(stdout: string) {
+  const envelope: unknown = JSON.parse(stdout);
+  return installEnvelope.parse(envelope).data.steps;
+}
+
 function step(r: InstallResult, name: string) {
   const { steps } = r;
   const s = steps.find((x) => x.name === name);
@@ -80,7 +91,9 @@ describe("install-base over the fixture plugin", () => {
     for (const bin of ["qsm-fix-a", "qsm-fix-b"]) {
       const path = join(f.home, "bin", bin);
       expect(existsSync(path)).toBe(true);
-      expect(() => accessSync(path, constants.X_OK)).not.toThrow();
+      expect(() => {
+        accessSync(path, constants.X_OK);
+      }).not.toThrow();
       expect(step(r, `bin ${bin}`).status).toBe("installed");
       const fish = readFileSync(join(f.home, "config/fish/completions", `${bin}.fish`), "utf8");
       expect(fish).toContain(MARKER);
@@ -147,7 +160,7 @@ describe("install-base dry run with extra steps", () => {
     const d = fake({ dryRun: true, present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
-      extra: async () => [
+      extra: () => [
         { name: "first", status: "skipped", detail: "would do the first" },
         { name: "second", status: "skipped", detail: "would do the second" },
       ],
@@ -187,8 +200,9 @@ describe("install-base run twice, each run its own process", () => {
     const installer = join(FIXTURE, "scripts/install.ts");
     const compiles = (): { name: string; status: string }[] => {
       const r = spawnSync("bun", [installer, "--json"], { encoding: "utf8", env });
-      const data = JSON.parse(r.stdout).data as InstallResult;
-      return data.steps.filter((s) => s.name.startsWith("bin ") || s.name.startsWith("hook "));
+      return stepsOf(r.stdout).filter(
+        (s) => s.name.startsWith("bin ") || s.name.startsWith("hook "),
+      );
     };
     const first = compiles();
     expect(first.filter((s) => s.name.startsWith("bin ")).map((s) => s.status)).toEqual([
@@ -349,7 +363,8 @@ process.exit(await activationMain(activation));
   }
   const envelope = (args: string[]) => {
     const r = spawnSync("bun", [activation(), "--json", ...args], { encoding: "utf8" });
-    return { exit: r.status, body: JSON.parse(r.stdout) };
+    const body: unknown = JSON.parse(r.stdout);
+    return { exit: r.status, body };
   };
 
   test("Activation with an unanswered choice and no terminal", () => {
@@ -379,7 +394,7 @@ process.exit(await activationMain(activation));
 
 describe("installScript", () => {
   test("A script's directory names its plugin root", async () => {
-    const meta = { dir: join(FIXTURE, "scripts"), main: false } as ImportMeta;
+    const meta = { dir: join(FIXTURE, "scripts"), main: false };
     const dry = fake({ dryRun: true, present: ["bun", "fakeup"] });
     const viaScript = await installScript(meta, {
       upstream: [{ cmd: "fakeup", hint: "brew install fakeup" }],

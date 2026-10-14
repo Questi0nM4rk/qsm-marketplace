@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { z } from "zod";
 import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
   cliMain,
@@ -85,16 +86,19 @@ export function sha256(path: string): string {
 }
 
 /** What the bin farm last compiled, read by `qsm-setup doctor` and `relink`. */
-export interface BuildRecord {
-  readonly bins: Readonly<Record<string, { readonly plugin: string; readonly sha256: string }>>;
-}
+const buildRecordSchema = z.object({
+  bins: z.record(z.string(), z.object({ plugin: z.string(), sha256: z.string() })).readonly(),
+});
+
+export type BuildRecord = z.infer<typeof buildRecordSchema>;
 
 export function readRecord(path: string): BuildRecord | null {
   if (!existsSync(path)) {
     return null;
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as BuildRecord;
+    const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return buildRecordSchema.parse(raw);
   } catch {
     return null;
   }
@@ -171,7 +175,10 @@ function declaredHooks(
   const names = new Set<string>();
   for (const command of commands) {
     for (const m of command.matchAll(/\/dist\/([a-z0-9-]+)/g)) {
-      names.add(m[1] as string);
+      const name = m[1];
+      if (name !== undefined) {
+        names.add(name);
+      }
     }
   }
   return [...names].map((name) => ({ name, entry: `hooks/${name}.ts` }));
@@ -363,12 +370,12 @@ export function installBase(config: InstallBaseConfig): InstallFn {
  * code. The script exports the result so its own test can call it.
  */
 export function installScript(
-  meta: ImportMeta,
+  meta: Pick<ImportMeta, "dir" | "main">,
   config: Omit<InstallBaseConfig, "pluginRoot"> = {},
 ): InstallFn {
   const install = installBase({ ...config, pluginRoot: resolve(meta.dir, "..") });
   if (meta.main) {
-    cliMain(install).then((code) => process.exit(code));
+    void cliMain(install).then((code) => process.exit(code));
   }
   return install;
 }

@@ -3,6 +3,7 @@ import { exitOf, fail, type Outcome, renderJson, renderText } from "./outcome.ts
 import {
   type CommandArg,
   type CommandDecl,
+  declOf,
   groupVerbs,
   matchGroup,
   matchVerb,
@@ -76,7 +77,10 @@ class VerbParse {
 
   run(verb: string): ParseResult {
     while (this.at < this.argv.length) {
-      const token = this.argv[this.at] as string;
+      const token = this.argv[this.at];
+      if (token === undefined) {
+        break;
+      }
       this.at += 1;
       const err = this.take(token);
       if (err !== null) {
@@ -164,7 +168,8 @@ class VerbParse {
 
   private put(arg: CommandArg, value: string | number | boolean): string | null {
     if (arg.repeatable === true) {
-      const list = (this.values[arg.name] as string[] | undefined) ?? [];
+      const current = this.values[arg.name];
+      const list = Array.isArray(current) ? current : [];
       list.push(String(value));
       this.values[arg.name] = list;
       return null;
@@ -215,7 +220,7 @@ export function parseCall(
   if (before.includes("--help") || before.includes("-h")) {
     return { ok: false, help: verb, message: "" };
   }
-  return new VerbParse(verbs.get(verb) as CommandDecl, tail).run(verb);
+  return new VerbParse(declOf(verbs, verb), tail).run(verb);
 }
 
 /** No verb matched: a group's help, a group missing its verb, or an unknown verb. */
@@ -267,7 +272,7 @@ function renderGroupHelp(
   group: string,
 ): string {
   const rows = groupVerbs(verbs, group).map(
-    (v) => [v.slice(group.length + 1), (verbs.get(v) as CommandDecl).description] as const,
+    (v) => [v.slice(group.length + 1), declOf(verbs, v).description] as const,
   );
   return `usage: ${bin} ${group} <verb> [args] [--json] [--no-input]\n\n${column(rows)}\n\nrun ${bin} ${group} <verb> --help for its arguments\n`;
 }
@@ -337,8 +342,12 @@ interface CliIo {
 }
 
 const processIo: CliIo = {
-  stdout: (t) => process.stdout.write(t),
-  stderr: (t) => process.stderr.write(t),
+  stdout: (t) => {
+    process.stdout.write(t);
+  },
+  stderr: (t) => {
+    process.stderr.write(t);
+  },
 };
 
 function emit(outcome: Outcome, json: boolean, io: CliIo): number {
@@ -368,7 +377,7 @@ function checkHandlers(
   const unhandled = declared.filter((v) => !(v in handlers));
   if (undeclared.length > 0 || unhandled.length > 0) {
     throw new Error(
-      `${bin}: handlers and qsm.json disagree; not declared: [${undeclared}], no handler: [${unhandled}]`,
+      `${bin}: handlers and qsm.json disagree; not declared: [${undeclared.join(", ")}], no handler: [${unhandled.join(", ")}]`,
     );
   }
 }
@@ -414,6 +423,10 @@ export async function runCli(
         : renderVerbHelp(manifest, bin, parsed.verb);
     return respondUsage(parsed.message, help, argv.includes("--json"), io);
   }
-  const outcome = await callHandler(handlers[parsed.call.verb] as Handler, parsed.call);
+  const handler = handlers[parsed.call.verb];
+  if (handler === undefined) {
+    throw new Error(`${bin}: no handler for verb "${parsed.call.verb}"`);
+  }
+  const outcome = await callHandler(handler, parsed.call);
   return emit(outcome, parsed.call.json, io);
 }

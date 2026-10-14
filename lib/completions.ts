@@ -2,7 +2,7 @@
 // binary, marked so we only ever overwrite our own.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type CommandArg, type CommandDecl, toKebab } from "./qsm-manifest.ts";
+import { type CommandArg, type CommandDecl, declOf, toKebab } from "./qsm-manifest.ts";
 
 export const MARKER = "qsm-generated-fish-completion";
 
@@ -52,7 +52,10 @@ function nextWords(
     ) {
       continue;
     }
-    const word = words[parent.length] as string;
+    const word = words[parent.length];
+    if (word === undefined) {
+      continue;
+    }
     const path = [...parent, word].join(" ");
     const group = verbs
       .filter((v) => v.startsWith(`${path} `))
@@ -96,16 +99,16 @@ export function fishCompletion(
   const offered = new Set<string>();
   for (const verb of verbs) {
     const words = verb.split(" ");
-    for (let depth = 0; depth < words.length; depth += 1) {
+    for (const [depth, word] of words.entries()) {
       const parent = words.slice(0, depth);
       const path = words.slice(0, depth + 1).join(" ");
       if (offered.has(path)) {
         continue;
       }
       offered.add(path);
-      lines.push(wordLine(bin, parent, words[depth] as string, nextWords(verbs, decls, parent)));
+      lines.push(wordLine(bin, parent, word, nextWords(verbs, decls, parent)));
     }
-    const decl = decls.get(verb) as CommandDecl;
+    const decl = declOf(decls, verb);
     for (const arg of decl.args ?? []) {
       const line =
         arg.positional === true ? positionalChoicesLine(bin, verb, arg) : flagLine(bin, verb, arg);

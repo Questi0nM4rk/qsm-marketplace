@@ -1,7 +1,7 @@
 // A fixture binary for lib/cli-base.test.ts: every arg shape the base
 // supports, every outcome a handler can return. Run: bun lib/fixtures/cli-fixture.ts <verb> ...
 import { runCli } from "../cli-base.ts";
-import { fail, ok } from "../outcome.ts";
+import { fail, OUTCOME_CODES, type OutcomeCode, ok } from "../outcome.ts";
 import type { QsmManifest } from "../qsm-manifest.ts";
 
 /** A one-binary manifest with multi-word verbs: a group of three words deep,
@@ -84,6 +84,15 @@ export const manifest: QsmManifest = {
   },
 };
 
+function failureCode(code: string): Exclude<OutcomeCode, "ok"> {
+  for (const known of OUTCOME_CODES) {
+    if (known !== "ok" && known === code) {
+      return known;
+    }
+  }
+  throw new Error(`not a failure code: ${code}`);
+}
+
 if (import.meta.main) {
   process.exit(
     await runCli(manifest, "qsm-fix", {
@@ -91,12 +100,16 @@ if (import.meta.main) {
       files: (call) => ok(call.args),
       run: (call) => ok({ shell: call.args.shell, rest: call.rest }),
       outcome: (call) => {
-        const code = call.args.code as string;
-        const warnings = (call.args.warn as string[] | undefined) ?? [];
+        const code = call.args.code;
+        if (typeof code !== "string") {
+          throw new Error("outcome needs --code");
+        }
+        const raw = call.args.warn;
+        const warnings = Array.isArray(raw) ? raw : [];
         const outcome =
           code === "ok"
             ? ok({ fine: true }, "all good")
-            : fail(code as "failed", `asked for ${code}`);
+            : fail(failureCode(code), `asked for ${code}`);
         return { ...outcome, warnings };
       },
     }),

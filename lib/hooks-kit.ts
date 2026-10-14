@@ -15,7 +15,7 @@ async function runHook(main: () => Promise<void>, log: (msg: string) => void): P
   try {
     await main();
   } catch (error) {
-    log(`unexpected error: ${(error as Error).message}`);
+    log(`unexpected error: ${error instanceof Error ? error.message : String(error)}`);
   }
   process.exit(0);
 }

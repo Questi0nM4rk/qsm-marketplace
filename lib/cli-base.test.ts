@@ -198,9 +198,11 @@ describe("through the real surface, usage and help", () => {
 
   test("the handler sees typed args and the passthrough rest", () => {
     const r = run("run", "--shell", "fish", "--json", "--", "--flag", "v");
-    expect(JSON.parse(r.stdout).data).toEqual({ shell: "fish", rest: ["--flag", "v"] });
+    const parsedRun: unknown = JSON.parse(r.stdout);
+    expect(parsedRun).toMatchObject({ data: { shell: "fish", rest: ["--flag", "v"] } });
     const e = run("echo", "bob", "--times", "2", "--loud", "--json");
-    expect(JSON.parse(e.stdout).data).toEqual({ name: "bob", times: 2, loud: true });
+    const parsedEcho: unknown = JSON.parse(e.stdout);
+    expect(parsedEcho).toMatchObject({ data: { name: "bob", times: 2, loud: true } });
   });
 });
 

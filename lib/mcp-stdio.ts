@@ -13,7 +13,9 @@ const STOP_SIGNALS = ["SIGTERM", "SIGINT"] as const;
  * or SIGTERM or SIGINT arrives; then closes the server and resolves. */
 export async function serveStdio(server: McpServer): Promise<void> {
   const { promise: released, resolve: release } = Promise.withResolvers<void>();
-  const onRelease = () => release();
+  const onRelease = () => {
+    release();
+  };
   for (const signal of STOP_SIGNALS) {
     process.once(signal, onRelease);
   }
@@ -36,6 +38,16 @@ interface Message {
   id?: number;
   method?: string;
   [key: string]: unknown;
+}
+
+function isMessage(value: unknown): value is Message {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "jsonrpc" in value &&
+    value.jsonrpc === "2.0" &&
+    (!("id" in value) || typeof value.id === "number")
+  );
 }
 
 /** A running server process, spoken to one JSON-RPC line at a time. */
@@ -98,7 +110,12 @@ export function spawnServer(
       if (child.stdout.readableEnded) {
         throw new Error(`server closed stdout before a full line: ${buffered}`);
       }
-      await Promise.race([new Promise<void>((wake) => waiting.push(wake)), exited]);
+      await Promise.race([
+        new Promise<void>((wake) => {
+          waiting.push(wake);
+        }),
+        exited,
+      ]);
     }
   }
 
@@ -110,15 +127,24 @@ export function spawnServer(
     async request(message) {
       write(message);
       for (;;) {
-        const reply = JSON.parse(await nextLine()) as Message;
+        const reply: unknown = JSON.parse(await nextLine());
+        if (!isMessage(reply)) {
+          throw new Error(
+            `server sent a line that is not a JSON-RPC message: ${JSON.stringify(reply)}`,
+          );
+        }
         if (reply.id === message.id) {
           return reply;
         }
       }
     },
     notify: write,
-    closeStdin: () => child.stdin.end(),
-    kill: (signal) => child.kill(signal),
+    closeStdin: () => {
+      child.stdin.end();
+    },
+    kill: (signal) => {
+      child.kill(signal);
+    },
     exited,
     async restOfStdout() {
       await exited;
