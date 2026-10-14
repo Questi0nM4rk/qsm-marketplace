@@ -17,6 +17,14 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
+      # A plugin owns its npm dependencies (plugins/<name>/package.json); typecheck and the tests
+      # resolve them from the plugin's own node_modules, as the install base does.
+      - name: Install each plugin's dependencies
+        shell: bash
+        run: |
+          for manifest in plugins/*/package.json; do
+            (cd "$(dirname "$manifest")" && bun install --frozen-lockfile)
+          done
       # The tests drive these real binaries and fail loud without them (no skip hides a broken
       # pipeline): wt, rumdl and markdownlint-cli2 and biome for qsm-langdev's markdown fixers,
       # yamllint, taplo, semgrep and lizard because the pre-commit gate marks a checker whose

@@ -15,6 +15,7 @@ lib/                              # layer 0: install-contract.ts, install-base.t
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
+  package.json + bun.lock         # the plugin's own npm dependencies, only when it has any; the install base runs `bun install --frozen-lockfile` before it compiles
   lib/ scripts/ skills/ agents/ commands/ hooks/ openspec/
   README.md                       # always, opens with `## Why it exists`; INSTALL.md + USAGE.md only with a bin
 .gates/                           # bun run validate

@@ -48,3 +48,6 @@ plugins/*/evals/results/
 
 # qsm-builder lens: generated into each marketplace, rewritten on every run
 .qsm/
+
+# a plugin's own npm dependencies (plugins/<name>/package.json)
+plugins/*/node_modules

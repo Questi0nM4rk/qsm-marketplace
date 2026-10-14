@@ -301,6 +301,13 @@ free-text line.
 - **THEN** the system SHALL produce the standalone binary and report it
   built
 
+#### Scenario: A plugin with npm dependencies
+
+- **WHEN** the install base runs for a plugin that has a `package.json`
+- **THEN** it SHALL run `bun install --frozen-lockfile` in the plugin root as its own step before
+  it compiles, and SHALL report an error step naming the cause and the fix, compiling nothing, when
+  that install fails
+
 #### Scenario: A compilable command with no build step
 
 - **WHEN** a plugin declares a compilable command but supplies no build
