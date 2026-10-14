@@ -84,6 +84,6 @@ describe("query pieces", () => {
   test("sinceCutoff reads days or a date", () => {
     expect(sinceCutoff("7d", NOW)).toBe("2026-09-23T12:00:00.000Z");
     expect(sinceCutoff("2026-09-01", NOW)).toBe("2026-09-01T00:00:00.000Z");
-    expect(sinceCutoff("yesterday", NOW)).toBeNull();
+    expect(() => sinceCutoff("yesterday", NOW)).toThrow("--since takes Nd or a date");
   });
 });
