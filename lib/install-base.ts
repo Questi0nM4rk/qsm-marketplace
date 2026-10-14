@@ -112,6 +112,27 @@ function recordBin(env: Env, plugin: string, bin: string, binPath: string): void
   writeRecord(path, { bins });
 }
 
+/** The plugin's own npm dependencies, installed from its lockfile before anything compiles. */
+function dependencyStep(pluginRoot: string): Step[] {
+  if (!existsSync(join(pluginRoot, "package.json"))) {
+    return [];
+  }
+  const name = "dependencies";
+  const done = spawnSync("bun", ["install", "--frozen-lockfile"], {
+    cwd: pluginRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (done.status !== 0) {
+    const why = done.stderr.trim().split("\n").at(-1) ?? "";
+    const fix = "run `bun install` in the plugin and commit its bun.lock";
+    return [
+      { name, status: "error", detail: `bun install failed in ${pluginRoot}: ${why}; ${fix}` },
+    ];
+  }
+  return [{ name, status: "installed", detail: "ran bun install --frozen-lockfile" }];
+}
+
 /** Compiles `entry` to `outFile`, replacing it only when the bytes differ. */
 function compile(pluginRoot: string, entry: string, outFile: string): Step {
   const name = basename(outFile);
@@ -270,6 +291,9 @@ function plan(config: InstallBaseConfig, manifest: QsmManifest, ctx: InstallCont
   const completions = Object.keys(manifest.qsm.bin ?? {}).map(
     (bin) => `would write ${join(fishCompletionDir(ctx.env), `${bin}.fish`)}`,
   );
+  if (existsSync(join(config.pluginRoot, "package.json"))) {
+    lines.unshift("would run bun install --frozen-lockfile");
+  }
   return [
     ...lines.map(planStep),
     ...(config.upstream ?? []).map((t) => planUpstream(ctx, t)),
@@ -305,7 +329,13 @@ async function run(
   ctx: InstallContext,
 ): Promise<Step[]> {
   const completionDir = fishCompletionDir(ctx.env);
+  const deps = dependencyStep(config.pluginRoot);
+  // a plugin that cannot install its dependencies cannot compile either; stop at the cause
+  if (worst(deps) === "error") {
+    return deps;
+  }
   const steps: Step[] = [
+    ...deps,
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
     ...(config.upstream ?? []).map((t) => installUpstream(ctx, t)),
