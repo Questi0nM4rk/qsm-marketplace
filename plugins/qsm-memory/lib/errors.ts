@@ -18,3 +18,8 @@ export class MemError extends Error {
 export function fail(code: ErrorCode, message: string, next: string): never {
   throw new MemError(code, message, next);
 }
+
+/** The message of a caught value. */
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

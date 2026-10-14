@@ -3,12 +3,13 @@
 // qsm-memory: the per-machine archive of Claude Code sessions and the short-term notes.
 
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import { type Handler, runCli } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
 import { startDetached } from "../lib/detach.ts";
-import { type ErrorCode, MemError } from "../lib/errors.ts";
+import { type ErrorCode, MemError, messageOf } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
 import { addNote, currentNotes, dropNote, formatNotes, NOTE_DEFAULT_DAYS } from "../lib/notes.ts";
 import { orientOutcome } from "../lib/orient.ts";
@@ -21,7 +22,34 @@ import { openArchive, resolveDbPath } from "../lib/store.ts";
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const argSchema = z.object({
+  name: z.string(),
+  type: z.enum(["string", "number", "boolean"]),
+  positional: z.literal(true).exactOptional(),
+  required: z.literal(true).exactOptional(),
+  repeatable: z.literal(true).exactOptional(),
+  choices: z.array(z.string()).exactOptional(),
+  description: z.string(),
+});
+
+const manifestSchema = z.object({
+  name: z.string().exactOptional(),
+  qsm: z.object({
+    bin: z.record(z.string(), z.string()).exactOptional(),
+    noun: z.string().exactOptional(),
+    commands: z.record(
+      z.string(),
+      z.object({
+        description: z.string(),
+        args: z.array(argSchema).exactOptional(),
+        passthrough: z.literal(true).exactOptional(),
+        noNoun: z.literal(true).exactOptional(),
+      }),
+    ),
+  }),
+});
+
+const manifest: QsmManifest = manifestSchema.parse(manifestJson);
 
 const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   "not-found": "missing",
@@ -94,7 +122,10 @@ const runSave: Handler = (call) => {
     const skipped = r.skipped === 0 ? "" : `, ${r.skipped} skipped`;
     return ok(r, `saved ${r.saved}${skipped}, ${r.remain} remain`);
   }
-  const r = saveTranscript(db, transcript as string, cwd === undefined ? {} : { cwd });
+  if (transcript === undefined) {
+    return fail("usage", "save needs a transcript path or --catch-up");
+  }
+  const r = saveTranscript(db, transcript, cwd === undefined ? {} : { cwd });
   return r.status === "saved"
     ? ok(r, `saved ${r.id}: ${r.turns} turns, ${r.added} new`)
     : ok(r, `skipped: ${r.reason} in ${r.path}`);
@@ -105,10 +136,16 @@ const runSearch: Handler = (call) => {
   if (limit !== undefined && limit <= 0) {
     return fail("usage", `--limit must be a positive number (got '${limit}')`);
   }
-  const hits = search(openArchive(env()), call.args.query as string, {
+  const query = str(call.args.query);
+  if (query === undefined) {
+    return fail("usage", "search needs a query");
+  }
+  const since = str(call.args.since);
+  const project = str(call.args.project);
+  const hits = search(openArchive(env()), query, {
     ...(limit === undefined ? {} : { limit }),
-    ...(str(call.args.since) === undefined ? {} : { since: str(call.args.since) as string }),
-    ...(str(call.args.project) === undefined ? {} : { project: str(call.args.project) as string }),
+    ...(since === undefined ? {} : { since }),
+    ...(project === undefined ? {} : { project }),
   });
   return ok(hits, formatHits(hits));
 };
@@ -118,7 +155,11 @@ const runShow: Handler = (call) => {
   if (spec !== undefined && !/^\d+-\d+$/.test(spec)) {
     return fail("usage", `--lines takes a-b (got '${spec}')`);
   }
-  const text = show(openArchive(env()), call.args.session as string, {
+  const session = str(call.args.session);
+  if (session === undefined) {
+    return fail("usage", "show needs a session");
+  }
+  const text = show(openArchive(env()), session, {
     full: call.args.full === true,
     ...(spec === undefined ? {} : { lines: parseLines(spec) }),
   });
@@ -131,9 +172,11 @@ const runList: Handler = (call) => {
     const paths = unsavedTranscripts(db, projectsDir(env()));
     return ok(paths, paths.length === 0 ? "nothing unsaved" : paths.join("\n"));
   }
+  const since = str(call.args.since);
+  const project = str(call.args.project);
   const rows = listSessions(db, {
-    ...(str(call.args.since) === undefined ? {} : { since: str(call.args.since) as string }),
-    ...(str(call.args.project) === undefined ? {} : { project: str(call.args.project) as string }),
+    ...(since === undefined ? {} : { since }),
+    ...(project === undefined ? {} : { project }),
   });
   return ok(rows, formatList(rows));
 };
@@ -187,7 +230,7 @@ const runDoctor: Handler = () => {
         : `${r.unsaved} unsaved, the next session start saves them`;
     return ok(r, `archive ${path}: ${r.sessions} sessions, ${r.notes} notes; ${tail}`);
   } catch (error) {
-    return fail("failed", `archive ${path} does not open: ${(error as Error).message}`);
+    return fail("failed", `archive ${path} does not open: ${messageOf(error)}`);
   }
 };
 

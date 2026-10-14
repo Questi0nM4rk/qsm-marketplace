@@ -4,6 +4,7 @@
 import type { Database } from "bun:sqlite";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import { type Bead, type Closed, inProgress, recentlyClosed, TrackerMissing } from "./beads.ts";
+import { messageOf } from "./errors.ts";
 import { type Commit, commitsSince } from "./commits.ts";
 import { currentNotes, fitNotes, type NoteRow } from "./notes.ts";
 import { projectOf } from "./project.ts";
@@ -142,7 +143,7 @@ export function orientOutcome(
     const text = orient(db, cwd, options);
     return ok({ text }, text);
   } catch (error) {
-    const reason = (error as Error).message;
+    const reason = messageOf(error);
     return error instanceof TrackerMissing ? fail("missing", reason) : fail("failed", reason);
   }
 }

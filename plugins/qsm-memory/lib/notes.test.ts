@@ -66,7 +66,9 @@ describe("notes", () => {
     const row = addNote(d, { text: "x", project: null, expiresDays: 14, now: NOW });
     dropNote(d, row.id);
     expect(currentNotes(d, null, { now: NOW })).toEqual([]);
-    expect(() => dropNote(d, row.id)).toThrow(`no note ${row.id}`);
+    expect(() => {
+      dropNote(d, row.id);
+    }).toThrow(`no note ${row.id}`);
   });
 });
 

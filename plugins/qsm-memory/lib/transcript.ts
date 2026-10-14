@@ -1,6 +1,7 @@
 // A Claude Code transcript (JSONL) read down to what a person and the model said.
 
 import { basename } from "node:path";
+import { z } from "zod";
 
 type TurnKind = "text" | "tool_use" | "tool_result";
 type Role = "user" | "assistant";
@@ -25,27 +26,33 @@ export interface Transcript {
   readonly humanTurns: number;
 }
 
-type ResultContent = string | readonly { readonly type?: string; readonly text?: string }[];
+const resultContentSchema = z.union([
+  z.string(),
+  z.array(z.object({ type: z.string().optional(), text: z.string().optional() })),
+]);
+type ResultContent = z.infer<typeof resultContentSchema>;
 
-interface Block {
-  readonly type?: string;
-  readonly text?: string;
-  readonly name?: string;
-  readonly input?: unknown;
-  readonly content?: ResultContent;
-}
+const blockSchema = z.object({
+  type: z.string().optional(),
+  text: z.string().optional(),
+  name: z.string().optional(),
+  input: z.unknown().optional(),
+  content: resultContentSchema.optional(),
+});
+type Block = z.infer<typeof blockSchema>;
 
-interface TranscriptRecord {
-  readonly type?: string;
-  readonly uuid?: string;
-  readonly timestamp?: string;
-  readonly cwd?: string;
-  readonly isMeta?: boolean;
-  readonly origin?: { readonly kind?: string };
-  readonly promptSource?: string;
-  readonly aiTitle?: string;
-  readonly message?: { readonly content?: string | readonly Block[] };
-}
+const recordSchema = z.object({
+  type: z.string().optional(),
+  uuid: z.string().optional(),
+  timestamp: z.string().optional(),
+  cwd: z.string().optional(),
+  isMeta: z.boolean().optional(),
+  origin: z.object({ kind: z.string().optional() }).optional(),
+  promptSource: z.string().optional(),
+  aiTitle: z.string().optional(),
+  message: z.object({ content: z.union([z.string(), z.array(blockSchema)]).optional() }).optional(),
+});
+type TranscriptRecord = z.infer<typeof recordSchema>;
 
 const TITLE_MAX = 80;
 
@@ -57,8 +64,7 @@ function resultText(content: ResultContent | undefined): string {
     return content;
   }
   return content
-    .filter((part) => part.type === "text" && typeof part.text === "string")
-    .map((part) => part.text as string)
+    .flatMap((part) => (part.type === "text" && part.text !== undefined ? [part.text] : []))
     .join("\n");
 }
 
@@ -152,7 +158,8 @@ function parseLine(line: string): TranscriptRecord | null {
     return null;
   }
   try {
-    return JSON.parse(line) as TranscriptRecord;
+    const parsed = recordSchema.safeParse(JSON.parse(line));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
