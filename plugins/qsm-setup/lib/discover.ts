@@ -2,8 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { CommandDecl } from "../../../lib/qsm-manifest.ts";
-import { commandDecls, isRecord, stringRecord } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { type CommandDecl, parseManifest } from "../../../lib/qsm-manifest.ts";
 
 export interface PluginNode {
   readonly name: string;
@@ -26,19 +26,14 @@ function readQsm(dir: string): Pick<PluginNode, "bins" | "commands" | "doctor"> 
   if (!existsSync(path)) {
     return { bins: {}, commands: {}, doctor: null };
   }
-  const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
-  const qsm = isRecord(raw) && isRecord(raw.qsm) ? raw.qsm : {};
+  const { qsm } = parseManifest(JSON.parse(readFileSync(path, "utf8")), path);
   const commands = Object.fromEntries(
-    Object.entries(commandDecls(qsm.commands)).map(([key, value]): [string, CommandDecl] => [
+    Object.entries(qsm.commands).map(([key, value]): [string, CommandDecl] => [
       key,
       { description: value.description, args: value.args ?? [] },
     ]),
   );
-  return {
-    bins: stringRecord(qsm.bin),
-    commands,
-    doctor: typeof qsm.doctor === "string" ? qsm.doctor : null,
-  };
+  return { bins: qsm.bin ?? {}, commands, doctor: qsm.doctor ?? null };
 }
 
 export function discoverPlugins(root: string): PluginNode[] {

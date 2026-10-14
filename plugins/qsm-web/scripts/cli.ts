@@ -4,11 +4,17 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { optionalText, requiredText } from "../lib/args.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { formatDoctor, runDoctor } from "../lib/doctor.ts";
-import { parseManifest, parsePackage } from "../lib/manifest.ts";
+import { parsePackage } from "../lib/manifest.ts";
 import {
   ambiguousBareName,
   buildFetchResult,
@@ -25,7 +31,7 @@ import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as browserboxHandlers } from "./browserbox.ts";
 import { handlers as searxngHandlers } from "./searxng.ts";
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-web/qsm.json");
 
 /** A failure that already knows its outcome code. Thrown from the helpers
  * below so one guard turns it into the handler's outcome. */
@@ -120,8 +126,8 @@ function projectPackage(dir: string): ProjectPackage | null {
 }
 
 function get(call: Call): Outcome {
-  const target = requiredText(call.args, "target");
-  const project = optionalText(call.args, "project");
+  const target = requiredString(call, "target");
+  const project = optionalString(call, "project");
   const projectDir = project === undefined ? undefined : resolve(project);
   const into = libDir(target, sourceRoot(process.env, homedir()));
   mkdirSync(resolve(into, ".."), { recursive: true });

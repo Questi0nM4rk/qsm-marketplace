@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { readRecord, sha256 } from "../../../lib/install-base.ts";
 import type { PluginNode } from "./discover.ts";
 import { declaredBins } from "./farm.ts";
-import { isRecord } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 import type { PurgeReport } from "./purge.ts";
 import type { ActivationReader, Runner } from "./run-installers.ts";
 

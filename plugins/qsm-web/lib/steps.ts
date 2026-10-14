@@ -1,5 +1,5 @@
 // One ordered script of page actions, checked before any of it runs.
-import { isRecord } from "./args.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 const STEP_ACTIONS = [
   "navigate",

@@ -4,7 +4,7 @@
 // to use its ArtifactData tool, since the database has no other door for a command line.
 
 import { which } from "bun";
-import { isRecord } from "../guards.ts";
+import { isRecord } from "../../../../lib/outcome.ts";
 import { createEditTask, EditError, parseEdit, run } from "./edits.ts";
 import { ModelError } from "./model.ts";
 

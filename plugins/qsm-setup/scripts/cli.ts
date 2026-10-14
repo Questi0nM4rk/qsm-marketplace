@@ -3,8 +3,16 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
-import { exitOf, fail, OUTCOME_CODES, type Outcome, ok } from "../../../lib/outcome.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
+import { exitOf, fail, isRecord, OUTCOME_CODES, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   binDir,
   buildRecordPath,
@@ -12,7 +20,7 @@ import {
   fishCompletionDir,
   stateDir,
 } from "../../../lib/paths.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { buildBins } from "../lib/build-bins.ts";
 import { type ClaudeProbes, claudeChecks, type Lookup } from "../lib/claude-health.ts";
 import { readConfig, resolveProfile } from "../lib/config.ts";
@@ -20,7 +28,7 @@ import { discoverPlugins, type PluginNode } from "../lib/discover.ts";
 import { doctor, type Probe, qsmBinsIn, readInstalled } from "../lib/doctor.ts";
 import { declaredBins, type FarmReport, relink, removeUndeclaredBins } from "../lib/farm.ts";
 import { installOrder, requiredBy } from "../lib/graph.ts";
-import { isQsmManifest, isRecord, parseEnvelope } from "../lib/json.ts";
+import { parseEnvelope } from "../lib/json.ts";
 import { type PurgeReport, purge } from "../lib/purge.ts";
 import {
   bunActivationReader,
@@ -31,40 +39,8 @@ import {
 import { compareTools, describeTools, type ToolsProbes } from "../lib/tools.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-function bundledManifest(raw: unknown): QsmManifest {
-  if (!isQsmManifest(raw)) {
-    throw new Error("qsm.json is not a qsm manifest");
-  }
-  return raw;
-}
-const manifest = bundledManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-setup/qsm.json");
 
-/** An optional string arg. parseCall coerces every arg to its declared type, so another type is a bug. */
-function optString(call: Call, name: string): string | undefined {
-  const v = call.args[name];
-  if (v === undefined || typeof v === "string") {
-    return v;
-  }
-  throw new Error(`arg ${name} is not a string`);
-}
-
-/** A required string arg. */
-function reqString(call: Call, name: string): string {
-  const v = optString(call, name);
-  if (v === undefined) {
-    throw new Error(`arg ${name} is missing`);
-  }
-  return v;
-}
-
-/** An optional repeatable arg. */
-function optList(call: Call, name: string): string[] | undefined {
-  const v = call.args[name];
-  if (v === undefined || Array.isArray(v)) {
-    return v;
-  }
-  throw new Error(`arg ${name} is not a list`);
-}
 const env: Env = process.env;
 
 /** The checkout every verb works on, or why there is none. A root that holds no plugin is a wrong
@@ -74,7 +50,8 @@ function withRoot<T extends Outcome | Promise<Outcome>>(
   verb: (nodes: readonly PluginNode[], root: string) => T,
   allowEmpty = false,
 ): T | Outcome {
-  const root = optString(call, "root") ?? env.QSM_MARKETPLACE ?? readConfig(env).marketplaceRoot;
+  const root =
+    optionalString(call, "root") ?? env.QSM_MARKETPLACE ?? readConfig(env).marketplaceRoot;
   if (root === undefined) {
     return fail(
       "missing",
@@ -128,15 +105,15 @@ const claudeProbes: ClaudeProbes = {
 };
 
 function selectPlugins(call: Call, nodes: readonly PluginNode[]): string[] | undefined | Outcome {
-  const names = optList(call, "plugins") ?? [];
-  const profile = optString(call, "profile");
-  const modes = [call.args.all === true, names.length > 0, profile !== undefined].filter(
+  const names = stringList(call, "plugins");
+  const profile = optionalString(call, "profile");
+  const modes = [flagArg(call, "all"), names.length > 0, profile !== undefined].filter(
     Boolean,
   ).length;
   if (modes !== 1) {
     return fail("usage", "install takes exactly one of --all, plugin names, or --profile <name>");
   }
-  if (call.args.all === true) {
+  if (flagArg(call, "all")) {
     return undefined;
   }
   if (profile !== undefined) {
@@ -224,7 +201,7 @@ const install: Handler = (call) =>
     if (unknown.length > 0) {
       return fail("usage", `unknown plugin: ${unknown.join(", ")}; known: ${known.join(", ")}`);
     }
-    const dryRun = call.args.dryRun === true;
+    const dryRun = flagArg(call, "dryRun");
     const purged = purgeMachine(nodes, root, dryRun);
     const undeclared = removeUndeclaredBins(new Set(declaredBins(nodes).map((d) => d.bin)), {
       binDir: binDir(env),
@@ -271,7 +248,7 @@ function activateAtTerminal(argv: string[]): Outcome {
 /** The activation's own envelope, passed on: its code is the verb's code. */
 const activateVerb: Handler = (call) =>
   withRoot(call, (nodes) => {
-    const name = reqString(call, "plugin");
+    const name = requiredString(call, "plugin");
     const node = nodes.find((n) => n.name === name);
     if (node === undefined) {
       return fail(
@@ -282,7 +259,7 @@ const activateVerb: Handler = (call) =>
     if (node.activation === null) {
       return fail("missing", `${name} has no activation: nothing to activate`);
     }
-    const flags = [...(call.args.dryRun === true ? ["--dry-run"] : []), ...call.rest];
+    const flags = [...(flagArg(call, "dryRun") ? ["--dry-run"] : []), ...call.rest];
     if (!call.noInput && process.stdin.isTTY) {
       return activateAtTerminal([node.activation, ...flags]);
     }
@@ -301,9 +278,9 @@ const activateVerb: Handler = (call) =>
 
 const doctorVerb: Handler = (call) =>
   withRoot(call, async (nodes, root) => {
-    const only = optString(call, "plugin") ?? null;
+    const only = optionalString(call, "plugin") ?? null;
     const claude = only === null ? await claudeChecks(claudeProbes) : [];
-    const verbose = call.args.verbose === true;
+    const verbose = flagArg(call, "verbose");
     const report = doctor(nodes, {
       installedPath: join(stateDir(env), "installed.json"),
       recordPath: buildRecordPath(env),
@@ -384,17 +361,13 @@ function relinkMachine(nodes: readonly PluginNode[], root: string, check: boolea
 }
 
 const relinkVerb: Handler = (call) => {
-  if (call.args.auto === true && readConfig(env).autoRelink !== true) {
+  if (flagArg(call, "auto") && readConfig(env).autoRelink !== true) {
     return ok(
       { relinked: false, reason: "not opted in" },
       "relink: this machine has not opted in (setup.json autoRelink)",
     );
   }
-  return withRoot(
-    call,
-    (nodes, root) => relinkMachine(nodes, root, call.args.check === true),
-    true,
-  );
+  return withRoot(call, (nodes, root) => relinkMachine(nodes, root, flagArg(call, "check")), true);
 };
 
 const buildBinsVerb: Handler = (call) =>
@@ -433,7 +406,7 @@ function toolsProbes(root: string): ToolsProbes {
 
 const toolsVerb: Handler = (call) =>
   withRoot(call, (nodes, root) => {
-    const r = compareTools(nodes, toolsProbes(root), call.args.fetch === true);
+    const r = compareTools(nodes, toolsProbes(root), flagArg(call, "fetch"));
     if (r.kind !== "ok") {
       return fail(r.kind, r.message);
     }

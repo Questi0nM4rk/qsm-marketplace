@@ -5,82 +5,10 @@ import type {
   InstallResult,
   InstallStatus,
 } from "../../../lib/install-contract.ts";
-import { OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
-import type { CommandArg, CommandDecl, QsmManifest } from "../../../lib/qsm-manifest.ts";
-
-export function isRecord(x: unknown): x is Record<string, unknown> {
-  return x !== null && typeof x === "object" && !Array.isArray(x);
-}
+import { isRecord, OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
 
 function isStringArray(x: unknown): x is string[] {
   return Array.isArray(x) && x.every((v) => typeof v === "string");
-}
-
-/** The entries of `x` whose value is a string; {} when `x` is not an object. */
-export function stringRecord(x: unknown): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (isRecord(x)) {
-    for (const [k, v] of Object.entries(x)) {
-      if (typeof v === "string") {
-        out[k] = v;
-      }
-    }
-  }
-  return out;
-}
-
-const ARG_TYPES = new Set(["string", "number", "boolean"]);
-
-function isCommandArg(x: unknown): x is CommandArg {
-  return (
-    isRecord(x) &&
-    typeof x.name === "string" &&
-    typeof x.type === "string" &&
-    ARG_TYPES.has(x.type) &&
-    typeof x.description === "string" &&
-    (x.positional === undefined || x.positional === true) &&
-    (x.required === undefined || x.required === true) &&
-    (x.repeatable === undefined || x.repeatable === true) &&
-    (x.choices === undefined || isStringArray(x.choices))
-  );
-}
-
-function isCommandDecl(x: unknown): x is CommandDecl {
-  return (
-    isRecord(x) &&
-    typeof x.description === "string" &&
-    (x.args === undefined || (Array.isArray(x.args) && x.args.every((a) => isCommandArg(a)))) &&
-    (x.passthrough === undefined || x.passthrough === true) &&
-    (x.noNoun === undefined || x.noNoun === true)
-  );
-}
-
-export function isQsmManifest(x: unknown): x is QsmManifest {
-  if (!isRecord(x) || !isRecord(x.qsm)) {
-    return false;
-  }
-  const { bin, noun, commands } = x.qsm;
-  return (
-    (x.name === undefined || typeof x.name === "string") &&
-    (bin === undefined ||
-      (isRecord(bin) && Object.values(bin).every((v) => typeof v === "string"))) &&
-    (noun === undefined || typeof noun === "string") &&
-    isRecord(commands) &&
-    Object.values(commands).every((c) => isCommandDecl(c))
-  );
-}
-
-/** The declarations of `x` that are well formed, for a reader that skips what it cannot use. */
-export function commandDecls(x: unknown): Record<string, CommandDecl> {
-  const out: Record<string, CommandDecl> = {};
-  if (isRecord(x)) {
-    for (const [k, v] of Object.entries(x)) {
-      if (isCommandDecl(v)) {
-        out[k] = v;
-      }
-    }
-  }
-  return out;
 }
 
 const INSTALL_STATUSES: readonly InstallStatus[] = [
@@ -141,6 +69,7 @@ export function isActivationReport(x: unknown): x is ActivationReport {
 export interface ParsedEnvelope {
   readonly code: OutcomeCode;
   readonly message: string;
+  readonly exit: number;
   /** unchecked beyond being present: the caller narrows it with its own guard */
   readonly data: unknown;
 }
@@ -157,11 +86,12 @@ export function parseEnvelope(text: string): ParsedEnvelope | null {
   } catch {
     return null;
   }
-  if (!isRecord(parsed) || !isOutcomeCode(parsed.code)) {
+  if (!isRecord(parsed) || !isOutcomeCode(parsed.code) || typeof parsed.exit !== "number") {
     return null;
   }
   return {
     code: parsed.code,
+    exit: parsed.exit,
     message: typeof parsed.message === "string" ? parsed.message : "",
     data: parsed.data ?? null,
   };

@@ -61,7 +61,7 @@ describe("readValue", () => {
 
   test("the entry name reaches the command, and the value never reaches the message", () => {
     let seen: readonly string[] = [];
-    expect(() =>
+    const read = () =>
       readValue(
         "bw",
         (_cmd, args) => {
@@ -70,8 +70,9 @@ describe("readValue", () => {
         },
         "an-entry",
         "username",
-      ),
-    ).toThrow(VaultError);
+      );
+    expect(read).toThrow(VaultError);
+    expect(read).not.toThrow("the-value");
     expect(seen).toEqual(["get", "username", "an-entry", "--raw"]);
   });
 });

@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync, which } from "bun";
-import { isRecord } from "../guards.ts";
+import { isRecord } from "../../../../lib/outcome.ts";
 
 /** What the task is: an edit made on the lens, a new item asked for on it, feedback on a tool, or any other task. */
 type TaskKind = "edit" | "new" | "feedback" | "task";

@@ -7,12 +7,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { which } from "bun";
-import { type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  flagArg,
+  type Handler,
+  optionalNumber,
+  optionalString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { BriefError, briefOf } from "../lib/lens/brief.ts";
 import { ModelError, readMarketplace } from "../lib/lens/model.ts";
-import { isRecord } from "../lib/guards.ts";
 import { renderDocument } from "../lib/lens/page.ts";
 import { artifactRows, pullEdits } from "../lib/lens/pull.ts";
 import { generatedFiles } from "../lib/lens/readme.ts";
@@ -23,33 +28,7 @@ import { marketplaceView, viewOf } from "../lib/lens/view.ts";
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const ARG_TYPES = new Set<unknown>(["string", "number", "boolean"]);
-
-const isArg = (v: unknown): boolean =>
-  isRecord(v) &&
-  typeof v.name === "string" &&
-  ARG_TYPES.has(v.type) &&
-  typeof v.description === "string";
-
-function isManifest(v: unknown): v is QsmManifest {
-  return (
-    isRecord(v) &&
-    isRecord(v.qsm) &&
-    isRecord(v.qsm.commands) &&
-    Object.values(v.qsm.commands).every(
-      (d: unknown) =>
-        isRecord(d) &&
-        typeof d.description === "string" &&
-        (d.args === undefined || (Array.isArray(d.args) && d.args.every(isArg))),
-    )
-  );
-}
-
-const loadedManifest: unknown = manifestJson;
-if (!isManifest(loadedManifest)) {
-  throw new Error("qsm.json is not a qsm manifest");
-}
-const manifest = loadedManifest;
+const manifest = parseManifest(manifestJson, "qsm-builder/qsm.json");
 
 // A marketplace that cannot be read is the outcome its ModelError names; anything else still throws.
 const modelFailure =
@@ -66,10 +45,9 @@ const modelFailure =
   };
 
 const lensExport: Handler = modelFailure((call) => {
-  const { dir, out } = call.args;
-  const root = resolve(typeof dir === "string" ? dir : process.cwd());
+  const root = resolve(optionalString(call, "dir") ?? process.cwd());
   // Regenerated on each run into the marketplace's own gitignored .qsm directory.
-  const target = typeof out === "string" ? out : join(root, ".qsm", "lens.html");
+  const target = optionalString(call, "out") ?? join(root, ".qsm", "lens.html");
   const marketplace = readMarketplace(root);
   // A full document, so the file opens right in a browser from disk; an artifact publish wraps
   // its own skeleton around it and ignores the leading lines.
@@ -86,8 +64,7 @@ const lensExport: Handler = modelFailure((call) => {
 });
 
 const lensReadme: Handler = modelFailure((call) => {
-  const { dir, check } = call.args;
-  const root = resolve(typeof dir === "string" ? dir : process.cwd());
+  const root = resolve(optionalString(call, "dir") ?? process.cwd());
   const readmeFile = join(root, "README.md");
   const readme = existsSync(readmeFile) ? readFileSync(readmeFile, "utf8") : "";
   const files = generatedFiles(readMarketplace(root), readme);
@@ -96,7 +73,7 @@ const lensReadme: Handler = modelFailure((call) => {
       !existsSync(join(root, path)) || readFileSync(join(root, path), "utf8") !== text,
   );
   const names = differs.map(([path]) => path);
-  if (check === true) {
+  if (flagArg(call, "check")) {
     return names.length === 0
       ? ok({ files: [] }, "README.md and the banners are what the lens would write")
       : fail(
@@ -116,7 +93,7 @@ const lensReadme: Handler = modelFailure((call) => {
 });
 
 const lensTasks: Handler = modelFailure((call) => {
-  const { plugin } = call.args;
+  const plugin = optionalString(call, "plugin");
   const root = process.cwd();
   const market = readMarketplace(root);
   if (market.plugins.every((p) => p.tasks === null)) {
@@ -143,11 +120,11 @@ const lensTasks: Handler = modelFailure((call) => {
 });
 
 const lensPlugin: Handler = modelFailure((call) => {
-  const { plugin, dir } = call.args;
-  if (typeof plugin !== "string" || plugin === "") {
+  const plugin = optionalString(call, "plugin");
+  if (plugin === undefined || plugin === "") {
     return fail("usage", "plugin needs a name: qsm-builder lens plugin <name> [--dir <root>]");
   }
-  const root = resolve(typeof dir === "string" ? dir : process.cwd());
+  const root = resolve(optionalString(call, "dir") ?? process.cwd());
   const view = viewOf(readMarketplace(root), plugin);
   return view === null
     ? fail("usage", `${plugin} is not a plugin of ${root}`)
@@ -158,15 +135,14 @@ const lensPlugin: Handler = modelFailure((call) => {
 });
 
 const lensMarketplace: Handler = modelFailure((call) => {
-  const { dir } = call.args;
-  const root = resolve(typeof dir === "string" ? dir : process.cwd());
+  const root = resolve(optionalString(call, "dir") ?? process.cwd());
   const view = marketplaceView(readMarketplace(root));
   return ok(view, `${view.name}: ${view.plugins.length} plugins`);
 });
 
 const lensBrief: Handler = (call) => {
-  const { file } = call.args;
-  if (typeof file !== "string" || !file.startsWith("/")) {
+  const file = optionalString(call, "file");
+  if (file === undefined || !file.startsWith("/")) {
     return fail("usage", "brief needs an absolute file path: qsm-builder lens brief <file>");
   }
   try {
@@ -181,8 +157,8 @@ const lensBrief: Handler = (call) => {
 };
 
 const lensPull: Handler = modelFailure(async (call) => {
-  const { url } = call.args;
-  if (typeof url !== "string" || url === "") {
+  const url = optionalString(call, "url");
+  if (url === undefined || url === "") {
     return fail("usage", "pull needs the artifact URL: qsm-builder lens pull <artifact-url>");
   }
   const root = process.cwd();
@@ -206,10 +182,9 @@ const lensPull: Handler = modelFailure(async (call) => {
 const DEFAULT_PORT = 4747;
 
 const lensServe: Handler = modelFailure(async (call) => {
-  const { dir, port } = call.args;
-  const root = resolve(typeof dir === "string" ? dir : process.cwd());
+  const root = resolve(optionalString(call, "dir") ?? process.cwd());
   readMarketplace(root);
-  const served = serveLens(root, typeof port === "number" ? port : DEFAULT_PORT);
+  const served = serveLens(root, optionalNumber(call, "port") ?? DEFAULT_PORT);
   // Status goes to stderr: stdout stays the outcome, as under --json.
   process.stderr.write(`serving ${root} on ${served.url} (Ctrl-C stops it)\n`);
   await new Promise<void>((done) => {

@@ -5,7 +5,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { YAML } from "bun";
 import { type CommandDecl, toCamel, verbsOf } from "../../../../lib/qsm-manifest.ts";
-import { isRecord, listOf } from "../guards.ts";
+import { isRecord } from "../../../../lib/outcome.ts";
+import { listOf } from "../guards.ts";
 import { commandHook, functionHooks, type Hook, type Methods } from "./hooks.ts";
 import {
   type Reference,

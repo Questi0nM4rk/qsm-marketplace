@@ -6,7 +6,7 @@ import { join, relative } from "node:path";
 import { YAML } from "bun";
 import type { Check } from "./doctor.ts";
 import { jsonErrorAt } from "./json-position.ts";
-import { isRecord } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface ClaudePaths {
   /** `CLAUDE_CONFIG_DIR`, else `~/.claude` */

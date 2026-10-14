@@ -1,7 +1,6 @@
 // Tools: the qsm binaries on origin/main next to the ones on this machine.
-import { type QsmManifest, verbsOf } from "../../../lib/qsm-manifest.ts";
+import { parseManifest, type QsmManifest, verbsOf } from "../../../lib/qsm-manifest.ts";
 import type { PluginNode } from "./discover.ts";
-import { isQsmManifest } from "./json.ts";
 
 export interface GitResult {
   readonly code: number;
@@ -81,14 +80,11 @@ function readMain(git: ToolsProbes["git"]): Map<string, Declared> | string {
   for (const file of files) {
     const shown = git(["show", `${MAIN}:${file}`]);
     const plugin = file.split("/")[1] ?? file;
-    let manifest: unknown;
+    let manifest: QsmManifest;
     try {
-      manifest = JSON.parse(shown.stdout);
-    } catch {
-      return `${MAIN}:${file} is not a readable qsm.json`;
-    }
-    if (!isQsmManifest(manifest)) {
-      return `${MAIN}:${file} is not a readable qsm.json`;
+      manifest = parseManifest(JSON.parse(shown.stdout), `${MAIN}:${file}`);
+    } catch (error) {
+      return `${MAIN}:${file} is not a readable qsm.json (${error instanceof Error ? error.message : String(error)})`;
     }
     for (const [bin, d] of declared(plugin, manifest)) {
       out.set(bin, d);

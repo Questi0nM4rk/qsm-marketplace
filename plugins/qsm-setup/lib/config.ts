@@ -2,7 +2,7 @@
 // where the marketplace checkout is, and any saved profiles (named plugin lists).
 import { existsSync, readFileSync } from "node:fs";
 import { type Env, setupConfigPath } from "../../../lib/paths.ts";
-import { isRecord } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface SetupConfig {
   readonly autoRelink?: boolean;
@@ -10,6 +10,11 @@ export interface SetupConfig {
   readonly profiles?: Readonly<Record<string, readonly string[]>>;
 }
 
+function isStringList(x: unknown): x is string[] {
+  return Array.isArray(x) && x.every((v) => typeof v === "string");
+}
+
+/** A profile that is not a list of plugin names is a defect in the file: it names the profile. */
 function toConfig(raw: unknown): SetupConfig {
   if (!isRecord(raw)) {
     return {};
@@ -17,9 +22,10 @@ function toConfig(raw: unknown): SetupConfig {
   const profiles: Record<string, readonly string[]> = {};
   if (isRecord(raw.profiles)) {
     for (const [name, list] of Object.entries(raw.profiles)) {
-      if (Array.isArray(list) && list.every((x) => typeof x === "string")) {
-        profiles[name] = list.filter((x): x is string => typeof x === "string");
+      if (!isStringList(list)) {
+        throw new Error(`setup config: profile ${name} is not a list of plugin names`);
       }
+      profiles[name] = list;
     }
   }
   return {
@@ -34,11 +40,13 @@ export function readConfig(env: Env): SetupConfig {
   if (!existsSync(path)) {
     return {};
   }
+  let raw: unknown;
   try {
-    return toConfig(JSON.parse(readFileSync(path, "utf8")));
+    raw = JSON.parse(readFileSync(path, "utf8"));
   } catch {
     return {};
   }
+  return toConfig(raw);
 }
 
 const NOT_IN_GENERAL = new Set(["qsm-builder"]);

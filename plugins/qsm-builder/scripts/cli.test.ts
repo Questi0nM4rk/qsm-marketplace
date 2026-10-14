@@ -5,7 +5,8 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { which } from "bun";
 import { sandboxDir, writeIn as write } from "../../../lib/fixtures/sandbox.ts";
-import { isRecord, listOf } from "../lib/guards.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { listOf } from "../lib/guards.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 

@@ -5,7 +5,8 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sleep, spawn, spawnSync, which } from "bun";
-import { isRecord, listOf } from "../guards.ts";
+import { isRecord } from "../../../../lib/outcome.ts";
+import { listOf } from "../guards.ts";
 import { sandboxDir, writeIn as write } from "../../../../lib/fixtures/sandbox.ts";
 import { type Issue, issuesOf } from "./tasks.ts";
 

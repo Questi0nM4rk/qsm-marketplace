@@ -5,7 +5,8 @@ import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { readRelinkOutput } from "../hooks/relink-output.ts";
-import { isRecord, parseEnvelope } from "../lib/json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { parseEnvelope } from "../lib/json.ts";
 import setupManifest from "../qsm.json" with { type: "json" };
 
 interface CheckRow {

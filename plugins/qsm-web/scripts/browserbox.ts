@@ -3,15 +3,16 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Call, Handler } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
-  isRecord,
+  type Call,
+  flagArg,
+  type Handler,
   optionalNumber,
-  optionalText,
+  optionalString,
   requiredNumber,
-  requiredText,
-} from "../lib/args.ts";
+  requiredString,
+} from "../../../lib/cli-base.ts";
+import { fail, isRecord, type Outcome, ok } from "../../../lib/outcome.ts";
 import { BoxError } from "../lib/box-error.ts";
 import {
   buildDefinition,
@@ -197,8 +198,8 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
   return { name, port, liveView, out: where };
 }
 
-function start({ args }: Call, box: Box): Outcome {
-  const instance = startInstance(box, optionalText(args, "out"));
+function start(call: Call, box: Box): Outcome {
+  const instance = startInstance(box, optionalString(call, "out"));
   return ok(instance, JSON.stringify(instance));
 }
 
@@ -207,9 +208,9 @@ function ls(_call: Call, box: Box): Outcome {
   return ok(live, JSON.stringify(live));
 }
 
-function stop({ args }: Call, box: Box): Outcome {
-  const name = optionalText(args, "name");
-  const all = args.all === true;
+function stop(call: Call, box: Box): Outcome {
+  const name = optionalString(call, "name");
+  const all = flagArg(call, "all");
   if (all === (name !== undefined)) {
     return fail("usage", "stop takes exactly one of an instance name and --all");
   }
@@ -227,24 +228,24 @@ function stop({ args }: Call, box: Box): Outcome {
 }
 
 /** One address, one result. */
-function fetchOne({ args }: Call, box: Box): Outcome {
-  const given = optionalText(args, "in");
-  const keep = args.keep === true;
-  const url = requiredText(args, "url");
+function fetchOne(call: Call, box: Box): Outcome {
+  const given = optionalString(call, "in");
+  const keep = flagArg(call, "keep");
+  const url = requiredString(call, "url");
   const name = given ?? startInstance(box).name;
   const job: Record<string, unknown> = {
     cmd: "fetch",
     url,
-    html: args.html === true,
-    screenshot: args.screenshot === true,
-    cookies: args.cookies === true,
+    html: flagArg(call, "html"),
+    screenshot: flagArg(call, "screenshot"),
+    cookies: flagArg(call, "cookies"),
     keep,
   };
-  const settle = optionalNumber(args, "settle");
+  const settle = optionalNumber(call, "settle");
   if (settle !== undefined) {
     job.settle = settle;
   }
-  const timeout = optionalNumber(args, "timeout");
+  const timeout = optionalNumber(call, "timeout");
   if (timeout !== undefined) {
     job.timeout = timeout;
   }
@@ -306,14 +307,14 @@ function readJob(box: Box, file: string | undefined, steps: string | undefined):
   }
 }
 
-function runScript({ args }: Call, box: Box): Outcome {
-  const file = optionalText(args, "file");
-  const steps = optionalText(args, "steps");
+function runScript(call: Call, box: Box): Outcome {
+  const file = optionalString(call, "file");
+  const steps = optionalString(call, "steps");
   if ((file === undefined) === (steps === undefined)) {
     return fail("usage", "script takes exactly one of --file and --steps");
   }
   const job = readJob(box, file, steps);
-  const result = box.send(requiredText(args, "name"), { cmd: "script", ...job });
+  const result = box.send(requiredString(call, "name"), { cmd: "script", ...job });
   return result.ok === true
     ? ok(result, JSON.stringify(result))
     : fail("failed", "the script did not finish", result);
@@ -323,15 +324,15 @@ function runScript({ args }: Call, box: Box): Outcome {
  * Hand one tab to a human: arm the wait, name the page to open, and poll until the wall is gone or
  * the caller's timeout passes.
  */
-function takeover({ args }: Call, box: Box): Outcome {
-  const name = requiredText(args, "name");
-  const tab = requiredNumber(args, "tab");
-  const timeoutMs = optionalNumber(args, "timeout") ?? DEFAULT_WAIT_MS;
+function takeover(call: Call, box: Box): Outcome {
+  const name = requiredString(call, "name");
+  const tab = requiredNumber(call, "tab");
+  const timeoutMs = optionalNumber(call, "timeout") ?? DEFAULT_WAIT_MS;
   const view = liveViewUrl(Number(name.replace(/^bbox-/, "")));
   const armed = box.send(name, {
     cmd: "wait_for_human",
     tab,
-    reason: optionalText(args, "reason") ?? "a wall the agent cannot clear",
+    reason: optionalString(call, "reason") ?? "a wall the agent cannot clear",
     timeout: timeoutMs,
   });
   if (armed.ok !== true) {
@@ -341,7 +342,7 @@ function takeover({ args }: Call, box: Box): Outcome {
   if (box.dryRun) {
     return ok({ liveView: view }, view);
   }
-  if (args.open === true) {
+  if (flagArg(call, "open")) {
     spawnSync("xdg-open", [view], { stdio: "ignore" });
   }
   const deadline = Date.now() + timeoutMs + POLL_PAUSE_MS;
@@ -370,7 +371,7 @@ type BoxHandler = (call: Call, box: Box) => Outcome;
  */
 function handler(run: BoxHandler): Handler {
   return (call) => {
-    const box = new Box(call.args.dryRun === true);
+    const box = new Box(flagArg(call, "dryRun"));
     let outcome: Outcome;
     try {
       outcome = run(call, box);

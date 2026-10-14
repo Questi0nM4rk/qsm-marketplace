@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { type Env, home } from "../../../lib/paths.ts";
 import { agentChecks, type ClaudePaths, configChecks, skillChecks } from "./claude-files.ts";
 import type { Check } from "./doctor.ts";
-import { isRecord } from "./json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export type Channel = "latest" | "stable";
 export type Lookup =

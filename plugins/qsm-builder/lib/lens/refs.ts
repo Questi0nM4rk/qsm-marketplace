@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { isRecord } from "../guards.ts";
+import { isRecord } from "../../../../lib/outcome.ts";
 // Imported as text so `bun build --compile` embeds the copy the binary falls back to.
 import builtIn from "../../references.txt" with { type: "text" };
 

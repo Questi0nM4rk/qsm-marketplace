@@ -171,15 +171,16 @@ export function buildSearchUrl(instance: string, opts: SearchOptions): string {
   return `${instance.replace(/\/$/, "")}/search?${params.toString()}`;
 }
 
+// A field an instance sends as null is as absent as one it leaves out.
 const RAW_RESULT = z.object({
-  url: z.string().optional(),
-  title: z.string().optional(),
-  content: z.string().optional(),
-  engine: z.string().optional(),
-  engines: z.array(z.string()).optional(),
-  score: z.number().optional(),
-  category: z.string().optional(),
-  publishedDate: z.string().nullable().optional(),
+  url: z.string().nullish(),
+  title: z.string().nullish(),
+  content: z.string().nullish(),
+  engine: z.string().nullish(),
+  engines: z.array(z.string()).nullish(),
+  score: z.number().nullish(),
+  category: z.string().nullish(),
+  publishedDate: z.string().nullish(),
 });
 
 const RESPONSE = z.object({
@@ -210,15 +211,14 @@ export interface SearchOutcome {
 }
 
 function toResult(r: RawResult): SearchResult {
-  const { engine = "", score = 0, category = "general" } = r;
   return {
     url: r.url ?? "",
     title: r.title ?? "",
     content: r.content ?? "",
-    engine,
+    engine: r.engine ?? "",
     engines: engineList(r),
-    score,
-    category,
+    score: r.score ?? 0,
+    category: r.category ?? "general",
     publishedDate: r.publishedDate ?? null,
   };
 }
@@ -227,7 +227,7 @@ function engineList(r: RawResult): string[] {
   if (r.engines) {
     return r.engines;
   }
-  return r.engine === undefined || r.engine === "" ? [] : [r.engine];
+  return r.engine === undefined || r.engine === null || r.engine === "" ? [] : [r.engine];
 }
 
 /** Turn one instance response into results and warnings. */

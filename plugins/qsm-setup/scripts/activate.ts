@@ -14,7 +14,7 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
-import { isRecord } from "../lib/json.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 const NAME = "instructions";
 const SRC = resolve(import.meta.dir, "../instructions");
