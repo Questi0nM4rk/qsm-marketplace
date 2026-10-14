@@ -4,6 +4,7 @@
 // to use its ArtifactData tool, since the database has no other door for a command line.
 
 import { which } from "bun";
+import { isRecord } from "../guards.ts";
 import { createEditTask, EditError, parseEdit, run } from "./edits.ts";
 import { ModelError } from "./model.ts";
 
@@ -83,16 +84,30 @@ async function ask(prompt: string): Promise<string> {
   return out.trim();
 }
 
+function isEditRow(value: unknown): value is EditRow {
+  return isRecord(value) && typeof value.id === "string" && isRecord(value.data);
+}
+
 /** The rows from a reply that is a JSON array, or null. */
 function parseRows(text: string): EditRow[] | null {
-  const rows: unknown = (() => {
-    try {
-      return JSON.parse(text);
-    } catch {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) {
+    return null;
+  }
+  const items: unknown[] = parsed;
+  const rows: EditRow[] = [];
+  for (const item of items) {
+    if (!isEditRow(item)) {
       return null;
     }
-  })();
-  return Array.isArray(rows) ? (rows as EditRow[]) : null;
+    rows.push(item);
+  }
+  return rows;
 }
 
 /** The real database: unverified against a live artifact; the test uses a fake port. */

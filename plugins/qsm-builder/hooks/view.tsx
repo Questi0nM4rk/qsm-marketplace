@@ -4,6 +4,7 @@
 // nothing. What the pane shows travels in its id (a pane id holds letters, digits, `_` and `-`),
 // so the pane keeps no state.
 import type { EngineInterface, On } from "claude-code";
+import { isRecord, listOf } from "../lib/guards.ts";
 
 const MARKETPLACE = "lens";
 const PREFIX = "lens_";
@@ -44,6 +45,63 @@ interface PluginView {
   readonly tasksNote: string;
 }
 
+const isStrings = (v: unknown): boolean => listOf(v).every((x) => typeof x === "string");
+const isTextOrNull = (v: unknown): boolean => v === null || typeof v === "string";
+
+function isMarketView(v: unknown): v is MarketView {
+  return (
+    isRecord(v) &&
+    typeof v.name === "string" &&
+    isTextOrNull(v.why) &&
+    typeof v.tasksNote === "string" &&
+    Array.isArray(v.plugins) &&
+    v.plugins.every(
+      (p: unknown) =>
+        isRecord(p) &&
+        typeof p.name === "string" &&
+        isTextOrNull(p.line) &&
+        Array.isArray(p.dependencies) &&
+        isStrings(p.dependencies) &&
+        (p.openTasks === null || typeof p.openTasks === "number"),
+    )
+  );
+}
+
+const isTask = (v: unknown): v is Task =>
+  isRecord(v) &&
+  typeof v.id === "string" &&
+  typeof v.kind === "string" &&
+  typeof v.title === "string" &&
+  (v.stale === null || typeof v.stale === "boolean");
+
+function isPluginView(v: unknown): v is PluginView {
+  return (
+    isRecord(v) &&
+    typeof v.plugin === "string" &&
+    isTextOrNull(v.why) &&
+    typeof v.tasksNote === "string" &&
+    Array.isArray(v.items) &&
+    v.items.every(
+      (i: unknown) =>
+        isRecord(i) &&
+        typeof i.kind === "string" &&
+        typeof i.name === "string" &&
+        typeof i.line === "string" &&
+        typeof i.description === "string" &&
+        Array.isArray(i.triggers) &&
+        isStrings(i.triggers),
+    ) &&
+    Array.isArray(v.dependencies) &&
+    v.dependencies.every(
+      (d: unknown) => isRecord(d) && typeof d.name === "string" && isTextOrNull(d.reason),
+    ) &&
+    (v.tasks === null || (Array.isArray(v.tasks) && v.tasks.every(isTask)))
+  );
+}
+
+/** What a verb read: the marketplace, or one plugin. */
+type Loaded = { readonly market: MarketView } | { readonly plugin: PluginView };
+
 type Elements = ReturnType<EngineInterface["ui"]["resolve"]>;
 
 /** What a draw needs: the elements, the width, and how a press opens the next level. */
@@ -58,19 +116,27 @@ const cut = (text: string, room: number): string =>
 
 // One verb call per opening, not per redraw: the view is kept by pane id until the command runs
 // again. A pane that outlives a reload of this module reads it again on its next draw.
-const views = new Map<string, Promise<unknown>>();
+const views = new Map<string, Promise<Loaded>>();
 
 const idOf = (plugin: string, item?: string): string =>
   item === undefined ? `${PREFIX}${plugin}` : `${PREFIX}${plugin}${ITEM_SEP}${item}`;
 
-function load($: EngineInterface, id: string): Promise<unknown> {
-  const read = async (): Promise<unknown> => {
+function load($: EngineInterface, id: string): Promise<Loaded> {
+  const read = async (): Promise<Loaded> => {
     const dir = await $.session.cwd();
     if (id === MARKETPLACE) {
-      return $.builder.lensMarketplace({ dir });
+      const market: unknown = await $.builder.lensMarketplace({ dir });
+      if (!isMarketView(market)) {
+        throw new Error("the marketplace view has an unexpected shape");
+      }
+      return { market };
     }
-    const [plugin = ""] = id.slice(PREFIX.length).split(ITEM_SEP);
-    return $.builder.lensPlugin({ plugin, dir });
+    const [name = ""] = id.slice(PREFIX.length).split(ITEM_SEP);
+    const plugin: unknown = await $.builder.lensPlugin({ plugin: name, dir });
+    if (!isPluginView(plugin)) {
+      throw new Error(`the view of ${name} has an unexpected shape`);
+    }
+    return { plugin };
   };
   const loaded = read();
   views.set(id, loaded);
@@ -159,14 +225,12 @@ function drawItem({ els }: Ctx, view: PluginView, name: string) {
   );
 }
 
-function draw(ctx: Ctx, id: string, loaded: unknown) {
-  if (id === MARKETPLACE) {
-    return drawMarketplace(ctx, loaded as MarketView);
+function draw(ctx: Ctx, id: string, loaded: Loaded) {
+  if ("market" in loaded) {
+    return drawMarketplace(ctx, loaded.market);
   }
   const [, item] = id.slice(PREFIX.length).split(ITEM_SEP);
-  return item === undefined
-    ? drawPlugin(ctx, loaded as PluginView)
-    : drawItem(ctx, loaded as PluginView, item);
+  return item === undefined ? drawPlugin(ctx, loaded.plugin) : drawItem(ctx, loaded.plugin, item);
 }
 
 export function registerView(on: On): void {
@@ -197,7 +261,7 @@ export function registerView(on: On): void {
     // A press opens the next level in its own pane, loaded when that pane first draws.
     const open = (target: string) =>
       $.ui.open({ id: target, title: target.slice(PREFIX.length).replace(ITEM_SEP, " / ") });
-    let loaded: unknown;
+    let loaded: Loaded;
     try {
       loaded = await (views.get(id) ?? load($, id));
     } catch (error) {

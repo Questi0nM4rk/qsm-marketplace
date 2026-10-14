@@ -4,10 +4,12 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isRecord } from "../guards.ts";
 // Imported as text so `bun build --compile` embeds the copy the binary falls back to.
 import builtIn from "../../references.txt" with { type: "text" };
 
-export type RefKind = "plugin" | "tool" | "web" | "mcp";
+export const REF_KINDS = ["plugin", "tool", "web", "mcp"] as const;
+export type RefKind = (typeof REF_KINDS)[number];
 
 export interface Reference {
   readonly name: string;
@@ -70,8 +72,8 @@ function mcpServers(dir: string): string[] {
     return [];
   }
   try {
-    const cfg = JSON.parse(readFileSync(file, "utf8")) as { mcpServers?: object };
-    return Object.keys(cfg.mcpServers ?? {});
+    const cfg: unknown = JSON.parse(readFileSync(file, "utf8"));
+    return isRecord(cfg) && isRecord(cfg.mcpServers) ? Object.keys(cfg.mcpServers) : [];
   } catch {
     return [];
   }
@@ -99,7 +101,7 @@ export const scopeOf = (
 
 function scan(text: string, found: Found, { self, known, words }: Scope): void {
   for (const m of text.matchAll(/\bqsm-[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::([a-z][a-z0-9-]*))?/g)) {
-    const name = m[0].split(":")[0] as string;
+    const [name = ""] = m[0].split(":");
     if (name !== self && known.has(name)) {
       const set = found.plugins.get(name) ?? new Set<string>();
       set.add(m[1] ?? "");
@@ -110,10 +112,10 @@ function scan(text: string, found: Found, { self, known, words }: Scope): void {
     found.tools.add(m[0]);
   }
   for (const m of text.matchAll(/https?:\/\/([a-z0-9][a-z0-9.-]*\.[a-z]{2,})/gi)) {
-    found.hosts.add((m[1] as string).toLowerCase());
+    found.hosts.add((m[1] ?? "").toLowerCase());
   }
   for (const m of text.matchAll(/\bmcp__([a-zA-Z0-9-]+)__/g)) {
-    found.mcp.add(m[1] as string);
+    found.mcp.add(m[1] ?? "");
   }
 }
 

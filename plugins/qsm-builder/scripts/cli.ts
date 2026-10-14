@@ -12,6 +12,7 @@ import { fail, ok } from "../../../lib/outcome.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
 import { BriefError, briefOf } from "../lib/lens/brief.ts";
 import { ModelError, readMarketplace } from "../lib/lens/model.ts";
+import { isRecord } from "../lib/guards.ts";
 import { renderDocument } from "../lib/lens/page.ts";
 import { artifactRows, pullEdits } from "../lib/lens/pull.ts";
 import { generatedFiles } from "../lib/lens/readme.ts";
@@ -22,7 +23,33 @@ import { marketplaceView, viewOf } from "../lib/lens/view.ts";
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const ARG_TYPES = new Set<unknown>(["string", "number", "boolean"]);
+
+const isArg = (v: unknown): boolean =>
+  isRecord(v) &&
+  typeof v.name === "string" &&
+  ARG_TYPES.has(v.type) &&
+  typeof v.description === "string";
+
+function isManifest(v: unknown): v is QsmManifest {
+  return (
+    isRecord(v) &&
+    isRecord(v.qsm) &&
+    isRecord(v.qsm.commands) &&
+    Object.values(v.qsm.commands).every(
+      (d: unknown) =>
+        isRecord(d) &&
+        typeof d.description === "string" &&
+        (d.args === undefined || (Array.isArray(d.args) && d.args.every(isArg))),
+    )
+  );
+}
+
+const loadedManifest: unknown = manifestJson;
+if (!isManifest(loadedManifest)) {
+  throw new Error("qsm.json is not a qsm manifest");
+}
+const manifest = loadedManifest;
 
 // A marketplace that cannot be read is the outcome its ModelError names; anything else still throws.
 const modelFailure =
@@ -189,7 +216,7 @@ const lensServe: Handler = modelFailure(async (call) => {
     process.once("SIGINT", done);
     process.once("SIGTERM", done);
   });
-  served.stop();
+  await served.stop();
   return ok({ url: served.url }, `stopped ${served.url}`);
 });
 

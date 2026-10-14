@@ -1,4 +1,5 @@
 // What a plugin.json must hold, checked as text before the write lands.
+import { isRecord } from "./guards.ts";
 
 /** A plugin name: lowercase words joined by single dashes. */
 const KEBAB_CASE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -42,11 +43,7 @@ function checkAuthor(json: Record<string, unknown>, found: string[]): void {
   if (isText(author)) {
     return;
   }
-  const named =
-    typeof author === "object" &&
-    author !== null &&
-    !Array.isArray(author) &&
-    isText((author as Record<string, unknown>).name);
+  const named = isRecord(author) && isText(author.name);
   if (!named) {
     found.push(`author must be a name, or an object naming one, found ${show(author)}`);
   }
@@ -86,10 +83,10 @@ export function checkManifest(text: string): string[] {
   } catch (error) {
     return [`not valid JSON: ${error instanceof Error ? error.message : String(error)}`];
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return [`must be a JSON object, found ${show(parsed)}`];
   }
-  const json = parsed as Record<string, unknown>;
+  const json = parsed;
   const found: string[] = [];
   checkName(json, found);
   checkVersion(json, found);

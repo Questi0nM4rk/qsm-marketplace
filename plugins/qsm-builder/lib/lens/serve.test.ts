@@ -5,7 +5,9 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sleep, spawn, spawnSync, which } from "bun";
+import { isRecord, listOf } from "../guards.ts";
 import { sandboxDir, writeIn as write } from "../../../../lib/fixtures/sandbox.ts";
+import { type Issue, issuesOf } from "./tasks.ts";
 
 const CLI = resolve(import.meta.dir, "../../scripts/cli.ts");
 
@@ -66,10 +68,17 @@ async function start(root: string): Promise<string> {
   return url;
 }
 
+function streamOf(res: Response): ReadableStream<Uint8Array> {
+  if (res.body === null) {
+    throw new Error("the response has no body");
+  }
+  return res.body;
+}
+
 /** What the event stream said up to the first `data:` line after `trigger` ran. */
 async function nextEvent(url: string, trigger: () => void): Promise<string> {
   const res = await fetch(`${url}events`);
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+  const reader = streamOf(res).getReader();
   let seen = "";
   const first = await reader.read();
   seen += new TextDecoder().decode(first.value);
@@ -95,9 +104,9 @@ test("a name added to references.txt while the page is open shows in the graph, 
   const before = await (await fetch(url)).text();
   expect(before).toContain("<title>fix marketplace lens</title>");
   expect(before).not.toContain(">zork</text>");
-  const said = await nextEvent(url, () =>
-    appendFileSync(join(root, "plugins/qsm-builder/references.txt"), "zork\n"),
-  );
+  const said = await nextEvent(url, () => {
+    appendFileSync(join(root, "plugins/qsm-builder/references.txt"), "zork\n");
+  });
   expect(said).toContain("data: change");
   const after = await (await fetch(url)).text();
   expect(after).toContain(">zork</text>");
@@ -108,7 +117,7 @@ test("generated and ignored files never wake the page", async () => {
   write(root, "plugins/qsm-a/evals/.keep", "");
   const url = await start(root);
   const res = await fetch(`${url}events`);
-  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+  const reader = streamOf(res).getReader();
   await reader.read();
   write(root, ".qsm/lens.html", "x");
   write(root, "plugins/qsm-a/evals/results/run/aggregate-result.json", "{}");
@@ -129,12 +138,44 @@ test("a taken port is failed, names the port and suggests --port", async () => {
 });
 
 /** The tasks the task tool holds in `root`, newest first. */
-function tasksIn(root: string): { id: string; title: string; description: string }[] {
-  return (
-    JSON.parse(spawnSync(["br", "list", "--json"], { cwd: root }).stdout.toString()) as {
-      issues: { id: string; title: string; description: string }[];
-    }
-  ).issues;
+function tasksIn(root: string): Issue[] {
+  return issuesOf(spawnSync(["br", "list", "--json"], { cwd: root }).stdout.toString());
+}
+
+/** A text field of a JSON body, or a thrown error naming what was missing. */
+function textField(body: unknown, key: string): string {
+  const value = isRecord(body) ? body[key] : undefined;
+  if (typeof value !== "string") {
+    throw new TypeError(`the body has no text ${key}`);
+  }
+  return value;
+}
+
+/** What the page tells the pen of one text: where it is and what it holds. */
+interface Pen {
+  readonly kind?: string;
+  readonly where: string;
+  readonly file: string;
+  readonly sha: string;
+  readonly section: string;
+  readonly what: string;
+  readonly fields: readonly { readonly value: string }[];
+}
+
+function parsePen(text: string): Pen {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)) {
+    throw new Error(`the pen is not an object: ${text}`);
+  }
+  return {
+    ...(typeof value.kind === "string" ? { kind: value.kind } : {}),
+    where: textField(value, "where"),
+    file: textField(value, "file"),
+    sha: textField(value, "sha"),
+    section: textField(value, "section"),
+    what: textField(value, "what"),
+    fields: listOf(value.fields).map((f: unknown) => ({ value: textField(f, "value") })),
+  };
 }
 
 /** Whether the page shows `label` before and after `change` runs. */
@@ -164,10 +205,10 @@ test("the served page puts a pen on a skill's description, with the file's sha25
     /data-key="plugins\/qsm-a\/skills\/one\/SKILL\.md\|frontmatter description" data-pen="([^"]*)"/.exec(
       html,
     );
-  const pen = JSON.parse(unescapeHtml(m?.[1] ?? "null"));
+  const pen = parsePen(unescapeHtml(m?.[1] ?? "null"));
   const file = readFileSync(join(root, "plugins/qsm-a/skills/one/SKILL.md"));
   expect(pen.where).toBe("qsm-a:one");
-  expect(pen.fields[0].value).toBe("Use when x.");
+  expect(pen.fields[0]?.value).toBe("Use when x.");
   expect(pen.sha).toBe(createHash("sha256").update(file).digest("hex"));
   // The why-it-exists section of the plugin gets one too, as a text box for the section.
   expect(html).toContain('data-key="plugins/qsm-a/README.md|Why it exists"');
@@ -203,11 +244,11 @@ const post = (url: string, body: unknown, headers: Record<string, string> = {}) 
   });
 
 /** The pen of a text on the served page, as the page rendered it. */
-async function penOf(url: string, key: string): Promise<Record<string, unknown>> {
+async function penOf(url: string, key: string): Promise<Pen> {
   const html = await (await fetch(url)).text();
   const at = html.indexOf(`data-key="${key}" data-pen="`);
   const raw = html.slice(at).match(/data-pen="([^"]*)"/)?.[1] ?? "null";
-  return JSON.parse(unescapeHtml(raw));
+  return parsePen(unescapeHtml(raw));
 }
 
 // A temporary marketplace with its own task store: nothing here touches this repository's .beads.
@@ -233,7 +274,7 @@ test("saving an edit makes one task and writes no plugin file; the task is stale
     note: "y is a real case",
   });
   expect(saved.status).toBe(200);
-  const { id } = (await saved.json()) as { id: string };
+  const id = textField(await saved.json(), "id");
 
   const issues = tasksIn(root);
   expect(issues.map((i) => i.id)).toEqual([id]);
@@ -249,9 +290,9 @@ test("saving an edit makes one task and writes no plugin file; the task is stale
 
   // The page lists the task as current, then as stale once its file changed.
   expect(
-    await shownAround(url, "stale: its file changed", () =>
-      appendFileSync(join(root, "plugins/qsm-a/skills/one/SKILL.md"), "\nmore\n"),
-    ),
+    await shownAround(url, "stale: its file changed", () => {
+      appendFileSync(join(root, "plugins/qsm-a/skills/one/SKILL.md"), "\nmore\n");
+    }),
   ).toEqual([false, true]);
 });
 
@@ -312,13 +353,13 @@ test("a new skill is saved as one task of kind new and refused without an eval c
     after: "Name: two\nWhat the eval does: \nWhat the grader expects: ",
   });
   expect(noEval.status).toBe(400);
-  expect(((await noEval.json()) as { error: string }).error).toContain("eval case");
+  expect(textField(await noEval.json(), "error")).toContain("eval case");
   const taken = await post(url, {
     ...fresh,
     file: "plugins/qsm-a/skills/one/SKILL.md",
     after: "What the eval does: a\nWhat the grader expects: b",
   });
-  expect(((await taken.json()) as { error: string }).error).toContain("already exists");
+  expect(textField(await taken.json(), "error")).toContain("already exists");
 
   if (which("br") === null) {
     process.stderr.write("skipped the task part: br is not on PATH\n");
@@ -336,8 +377,8 @@ test("a new skill is saved as one task of kind new and refused without an eval c
   expect(snapshot(root)).toEqual(files);
   // The task reads as new, and stale only once its file exists.
   expect(
-    await shownAround(url, "stale: its file now exists", () =>
-      write(root, "plugins/qsm-a/skills/two/SKILL.md", "---\nname: two\n---\n"),
-    ),
+    await shownAround(url, "stale: its file now exists", () => {
+      write(root, "plugins/qsm-a/skills/two/SKILL.md", "---\nname: two\n---\n");
+    }),
   ).toEqual([false, true]);
 });

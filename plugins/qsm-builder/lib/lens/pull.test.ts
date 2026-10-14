@@ -6,6 +6,7 @@ import { sandboxDir, writeIn as write } from "../../../../lib/fixtures/sandbox.t
 import { readMarketplace } from "./model.ts";
 import { renderDocument } from "./page.ts";
 import { type EditRow, type EditRows, pullEdits } from "./pull.ts";
+import { type Issue, issuesOf } from "./tasks.ts";
 
 const sha = "0".repeat(64);
 const edit = (what: string): Record<string, unknown> => ({
@@ -46,12 +47,8 @@ function fake(rows: EditRow[]): EditRows {
   };
 }
 
-const tasks = (root: string): { title: string; description: string }[] =>
-  (
-    JSON.parse(spawnSync(["br", "list", "--json"], { cwd: root }).stdout.toString()) as {
-      issues: { title: string; description: string }[];
-    }
-  ).issues;
+const tasks = (root: string): Issue[] =>
+  issuesOf(spawnSync(["br", "list", "--json"], { cwd: root }).stdout.toString());
 
 test("pull makes one task per untaken row, marks it taken, and a second pull makes none", async () => {
   if (which("br") === null) {
@@ -70,7 +67,9 @@ test("pull makes one task per untaken row, marks it taken, and a second pull mak
   const first = await pullEdits(root, "https://claude.ai/artifact/x", db);
   expect(first.created.map((c) => c.row)).toEqual(["r1", "r2"]);
   expect(first.taken).toBe(1);
-  expect(first.rejected).toEqual([{ row: "r4", reason: expect.stringContaining("qsm-nope") }]);
+  expect(first.rejected).toHaveLength(1);
+  expect(first.rejected[0]?.row).toBe("r4");
+  expect(first.rejected[0]?.reason).toContain("qsm-nope");
   expect(rows.map((r) => r.data.taken)).toEqual([true, true, true, false]);
   const made = tasks(root);
   expect(made.map((t) => t.title).sort((a, b) => a.localeCompare(b))).toEqual([

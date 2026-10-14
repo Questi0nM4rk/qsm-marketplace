@@ -19,7 +19,7 @@ import {
   type Plugin,
 } from "./model.ts";
 import { newItemSpecs, searchIndex } from "./newitem.ts";
-import type { Reference, RefKind } from "./refs.ts";
+import { type Reference, type RefKind, REF_KINDS } from "./refs.ts";
 import type { Field, Spec } from "./spec.ts";
 import { CSS, FONTS, PEN_CSS, SCRIPT, WAIT_CSS } from "./style.ts";
 import type { Task } from "./tasks.ts";
@@ -180,8 +180,7 @@ const KIND_CLASS: Record<RefKind, "node" | "tool" | "web" | "mcp"> = {
 };
 
 const legendOf = (refs: readonly Reference[]): string =>
-  (Object.keys(KIND_LABEL) as RefKind[])
-    .filter((k) => refs.some((r) => r.kind === k))
+  REF_KINDS.filter((k) => refs.some((r) => r.kind === k))
     .map((k) => `<span class="tag k-${KIND_CLASS[k]}">${esc(KIND_LABEL[k])}</span>`)
     .join("");
 

@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { YAML } from "bun";
 import { type CommandDecl, toCamel, verbsOf } from "../../../../lib/qsm-manifest.ts";
+import { isRecord, listOf } from "../guards.ts";
 import { commandHook, functionHooks, type Hook, type Methods } from "./hooks.ts";
 import {
   type Reference,
@@ -150,7 +151,11 @@ const dirs = (path: string): string[] =>
     : [];
 
 const parseFailure = (label: string, cause: unknown): ModelError =>
-  new ModelError("failed", `${label} does not parse: ${(cause as Error).message}`, { cause });
+  new ModelError(
+    "failed",
+    `${label} does not parse: ${cause instanceof Error ? cause.message : String(cause)}`,
+    { cause },
+  );
 
 function parse(label: string, text: string, parser: (t: string) => unknown): unknown {
   try {
@@ -160,8 +165,13 @@ function parse(label: string, text: string, parser: (t: string) => unknown): unk
   }
 }
 
-const json = (label: string, text: string) =>
-  parse(label, text, JSON.parse) as Record<string, unknown>;
+function json(label: string, text: string): Record<string, unknown> {
+  const value = parse(label, text, (t) => JSON.parse(t));
+  if (!isRecord(value)) {
+    throw new ModelError("failed", `${label} does not parse: not a JSON object`);
+  }
+  return value;
+}
 
 /** The frontmatter and the body of a markdown file (no frontmatter: empty meta). */
 function split(label: string, text: string): { meta: Record<string, unknown>; body: string } {
@@ -170,11 +180,13 @@ function split(label: string, text: string): { meta: Record<string, unknown>; bo
     return { meta: {}, body: text };
   }
   const meta = parse(`${label} frontmatter`, m[1] ?? "", (t) => YAML.parse(t)) ?? {};
-  return { meta: meta as Record<string, unknown>, body: text.slice(m[0].length) };
+  return { meta: isRecord(meta) ? meta : {}, body: text.slice(m[0].length) };
 }
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
+const numberOrText = (v: unknown, fallback: string): string =>
+  typeof v === "string" || typeof v === "number" ? String(v) : fallback;
 const squash = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 /** The first paragraph that is not a heading, on one line. */
@@ -232,7 +244,7 @@ function summaryOf(type: string, meta: Record<string, unknown>, body: string): s
   const shown: Record<string, () => string> = {
     regex: () => `/${str(meta.pattern)}/${str(meta.flags)}`,
     tool_used: () =>
-      `${str(meta.tool)} (min ${String(meta.min ?? 1)}, max ${String(meta.max ?? "any")}, arm ${str(meta.arm) || "with"})`,
+      `${str(meta.tool)} (min ${numberOrText(meta.min, "1")}, max ${numberOrText(meta.max, "any")}, arm ${str(meta.arm) || "with"})`,
   };
   return shown[type]?.() ?? squash(body.trim().split(/\r?\n/)[0] ?? "");
 }
@@ -287,11 +299,15 @@ function howOf(type: string, meta: Record<string, unknown>): string {
 function graderOf(file: string): Grader {
   const { meta, body } = split(file, readFileSync(file, "utf8"));
   const type = str(meta.type) || "unknown";
-  const core = { regex: str(meta.pattern), tool_used: str(meta.tool) }[type as "regex"] ?? "";
+  const cores: Record<string, string | undefined> = {
+    regex: str(meta.pattern),
+    tool_used: str(meta.tool),
+  };
+  const core = cores[type] ?? "";
   const lines = body.trim().split(/\r?\n/);
   const rule =
     type === "llm"
-      ? squash(lines.slice(lines[0]?.startsWith(INTENT_PREFIX) ? 1 : 0).join(" "))
+      ? squash(lines.slice((lines[0] ?? "").startsWith(INTENT_PREFIX) ? 1 : 0).join(" "))
       : "";
   return {
     name: basename(file, ".md"),
@@ -309,6 +325,27 @@ interface Aggregate {
     name: string;
     arms?: { with?: { passed?: boolean }[]; without?: { passed?: boolean }[] };
   }[];
+}
+
+const passedList = (v: unknown): { passed?: boolean }[] =>
+  listOf(v).map((x) => (isRecord(x) && typeof x.passed === "boolean" ? { passed: x.passed } : {}));
+
+function aggregateOf(value: Record<string, unknown>): Aggregate {
+  return {
+    cases: listOf(value.cases).flatMap((c) => {
+      if (!isRecord(c) || typeof c.name !== "string") {
+        return [];
+      }
+      return isRecord(c.arms)
+        ? [
+            {
+              name: c.name,
+              arms: { with: passedList(c.arms.with), without: passedList(c.arms.without) },
+            },
+          ]
+        : [{ name: c.name }];
+    }),
+  };
 }
 
 const passes = (arms: { passed?: boolean }[]): number =>
@@ -365,7 +402,7 @@ function loadResults(evals: string): { hasDir: boolean; results: Run[] } {
       : [
           {
             run,
-            agg: json(`${run}/aggregate-result.json`, text) as Aggregate,
+            agg: aggregateOf(json(`${run}/aggregate-result.json`, text)),
             date: statSync(file).mtime.toISOString().slice(0, 10),
           },
         ];
@@ -389,10 +426,8 @@ function caseMeta(dir: string, fallback: Record<string, unknown>): Record<string
   if (!existsSync(file)) {
     return fallback;
   }
-  return (parse(file, readFileSync(file, "utf8"), (t) => YAML.parse(t)) ?? {}) as Record<
-    string,
-    unknown
-  >;
+  const meta = parse(file, readFileSync(file, "utf8"), (t) => YAML.parse(t));
+  return isRecord(meta) ? meta : {};
 }
 
 const scalar = (v: unknown): string =>
@@ -475,6 +510,25 @@ interface Qsm {
   commands?: Record<string, CommandDecl>;
 }
 
+function qsmOf(value: unknown): Qsm | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const bin: Record<string, string> = {};
+  if (isRecord(value.bin)) {
+    for (const [name, entry] of Object.entries(value.bin)) {
+      bin[name] = str(entry);
+    }
+  }
+  const commands: Record<string, CommandDecl> = {};
+  if (isRecord(value.commands)) {
+    for (const [name, decl] of Object.entries(value.commands)) {
+      commands[name] = { description: isRecord(decl) ? str(decl.description) : "" };
+    }
+  }
+  return typeof value.noun === "string" ? { bin, noun: value.noun, commands } : { bin, commands };
+}
+
 /** `<noun>.<method>` of each verb, the way the generated noun joins its words. */
 function methodsOf(qsm: Qsm | undefined, bin: string | null): Methods {
   if (qsm?.noun === undefined || bin === null) {
@@ -498,10 +552,6 @@ function commandSource(dir: string, command: string): { file: string; src: strin
   return { file: file ?? `hooks/${name}`, src: file === undefined ? null : read(join(dir, file)) };
 }
 
-interface Group {
-  hooks?: { command?: string }[];
-}
-
 function hooksOf(dir: string, methods: Methods): Hook[] {
   const file = join(dir, "hooks", "hooks.json");
   const text = read(file);
@@ -509,18 +559,19 @@ function hooksOf(dir: string, methods: Methods): Hook[] {
     return [];
   }
   const cfg = json(file, text);
-  const modules = (Array.isArray(cfg.modules) ? cfg.modules.map(String) : []).flatMap((mod) => {
-    const path = `hooks/${mod.replace(/^\.\//, "")}`;
-    return functionHooks(path, read(join(dir, path)) ?? "", methods);
-  });
-  const command = Object.entries((cfg.hooks ?? {}) as Record<string, Group[]>).flatMap(
-    ([event, groups]) =>
-      groups.flatMap((g) =>
-        (g.hooks ?? []).map((h) => {
-          const { file: source, src } = commandSource(dir, str(h.command));
-          return commandHook(source, event, src);
-        }),
-      ),
+  const modules = listOf(cfg.modules)
+    .map(String)
+    .flatMap((mod) => {
+      const path = `hooks/${mod.replace(/^\.\//, "")}`;
+      return functionHooks(path, read(join(dir, path)) ?? "", methods);
+    });
+  const command = Object.entries(isRecord(cfg.hooks) ? cfg.hooks : {}).flatMap(([event, groups]) =>
+    listOf(groups).flatMap((g) =>
+      listOf(isRecord(g) ? g.hooks : undefined).map((h) => {
+        const { file: source, src } = commandSource(dir, str(isRecord(h) ? h.command : undefined));
+        return commandHook(source, event, src);
+      }),
+    ),
   );
   return [...modules, ...command];
 }
@@ -552,7 +603,7 @@ function pluginOf(
   const dependencies = strings(manifest.dependencies);
   const { items, loose } = attach(itemsOf(dir, root, scope), casesOf(dir));
   const qsmText = read(join(dir, "qsm.json"));
-  const qsm = qsmText === null ? null : (json(`${name} qsm.json`, qsmText).qsm as Qsm | undefined);
+  const qsm = qsmText === null ? null : qsmOf(json(`${name} qsm.json`, qsmText).qsm);
   const bin = Object.keys(qsm?.bin ?? {})[0] ?? null;
   const references = refsOf(scope, dir, dependencies);
   const otherReferences = refsOutsideParts(scope, dir, dependencies);
@@ -629,16 +680,16 @@ export function readMarketplace(dir: string): Marketplace {
     throw new ModelError("missing", `${file} is missing: ${dir} is not a marketplace`);
   }
   const mp = json(file, text);
-  const entries = (Array.isArray(mp.plugins) ? mp.plugins : []) as {
-    name?: string;
-    source?: string;
-  }[];
-  const known = new Set(entries.map((e) => str(e.name)));
+  const entries = listOf(mp.plugins).map((e) => ({
+    name: isRecord(e) ? str(e.name) : "",
+    source: isRecord(e) ? str(e.source) : "",
+  }));
+  const known = new Set(entries.map((e) => e.name));
   const tasks = readTasks(dir);
   const searched = searchedNames(dir);
   const plugins = entries.map((e) => {
-    const name = str(e.name);
-    const pdir = join(dir, str(e.source) || `plugins/${name}`);
+    const name = e.name;
+    const pdir = join(dir, e.source || `plugins/${name}`);
     if (!existsSync(pdir)) {
       throw new ModelError("missing", `${pdir} is missing: marketplace.json lists ${name}`);
     }
