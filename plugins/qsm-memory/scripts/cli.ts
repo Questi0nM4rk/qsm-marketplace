@@ -7,6 +7,7 @@ import { type Handler, runCli } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { blobPath, putBlob } from "../lib/blobs.ts";
 import { startDetached } from "../lib/detach.ts";
 import { type ErrorCode, MemError } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
@@ -138,6 +139,16 @@ const runList: Handler = (call) => {
   return ok(rows, formatList(rows));
 };
 
+const runBlobPut: Handler = (call) => {
+  const r = putBlob(env(), call.args.file as string);
+  return ok(r, `${r.sha256}  ${r.path}${r.stored ? "" : " (already stored)"}`);
+};
+
+const runBlobPath: Handler = (call) => {
+  const path = blobPath(env(), call.args.sha256 as string);
+  return ok({ path }, path);
+};
+
 const runNote: Handler = (call) => {
   const db = openArchive(env());
   const drop = str(call.args.drop);
@@ -207,6 +218,8 @@ if (import.meta.main) {
         search: runSearch,
         show: runShow,
         list: runList,
+        "blob put": runBlobPut,
+        "blob path": runBlobPath,
         note: runNote,
         notes: runNotes,
         orient: runOrient,
