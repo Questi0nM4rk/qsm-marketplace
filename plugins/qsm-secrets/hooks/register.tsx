@@ -104,22 +104,22 @@ function registerGuard(on: On): void {
 }
 
 /** Read and Grep put a file's lines into the tool result as surely as `cat` does, and a Glob names
- * the files of the store. A Grep or a Glob also walks everything under its path, so a path above a
- * protected directory is refused too. */
+ * the files of the store. A Grep also walks everything under its path, so a path above a
+ * protected directory is refused too; a Glob lists names only, like `ls`, so only a path inside one is. */
 function registerFileGuard(on: On): void {
   // The shipped types list no Grep or Glob (a build without the tool has nothing to guard), so their
   // names are cast; a build that has the tool routes its calls here.
   const guarded = [
     { tool: "Read" as const, ancestors: false, globs: false },
     { tool: "Grep" as "Read", ancestors: true, globs: false },
-    { tool: "Glob" as "Read", ancestors: true, globs: true },
+    { tool: "Glob" as "Read", ancestors: false, globs: true },
   ];
   for (const { tool, ancestors, globs } of guarded) {
     on("tool.call", { tool }, async ($, e, next) => {
       const input = e as { file_path?: string; path?: string; pattern?: string };
       // A Grep or a Glob with no path searches the working directory, so that is its path.
       const target =
-        input.file_path ?? input.path ?? (ancestors ? await $.session.cwd() : undefined);
+        input.file_path ?? input.path ?? (ancestors || globs ? await $.session.cwd() : undefined);
       if (target === undefined) {
         return next(e);
       }
@@ -137,7 +137,11 @@ function registerFileGuard(on: On): void {
       }
       // A Glob's own pattern may start at a protected directory (`~/.password-store/**`): its part
       // before the first wildcard is a path too.
-      const lead = globs ? input.pattern?.split(/[*?[{]/)[0] : undefined;
+      const written = globs ? input.pattern?.split(/[*?[{]/)[0] : undefined;
+      const lead =
+        written !== undefined && written !== "" && !/^[/~$]/.test(written)
+          ? `${target}/${written}`
+          : written;
       const spellings = [target, real, lead].filter(
         (path): path is string => path !== undefined && path !== "",
       );
@@ -146,7 +150,7 @@ function registerFileGuard(on: On): void {
       }
       $.ui.log(`refused a ${tool} of ${target}`);
       return {
-        deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
+        deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials, or the names of the store's files, in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
       };
     }).catch(($, _e, next) => {
       const reason = cause(next.error);

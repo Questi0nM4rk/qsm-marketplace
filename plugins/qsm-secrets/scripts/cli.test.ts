@@ -957,6 +957,19 @@ describe("libsecret: the shape of secret-tool's output", () => {
       }
     });
 
+    test("with the same name, the value is never held only in the process", () => {
+      writeFileSync(legacy("OLD_TOKEN"), "old-value");
+      writeFileSync(join(store, "qsm__OLD_TOKEN.qsm-rename"), "leftover");
+      try {
+        const blocked = run(["rename", "OLD_TOKEN", "OLD_TOKEN", "--legacy"]);
+        expect(blocked.code).toBe(5);
+        expect(readFileSync(legacy("OLD_TOKEN"), "utf8")).toBe("old-value");
+      } finally {
+        rmSync(legacy("OLD_TOKEN"), { force: true });
+        rmSync(join(store, "qsm__OLD_TOKEN.qsm-rename"), { force: true });
+      }
+    });
+
     test("a name that is not a legacy entry is missing, and --folder cannot join --legacy", () => {
       expect(run(["rename", "npm-token", "x", "--legacy"]).code).toBe(4);
       expect(run(["rename", "a", "b", "--legacy", "--folder", "qsm"]).code).toBe(2);

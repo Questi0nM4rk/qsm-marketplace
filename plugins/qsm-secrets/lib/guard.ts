@@ -54,6 +54,9 @@ export interface Refusal {
 const USE_WRAPPER =
   "Use `qsm-secrets pipe <key> -- <cmd>` or `qsm-secrets env <key>=<VAR> -- <cmd>`: the value reaches the command without reaching this transcript.";
 
+const PASS_STORE_INSTEAD =
+  "A pass entry is not reachable through a wrapper: run it in your own terminal, or move the key into the vault with `qsm-secrets set <key>` and use `qsm-secrets pipe <key> -- <cmd>`.";
+
 function refuse(code: RefusalCode, command: string, why: string, instead: string): Refusal {
   return { code, command, reason: `[qsm-secrets ${code}] ${why} ${instead}` };
 }
@@ -278,7 +281,8 @@ function innerStarts(name: string, args: readonly Word[]): number[] {
 
 /** A word as the shell would hand it on, with an expansion left as written. The types say a
  * redirect always has a word, the processor serializes a missing one as null, and a missing word
- * names nothing, so it reads as empty text rather than throwing. */
+ * names nothing, so it reads as empty text rather than throwing; judgeRedirect refuses a redirect
+ * with no word before this is reached. */
 function textOf(word: Word | null | undefined): string {
   if (word === null || word === undefined) {
     return "";
@@ -414,8 +418,10 @@ function judgePaths(
       return refuse(
         "keyring-files",
         shown,
-        `\`${name}\` is pointed at the keyring or the vault's data directory, whose files hold stored credentials.`,
-        USE_WRAPPER,
+        `\`${name}\` is pointed at a secret store (the keyring, the vault's data directory or the pass store), whose files hold stored credentials.`,
+        hit.path.endsWith("/.password-store") || hit.path === ctx.env.passwordStore
+          ? PASS_STORE_INSTEAD
+          : USE_WRAPPER,
       );
     }
     if (hit?.kind === "rendered" && (READERS.has(name) || name === "cd" || name === "pushd")) {
@@ -443,6 +449,14 @@ function judgePaths(
 }
 
 function judgeRedirect(redirect: Redirect, ctx: Context): Refusal | null {
+  if (redirect.word === null || redirect.word === undefined) {
+    return refuse(
+      "unreadable-command",
+      redirect.op,
+      "a redirect's target could not be read, so the guard cannot tell what it opens.",
+      "Rewrite the redirect with a plain file name.",
+    );
+  }
   const target = textOf(redirect.word);
   if (INPUT_OPS.has(redirect.op)) {
     const hit = pathHit(target, ctx);

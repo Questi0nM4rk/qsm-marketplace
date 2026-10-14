@@ -147,6 +147,13 @@ already stored.
 - **THEN** the wrapper refuses with `blocked`, naming that namespace, and both entries are unchanged,
   because the old entry is found and removed by its key alone and would take the other with it
 
+#### Scenario: A legacy entry keeps its name
+
+- **WHEN** `rename --legacy` gives the new entry the same key as the old one
+- **THEN** the value is stored under a spare key in the target and read back, the old entry is
+  removed, the final key is stored and read back, and the spare one is removed, so at no point is
+  the value held only in the process; a leftover spare key is refused as `blocked`
+
 #### Scenario: The copy does not read back equal
 
 - **WHEN** the new entry does not read back equal to the old value
@@ -640,9 +647,11 @@ because the hook sandbox cannot load WebAssembly.
 
 A function hook on `tool.call` for `Read`, `Grep` and `Glob` SHALL deny a path inside the keyring
 directory, the vault's data directory, the pass store or the rendered config directory, by its
-spelling or the file it resolves to, and a `Grep` or `Glob` whose path holds one of them (with no
-path, the session's working directory is judged; a `Glob` pattern that starts inside one is judged
-by its part before the first wildcard), and SHALL answer with the wrapper to use instead.
+spelling or the file it resolves to, and a `Grep` whose path holds one of them (with no path, the
+session's working directory is judged), and SHALL deny a `Glob` whose path is inside one or whose
+pattern starts inside one, judged by its part before the first wildcard and, when that part is
+relative, joined to the Glob's path (a `Glob` lists names, like `ls`, so a path above a store is
+allowed), and SHALL answer with the wrapper to use instead.
 
 #### Scenario: a file read of the keyring is denied
 

@@ -152,6 +152,20 @@ test("a Glob under the pass store, or with a pattern that starts there, is denie
   expect(byPattern.deny).toContain("keyring-files");
   const ordinary = await $.tool.call({ tool: "Glob", pattern: "src/**/*.ts" } as never);
   expect(ordinary.result).toBe("ran");
+  const relative = await $.tool.call({
+    tool: "Glob",
+    pattern: "../.password-store/**",
+    path: "/home/p/project",
+  } as never);
+  expect(relative.deny).toContain("keyring-files");
+});
+
+test("a Glob from the home directory lists names and is not denied", async ($, on) => {
+  fileHost(on, undefined);
+  on("session.cwd", () => ({ value: "/home/p" }));
+
+  const listed = await $.tool.call({ tool: "Glob", pattern: "*.md" } as never);
+  expect(listed.result).toBe("ran");
 });
 
 test("a Read of an ordinary file runs", async ($, on) => {

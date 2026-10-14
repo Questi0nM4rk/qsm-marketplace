@@ -382,36 +382,43 @@ export function runRename(
   if (value === null) {
     missing(from.namespace, from.key);
   }
-  if (legacy) {
-    // The old entry goes first, so that removing it cannot take the new one with it; the value
-    // stays in this process, and a failed copy puts it back.
-    backend.remove(from.namespace, from.key);
-  }
-  const undo = (): void => {
-    backend.remove(to.namespace, to.key);
-    if (legacy) {
-      backend.store(from.namespace, from.key, value);
-    }
-  };
-  try {
-    backend.store(to.namespace, to.key, value);
-  } catch (error) {
-    undo();
-    throw error;
-  }
-  const copy = backend.read(to.namespace, to.key);
-  if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
-    undo();
+  // Removing the old entry matches by key alone, so with the same key in the target it would take
+  // the new entry too. Then the value waits under a spare key until the old entry is gone; either
+  // way the value is stored before anything is removed.
+  const holds = legacy && to.key === from.key ? `${to.key}.qsm-rename` : to.key;
+  if (holds !== to.key && keyExists(rows, to.namespace, holds)) {
     fail(
-      `the copy at ${label(to)} did not read back equal, nothing renamed`,
-      `${label(from)} is untouched`,
+      `${label({ namespace: to.namespace, key: holds })} is stored`,
+      "remove that leftover with qsm-secrets rm, then rename again",
+      "blocked",
     );
   }
-  if (!(legacy || backend.remove(from.namespace, from.key))) {
+  const copyTo = (key: string): void => {
+    try {
+      backend.store(to.namespace, key, value);
+    } catch (error) {
+      backend.remove(to.namespace, key);
+      throw error;
+    }
+    const copy = backend.read(to.namespace, key);
+    if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
+      backend.remove(to.namespace, key);
+      fail(
+        `the copy at ${label({ namespace: to.namespace, key })} did not read back equal, nothing renamed`,
+        `${label(from)} is untouched`,
+      );
+    }
+  };
+  copyTo(holds);
+  if (!backend.remove(from.namespace, from.key) && !legacy) {
     fail(
       `copied to ${label(to)} but could not remove ${label(from)}`,
       `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
     );
+  }
+  if (holds !== to.key) {
+    copyTo(to.key);
+    backend.remove(to.namespace, holds);
   }
   return { from: label(from), to: label(to) };
 }
