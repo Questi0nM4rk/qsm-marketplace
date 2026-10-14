@@ -1,6 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { readScript, ScriptError, secretSteps, withSecrets } from "./steps.ts";
 
+/** The ScriptError a call throws; any other outcome fails the test. */
+function scriptErrorOf(fn: () => unknown): ScriptError {
+  try {
+    fn();
+  } catch (err: unknown) {
+    if (err instanceof ScriptError) {
+      return err;
+    }
+    throw err;
+  }
+  throw new Error("expected a ScriptError, nothing was thrown");
+}
+
 describe("readScript", () => {
   test("an ordered script of known actions is accepted with its tab", () => {
     const script = readScript({
@@ -19,23 +32,16 @@ describe("readScript", () => {
   });
 
   test("an unknown action is refused with the step's index", () => {
-    try {
-      readScript({ steps: [{ action: "navigate", url: "https://a.test" }, { action: "scroll" }] });
-      expect.unreachable("an unknown action must be refused");
-    } catch (err) {
-      expect(err).toBeInstanceOf(ScriptError);
-      expect((err as ScriptError).index).toBe(1);
-    }
+    const err = scriptErrorOf(() =>
+      readScript({ steps: [{ action: "navigate", url: "https://a.test" }, { action: "scroll" }] }),
+    );
+    expect(err.index).toBe(1);
   });
 
   test("a step missing what it needs is refused with the index and the field", () => {
-    try {
-      readScript({ steps: [{ action: "fill", selector: "#user" }] });
-      expect.unreachable("a fill without a value must be refused");
-    } catch (err) {
-      expect((err as ScriptError).index).toBe(0);
-      expect((err as ScriptError).message).toContain("value");
-    }
+    const err = scriptErrorOf(() => readScript({ steps: [{ action: "fill", selector: "#user" }] }));
+    expect(err.index).toBe(0);
+    expect(err.message).toContain("value");
   });
 
   test("a wait needs a selector, a text, or a plain timeout", () => {

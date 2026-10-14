@@ -172,9 +172,11 @@ describe("runSetup", () => {
     const { io, prompts } = scripted(["https://search.test", "duckduckgo, mojeek"]);
     expect(await runSetup(path, io)).toBe(0);
     expect(prompts.some((p) => p.includes("Replace"))).toBe(false);
-    const written = JSON.parse(readFileSync(path, "utf8"));
-    expect(written.instance).toBe("https://search.test");
-    expect(written.defaultEngines).toEqual(["duckduckgo", "mojeek"]);
+    const written: unknown = JSON.parse(readFileSync(path, "utf8"));
+    expect(written).toMatchObject({
+      instance: "https://search.test",
+      defaultEngines: ["duckduckgo", "mojeek"],
+    });
   });
 
   test("a config that is present but names no instance is still guarded", async () => {
@@ -202,10 +204,12 @@ describe("runSetup", () => {
     writeConfig({ ...DEFAULT_CONFIG, instance: "https://old.test", timeoutMs: 42 }, path);
     const { io } = scripted(["y", "https://new.test", ""]);
     expect(await runSetup(path, io)).toBe(0);
-    const written = JSON.parse(readFileSync(path, "utf8"));
-    expect(written.instance).toBe("https://new.test");
-    expect(written.timeoutMs).toBe(42);
-    expect(written.defaultEngines).toEqual([...DEFAULT_CONFIG.defaultEngines]);
+    const written: unknown = JSON.parse(readFileSync(path, "utf8"));
+    expect(written).toMatchObject({
+      instance: "https://new.test",
+      timeoutMs: 42,
+      defaultEngines: [...DEFAULT_CONFIG.defaultEngines],
+    });
   });
 
   test("no instance given and none on file writes nothing and exits non-zero", async () => {

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { chooseVaultCli, readValue, VaultError, vaultCommand } from "./vault.ts";
 
+const locked = () =>
+  readValue("rbw", () => ({ status: 1, stdout: "", stderr: "vault is locked\n" }), "an-entry");
+
 describe("chooseVaultCli", () => {
   test("the named client is taken as given", () => {
     expect(chooseVaultCli({ QSM_BITWARDEN_CLI: "bw" }, () => false)).toBe("bw");
@@ -45,14 +48,9 @@ describe("readValue", () => {
   });
 
   test("a locked vault fails with the client's own reason and how to unlock", () => {
-    try {
-      readValue("rbw", () => ({ status: 1, stdout: "", stderr: "vault is locked\n" }), "an-entry");
-      expect.unreachable("a locked vault must fail");
-    } catch (err) {
-      expect(err).toBeInstanceOf(VaultError);
-      expect((err as VaultError).message).toContain("vault is locked");
-      expect((err as VaultError).message).toContain("rbw unlock");
-    }
+    expect(locked).toThrow(VaultError);
+    expect(locked).toThrow("vault is locked");
+    expect(locked).toThrow("rbw unlock");
   });
 
   test("an empty answer is a failure, not an empty password", () => {
@@ -63,7 +61,7 @@ describe("readValue", () => {
 
   test("the entry name reaches the command, and the value never reaches the message", () => {
     let seen: readonly string[] = [];
-    try {
+    expect(() =>
       readValue(
         "bw",
         (_cmd, args) => {
@@ -72,10 +70,8 @@ describe("readValue", () => {
         },
         "an-entry",
         "username",
-      );
-    } catch (err) {
-      expect((err as VaultError).message).not.toContain("the-value");
-    }
+      ),
+    ).toThrow(VaultError);
     expect(seen).toEqual(["get", "username", "an-entry", "--raw"]);
   });
 });

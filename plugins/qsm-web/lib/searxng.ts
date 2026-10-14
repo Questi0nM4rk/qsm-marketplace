@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 
 export interface SearchResult {
   readonly url: string;
@@ -51,6 +52,15 @@ export const DEFAULT_CONFIG: SearxngConfig = {
   timeoutMs: 10_000,
 };
 
+const CONFIG_FILE = z.object({
+  instance: z.string().exactOptional(),
+  defaultEngines: z.array(z.string()).exactOptional(),
+  defaultNumResults: z.number().exactOptional(),
+  timeoutMs: z.number().exactOptional(),
+  defaultLanguage: z.string().exactOptional(),
+  defaultSafesearch: z.number().exactOptional(),
+});
+
 export function configPath(overridePath?: string, homeDir: string = homedir()): string {
   if (overridePath !== undefined && overridePath.length > 0) {
     return overridePath;
@@ -72,7 +82,7 @@ export function loadConfig(path: string): LoadedConfig {
     };
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<SearxngConfig>;
+    const parsed = CONFIG_FILE.parse(JSON.parse(readFileSync(path, "utf8")));
     return { config: { ...DEFAULT_CONFIG, ...parsed }, warnings: [] };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -161,21 +171,24 @@ export function buildSearchUrl(instance: string, opts: SearchOptions): string {
   return `${instance.replace(/\/$/, "")}/search?${params.toString()}`;
 }
 
-interface RawResult {
-  url?: string;
-  title?: string;
-  content?: string;
-  engine?: string;
-  engines?: string[];
-  score?: number;
-  category?: string;
-  publishedDate?: string | null;
-}
+const RAW_RESULT = z.object({
+  url: z.string().optional(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  engine: z.string().optional(),
+  engines: z.array(z.string()).optional(),
+  score: z.number().optional(),
+  category: z.string().optional(),
+  publishedDate: z.string().nullable().optional(),
+});
 
-export interface SearxngResponse {
-  results?: RawResult[];
-  unresponsive_engines?: [string, string][];
-}
+const RESPONSE = z.object({
+  results: z.array(RAW_RESULT).optional(),
+  unresponsive_engines: z.array(z.tuple([z.string(), z.string()])).optional(),
+});
+
+type RawResult = z.infer<typeof RAW_RESULT>;
+export type SearxngResponse = z.infer<typeof RESPONSE>;
 
 class SearchFailure extends Error {
   readonly exitCode: number;
@@ -214,7 +227,7 @@ function engineList(r: RawResult): string[] {
   if (r.engines) {
     return r.engines;
   }
-  return r.engine ? [r.engine] : [];
+  return r.engine === undefined || r.engine === "" ? [] : [r.engine];
 }
 
 /** Turn one instance response into results and warnings. */
@@ -244,7 +257,7 @@ export async function search(
   }
   let body: SearxngResponse;
   try {
-    body = (await resp.json()) as SearxngResponse;
+    body = RESPONSE.parse(await resp.json());
   } catch (err: unknown) {
     throw SearchFailure.because(
       err,

@@ -31,8 +31,9 @@ export function resolvedVersionFromPath(p: string): string | null {
     return seg.replace(/^v/, "");
   }
   const at = seg.match(/@(v?\d+\.\d+[^@/\s]*)$/);
-  if (at?.[1]) {
-    return at[1].replace(/^v/, "");
+  const version = at?.[1];
+  if (version !== undefined) {
+    return version.replace(/^v/, "");
   }
   return null;
 }

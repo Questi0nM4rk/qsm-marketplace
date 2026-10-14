@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { z } from "zod";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import { TAVILY_SKILLS } from "../lib/upstream.ts";
 import { install } from "./install.ts";
@@ -88,10 +89,9 @@ describe("install", () => {
         encoding: "utf8",
         env,
       });
-      const envelope = JSON.parse(doctor.stdout) as {
-        code: string;
-        message: string;
-      };
+      const envelope = z
+        .object({ code: z.string(), message: z.string() })
+        .parse(JSON.parse(doctor.stdout));
       expect(envelope.message).toContain("tavily skills: healthy");
       expect(envelope.message).toContain("context7 skill: healthy");
       expect(envelope.code).toBe("ok");

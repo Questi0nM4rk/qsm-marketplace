@@ -5,6 +5,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Call, Handler } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import {
+  isRecord,
+  optionalNumber,
+  optionalText,
+  requiredNumber,
+  requiredText,
+} from "../lib/args.ts";
 import { BoxError } from "../lib/box-error.ts";
 import {
   buildDefinition,
@@ -70,7 +77,7 @@ class Box {
       this.commands.push(renderCommand(this.runtime(), args));
       return { status: 0, stdout: "" };
     }
-    const { status, stdout } = spawnSync(this.runtime(), args as string[], {
+    const { status, stdout } = spawnSync(this.runtime(), args, {
       encoding: "utf8",
       stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
     });
@@ -92,15 +99,22 @@ class Box {
       input: `${JSON.stringify(job)}\n`,
       stdio: ["pipe", "pipe", quiet ? "ignore" : "inherit"],
     });
-    const text = (stdout ?? "").trim();
-    if (status !== 0 && text.length === 0) {
+    const reply = (stdout ?? "").trim();
+    if (status !== 0 && reply.length === 0) {
       return { ok: false, error: { kind: "driver", message: `the driver exited ${status ?? 1}` } };
     }
+    let answer: unknown;
     try {
-      return JSON.parse(text) as Record<string, unknown>;
+      answer = JSON.parse(reply);
     } catch {
       return { ok: false, error: { kind: "driver", message: "the driver answered with non-JSON" } };
     }
+    return isRecord(answer)
+      ? answer
+      : {
+          ok: false,
+          error: { kind: "driver", message: "the driver answered with non-object JSON" },
+        };
   }
 }
 
@@ -110,8 +124,8 @@ function redact(job: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(steps)) {
     return job;
   }
-  const shown = steps.map((s: Record<string, unknown>) =>
-    s.redact === true ? { ...s, value: "[redacted]" } : s,
+  const shown = steps.map((s: unknown) =>
+    isRecord(s) && s.redact === true ? { ...s, value: "[redacted]" } : s,
   );
   return { ...job, steps: shown };
 }
@@ -184,7 +198,7 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
 }
 
 function start({ args }: Call, box: Box): Outcome {
-  const instance = startInstance(box, args.out as string | undefined);
+  const instance = startInstance(box, optionalText(args, "out"));
   return ok(instance, JSON.stringify(instance));
 }
 
@@ -194,18 +208,18 @@ function ls(_call: Call, box: Box): Outcome {
 }
 
 function stop({ args }: Call, box: Box): Outcome {
-  const name = args.name as string | undefined;
+  const name = optionalText(args, "name");
   const all = args.all === true;
   if (all === (name !== undefined)) {
     return fail("usage", "stop takes exactly one of an instance name and --all");
   }
-  if (all) {
+  if (name === undefined) {
     for (const i of instances(box)) {
       box.run(stopDefinition(i.name));
     }
     return ok({ stopped: "all" }, "stopped every instance");
   }
-  const { status } = box.run(stopDefinition(name as string));
+  const { status } = box.run(stopDefinition(name));
   if (status !== 0) {
     throw new BoxError("failed", `${name} could not be stopped (exit ${status})`);
   }
@@ -214,22 +228,25 @@ function stop({ args }: Call, box: Box): Outcome {
 
 /** One address, one result. */
 function fetchOne({ args }: Call, box: Box): Outcome {
-  const given = args.in as string | undefined;
+  const given = optionalText(args, "in");
   const keep = args.keep === true;
+  const url = requiredText(args, "url");
   const name = given ?? startInstance(box).name;
   const job: Record<string, unknown> = {
     cmd: "fetch",
-    url: args.url as string,
+    url,
     html: args.html === true,
     screenshot: args.screenshot === true,
     cookies: args.cookies === true,
     keep,
   };
-  if (args.settle !== undefined) {
-    job.settle = args.settle;
+  const settle = optionalNumber(args, "settle");
+  if (settle !== undefined) {
+    job.settle = settle;
   }
-  if (args.timeout !== undefined) {
-    job.timeout = args.timeout;
+  const timeout = optionalNumber(args, "timeout");
+  if (timeout !== undefined) {
+    job.timeout = timeout;
   }
   const answer = box.send(name, job);
   const result: Record<string, unknown> = { ...answer, instance: name };
@@ -238,7 +255,7 @@ function fetchOne({ args }: Call, box: Box): Outcome {
   }
   return answer.ok === true
     ? ok(result, JSON.stringify(result))
-    : fail("failed", `${args.url as string} could not be fetched`, result);
+    : fail("failed", `${url} could not be fetched`, result);
 }
 
 /** Resolve every fill-secret step from the user's vault. The values exist
@@ -262,7 +279,7 @@ function fillSecrets(box: Box, script: Script): Script {
     const value = readValue(
       cli,
       (cmd, args) => {
-        const r = spawnSync(cmd, args as string[], { encoding: "utf8" });
+        const r = spawnSync(cmd, args, { encoding: "utf8" });
         return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
       },
       step.item ?? "",
@@ -290,13 +307,13 @@ function readJob(box: Box, file: string | undefined, steps: string | undefined):
 }
 
 function runScript({ args }: Call, box: Box): Outcome {
-  const file = args.file as string | undefined;
-  const steps = args.steps as string | undefined;
+  const file = optionalText(args, "file");
+  const steps = optionalText(args, "steps");
   if ((file === undefined) === (steps === undefined)) {
     return fail("usage", "script takes exactly one of --file and --steps");
   }
   const job = readJob(box, file, steps);
-  const result = box.send(args.name as string, { cmd: "script", ...job });
+  const result = box.send(requiredText(args, "name"), { cmd: "script", ...job });
   return result.ok === true
     ? ok(result, JSON.stringify(result))
     : fail("failed", "the script did not finish", result);
@@ -307,14 +324,14 @@ function runScript({ args }: Call, box: Box): Outcome {
  * the caller's timeout passes.
  */
 function takeover({ args }: Call, box: Box): Outcome {
-  const name = args.name as string;
-  const tab = args.tab as number;
-  const timeoutMs = (args.timeout as number | undefined) ?? DEFAULT_WAIT_MS;
+  const name = requiredText(args, "name");
+  const tab = requiredNumber(args, "tab");
+  const timeoutMs = optionalNumber(args, "timeout") ?? DEFAULT_WAIT_MS;
   const view = liveViewUrl(Number(name.replace(/^bbox-/, "")));
   const armed = box.send(name, {
     cmd: "wait_for_human",
     tab,
-    reason: (args.reason as string | undefined) ?? "a wall the agent cannot clear",
+    reason: optionalText(args, "reason") ?? "a wall the agent cannot clear",
     timeout: timeoutMs,
   });
   if (armed.ok !== true) {

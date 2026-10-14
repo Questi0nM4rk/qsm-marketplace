@@ -2,6 +2,7 @@
 import { createInterface } from "node:readline";
 import type { Call, Handler } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { optionalNumber, optionalText, texts } from "../lib/args.ts";
 import {
   configPath,
   EXIT,
@@ -16,20 +17,19 @@ import {
 const NO_INSTANCE =
   "no instance configured; set QSM_SEARXNG_INSTANCE, pass --instance, or run qsm-web searxng setup";
 
-function optional<T>(key: string, value: T | undefined): Record<string, T> {
-  return value === undefined ? {} : ({ [key]: value } as Record<string, T>);
-}
-
 function searchOptions(
   call: Call,
   defaults: ReturnType<typeof loadConfig>["config"],
 ): SearchOptions {
-  const engines = call.args.engines as string | undefined;
-  const language = (call.args.language as string | undefined) ?? defaults.defaultLanguage;
-  const safesearch = (call.args.safesearch as number | undefined) ?? defaults.defaultSafesearch;
+  const { args } = call;
+  const engines = optionalText(args, "engines");
+  const timeRange = optionalText(args, "timeRange");
+  const category = optionalText(args, "category");
+  const language = optionalText(args, "language") ?? defaults.defaultLanguage;
+  const safesearch = optionalNumber(args, "safesearch") ?? defaults.defaultSafesearch;
   return {
-    query: (call.args.query as string[]).join(" ").trim(),
-    numResults: (call.args.numResults as number | undefined) ?? defaults.defaultNumResults,
+    query: texts(args, "query").join(" ").trim(),
+    numResults: optionalNumber(args, "numResults") ?? defaults.defaultNumResults,
     engines:
       engines === undefined
         ? defaults.defaultEngines
@@ -37,10 +37,10 @@ function searchOptions(
             .split(",")
             .map((e) => e.trim())
             .filter(Boolean),
-    ...optional("timeRange", call.args.timeRange as string | undefined),
-    ...optional("category", call.args.category as string | undefined),
-    ...optional("language", language),
-    ...optional("safesearch", safesearch),
+    ...(timeRange === undefined ? {} : { timeRange }),
+    ...(category === undefined ? {} : { category }),
+    ...(language === undefined ? {} : { language }),
+    ...(safesearch === undefined ? {} : { safesearch }),
   };
 }
 
@@ -48,7 +48,7 @@ async function searchVerb(call: Call): Promise<Outcome> {
   const { config, warnings } = loadConfig(configPath(process.env.QSM_SEARXNG_CONFIG));
   const instance = resolveInstance(
     config,
-    call.args.instance as string | undefined,
+    optionalText(call.args, "instance"),
     process.env.QSM_SEARXNG_INSTANCE,
   );
   if (instance.length === 0) {
@@ -84,8 +84,13 @@ async function setupVerb(): Promise<Outcome> {
   let code: number;
   try {
     code = await runSetup(path, {
-      ask: (prompt) => new Promise((done) => rl.question(prompt, done)),
-      note: (line) => process.stderr.write(line),
+      ask: (prompt) =>
+        new Promise((done) => {
+          rl.question(prompt, done);
+        }),
+      note: (line) => {
+        process.stderr.write(line);
+      },
     });
   } finally {
     rl.close();
