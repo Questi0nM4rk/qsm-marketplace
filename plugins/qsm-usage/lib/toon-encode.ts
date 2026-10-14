@@ -47,7 +47,7 @@ function emitArray(key: string | null, items: readonly unknown[], indent: number
   const columns = tableColumns(items);
   if (columns !== null) {
     out.push(`${head}{${columns.map(keyText).join(",")}}:`);
-    for (const item of items as readonly Record<string, unknown>[]) {
+    for (const item of items.filter((cell) => isPlainObject(cell))) {
       out.push(pad(indent + STEP) + columns.map((c) => scalarText(item[c])).join(","));
     }
     return;
@@ -68,8 +68,10 @@ function emitItem(value: unknown, indent: number, out: string[]): void {
   const inner = indent + STEP;
   if (Array.isArray(value)) {
     emitArray(null, value, inner, body);
+  } else if (isPlainObject(value)) {
+    emitObject(value, inner, body);
   } else {
-    emitObject(value as Record<string, unknown>, inner, body);
+    throw new TypeError("a TOON list element is a scalar, an array or a plain object");
   }
   const [first, ...rest] = body;
   out.push(first === undefined ? `${pad(indent)}-` : `${pad(indent)}- ${first.slice(inner)}`);

@@ -1,6 +1,8 @@
 // Where the command output filter comes from, in one place, so the installer, the doctor, and the
 // documentation cannot disagree about it.
 
+import { isPlainObject } from "./toon-scalar.ts";
+
 const FILTER_REPO = "https://github.com/rtk-ai/rtk";
 
 export const FILTER_REVISION = "5d32d0736f686b69d1e8b9dc45c007d4eb77a0a2";
@@ -31,6 +33,14 @@ export interface FilterAnswer {
   readonly deny: string | null;
 }
 
+export function isFilterAnswer(value: unknown): value is FilterAnswer {
+  return (
+    isPlainObject(value) &&
+    (value.command === null || typeof value.command === "string") &&
+    (value.deny === null || typeof value.deny === "string")
+  );
+}
+
 export const NO_ANSWER: FilterAnswer = { command: null, deny: null };
 
 /** The harness's exit code for "block this call, here is why on stderr". */
@@ -53,7 +63,10 @@ export function filterAnswer(reply: {
     return NO_ANSWER;
   }
   try {
-    const rewritten: unknown = JSON.parse(reply.stdout).hookSpecificOutput?.updatedInput?.command;
+    const parsed: unknown = JSON.parse(reply.stdout);
+    const specific = isPlainObject(parsed) ? parsed.hookSpecificOutput : undefined;
+    const updated = isPlainObject(specific) ? specific.updatedInput : undefined;
+    const rewritten = isPlainObject(updated) ? updated.command : undefined;
     return typeof rewritten === "string" ? { command: rewritten, deny: null } : NO_ANSWER;
   } catch {
     return NO_ANSWER;

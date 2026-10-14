@@ -10,7 +10,8 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { FILTER_HOOK_ARGS } from "../lib/filter.ts";
+import { FILTER_HOOK_ARGS, isFilterAnswer } from "../lib/filter.ts";
+import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 // One directory for the whole file, removed after the last test, which stubs are written into
@@ -18,7 +19,9 @@ const CLI = resolve(import.meta.dir, "cli.ts");
 const dir = mkdtempSync(join(tmpdir(), "qsm-usage-filter-"));
 let stubs = 0;
 
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /** A stand-in for the filter binary: it records the stdin it was handed, prints `stdout`, writes
  * `stderr`, and answers with the exit code the test wants back. */
@@ -45,8 +48,8 @@ function ask(filterBin: string, command: string, subagent = false): Answer {
     encoding: "utf8",
     env: { ...process.env, QSM_FILTER_BIN: filterBin },
   });
-  const envelope = JSON.parse(ran.stdout) as { code: string; data: Answer };
-  if (envelope.code !== "ok") {
+  const envelope = envelopeOf(ran.stdout);
+  if (envelope.code !== "ok" || !isFilterAnswer(envelope.data)) {
     throw new Error(`qsm-usage filter: ${ran.stdout}${ran.stderr}`);
   }
   return envelope.data;

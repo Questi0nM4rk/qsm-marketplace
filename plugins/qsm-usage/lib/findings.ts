@@ -1,5 +1,7 @@
 // The one shape every topic skill returns and the report renders from.
 
+import { isPlainObject } from "./toon-scalar.ts";
+
 const LEVELS = ["quick", "standard"] as const;
 type Level = (typeof LEVELS)[number];
 
@@ -75,10 +77,10 @@ function broken(field: string, reason: string): never {
 }
 
 function asObject(value: unknown, field: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     broken(field, "must be an object");
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
 function nested(obj: Record<string, unknown>, key: string, field: string): Record<string, unknown> {
@@ -102,7 +104,7 @@ function str(obj: Record<string, unknown>, key: string, field: string): string {
 function optionalStr(obj: Record<string, unknown>, key: string, field: string): string | undefined {
   const value = obj[key];
   if (value === undefined) {
-    return;
+    return undefined;
   }
   if (typeof value !== "string") {
     broken(field, "must be a string");
@@ -171,10 +173,11 @@ function oneOf<T extends string>(
   options: readonly T[],
 ): T {
   const value = str(obj, key, field);
-  if (!(options as readonly string[]).includes(value)) {
+  const match = options.find((option) => option === value);
+  if (match === undefined) {
     broken(field, `must be one of ${options.join(", ")}`);
   }
-  return value as T;
+  return match;
 }
 
 function arr(obj: Record<string, unknown>, key: string, field: string): unknown[] {

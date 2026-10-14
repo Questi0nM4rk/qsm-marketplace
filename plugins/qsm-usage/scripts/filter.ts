@@ -4,11 +4,12 @@
 import { spawnSync } from "node:child_process";
 import type { Handler } from "../../../lib/cli-base.ts";
 import { ok } from "../../../lib/outcome.ts";
+import { requiredString } from "../lib/args.ts";
 import { filterBin } from "../lib/doctor.ts";
 import { FILTER_HOOK_ARGS, filterAnswer, NO_ANSWER, runsGit } from "../lib/filter.ts";
 
 export const filter: Handler = (call) => {
-  const command = call.args.command as string;
+  const command = requiredString(call, "command");
   if (call.args.subagent === true && runsGit(command)) {
     return ok(NO_ANSWER, "");
   }

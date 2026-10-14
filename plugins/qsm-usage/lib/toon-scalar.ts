@@ -54,7 +54,10 @@ export function scalarText(value: unknown): string {
   if (typeof value === "boolean") {
     return String(value);
   }
-  const text = String(value);
+  if (typeof value !== "string") {
+    throw new TypeError("a TOON scalar is null, a boolean, a number, a string or a date");
+  }
+  const text = value;
   return isBare(text) ? text : JSON.stringify(text);
 }
 
@@ -66,6 +69,15 @@ export function keyText(key: string): string {
     : JSON.stringify(key);
 }
 
+/** A JSON string literal read back as its string; anything else is an error. */
+export function parseQuoted(literal: string): string {
+  const parsed: unknown = JSON.parse(literal);
+  if (typeof parsed !== "string") {
+    throw new TypeError(`${literal} is not a JSON string literal`);
+  }
+  return parsed;
+}
+
 /** The inverse of `scalarText`. An empty token is an empty string, which is
  * what an empty cell in a row means. */
 export function parseScalar(token: string): Json {
@@ -74,7 +86,7 @@ export function parseScalar(token: string): Json {
     return "";
   }
   if (text.startsWith('"')) {
-    return JSON.parse(text) as string;
+    return parseQuoted(text);
   }
   if (text === "null") {
     return null;

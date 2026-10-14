@@ -13,6 +13,7 @@ import {
   formatDoctorReport,
   probeList,
 } from "../lib/doctor.ts";
+import { optionalString, requiredString } from "../lib/args.ts";
 import { InputError, messageOf, readData } from "../lib/formats.ts";
 import { extractFrontmatter, extractTable, frontmatterText, tableText } from "../lib/markdown.ts";
 import { formatSizeReport, sizeReport } from "../lib/size.ts";
@@ -25,6 +26,7 @@ import { filter } from "./filter.ts";
 import { report as reportVerb } from "./report.ts";
 import { wrap } from "./wrap.ts";
 
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import types `type` as string; only a root lib/qsm-manifest.ts validator could check it, and every plugin cli.ts casts the same way
 const manifest = manifestJson as QsmManifest;
 
 /**
@@ -67,7 +69,7 @@ function read(path: string): string {
   try {
     return readFileSync(path, "utf8");
   } catch (error) {
-    inputError(`cannot read ${path}: ${messageOf(error)}`);
+    return inputError(`cannot read ${path}: ${messageOf(error)}`);
   }
 }
 
@@ -80,8 +82,8 @@ interface Selection {
 /** The three ways to name the data inside a file: the whole file, its
  * frontmatter, or one table under a heading. */
 function select(call: Call): Selection {
-  const file = call.args.file as string;
-  const section = call.args.section as string | undefined;
+  const file = requiredString(call, "file");
+  const section = optionalString(call, "section");
   const source = read(file);
   if (call.args.frontmatter === true && call.args.table === true) {
     badCall("--frontmatter and --table name two different things; pass one");
@@ -111,7 +113,7 @@ const answer: Answer = (bin, args) => {
   if (probed.error !== undefined || probed.status !== 0) {
     return null;
   }
-  const [line] = `${probed.stdout}`.trim().split("\n");
+  const [line] = probed.stdout.trim().split("\n");
   return line === undefined || line.length === 0 ? null : line;
 };
 
@@ -121,7 +123,7 @@ const encodeVerb: Handler = guarded((call) => {
 });
 
 const decodeVerb: Handler = guarded((call) => {
-  const value = decode(read(call.args.file as string));
+  const value = decode(read(requiredString(call, "file")));
   return ok(value, JSON.stringify(value));
 });
 

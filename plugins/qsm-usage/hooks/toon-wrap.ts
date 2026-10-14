@@ -1,5 +1,7 @@
 // Which tool results are worth asking about, and the header a conversion reaches the model under.
 
+import { isPlainObject } from "../lib/toon-scalar.ts";
+
 /** Output this short is under the binary's ~1,000-token threshold at any
  * format, so it is not worth starting a process for. */
 export const MIN_CHARS = 4000;
@@ -99,7 +101,7 @@ function isCount(value: unknown): value is number {
 /** The TOON text under its header line when the binary said to use it, null
  * when it said to keep the original; a data shape it never prints throws. */
 export function conversionOf(data: unknown, hint: string): Conversion | null {
-  const d = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  const d: Record<string, unknown> = isPlainObject(data) ? data : {};
   if (d.use === "original") {
     return null;
   }

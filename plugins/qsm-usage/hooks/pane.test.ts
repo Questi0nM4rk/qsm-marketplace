@@ -49,7 +49,7 @@ function watch(on: On): Counts {
   });
   on("turn.start", (_$, e) => {
     counts.turns += 1;
-    return e as never;
+    return e;
   });
   on("model.complete", () => {
     counts.models += 1;
@@ -68,7 +68,8 @@ async function paneText($: Engine, surface: "terminal" | "desktop"): Promise<str
   });
   const found = await ui.find({ type: "Markdown" });
   await ui.unmount();
-  return String(found?.props.text ?? "");
+  const text = found?.props.text;
+  return typeof text === "string" ? text : "";
 }
 
 test("Running the command", async ($, on) => {

@@ -10,6 +10,7 @@ import {
   countText,
   DEFAULT_MODEL,
 } from "../lib/count.ts";
+import { optionalString, stringList } from "../lib/args.ts";
 import { ESTIMATE_NOTE } from "../lib/estimate.ts";
 import { absent, messageOf } from "../lib/formats.ts";
 
@@ -19,11 +20,7 @@ interface Counted {
 }
 
 export async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return Bun.stdin.text();
 }
 
 function render(results: readonly Counted[], showTotal: boolean, total: number): string {
@@ -66,14 +63,24 @@ async function countInputs(
   return results;
 }
 
+function modeOf(value: string | undefined): CountMode {
+  if (value === undefined || value === "estimate") {
+    return "estimate";
+  }
+  if (value === "exact") {
+    return "exact";
+  }
+  throw new TypeError(`argument mode is ${value}, not estimate or exact`);
+}
+
 export const count: Handler = async (call) => {
-  const files = (call.args.files as string[] | undefined) ?? [];
+  const files = stringList(call, "files");
   const useStdin = call.args.stdin === true;
   if (files.length === 0 && !useStdin) {
     return fail("usage", "no input: pass one or more files, or --stdin");
   }
-  const mode = (call.args.mode as CountMode | undefined) ?? "estimate";
-  const model = (call.args.model as string | undefined) ?? DEFAULT_MODEL;
+  const mode = modeOf(optionalString(call, "mode"));
+  const model = optionalString(call, "model") ?? DEFAULT_MODEL;
   const options = { mode, model, apiKey: process.env[CREDENTIAL_ENV] };
   let results: Counted[] | Outcome;
   try {

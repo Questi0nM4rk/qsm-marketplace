@@ -23,7 +23,9 @@ import {
   type SessionRecord,
   toolUsesSince,
 } from "./ledger.ts";
-import { argvOf, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
+import { isFilterAnswer } from "../lib/filter.ts";
+import { isPlainObject } from "../lib/toon-scalar.ts";
+import { argvOf, registerNoun, unwrap, verbs } from "./noun.generated.ts";
 import { paneMarkdown, startBeforeFirstTurn } from "./pane.ts";
 import { breakdownText, ledgerText } from "./report.ts";
 import { conversionOf, offerOf, WRAP_TIMEOUT_MS } from "./toon-wrap.ts";
@@ -191,7 +193,7 @@ async function registerSurfaces($: EngineInterface): Promise<void> {
 }
 
 function sessionsWanted(input: unknown): number {
-  const n = (input as { sessions?: unknown }).sessions;
+  const n = isPlainObject(input) ? input.sessions : undefined;
   return typeof n === "number" && Number.isInteger(n) && n > 0 ? n : DEFAULT_SESSIONS;
 }
 
@@ -238,7 +240,9 @@ function registerSession(on: On): void {
     const result = await next(e);
     const usd = e.cost?.usd;
     if (usd !== undefined) {
-      await record($, "session.measure", (rec) => addCost(rec, usd));
+      await record($, "session.measure", (rec) => {
+        addCost(rec, usd);
+      });
     }
     return result;
   });
@@ -255,18 +259,18 @@ function registerInjections(on: On): void {
     const result = await next(e);
     const { text } = result;
     if (text !== null) {
-      await record($, "prompt.attachment", (rec) =>
-        addInjection(rec, "prompt.attachment", e.type, text.length),
-      );
+      await record($, "prompt.attachment", (rec) => {
+        addInjection(rec, "prompt.attachment", e.type, text.length);
+      });
     }
     return result;
   });
 
   on("tool.describe", async ($, e, next) => {
     const result = await next(e);
-    await record($, "tool.describe", (rec) =>
-      addInjection(rec, "tool.describe", e.tool, result.description.length),
-    );
+    await record($, "tool.describe", (rec) => {
+      addInjection(rec, "tool.describe", e.tool, result.description.length);
+    });
     return result;
   });
 
@@ -283,14 +287,18 @@ function registerInjections(on: On): void {
 function registerUses(on: On): void {
   on("command.run", async ($, e, next) => {
     const result = await next(e);
-    await record($, "command.run", (rec) => addUse(rec, "commands", e.command));
+    await record($, "command.run", (rec) => {
+      addUse(rec, "commands", e.command);
+    });
     return result;
   });
 
   on("agent.spawn", async ($, e, next) => {
     const result = await next(e);
     if (!("deny" in result)) {
-      await record($, "agent.spawn", (rec) => addUse(rec, "agents", e.subagentType));
+      await record($, "agent.spawn", (rec) => {
+        addUse(rec, "agents", e.subagentType);
+      });
     }
     return result;
   });
@@ -314,12 +322,6 @@ function registerLedger(on: On): void {
   registerLedgerTools(on);
 }
 
-/** What `qsm-usage filter` answers: the command to run instead, or the reason to refuse it. */
-interface FilterAnswer {
-  readonly command: string | null;
-  readonly deny: string | null;
-}
-
 /** What every tool.call hook here does when it throws: the failure is shown once, and the call
  * carries on as it was. */
 function carryOn<E, R>($: EngineInterface, e: E, next: ((e: E) => R) & Caught): R {
@@ -330,15 +332,22 @@ function carryOn<E, R>($: EngineInterface, e: E, next: ((e: E) => R) & Caught): 
 /** The command output filter may rewrite a Bash command or refuse it; the verb holds the rules. */
 function registerFilter(on: On): void {
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
-    const answer = (await $.usage.filter({
+    const answer = await $.usage.filter({
       command: e.command,
       subagent: e.agentId !== undefined,
-    })) as FilterAnswer;
+    });
+    if (!isFilterAnswer(answer)) {
+      throw new TypeError("qsm-usage filter answered with something other than { command, deny }");
+    }
     if (answer.deny !== null) {
       return { deny: answer.deny };
     }
     return next(answer.command === null ? e : { ...e, command: answer.command });
   }).catch(carryOn);
+}
+
+function stdoutOf(result: unknown): unknown {
+  return isPlainObject(result) ? result.stdout : undefined;
 }
 
 /** The text a call printed and the command that printed it (null for an MCP tool): Bash's stdout,
@@ -348,7 +357,7 @@ function printed(e: ToolCallInput, ran: ToolCallResult) {
     return null;
   }
   const isBash = e.tool === "Bash";
-  const out = isBash ? (ran.result as { stdout?: unknown }).stdout : ran.result;
+  const out = isBash ? stdoutOf(ran.result) : ran.result;
   const isWrappable = isBash || e.tool.startsWith("mcp__");
   return isWrappable && typeof out === "string"
     ? { tool: e.tool, command: isBash ? e.command : null, raw: out }
@@ -357,7 +366,11 @@ function printed(e: ToolCallInput, ran: ToolCallResult) {
 
 /** `qsm-usage toon wrap` decides on the text; the hook only offers it and swaps in the answer. */
 async function toonOf($: EngineInterface, raw: string, hint: string) {
-  const argv = argvOf(verbs.toonWrap as VerbRow, { stdin: true });
+  const row = verbs.toonWrap;
+  if (row === undefined) {
+    throw new Error("the generated noun has no toonWrap verb; regenerate noun.generated.ts");
+  }
+  const argv = argvOf(row, { stdin: true });
   const ran = await $.process.run(argv, { stdin: raw, timeoutMs: WRAP_TIMEOUT_MS });
   return conversionOf(unwrap(argv, ran), hint);
 }
@@ -373,11 +386,13 @@ function registerToon(on: On, patterns: readonly string[]): void {
     if (offer === null || conversion === null) {
       return ran;
     }
-    await record($, "tool.call", (rec) =>
-      addToon(rec, offer.pattern, conversion.fromTokens, conversion.toTokens),
-    );
+    await record($, "tool.call", (rec) => {
+      addToon(rec, offer.pattern, conversion.fromTokens, conversion.toTokens);
+    });
     const result =
-      e.tool === "Bash" ? { ...(ran.result as object), stdout: conversion.text } : conversion.text;
+      e.tool === "Bash" && isPlainObject(ran.result)
+        ? { ...ran.result, stdout: conversion.text }
+        : conversion.text;
     return { result, context: ran.context };
   }).catch(carryOn);
 }

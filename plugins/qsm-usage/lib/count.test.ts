@@ -4,13 +4,13 @@ import { estimateTokens } from "./estimate.ts";
 
 describe("estimate mode", () => {
   test("is the default path and needs no credential", async () => {
-    await expect(countText("hello world", { mode: "estimate" })).resolves.toBe(
+    expect(await countText("hello world", { mode: "estimate" })).toBe(
       estimateTokens("hello world"),
     );
   });
 
   test("empty text is zero", async () => {
-    await expect(countText("", { mode: "estimate" })).resolves.toBe(0);
+    expect(await countText("", { mode: "estimate" })).toBe(0);
   });
 
   test("grows with the input", () => {
@@ -35,13 +35,13 @@ describe("exact mode", () => {
   });
 
   test("fails without the credential instead of estimating", async () => {
-    await expect(countText("count this", { mode: "exact" })).rejects.toMatchObject({
-      code: "missing",
-    });
+    const error = await countText("count this", { mode: "exact" }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "missing" });
   });
 
   test("the failure names the missing credential", async () => {
-    await expect(countText("x", { mode: "exact", apiKey: "" })).rejects.toThrow(CREDENTIAL_ENV);
+    const error = await countText("x", { mode: "exact", apiKey: "" }).catch((e: unknown) => e);
+    expect(error instanceof Error && error.message.includes(CREDENTIAL_ENV)).toBe(true);
   });
 
   test("never reaches the provider when the credential is missing", async () => {
@@ -53,7 +53,7 @@ describe("exact mode", () => {
         return Promise.resolve(1);
       },
     });
-    await expect(attempt).rejects.toMatchObject({ code: "missing" });
+    expect(await attempt.catch((e: unknown) => e)).toMatchObject({ code: "missing" });
     expect(called).toBe(false);
   });
 });

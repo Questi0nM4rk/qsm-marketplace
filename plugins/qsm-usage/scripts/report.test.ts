@@ -7,6 +7,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { firstFinding } from "../lib/findings-fixture.ts";
+import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const sandboxes: string[] = [];
@@ -85,7 +87,7 @@ describe("qsm-usage report: the call", () => {
     const out = join(dir, "report.html");
     const result = run(["report", join(dir, "nonexistent.json"), "--out", out, "--json"]);
     expect(result.status).toBe(4);
-    const envelope = JSON.parse(result.stdout);
+    const envelope = envelopeOf(result.stdout);
     expect(envelope.code).toBe("missing");
     expect(envelope.message).toContain("nonexistent.json");
     expect(existsSync(out)).toBe(false);
@@ -121,12 +123,7 @@ describe("qsm-usage report: validation and rendering", () => {
   test("A finding without a saving", () => {
     const dir = sandboxDir();
     const doc = fiveTopicFindings();
-    const topics = doc.topics as Record<string, unknown>[];
-    const first = topics[0] as Record<string, unknown>;
-    const findings = first.findings as Record<string, unknown>[];
-    const finding = { ...(findings[0] as Record<string, unknown>) };
-    finding.savingTokens = undefined;
-    first.findings = [finding];
+    firstFinding(doc).savingTokens = undefined;
     const input = sandboxFile(dir, "findings.json", JSON.stringify(doc));
     const out = join(dir, "report.html");
     const result = run(["report", input, "--out", out]);

@@ -1,5 +1,7 @@
 // The ledger's data: one record per session, names, sizes and counts only.
 
+import { isPlainObject } from "../lib/toon-scalar.ts";
+
 export interface TurnUsage {
   model: string;
   input_tokens: number;
@@ -93,20 +95,36 @@ export function newSession(id: string, at: number): SessionRecord {
   };
 }
 
+function isSessionRecord(value: unknown): value is SessionRecord {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === "string" &&
+    typeof value.startedAt === "number" &&
+    (value.start === null || isPlainObject(value.start)) &&
+    Array.isArray(value.turns) &&
+    (value.costUsd === null || typeof value.costUsd === "number") &&
+    Array.isArray(value.injected) &&
+    isPlainObject(value.uses) &&
+    Array.isArray(value.toon) &&
+    typeof value.toolMessagesSeen === "number"
+  );
+}
+
 /** A stored value read back: a record this module wrote, or null. */
 export function asSession(value: unknown): SessionRecord | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  const rec = value as Partial<SessionRecord>;
-  if (typeof rec.id !== "string" || !Array.isArray(rec.turns)) {
+  if (!isPlainObject(value) || typeof value.id !== "string" || !Array.isArray(value.turns)) {
     return null;
   }
   // Older records carried a per-turn breakdown nothing read; it goes when the record is next written.
-  const turns = rec.turns.map(
-    ({ after: _after, ...turn }: TurnRecord & { after?: unknown }) => turn,
-  );
-  return { ...rec, turns } as SessionRecord;
+  const turns: unknown[] = value.turns.map((turn: unknown) => {
+    if (!isPlainObject(turn)) {
+      return turn;
+    }
+    const { after: _after, ...kept } = turn;
+    return kept;
+  });
+  const record = { ...value, turns };
+  return isSessionRecord(record) ? record : null;
 }
 
 export function breakdownOf(context: ContextUsage, at: number): Breakdown {
