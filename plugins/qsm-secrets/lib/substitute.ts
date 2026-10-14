@@ -10,7 +10,9 @@ const PLACEHOLDER = /\{\{secret:((?:[\w-]+\/)?[\w-]+)\}\}(?:…[\w-]{4})?/g;
 
 /** Each distinct id a text holds a placeholder for, in order of appearance. */
 export function placeholderIds(text: string): string[] {
-  return [...new Set([...text.matchAll(PLACEHOLDER)].map((m) => m[1] as string))];
+  return [
+    ...new Set([...text.matchAll(PLACEHOLDER)].flatMap((m) => (m[1] === undefined ? [] : [m[1]]))),
+  ];
 }
 
 export interface Substitution {

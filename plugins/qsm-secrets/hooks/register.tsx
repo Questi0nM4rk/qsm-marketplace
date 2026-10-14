@@ -26,48 +26,107 @@ function cause(error: { readonly kind: string; readonly message?: string }): str
   return `${error.kind}: ${(error.message ?? "no message").slice(0, 400)}`;
 }
 
-function isEnvelope(stdout: string): boolean {
-  try {
-    return typeof (JSON.parse(stdout) as { exit?: unknown }).exit === "number";
-  } catch {
-    return false;
-  }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item: unknown) => typeof item === "string");
+
+const isBlocks = (value: unknown): value is ApiContentBlock[] =>
+  Array.isArray(value) &&
+  value.every((item: unknown) => isRecord(item) && typeof item.type === "string");
+
+interface MaskData {
+  readonly texts: string[];
 }
 
-/** A verb's data from a `process.run` result. unwrap quotes a stdout that is no envelope, which for
- * capture and mask can be the prompt or the result, so that case is rebuilt from exit code and stderr. */
-function dataOf(
+interface CaptureData {
+  readonly text: string;
+  readonly captured: readonly { readonly id: string }[];
+  readonly taken: string[];
+}
+
+const isMaskData = (value: unknown): value is MaskData => isRecord(value) && isStrings(value.texts);
+
+const isCaptureData = (value: unknown): value is CaptureData =>
+  isRecord(value) &&
+  typeof value.text === "string" &&
+  Array.isArray(value.captured) &&
+  value.captured.every((item: unknown) => isRecord(item) && typeof item.id === "string") &&
+  isStrings(value.taken);
+
+interface Envelope {
+  readonly code: string;
+  readonly message: string | undefined;
+  readonly reason: string | undefined;
+}
+
+/** The outcome envelope a binary printed on stdout, or undefined when stdout is not one. */
+function envelopeOf(stdout: string): Envelope | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed) || typeof parsed.exit !== "number" || typeof parsed.code !== "string") {
+    return undefined;
+  }
+  return {
+    code: parsed.code,
+    message: typeof parsed.message === "string" ? parsed.message : undefined,
+    reason:
+      isRecord(parsed.data) && typeof parsed.data.reason === "string"
+        ? parsed.data.reason
+        : undefined,
+  };
+}
+
+/** A verb's data from a `process.run` result, checked by `isData`. unwrap quotes a stdout that is no
+ * envelope, which for capture and mask can be the prompt or the result, so that case is rebuilt from
+ * exit code and stderr. */
+function dataOf<T>(
   argv: string[],
   ran: { exitCode: number; stdout: string; stderr: string },
-): unknown {
-  if (!isEnvelope(ran.stdout)) {
+  isData: (value: unknown) => value is T,
+): T {
+  if (envelopeOf(ran.stdout) === undefined) {
     const stderr = ran.stderr.trim().slice(0, 300);
     throw new Error(
       `${argv.slice(0, 2).join(" ")} printed no outcome envelope (exit ${ran.exitCode}): ${stderr.length > 0 ? stderr : "no stderr"}`,
     );
   }
-  return unwrap(argv, ran);
+  const data = unwrap(argv, ran);
+  if (!isData(data)) {
+    throw new Error(`${argv.slice(0, 2).join(" ")} answered data of an unexpected shape`);
+  }
+  return data;
+}
+
+/** The row of a verb the noun was generated with. */
+function verbOf(name: string): VerbRow {
+  const row = verbs[name];
+  if (row === undefined) {
+    throw new Error(`qsm.json has no verb ${name}`);
+  }
+  return row;
 }
 
 /** What `qsm-secrets guard` said: the reason to deny with, or null when the command may run. A verb
  * that did not answer is an error, and the hook's catch denies the call. */
 function refusalOf(ran: { exitCode: number; stdout: string; stderr: string }): string | null {
-  if (!isEnvelope(ran.stdout)) {
+  const envelope = envelopeOf(ran.stdout);
+  if (envelope === undefined) {
     const stderr = ran.stderr.trim().slice(0, 300);
     throw new Error(
       `qsm-secrets guard printed no outcome envelope (exit ${ran.exitCode}): ${stderr.length > 0 ? stderr : "no stderr"}`,
     );
   }
-  const envelope = JSON.parse(ran.stdout) as {
-    code: string;
-    message?: string;
-    data?: { reason?: string };
-  };
   if (envelope.code === "ok") {
     return null;
   }
-  if (envelope.code === "blocked" && typeof envelope.data?.reason === "string") {
-    return envelope.data.reason;
+  if (envelope.code === "blocked" && envelope.reason !== undefined) {
+    return envelope.reason;
   }
   throw new Error(
     `qsm-secrets guard answered ${envelope.code}: ${(envelope.message ?? "").slice(0, 200)}`,
@@ -83,7 +142,7 @@ const RECOVERY = /^\s*qsm-secrets doctor\s*$/;
  * rewrites it. */
 function registerGuard(on: On): void {
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
-    const argv = argvOf(verbs.guard as VerbRow);
+    const argv = argvOf(verbOf("guard"));
     const ran = await $.process.run(argv, { stdin: e.command, timeoutMs: GUARD_TIMEOUT_MS });
     const reason = refusalOf(ran);
     if (reason === null) {
@@ -110,6 +169,7 @@ function registerFileGuard(on: On): void {
   // cast; a build that has the tool routes its calls here.
   const guarded = [
     { tool: "Read" as const, ancestors: false },
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the engine's declared tool names list no Grep
     { tool: "Grep" as "Read", ancestors: true },
   ];
   for (const { tool, ancestors } of guarded) {
@@ -176,8 +236,8 @@ function mapTexts(content: ApiContentBlock[], map: (text: string) => string): Ap
     if (block.type === "tool_result" && typeof block.content === "string") {
       return { ...block, content: map(block.content) };
     }
-    if (block.type === "tool_result" && Array.isArray(block.content)) {
-      return { ...block, content: (block.content as ApiContentBlock[]).map(mapBlock) };
+    if (block.type === "tool_result" && isBlocks(block.content)) {
+      return { ...block, content: block.content.map(mapBlock) };
     }
     return block;
   };
@@ -201,12 +261,12 @@ function registerMask(on: On): void {
     if (texts.every((text) => text === "")) {
       return next(e);
     }
-    const argv = argvOf(verbs.mask as VerbRow, { all: true });
+    const argv = argvOf(verbOf("mask"), { all: true });
     const ran = await $.process.run(argv, {
       stdin: JSON.stringify(texts),
       timeoutMs: CAPTURE_TIMEOUT_MS,
     });
-    const done = (dataOf(argv, ran) as { texts: string[] }).texts;
+    const done = [...dataOf(argv, ran, isMaskData).texts];
     if (done.length !== texts.length) {
       throw new Error(`the mask returned ${done.length} texts for ${texts.length}`);
     }
@@ -214,7 +274,13 @@ function registerMask(on: On): void {
     return next(
       rewritten(
         e,
-        mapTexts(e.message.content, () => done.shift() as string),
+        mapTexts(e.message.content, () => {
+          const text = done.shift();
+          if (text === undefined) {
+            throw new Error("the mask returned too few texts");
+          }
+          return text;
+        }),
       ),
     );
   }).catch(($, e, next) => {
@@ -246,7 +312,12 @@ function registerScrub(on: On): void {
       try {
         await step();
       } catch (error) {
-        failed.push(cause({ kind: "failed", message: String((error as Error).message) }));
+        failed.push(
+          cause({
+            kind: "failed",
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
     }
     if (failed.length > 0) {
@@ -276,13 +347,9 @@ export function register(on: On): void {
       $.ui.log(`a ${e.origin.kind} prompt is not the person's own; it was not captured`);
       return next(e);
     }
-    const argv = argvOf(verbs.capture as VerbRow);
+    const argv = argvOf(verbOf("capture"));
     const ran = await $.process.run(argv, { stdin: e.text, timeoutMs: CAPTURE_TIMEOUT_MS });
-    const done = dataOf(argv, ran) as {
-      text: string;
-      captured: { id: string }[];
-      taken: string[];
-    };
+    const done = dataOf(argv, ran, isCaptureData);
     if (done.captured.length === 0) {
       return next(e);
     }

@@ -59,7 +59,7 @@ function alphabetSize(token: string): number {
   ] as const) {
     size += pattern.test(token) ? add : 0;
   }
-  return size + [..."-_+/"].filter((char) => token.includes(char)).length;
+  return size + ["-", "_", "+", "/"].filter((char) => token.includes(char)).length;
 }
 
 /** The measured entropy over what a random token of this length and alphabet averages (Miller-Madow). */
@@ -173,7 +173,10 @@ function nameKind(name: string | undefined): "none" | "token" | "password" {
 function contextSpans(text: string): Span[] {
   const found = [...text.matchAll(NAMED), ...text.matchAll(BEARER)];
   return found.flatMap((m) => {
-    const value = m[m.length - 1] as string;
+    const value = m.at(-1);
+    if (value === undefined) {
+      return [];
+    }
     const kind = nameKind(m.length === 3 ? m[1] : undefined);
     const token = value.replace(/[.,;:]+$/, "");
     const plain = !(token.startsWith("/") || token.startsWith("~") || token.startsWith("."));

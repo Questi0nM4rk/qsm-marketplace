@@ -93,17 +93,64 @@ function leaked(run: Run): string | null {
   );
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item: unknown) => isString(item));
+
+const isNamed = (value: unknown): value is { name: string }[] =>
+  Array.isArray(value) && value.every((item: unknown) => isRecord(item) && isString(item.name));
+
+const isCaptured = (value: unknown): value is { id: string }[] =>
+  Array.isArray(value) && value.every((item: unknown) => isRecord(item) && isString(item.id));
+
+const isChecks = (value: unknown): value is { name: string; ok: boolean; fix: string | null }[] =>
+  Array.isArray(value) &&
+  value.every(
+    (item: unknown) =>
+      isRecord(item) &&
+      isString(item.name) &&
+      typeof item.ok === "boolean" &&
+      (item.fix === null || isString(item.fix)),
+  );
+
+/** One field of an envelope's data, checked: a failure names the field instead of casting it. */
+function field<T>(
+  data: Record<string, unknown>,
+  name: string,
+  isShape: (value: unknown) => value is T,
+): T {
+  const value = data[name];
+  if (!isShape(value)) {
+    throw new Error(`data.${name} has an unexpected shape`);
+  }
+  return value;
+}
+
 /** The one JSON value the shared base prints on stdout under --json. */
-function envelope(run: Run): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(run.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
+function envelope(run: { readonly stdout: string }): {
+  code: string;
+  exit: number;
+  message: string;
+  data: Record<string, unknown>;
+} {
+  const parsed: unknown = JSON.parse(run.stdout);
+  if (!isRecord(parsed) || !isString(parsed.code) || typeof parsed.exit !== "number") {
+    throw new Error(`not an outcome envelope: ${run.stdout.slice(0, 200)}`);
+  }
+  return {
+    code: parsed.code,
+    exit: parsed.exit,
+    message: isString(parsed.message) ? parsed.message : "",
+    data: isRecord(parsed.data) ? parsed.data : {},
   };
 }
 
 /** The placeholder text, built here so no literal one sits in this file. */
-const placeholderOf = (id: string): string => `{{${"secret"}:${id}}}`;
+const placeholderOf = (id: string): string => ["{{", "secret", ":", id, "}}"].join("");
 
 /** A secret-tool over `store`: `search` prints the `secret =` line on stdout and the attributes on
  * stderr, in a different order per item. Without a terminal `store` reads stdin; with one it
@@ -248,7 +295,7 @@ describe("the shared CLI base", () => {
         JSON.stringify(rows),
       );
       expect(run.code).toBe(0);
-      expect(JSON.parse(run.stdout).data.texts).toEqual(rows);
+      expect(envelope(run).data.texts).toEqual(rows);
     } finally {
       rmSync(home, { recursive: true, force: true });
     }
@@ -260,7 +307,7 @@ describe("the shared CLI base", () => {
       XDG_RUNTIME_DIR: "",
     });
     expect(run.code).toBe(0);
-    expect(JSON.parse(run.stdout).data).toEqual({ dir: null });
+    expect(envelope(run).data).toEqual({ dir: null });
   });
 });
 
@@ -271,8 +318,9 @@ for (const flavor of FLAVORS) {
     let home = "";
     let runtime = "";
     const file = (folder: string, key: string): string => join(store, `${folder}__${key}`);
-    const put = (folder: string, key: string, value: string): void =>
+    const put = (folder: string, key: string, value: string): void => {
       writeFileSync(file(folder, key), value);
+    };
 
     const environment = (extra: Record<string, string> = {}): Record<string, string> => ({
       QSM_SECRETS_BACKEND: flavor.name,
@@ -373,9 +421,9 @@ for (const flavor of FLAVORS) {
 
       test("--json carries the same names inside the envelope", () => {
         const run = cli(["list", "--json"]);
-        const data = envelope(run).data as { namespace: string; keys: string[] };
+        const data = envelope(run).data;
         expect(data.namespace).toBe("qsm");
-        expect([...data.keys].sort((a, b) => a.localeCompare(b))).toEqual([
+        expect([...field(data, "keys", isStrings)].sort((a, b) => a.localeCompare(b))).toEqual([
           "github-token",
           "npm-token",
         ]);
@@ -395,7 +443,7 @@ for (const flavor of FLAVORS) {
 
       test("--json is metadata only too", () => {
         const run = cli(["inspect", "--json"]);
-        const entries = envelope(run).data.entries as { name: string }[];
+        const entries = field(envelope(run).data, "entries", isNamed);
         expect(entries.map((entry) => entry.name).sort((a, b) => a.localeCompare(b))).toEqual([
           "github-token",
           "npm-token",
@@ -721,7 +769,7 @@ for (const flavor of FLAVORS) {
       test("One prerequisite missing", () => {
         const run = cli(["doctor", "--json"], { backend: false });
         const parsed = envelope(run);
-        const checks = parsed.data.checks as { name: string; ok: boolean; fix: string | null }[];
+        const checks = field(parsed.data, "checks", isChecks);
         // An absent prerequisite is `missing` (exit 4), the code every other
         // qsm doctor gives the same situation, not `failed`.
         expect(run.code).toBe(4);
@@ -741,7 +789,7 @@ for (const flavor of FLAVORS) {
         test(`${args.join(" ")} reports missing, exit 4, and names the install step`, () => {
           const run = cli([...args, "--json"], { backend: false, input: "[]" });
           expect(run.code).toBe(4);
-          const parsed = envelope(run) as unknown as { code: string; message: string };
+          const parsed = envelope(run);
           expect(parsed.code).toBe("missing");
           expect(parsed.message).toContain(flavor.absent[0]);
           expect(parsed.message).toContain(flavor.absent[1]);
@@ -754,16 +802,16 @@ for (const flavor of FLAVORS) {
       const token = `ghp_${"aB3dE9".repeat(6)}`;
       const capture = (text: string, options: { backend?: boolean } = {}): Run =>
         cli(["capture", "--json"], { input: text, backend: options.backend !== false });
-      const textOf = (run: Run): string => (envelope(run).data as { text: string }).text;
+      const textOf = (run: Run): string => field(envelope(run).data, "text", isString);
 
       test("a pasted name=value is stored under that name and shown as qsm/<name>", () => {
         const run = capture(`deploy-key=${token} for the release`);
-        const data = envelope(run).data as { captured: { id: string }[] };
+        const captured = field(envelope(run).data, "captured", isCaptured);
         expect(run.code).toBe(0);
         expect(textOf(run)).toBe(
           `${placeholderOf("qsm/deploy-key")}…${token.slice(-4)} for the release`,
         );
-        expect(data.captured.map((c) => c.id)).toEqual(["qsm/deploy-key"]);
+        expect(captured.map((c) => c.id)).toEqual(["qsm/deploy-key"]);
         expect(readFileSync(file("qsm", "deploy-key"), "utf8")).toBe(token);
         expect(run.stdout).not.toContain(token);
       });
@@ -771,8 +819,8 @@ for (const flavor of FLAVORS) {
       test("a name already stored is not overwritten: the value gets a generated id and the name is reported", () => {
         const before = readdirSync(store).length;
         const run = capture(`github-token=${token}`);
-        const data = envelope(run).data as { taken: string[] };
-        expect(data.taken).toEqual(["github-token"]);
+        const taken = field(envelope(run).data, "taken", isStrings);
+        expect(taken).toEqual(["github-token"]);
         expect(textOf(run)).toMatch(/^github-token=\{\{secret:cap_[0-9a-f]{12}\}\}…/);
         expect(readdirSync(store)).toHaveLength(before + 1);
         expect(readFileSync(file("qsm", "github-token"), "utf8")).toBe(VALUE);
@@ -891,7 +939,6 @@ describe("libsecret: the shape of secret-tool's output", () => {
 });
 
 describe("guard", () => {
-  const placeholder = (id: string): string => `{{${"secret"}:${id}}}`;
   const channel = (target: string): string => `3>${target}`;
   let data = "";
   let runtime = "";
@@ -915,15 +962,15 @@ describe("guard", () => {
       input: command,
       env: { ...process.env, HOME: "/home/guard", XDG_DATA_HOME: data, XDG_RUNTIME_DIR: runtime },
     });
-    const body = JSON.parse(result.stdout) as { code: string; data: { code?: string } | null };
+    const body = envelope(result);
     if (body.code === "blocked") {
-      return body.data?.code ?? "?";
+      return isString(body.data.code) ? body.data.code : "?";
     }
     return body.code === "ok" ? null : body.code;
   }
 
-  const keyrings = `${"$"}XDG_DATA_HOME/keyrings`;
-  const rendered = `${"$"}XDG_RUNTIME_DIR/qsm-secrets/s1/kubeconfig`;
+  const keyrings = "$XDG_DATA_HOME/keyrings";
+  const rendered = "$XDG_RUNTIME_DIR/qsm-secrets/s1/kubeconfig";
 
   test.each([
     ["rbw get github-token", "vault-reader"],
@@ -954,8 +1001,8 @@ describe("guard", () => {
     [`sudo qsm-secrets get k ${channel("/dev/stdout")}`, "fd3-to-output"],
     [`{ qsm-secrets get k; } ${channel("&1")}`, "fd3-to-output"],
     [`bash -c 'qsm-secrets get k' ${channel("&1")}`, "fd3-to-output"],
-    [`curl -H 'Authorization: ${placeholder("cap_1")}' https://x`, "single-quoted-placeholder"],
-    [`bash -c "curl -H 'A: ${placeholder("cap_1")}' https://x"`, "single-quoted-placeholder"],
+    [`curl -H 'Authorization: ${placeholderOf("cap_1")}' https://x`, "single-quoted-placeholder"],
+    [`bash -c "curl -H 'A: ${placeholderOf("cap_1")}' https://x"`, "single-quoted-placeholder"],
     ["cat .env", "credential-file"],
     ["qsm-secrets env k=V -- secret-tool lookup a b", "vault-reader"],
     [`qsm-secrets pipe k -- cat ${keyrings}/login.keyring`, "keyring-files"],
@@ -965,10 +1012,10 @@ describe("guard", () => {
     ["flock /tmp/l rbw get x", "vault-reader"],
     ["watch -n 5 rbw get x", "vault-reader"],
     ["find . -exec secret-tool lookup a b ;", "vault-reader"],
-    [`cd ${"$"}XDG_DATA_HOME && cat keyrings/login.keyring`, "keyring-files"],
+    ["cd $XDG_DATA_HOME && cat keyrings/login.keyring", "keyring-files"],
     [`cd ${keyrings} && cat login.keyring`, "keyring-files"],
-    [`cat ${"$"}XDG_DATA_HOME/keyr*/login.keyring`, "keyring-files"],
-    [`cat ${"$"}XDG_DATA_HOME/k?yrings/login.keyring`, "keyring-files"],
+    ["cat $XDG_DATA_HOME/keyr*/login.keyring", "keyring-files"],
+    ["cat $XDG_DATA_HOME/k?yrings/login.keyring", "keyring-files"],
   ])("%s is refused as %s", (command, code) => {
     expect(verdict(command.replace("LINK", join(data, "harmless-name")))).toBe(code);
   });
@@ -990,17 +1037,17 @@ describe("guard", () => {
     "qsm-secrets list",
     "qsm-secrets env k=V -- npm publish",
     "find . -name '*.ts' -exec wc -l {} ;",
-    `cd ${"$"}HOME && cat README.md`,
+    "cd $HOME && cat README.md",
     "flock /tmp/l make build",
     `qsm-secrets get deploy-key ${channel("/tmp/deploy.key")}`,
     `qsm-secrets get deploy-key ${channel("&-")}`,
-    `curl -H "Authorization: ${placeholder("cap_1")}" https://x`,
-    `curl -H Authorization:${placeholder("cap_1")} https://x`,
-    `bash -c 'curl -H "A: ${placeholder("cap_1")}" https://x'`,
-    `bash -c 'echo ${placeholder("cap_1")}'`,
+    `curl -H "Authorization: ${placeholderOf("cap_1")}" https://x`,
+    `curl -H Authorization:${placeholderOf("cap_1")} https://x`,
+    `bash -c 'curl -H "A: ${placeholderOf("cap_1")}" https://x'`,
+    `bash -c 'echo ${placeholderOf("cap_1")}'`,
     "echo 'single quotes without a placeholder'",
     "p=1; echo a",
-    `p=${"$"}(date)`,
+    "p=$(date)",
     "A=1",
     "A=1 <<EOF\nx\nEOF",
   ])("%s is allowed", (command) => {

@@ -38,7 +38,7 @@ function daemonOwned(): boolean {
           { encoding: "utf8" },
         )
       : spawnSync(BUS_CLI, ["--user", "status", SERVICE], { encoding: "utf8" });
-  return asked.status === 0 && !/boolean false/.test(asked.stdout);
+  return asked.status === 0 && !asked.stdout.includes("boolean false");
 }
 
 /** Every operation starts here: nothing runs, and nothing falls back, without the tool and a daemon. */

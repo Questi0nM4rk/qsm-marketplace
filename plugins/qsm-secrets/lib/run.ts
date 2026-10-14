@@ -70,7 +70,7 @@ export function resolve(namespace: string, key: string): Uint8Array {
  * prompt without one needs no backend at all.
  */
 export function runCapture(): Capture {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     fail("capture reads its text from stdin", "pipe the text in", "usage");
   }
   let backend: Backend | undefined;
@@ -79,8 +79,9 @@ export function runCapture(): Capture {
     return backend;
   };
   return captureSecrets(readFileSync(0, "utf8"), {
-    store: (namespace, key, value) =>
-      active().store(namespace, key, new TextEncoder().encode(value)),
+    store: (namespace, key, value) => {
+      active().store(namespace, key, new TextEncoder().encode(value));
+    },
     exists: (namespace, key) => keyExists(active().entries(), namespace, key),
   });
 }
@@ -123,7 +124,7 @@ export function runMaskAll(): { texts: string[] } {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
   if (!backendChosen()) {
-    return { texts: parsed as string[] };
+    return { texts: parsed };
   }
   const backend = activeBackend();
   const values = backend
@@ -141,7 +142,7 @@ export function runMaskAll(): { texts: string[] } {
     })
     // A value that contains another is masked first, so the shorter one cannot leave a stub.
     .sort((a, b) => b.value.length - a.value.length);
-  const texts = (parsed as string[]).map((text) =>
+  const texts = parsed.map((text) =>
     values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
   );
   return { texts };
@@ -286,7 +287,7 @@ export function runSet(
   key: string,
 ): { namespace: string; key: string; stored: true } {
   const backend = activeBackend();
-  if (process.stdin.isTTY !== true) {
+  if (!process.stdin.isTTY) {
     fail(
       "set needs a terminal",
       `run it yourself in a shell; a value is typed into ${backend.name}'s prompt, never passed in`,

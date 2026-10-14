@@ -11,7 +11,7 @@ import { stateDir } from "../../../lib/paths.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
 import { activeBackend } from "../lib/backend.ts";
 import { formatChecks } from "../lib/doctor.ts";
-import { SecretError } from "../lib/errors.ts";
+import { fail as raise, SecretError } from "../lib/errors.ts";
 import { guardCommand } from "../lib/guard.ts";
 import { runClean, runRender } from "../lib/render.ts";
 import {
@@ -35,6 +35,7 @@ import {
 import { namespaceOf, parseEnvPair } from "../lib/vault.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the JSON import is typed by its literal values; a checked parse of qsm.json belongs in root lib/qsm-manifest.ts
 const manifest = manifestJson as QsmManifest;
 
 /**
@@ -43,12 +44,41 @@ const manifest = manifestJson as QsmManifest;
  */
 const NO_JSON = "a secret value never prints as JSON; use pipe or env";
 
+/** A string argument, or undefined when it was not given. qsm.json declares the type, so another
+ * type is a usage error rather than a cast. */
+function optionalText(call: Call, name: string): string | undefined {
+  const value = call.args[name];
+  if (value !== undefined && typeof value !== "string") {
+    return usageError(`--${name} takes text`);
+  }
+  return value;
+}
+
+/** A string argument the verb requires; the parser already refused a missing one. */
+function requiredText(call: Call, name: string): string {
+  const value = optionalText(call, name);
+  return value ?? usageError(`${name} is required`);
+}
+
+/** A repeatable argument: the list, empty when it was not given. */
+function texts(call: Call, name: string): string[] {
+  const value = call.args[name];
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) ? value : usageError(`--${name} takes text`);
+}
+
+function usageError(message: string): never {
+  return raise(message, "see qsm-secrets --help", "usage");
+}
+
 function namespace(call: Call): string {
-  return namespaceOf(call.args.folder as string | undefined, process.env);
+  return namespaceOf(optionalText(call, "folder"), process.env);
 }
 
 function key(call: Call): string {
-  return call.args.key as string;
+  return requiredText(call, "key");
 }
 
 /** A SecretError carries its own outcome code and the next step; anything
@@ -79,7 +109,7 @@ const env: Handler = (call) => {
   if (call.json) {
     return fail("blocked", NO_JSON);
   }
-  const pair = parseEnvPair(call.args.pair as string);
+  const pair = parseEnvPair(requiredText(call, "pair"));
   if (pair === null) {
     return fail("usage", "env takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -88,7 +118,7 @@ const env: Handler = (call) => {
 
 /** The probe runs like env but its output is discarded: only its exit code is the answer. */
 const probe: Handler = (call) => {
-  const pair = parseEnvPair(call.args.pair as string);
+  const pair = parseEnvPair(requiredText(call, "pair"));
   if (pair === null) {
     return fail("usage", "check takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -102,10 +132,10 @@ const probe: Handler = (call) => {
 
 const rename: Handler = (call) =>
   attempt(() => {
-    const from = { namespace: namespace(call), key: call.args.from as string };
+    const from = { namespace: namespace(call), key: requiredText(call, "from") };
     const to = {
-      namespace: (call.args.toFolder as string | undefined) ?? from.namespace,
-      key: call.args.to as string,
+      namespace: optionalText(call, "toFolder") ?? from.namespace,
+      key: requiredText(call, "to"),
     };
     const done = runRename(from, to);
     return ok(done, `renamed ${done.from} to ${done.to}`);
@@ -171,7 +201,7 @@ const mask: Handler = (call) =>
       const masked = runMaskAll();
       return ok(masked, JSON.stringify(masked.texts));
     }
-    const ids = (call.args.id as string[] | undefined) ?? [];
+    const ids = texts(call, "id");
     if (ids.length === 0) {
       return fail("usage", "mask takes at least one --id, or --all");
     }
@@ -182,7 +212,7 @@ const mask: Handler = (call) =>
 /** A transcript's captured values swapped for their placeholders; detached for a hook's 1.5 s. */
 const scrub: Handler = (call) =>
   attempt(() => {
-    const target = call.args.transcript as string;
+    const target = requiredText(call, "transcript");
     if (call.args.detach !== true) {
       const done = runScrub(target);
       return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
@@ -205,7 +235,7 @@ const scrub: Handler = (call) =>
 
 /** The Bash command on stdin, refused with its code and the verb to use instead, or allowed. */
 const guard: Handler = async () => {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     return fail("usage", "guard reads the Bash command from stdin; pipe it in");
   }
   const refusal = await guardCommand(readFileSync(0, "utf8"), {
@@ -218,7 +248,7 @@ const guard: Handler = async () => {
 
 /** The session a render or clean belongs to: `--session`, else the id the engine sets for Bash. */
 function inSession(call: Call, run: (session: string) => Outcome): Outcome {
-  const id = (call.args.session as string | undefined) ?? process.env.CLAUDE_CODE_SESSION_ID;
+  const id = optionalText(call, "session") ?? process.env.CLAUDE_CODE_SESSION_ID;
   return id === undefined
     ? fail("usage", "pass --session <id>; CLAUDE_CODE_SESSION_ID is not set")
     : attempt(() => run(id));
@@ -227,7 +257,12 @@ function inSession(call: Call, run: (session: string) => Outcome): Outcome {
 /** Only the path prints: the file holds values, and the caller reads it with the tool that needs it. */
 const render: Handler = (call) =>
   inSession(call, (id) => {
-    const done = runRender(call.args.template as string, call.args.out as string, id, process.env);
+    const done = runRender(
+      requiredText(call, "template"),
+      requiredText(call, "out"),
+      id,
+      process.env,
+    );
     return ok(done, done.path);
   });
 

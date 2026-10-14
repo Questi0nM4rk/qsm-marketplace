@@ -235,11 +235,15 @@ function secretsStarts(words: Words): number[] {
 
 function flagged(name: string, words: Words): number[] {
   let at = 0;
-  while ((words[at]?.startsWith("-") ?? false) && words[at] !== "--") {
-    if (looksUp(name, words[at] as string)) {
+  for (
+    let word = words[at];
+    isText(word) && word.startsWith("-") && word !== "--";
+    word = words[at]
+  ) {
+    if (looksUp(name, word)) {
       return [];
     }
-    at += name === "xargs" && XARGS_VALUE_FLAGS.has(words[at] as string) ? 2 : 1;
+    at += name === "xargs" && XARGS_VALUE_FLAGS.has(word) ? 2 : 1;
   }
   at += words[at] === "--" ? 1 : 0;
   return isText(words[at]) ? [at] : [];
@@ -466,19 +470,21 @@ async function judgeLayer(
   if (refusal !== null) {
     return refusal;
   }
-  for (const at of seen === null ? [] : innerStarts(seen.name, seen.args)) {
-    const inner = await judgeChain(
-      { ...call, assigns: [], args: (seen as Effective).args.slice(at) },
-      ctx,
-      exempt,
-    );
-    if (inner !== null) {
-      return inner;
+  if (seen !== null) {
+    for (const at of innerStarts(seen.name, seen.args)) {
+      const inner = await judgeChain(
+        { ...call, assigns: [], args: seen.args.slice(at) },
+        ctx,
+        exempt,
+      );
+      if (inner !== null) {
+        return inner;
+      }
     }
   }
   if (layer.kind === "wrapped-script") {
     exempt.add(layer.script);
-    return await judgeSource(layer.script, { ...ctx, depth: ctx.depth + 1 });
+    return judgeSource(layer.script, { ...ctx, depth: ctx.depth + 1 });
   }
   return null;
 }
@@ -574,7 +580,7 @@ function judgeQuotes(ast: ShellFile, exempt: ReadonlySet<string>): Refusal | nul
 }
 
 async function parseBash(source: string): Promise<ShellFile> {
-  return await parse(source, "bash");
+  return parse(source, "bash");
 }
 
 async function judgeSource(source: string, ctx: Context): Promise<Refusal | null> {
@@ -600,12 +606,12 @@ async function judgeSource(source: string, ctx: Context): Promise<Refusal | null
     }
     throw error;
   }
-  return await judgeFile(ast, ctx);
+  return judgeFile(ast, ctx);
 }
 
 /** The refusal for a Bash command, or null when nothing in it reads a stored value. */
 export async function guardCommand(command: string, env: PathEnv): Promise<Refusal | null> {
-  return await judgeSource(command, {
+  return judgeSource(command, {
     cwd: {},
     env,
     roots: protectedRoots(env),

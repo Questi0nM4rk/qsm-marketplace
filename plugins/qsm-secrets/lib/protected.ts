@@ -91,7 +91,7 @@ export function reaches(
 
 /** A glob word as a pattern over one path part: `*`, `?` and `[...]` as the shell reads them. */
 function partPattern(part: string): RegExp {
-  const source = [...part]
+  const source = Array.from(part)
     .map((char) => {
       if (char === "*") {
         return "[^/]*";
@@ -124,7 +124,10 @@ export function globMentioned(
     const rootParts = root.path.split("/");
     return (
       parts.length >= rootParts.length &&
-      rootParts.every((rootPart, at) => partPattern(parts[at] as string).test(rootPart))
+      rootParts.every((rootPart, at) => {
+        const part = parts[at];
+        return part !== undefined && partPattern(part).test(rootPart);
+      })
     );
   });
 }
