@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { manifestlessPlugins } from "./walk.ts";
 
 const plugins = mkdtempSync(join(tmpdir(), "qsm-walk-"));
-afterAll(() => rmSync(plugins, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(plugins, { recursive: true, force: true });
+});
 
 describe("manifestless plugins", () => {
   test("a plugin directory without .claude-plugin/plugin.json is named", () => {

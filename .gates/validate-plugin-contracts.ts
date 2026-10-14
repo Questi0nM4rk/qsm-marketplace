@@ -2,11 +2,10 @@
 // Plugin manifests, marketplace entries, skill/agent/command frontmatter, hooks.json shape.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
+import { isRecord, manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
 
 const findings: string[] = [];
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const isText = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
 function readJson(path: string): unknown {
@@ -81,8 +80,8 @@ if (isRecord(marketplace) && Array.isArray(marketplace.plugins)) {
 function classicHooks(json: unknown): string[] {
   const events = isRecord(json) && isRecord(json.hooks) ? Object.values(json.hooks) : [];
   return events
-    .flatMap((groups) => (Array.isArray(groups) ? groups : []))
-    .flatMap((group) => (isRecord(group) && Array.isArray(group.hooks) ? group.hooks : []))
+    .flatMap((groups) => list(groups))
+    .flatMap((group) => (isRecord(group) ? list(group.hooks) : []))
     .map((h) => (isRecord(h) && typeof h.command === "string" ? basename(h.command, '"') : ""))
     .filter((n) => n !== "");
 }

@@ -6,12 +6,25 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { checkNoun } from "../lib/generate-noun.ts";
 import { type QsmManifest, toCamel } from "../lib/qsm-manifest.ts";
-import { pluginDirs, readJson, rel, report, root } from "./walk.ts";
+import { isRecord, pluginDirs, readJson, rel, report, root } from "./walk.ts";
 
 export interface PluginFiles {
   readonly manifest: QsmManifest;
   readonly pluginJson: { readonly types?: string } | null;
   readonly readFile: (path: string) => string | null;
+}
+
+/** The part of qsm.json this gate reads: a qsm block with a commands record. checkNoun reads no more. */
+function isManifest(v: unknown): v is QsmManifest {
+  return isRecord(v) && isRecord(v.qsm) && isRecord(v.qsm.commands);
+}
+
+/** The types path plugin.json names, or null when it names none. */
+function pluginJsonOf(v: unknown): PluginFiles["pluginJson"] {
+  if (!isRecord(v)) {
+    return null;
+  }
+  return typeof v.types === "string" ? { types: v.types } : {};
 }
 
 /** Findings for one plugin directory; empty when it agrees with qsm.json. */
@@ -82,14 +95,18 @@ function namingFindings(name: string, bins: readonly string[], noun: string | un
 if (import.meta.main) {
   const findings: string[] = [];
   for (const dir of pluginDirs()) {
-    const manifest = readJson<QsmManifest>(join(dir, "qsm.json"));
+    const manifest = readJson(join(dir, "qsm.json"));
     if (manifest === null) {
+      continue;
+    }
+    if (!isManifest(manifest)) {
+      findings.push(`${rel(join(dir, "qsm.json"))}: no qsm.commands record`);
       continue;
     }
     findings.push(
       ...generatedFindings(dir, {
         manifest,
-        pluginJson: readJson(join(dir, ".claude-plugin", "plugin.json")),
+        pluginJson: pluginJsonOf(readJson(join(dir, ".claude-plugin", "plugin.json"))),
         readFile: (p) => (existsSync(p) ? readFileSync(p, "utf8") : null),
       }),
     );

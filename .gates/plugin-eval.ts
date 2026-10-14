@@ -26,7 +26,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { YAML } from "bun";
-import { root, walk } from "./walk.ts";
+import { isRecord, root, walk } from "./walk.ts";
 
 const [name, ...args] = process.argv.slice(2);
 if (name === undefined) {
@@ -38,8 +38,8 @@ const flags = args.filter((a) => a !== "--force");
 const pick = flags.some((f) => f === "--case" || f === "--tag");
 
 interface Arm {
-  passed?: boolean;
-  turns?: number;
+  passed?: boolean | undefined;
+  turns?: number | undefined;
 }
 interface Case {
   name: string;
@@ -62,12 +62,20 @@ const plugin = join(root, "plugins", name);
 const evals = join(plugin, "evals");
 const hashFile = join(evals, "results", "case-hashes.json");
 
+const str = (v: unknown, fallback: string): string => (typeof v === "string" ? v : fallback);
+
 /** The YAML of a case.yaml, or the frontmatter block of a markdown file. */
 function frontmatter(file: string): Record<string, unknown> {
   const text = readFileSync(file, "utf8");
   const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
   const doc: unknown = YAML.parse(file.endsWith(".md") ? block : text);
-  return (doc ?? {}) as Record<string, unknown>;
+  if (doc === null || doc === undefined) {
+    return {};
+  }
+  if (!isRecord(doc)) {
+    throw new Error(`${file}: the top level must be a mapping`);
+  }
+  return doc;
 }
 
 /** The plugin's case directories: a directory with a case.yaml or a prompt.md. */
@@ -88,7 +96,7 @@ function caseDirs(): Entry[] {
         dir,
         label,
         kind: KINDS.find((k) => tags.includes(k)) ?? "",
-        name: String(meta.name ?? label),
+        name: str(meta.name, label),
       };
     });
 }
@@ -100,11 +108,14 @@ function brokenGrader(c: Entry, g: string): string[] {
     return [];
   }
   const who = `${c.label}, grader ${g}`;
+  if (typeof meta.pattern !== "string") {
+    return [`${who}: a regex grader needs a string pattern`];
+  }
   let re: RegExp;
   try {
-    re = new RegExp(String(meta.pattern), String(meta.flags ?? ""));
+    re = new RegExp(meta.pattern, str(meta.flags, ""));
   } catch (e) {
-    return [`${who}: the pattern does not compile (${(e as Error).message})`];
+    return [`${who}: the pattern does not compile (${e instanceof Error ? e.message : String(e)})`];
   }
   return (
     [
@@ -144,6 +155,55 @@ function caseHash(dir: string): string {
   return h.digest("hex");
 }
 
+const armsOf = (v: unknown): Arm[] => {
+  const out: Arm[] = [];
+  for (const a of Array.isArray(v) ? v : []) {
+    if (isRecord(a)) {
+      out.push({
+        passed: typeof a.passed === "boolean" ? a.passed : undefined,
+        turns: typeof a.turns === "number" ? a.turns : undefined,
+      });
+    }
+  }
+  return out;
+};
+
+/** The cases of an aggregate-result.json; a file of another shape is a loud failure. */
+function parseCases(file: string): Case[] {
+  const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!isRecord(raw) || (raw.cases !== undefined && !Array.isArray(raw.cases))) {
+    throw new Error(`${file}: not an aggregate result with a cases array`);
+  }
+  return (raw.cases ?? [])
+    .filter((c) => isRecord(c))
+    .map((c) => {
+      if (typeof c.name !== "string") {
+        throw new TypeError(`${file}: a case has no name`);
+      }
+      const a = isRecord(c.arms) ? c.arms : {};
+      return { name: c.name, arms: { with: armsOf(a.with), without: armsOf(a.without) } };
+    });
+}
+
+/** The remembered verdicts of earlier runs; a malformed cache is a loud failure. */
+function readHashes(file: string): Record<string, { hash: string; ok: boolean }> {
+  if (!existsSync(file)) {
+    return {};
+  }
+  const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!isRecord(raw)) {
+    throw new Error(`${file}: not an object of case hashes`);
+  }
+  const out: Record<string, { hash: string; ok: boolean }> = {};
+  for (const [key, v] of Object.entries(raw)) {
+    if (!isRecord(v) || typeof v.hash !== "string" || typeof v.ok !== "boolean") {
+      throw new Error(`${file}: entry ${key} is not { hash, ok }`);
+    }
+    out[key] = { hash: v.hash, ok: v.ok };
+  }
+  return out;
+}
+
 /** A verdict per case from the aggregate results of the runs. */
 function verdicts(files: string[]): Verdict[] {
   const passed = (arms: Arm[]) => arms.filter((a) => a.passed === true).length;
@@ -152,8 +212,7 @@ function verdicts(files: string[]): Verdict[] {
       ? "n/a"
       : String(Math.round(arms.reduce((n, a) => n + (a.turns ?? 0), 0) / arms.length));
   return files.flatMap((file) => {
-    const { cases = [] }: { cases?: Case[] } = JSON.parse(readFileSync(file, "utf8"));
-    return cases.map((c) => {
+    return parseCases(file).map((c) => {
       const w = c.arms?.with ?? [];
       const wo = c.arms?.without ?? [];
       const ablated = wo.length > 0;
@@ -181,14 +240,15 @@ if (untagged.length > 0) {
   process.exit(1);
 }
 
-const hashes: Record<string, { hash: string; ok: boolean }> = existsSync(hashFile)
-  ? JSON.parse(readFileSync(hashFile, "utf8"))
-  : {};
+const hashes = readHashes(hashFile);
 const current = new Map(all.map((c) => [c.name, caseHash(c.dir)]));
 const skipped =
   pick || force
     ? []
-    : all.filter((c) => hashes[c.name]?.ok && hashes[c.name]?.hash === current.get(c.name));
+    : all.filter((c) => {
+        const entry = hashes[c.name];
+        return entry?.ok === true && entry.hash === current.get(c.name);
+      });
 const todo = all.filter((c) => !skipped.includes(c));
 
 const copy = mkdtempSync(join(tmpdir(), `eval-${name}-`));
@@ -196,7 +256,11 @@ let code = 0;
 try {
   cpSync(plugin, copy, { recursive: true });
   const manifestPath = join(copy, ".claude-plugin", "plugin.json");
-  const { dependencies: _, ...manifest } = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (!isRecord(parsed)) {
+    throw new Error(`${manifestPath}: not an object`);
+  }
+  const { dependencies: _, ...manifest } = parsed;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   // A scaffold script gets a scrubbed env, so it finds the repository root in this file, two
   // levels above itself: `cat "$(dirname "$0")/../../.eval-repo"`.

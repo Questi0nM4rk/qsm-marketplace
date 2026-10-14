@@ -4,7 +4,7 @@
 // lists must be the same set. Every mismatch of every plugin is reported in one run.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
-import { pluginDirs, readJson, rel, report } from "./walk.ts";
+import { isRecord, pluginDirs, readJson, rel, report } from "./walk.ts";
 
 const HEADING = "### Requirement: Dependencies";
 const BULLET = /^- `([^`]+)`:/;
@@ -22,7 +22,7 @@ export function specDependencies(spec: string): string[] {
       break;
     }
     const name = BULLET.exec(line)?.[1];
-    if (name) {
+    if (name !== undefined) {
       names.push(name);
     }
   }
@@ -44,13 +44,23 @@ export function diffDependencies(manifest: string[], spec: string[]): string[] {
   return findings;
 }
 
+/** The `dependencies` names of a parsed plugin.json; none when absent, a loud throw when malformed. */
+function manifestDependencies(manifest: unknown): string[] {
+  if (!isRecord(manifest) || manifest.dependencies === undefined) {
+    return [];
+  }
+  const deps = manifest.dependencies;
+  if (!Array.isArray(deps) || !deps.every((d): d is string => typeof d === "string")) {
+    throw new Error("plugin.json: dependencies must be an array of strings");
+  }
+  return deps;
+}
+
 function pluginFindings(dir: string): string[] {
-  const manifest = readJson<{ dependencies?: string[] }>(
-    resolve(dir, ".claude-plugin/plugin.json"),
-  );
+  const manifest = readJson(resolve(dir, ".claude-plugin/plugin.json"));
   const specPath = resolve(dir, "openspec/specs", basename(dir), "spec.md");
   const spec = existsSync(specPath) ? readFileSync(specPath, "utf8") : "";
-  return diffDependencies(manifest?.dependencies ?? [], specDependencies(spec)).map(
+  return diffDependencies(manifestDependencies(manifest), specDependencies(spec)).map(
     (f) => `${rel(specPath)}: ${f}`,
   );
 }
