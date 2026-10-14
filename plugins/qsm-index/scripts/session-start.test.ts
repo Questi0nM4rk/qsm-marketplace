@@ -34,7 +34,8 @@ function sleepyWorld() {
  * when there is nothing to ask. */
 function hook(cwd: string, env: Env) {
   const r = verb(env, "auto", cwd);
-  const askText = (r.data as { askText?: unknown } | null)?.askText;
+  const askText: unknown =
+    typeof r.data === "object" && r.data !== null ? Reflect.get(r.data, "askText") : null;
   return { exit: r.exit, context: typeof askText === "string" ? askText : null };
 }
 

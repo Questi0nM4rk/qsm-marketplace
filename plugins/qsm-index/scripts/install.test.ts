@@ -11,7 +11,9 @@ import { SEMBLE } from "../lib/doctor.ts";
 import { graphifyStep, install } from "./install.ts";
 
 const sandbox = mkdtempSync(join(tmpdir(), "qsm-index-install-"));
-afterAll(() => rmSync(sandbox, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
 
 function ctxOf(dryRun: boolean, exit = 0) {
   const ran: string[][] = [];

@@ -13,7 +13,8 @@ let owed: string | undefined;
 
 /** The `askText` of the auto verb's data, when it answered ask. */
 function askTextOf(data: unknown): string | undefined {
-  const askText = typeof data === "object" && data !== null ? Reflect.get(data, "askText") : null;
+  const askText: unknown =
+    typeof data === "object" && data !== null ? Reflect.get(data, "askText") : null;
   return typeof askText === "string" ? askText : undefined;
 }
 

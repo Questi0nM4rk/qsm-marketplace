@@ -100,9 +100,12 @@ function refresh(repo: string, run: Runner, env: Env): string {
     case "failed":
     case "not-indexable":
       return `reindex could not start: ${decided.reason}`;
-    default:
-      return "run reindex";
+    case "ask":
+    case "declined":
+    case "fresh":
+      break;
   }
+  return "run reindex";
 }
 
 function commitsBehind(repo: string, built: string | null, run: Runner): string {

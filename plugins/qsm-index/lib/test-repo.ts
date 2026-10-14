@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { type Envelope, OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
 import { type CacheFiles, cacheFiles, type Env } from "./paths.ts";
 import { type RunResult, spawnRunner } from "./run.ts";
 import { liveHolder, readStatus } from "./state.ts";
@@ -131,7 +132,9 @@ export async function until(check: () => boolean, what: string): Promise<void> {
     if (Date.now() > deadline) {
       throw new Error(`timed out waiting for ${what}`);
     }
-    await new Promise((done) => setTimeout(done, 50));
+    await new Promise((done) => {
+      setTimeout(done, 50);
+    });
   }
 }
 
@@ -146,8 +149,39 @@ export function detachedBuildTests(): void {
  * the outcome envelope it printed. */
 export function verb(env: Env, ...args: string[]) {
   const r = spawnSync(process.execPath, [CLI, ...args, "--json"], { encoding: "utf8", env });
-  const envelope = JSON.parse(r.stdout) as { code: string; message: string; data: unknown };
-  return { exit: r.status, ...envelope };
+  return parseEnvelope(r.stdout);
+}
+
+function isOutcomeCode(value: unknown): value is OutcomeCode {
+  return OUTCOME_CODES.some((code) => code === value);
+}
+
+function field(record: object, name: string): unknown {
+  return Reflect.get(record, name);
+}
+
+/** The outcome envelope a CLI printed under `--json`; anything else fails the test. */
+export function parseEnvelope(stdout: string): Envelope {
+  const parsed: unknown = JSON.parse(stdout);
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error(`not an envelope: ${stdout}`);
+  }
+  const code = field(parsed, "code");
+  const exit = field(parsed, "exit");
+  const reason = field(parsed, "reason");
+  const message = field(parsed, "message");
+  const warnings = field(parsed, "warnings");
+  if (
+    !isOutcomeCode(code) ||
+    typeof exit !== "number" ||
+    typeof reason !== "string" ||
+    typeof message !== "string" ||
+    !Array.isArray(warnings) ||
+    !warnings.every((warning) => typeof warning === "string")
+  ) {
+    throw new Error(`not an envelope: ${stdout}`);
+  }
+  return { code, exit, reason, message, warnings, data: field(parsed, "data") };
 }
 
 /** Waits for a build that started after `before` to finish. */

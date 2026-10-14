@@ -33,8 +33,14 @@ async function connected(run: Runner = spawnRunner, env: Env = process.env): Pro
   return client;
 }
 
-function textOf(result: { content: unknown }): string {
-  return (result.content as { type: string; text: string }[])[0]?.text ?? "";
+/** The text of the first content part of a tool result; "" when there is none. */
+function textOf(result: unknown): string {
+  const content: unknown =
+    typeof result === "object" && result !== null ? Reflect.get(result, "content") : [];
+  const first: unknown = Array.isArray(content) ? content[0] : undefined;
+  const text: unknown =
+    typeof first === "object" && first !== null ? Reflect.get(first, "text") : undefined;
+  return typeof text === "string" ? text : "";
 }
 
 /** A PATH holding git and the named fakes, and nothing else the tools could reach. */
@@ -110,7 +116,7 @@ describe("The CLI and the MCP server are two interfaces over one library", () =>
       name: "status",
       arguments: { path: repo },
     });
-    expect(textOf(mcp as { content: unknown })).toBe(cli.stdout.trim());
+    expect(textOf(mcp)).toBe(cli.stdout.trim());
   });
 });
 
@@ -127,13 +133,11 @@ describe("The MCP server registers six tools that never block", () => {
     const slow = await client.callTool({ name: "search", arguments: { path: repo, query: "q" } });
     expect(Date.now() - started).toBeLessThan(4000);
     expect(slow.isError).toBe(true);
-    expect(textOf(slow as { content: unknown })).toBe(
-      "semble ran past the 300 ms call limit and was stopped",
-    );
+    expect(textOf(slow)).toBe("semble ran past the 300 ms call limit and was stopped");
 
     const later = await client.callTool({ name: "status", arguments: { path: repo } });
     expect(later.isError).toBeUndefined();
-    expect(textOf(later as { content: unknown })).toContain(`index of ${repo}: absent`);
+    expect(textOf(later)).toContain(`index of ${repo}: absent`);
   });
 
   test("a missing backing command answers an error result and the server stays up", async () => {
@@ -148,11 +152,11 @@ describe("The MCP server registers six tools that never block", () => {
       arguments: { repo, op: "explain", node: "a.ts" },
     });
     expect(missing.isError).toBe(true);
-    expect(textOf(missing as { content: unknown })).toContain("graphify is not available");
+    expect(textOf(missing)).toContain("graphify is not available");
 
     const later = await client.callTool({ name: "status", arguments: { path: repo } });
     expect(later.isError).toBeUndefined();
-    expect(textOf(later as { content: unknown })).toContain(`index of ${repo}: present`);
+    expect(textOf(later)).toContain(`index of ${repo}: present`);
   });
 });
 
@@ -168,7 +172,7 @@ describe("A bad path answers an error result", () => {
       arguments: { path: "relative/tree", query: "anything" },
     });
     expect(bad.isError).toBe(true);
-    expect(textOf(bad as { content: unknown })).toContain("absolute");
+    expect(textOf(bad)).toContain("absolute");
 
     const repo = sandbox("qsm-index-server-");
     expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
@@ -176,6 +180,6 @@ describe("A bad path answers an error result", () => {
       name: "structure",
       arguments: { repo, op: "explain", node: "a.ts" },
     });
-    expect(textOf(after as { content: unknown })).toContain("no structural index");
+    expect(textOf(after)).toContain("no structural index");
   });
 });

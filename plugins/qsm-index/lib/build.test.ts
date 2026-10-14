@@ -21,6 +21,7 @@ import { type BuildDeps, buildIndex, IndexPathError } from "./build.ts";
 import { cacheFiles } from "./paths.ts";
 import { changedSet } from "./repo.ts";
 import { spawnRunner } from "./run.ts";
+import { type BuildStatus, readStatus } from "./state.ts";
 import { commit, fakeRunner, git, removeSandboxes, repoWithCache, sandbox } from "./test-repo.ts";
 
 afterEach(removeSandboxes);
@@ -34,8 +35,12 @@ function deps(runner: ReturnType<typeof fakeRunner>, cache: string): BuildDeps {
   return { cwd: "/", run: runner.run, env: { QSM_INDEX_CACHE_DIR: cache } };
 }
 
-function statusOf(file: string) {
-  return JSON.parse(readFileSync(file, "utf8"));
+function statusOf(file: string): BuildStatus {
+  const status = readStatus(file);
+  if (status === null) {
+    throw new Error(`no readable status at ${file}`);
+  }
+  return status;
 }
 
 describe("Index a local path", () => {

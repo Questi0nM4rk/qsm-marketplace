@@ -2,6 +2,7 @@
 
 import { spawnSync } from "node:child_process";
 import type { Env } from "./paths.ts";
+import { errnoCode } from "./state.ts";
 
 export interface RunResult {
   readonly ok: boolean;
@@ -28,7 +29,7 @@ export function timedRunner(timeoutMs: number, env: Env): Runner {
   return (command, args) => {
     const result = spawnSync(command, [...args], { encoding: "utf8", timeout: timeoutMs, env });
     const stdout = cap(result.stdout ?? "");
-    if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    if (errnoCode(result.error) === "ETIMEDOUT") {
       return {
         ok: false,
         stdout,

@@ -8,7 +8,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
-import { removeSandboxes, sandbox } from "../lib/test-repo.ts";
+import { parseEnvelope, removeSandboxes, sandbox } from "../lib/test-repo.ts";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
@@ -16,6 +16,23 @@ const CLI = join(PLUGIN, "scripts", "cli.ts");
 const BARE_PATH = dirname(process.execPath);
 
 afterEach(removeSandboxes);
+
+/** The names of the tools a `tools/list` result carries; anything else fails the test. */
+function toolNamesOf(result: unknown): string[] {
+  const tools: unknown =
+    typeof result === "object" && result !== null ? Reflect.get(result, "tools") : null;
+  if (!Array.isArray(tools)) {
+    throw new TypeError("tools/list result has no tools array");
+  }
+  return tools.map((tool: unknown) => {
+    const name: unknown =
+      typeof tool === "object" && tool !== null ? Reflect.get(tool, "name") : null;
+    if (typeof name !== "string") {
+      throw new TypeError("a listed tool has no name");
+    }
+    return name;
+  });
+}
 
 function run(entry: string, argv: readonly string[], env: Record<string, string> = {}) {
   const home = sandbox("qsm-index-cli-");
@@ -76,17 +93,18 @@ describe("qsm-index", () => {
   test("a path that is not there is missing, exit 4", () => {
     const r = run(CLI, ["build", "/nonexistent/tree", "--json"]);
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope).toMatchObject({ code: "missing", exit: 4 });
+    expect(parseEnvelope(r.stdout)).toMatchObject({ code: "missing", exit: 4 });
   });
 
   test("doctor with the binary not on PATH is missing, exit 4", () => {
     const r = run(CLI, ["doctor", "--json"], { PATH: BARE_PATH });
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = parseEnvelope(r.stdout);
     expect(envelope.code).toBe("missing");
-    expect(envelope.data.healthy).toBe(false);
-    expect(envelope.data.required).toHaveLength(2);
+    expect(envelope.data).toMatchObject({
+      healthy: false,
+      required: [expect.anything(), expect.anything()],
+    });
   });
 });
 
@@ -155,7 +173,7 @@ describe("qsm-index mcp serve", () => {
       await server.request(initialize(1));
       server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
       const listed = await server.request({ jsonrpc: "2.0", id: 2, method: "tools/list" });
-      const tools = (listed.result as { tools: { name: string }[] }).tools.map((t) => t.name);
+      const tools = toolNamesOf(listed.result);
       expect([...tools].sort((a, b) => a.localeCompare(b))).toEqual([
         "context",
         "impact",
@@ -179,7 +197,7 @@ describe("qsm-index auto", () => {
     const dir = sandbox("qsm-index-cli-auto-");
     const r = run(CLI, ["auto", dir, "--json"]);
     expect(r.exit).toBe(0);
-    expect(JSON.parse(r.stdout).data).toEqual({
+    expect(parseEnvelope(r.stdout).data).toEqual({
       answer: "not-indexable",
       reason: `${dir} is not inside a git repository`,
     });

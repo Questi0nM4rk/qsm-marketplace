@@ -2,30 +2,52 @@
 
 import { readFileSync } from "node:fs";
 
-export interface Symbol {
+export interface CodeSymbol {
   readonly label: string;
   readonly line: number;
 }
 
 interface GraphNode {
   readonly id: string;
-  readonly label?: string;
-  readonly source_file?: string;
+  readonly label?: string | undefined;
+  readonly source_file?: string | undefined;
   /** "L<start line>" */
-  readonly source_location?: string;
+  readonly source_location?: string | undefined;
 }
 
 export interface Graph {
   readonly nodes: readonly GraphNode[];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function parseNode(value: unknown): GraphNode {
+  if (!isRecord(value) || typeof value.id !== "string") {
+    throw new Error("graph node without a string id");
+  }
+  return {
+    id: value.id,
+    label: optionalString(value.label),
+    source_file: optionalString(value.source_file),
+    source_location: optionalString(value.source_location),
+  };
+}
+
+/** The graph file graphify wrote; a file without `nodes` is an empty graph, a malformed node throws. */
 export function readGraph(graphFile: string): Graph {
-  const graph = JSON.parse(readFileSync(graphFile, "utf8")) as Partial<Graph>;
-  return { nodes: graph.nodes ?? [] };
+  const graph: unknown = JSON.parse(readFileSync(graphFile, "utf8"));
+  const nodes = isRecord(graph) ? graph.nodes : undefined;
+  return { nodes: Array.isArray(nodes) ? nodes.map((node) => parseNode(node)) : [] };
 }
 
 /** Every node of `file` (a path relative to the repository) with its start line, by line. */
-export function symbolsOf(graph: Graph, file: string): Symbol[] {
+export function symbolsOf(graph: Graph, file: string): CodeSymbol[] {
   return graph.nodes
     .filter((node) => node.source_file === file)
     .map((node) => ({ label: node.label ?? "", line: Number(node.source_location?.slice(1)) }))
@@ -34,6 +56,6 @@ export function symbolsOf(graph: Graph, file: string): Symbol[] {
 }
 
 /** The last symbol starting at or above `line`. */
-export function enclosing(symbols: readonly Symbol[], line: number): Symbol | undefined {
+export function enclosing(symbols: readonly CodeSymbol[], line: number): CodeSymbol | undefined {
   return symbols.filter((symbol) => symbol.line <= line).at(-1);
 }

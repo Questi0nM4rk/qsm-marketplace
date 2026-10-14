@@ -16,10 +16,20 @@ import { handlers as mcpHandlers } from "./mcp.ts";
 
 const manifest = manifestJson as QsmManifest;
 
+/** The `path` the manifest declares required; the parser already made it a string. */
+function pathOf(call: Call): string | undefined {
+  const path = call.args.path;
+  return typeof path === "string" ? path : undefined;
+}
+
 function build(call: Call): Outcome {
+  const path = pathOf(call);
+  if (path === undefined) {
+    return fail("usage", "path is required");
+  }
   let report: BuildReport;
   try {
-    report = buildIndex(call.args.path as string, {
+    report = buildIndex(path, {
       cwd: process.cwd(),
       run: spawnRunner,
       env: process.env,
@@ -44,9 +54,13 @@ function build(call: Call): Outcome {
 
 /** The session-start decision; every answer but a failed start is a decision, exit 0. */
 function runAuto(call: Call): Outcome {
+  const path = pathOf(call);
+  if (path === undefined) {
+    return fail("usage", "path is required");
+  }
   const consent =
     call.args.consent === "yes" || call.args.consent === "no" ? call.args.consent : undefined;
-  const answer = auto({ path: call.args.path as string, consent }, spawnRunner, process.env);
+  const answer = auto({ path, consent }, spawnRunner, process.env);
   if (answer.answer === "ask") {
     const text = askText(answer);
     return ok({ ...answer, askText: text }, text);
@@ -60,7 +74,11 @@ function runAuto(call: Call): Outcome {
 /** One edited file counted towards a refresh; a refresh that cannot start is the one failure. */
 function runEdited(call: Call): Outcome {
   const cwd = typeof call.args.cwd === "string" ? call.args.cwd : undefined;
-  return printed(edited({ path: call.args.path as string, cwd }, spawnRunner, process.env));
+  const path = pathOf(call);
+  if (path === undefined) {
+    return fail("usage", "path is required");
+  }
+  return printed(edited({ path, cwd }, spawnRunner, process.env));
 }
 
 /** Unhealthy is a prerequisite that is not there: a binary is off PATH or
