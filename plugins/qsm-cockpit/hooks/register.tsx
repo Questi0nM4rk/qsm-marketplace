@@ -10,6 +10,7 @@ import {
   doingOf,
   guideText,
   isStage,
+  parseIssues,
   OUTCOME_WORD,
   offsetOf,
   reminderText,
@@ -18,7 +19,7 @@ import {
   TIER_COLOR,
   tierOf,
 } from "../lib/cockpit.ts";
-import type { AgentRun, Stage, StageStep, Task } from "../types/index.d.ts";
+import type { AgentRun, Stage, StageStep } from "../types/index.d.ts";
 
 const PANE = "qsm-cockpit";
 const STAGE_TOOL = "mcp__qsm-cockpit__stage";
@@ -65,13 +66,14 @@ async function refreshTasks($: EngineInterface): Promise<void> {
     $.ui.log(`br list failed (${run.exitCode}): ${run.stderr.trim().slice(0, 200)}`);
     return;
   }
-  const { issues } = JSON.parse(run.stdout) as { issues?: { id: string; title: string }[] };
-  const list: Task[] = (issues ?? []).map(({ id, title }) => ({ id, title }));
+  const list = parseIssues(run.stdout);
   await update($, tasks, () => list);
 }
 
 function refreshLater($: EngineInterface): void {
-  refreshTasks($).catch((error) => $.ui.log(`tasks: ${String(error)}`));
+  refreshTasks($).catch((error) => {
+    $.ui.log(`tasks: ${String(error)}`);
+  });
 }
 
 /** The stage tool, and the line every prompt carries about it. */
@@ -101,7 +103,8 @@ function registerStage(on: On): void {
 
   // The caller says its stage: the main chat's moves the cockpit, an agent's only its own row.
   on("tool.call", { tool: STAGE_TOOL }, async ($, e) => {
-    const { stage, doing } = e as unknown as { stage?: unknown; doing?: unknown };
+    const stage = "stage" in e ? e.stage : undefined;
+    const doing = "doing" in e ? e.doing : undefined;
     if (!isStage(stage)) {
       return {
         result: `stage must be one of ${STAGES.join(", ")}; got ${String(stage)}`,
@@ -130,12 +133,12 @@ function registerStage(on: On): void {
 }
 
 /** What an agent runs now: set before its call, back to thinking after it. */
-async function agentCall(
+async function agentCall<T>(
   $: EngineInterface,
   id: string,
   doing: string,
-  run: () => Promise<unknown>,
-) {
+  run: () => Promise<T>,
+): Promise<T> {
   await update($, agents, (list) => list.map((one) => (one.id === id ? { ...one, doing } : one)));
   try {
     return await run();
@@ -151,11 +154,9 @@ async function agentCall(
 /** Everything the band and the pane read, recorded as it happens whether the pane is open or not. */
 function registerRecords(on: On): void {
   on("tool.call", async ($, e, next) => {
-    const args = e as unknown as Record<string, unknown>;
+    const args: Record<string, unknown> = e;
     if (e.agentId !== undefined) {
-      return agentCall($, e.agentId, doingOf(e.tool, args), () => next(e)) as ReturnType<
-        typeof next
-      >;
+      return agentCall($, e.agentId, doingOf(e.tool, args), () => next(e));
     }
     const result = await next(e);
     if (e.tool === "AskUserQuestion" && result.result !== undefined) {

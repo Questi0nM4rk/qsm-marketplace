@@ -92,7 +92,7 @@ function expandGlob(pattern: string, cwd: string): string[] {
 }
 
 function resolveInput(input: string, cwd: string): { files: string[]; rejected: Rejected[] } {
-  if ([...input].some((char) => "*?[".includes(char))) {
+  if (/[*?[]/.test(input)) {
     const files = expandGlob(input, cwd);
     return files.length === 0
       ? { files, rejected: [{ path: input, reason: "matched no file" }] }

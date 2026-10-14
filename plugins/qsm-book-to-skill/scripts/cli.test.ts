@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { z } from "zod";
 import { analyzeText } from "../lib/structure.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -31,8 +32,19 @@ function run(args: readonly string[]): Run {
 }
 
 /** The one JSON value the shared base prints on stdout under --json. */
-function envelope(r: Run): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(r.stdout) as { code: string; exit: number; data: Record<string, unknown> };
+const ENVELOPE = z.object({
+  code: z.string(),
+  exit: z.number(),
+  data: z
+    .object({
+      sources: z.array(z.object({})).optional(),
+      chapters: z.array(z.object({})).optional(),
+    })
+    .nullish(),
+});
+
+function envelope(r: Run): z.infer<typeof ENVELOPE> {
+  return ENVELOPE.parse(JSON.parse(r.stdout));
 }
 
 const FIXTURE = ["# One", "alpha beta", "", "# Two", "gamma delta"].join("\n");
@@ -133,7 +145,7 @@ describe("a stage runs on its own", () => {
     const result = run(["draft", "--work", work, "--json"]);
     expect(result.status).toBe(0);
     expect(envelope(result)).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope(result).data.chapters).toHaveLength(2);
+    expect(envelope(result).data?.chapters).toHaveLength(2);
   });
 
   test("assemble runs from a draft directory and a name passed in", () => {
@@ -256,7 +268,7 @@ describe("a stage that resolves some of its inputs", () => {
       "--json",
     ]);
     expect(validated.status).toBe(0);
-    expect((envelope(validated).data.sources as unknown[]).length).toBe(2);
+    expect((envelope(validated).data?.sources ?? []).length).toBe(2);
   });
 });
 
@@ -267,7 +279,9 @@ describe("doctor", () => {
       env: { ...process.env, PATH: sandbox() },
     });
     expect(done.status).toBe(0);
-    const said = JSON.parse(done.stdout) as { code: string; warnings: string[] };
+    const said = z
+      .object({ code: z.string(), warnings: z.array(z.string()) })
+      .parse(JSON.parse(done.stdout));
     expect(said.code).toBe("ok");
     expect(said.warnings).toHaveLength(3);
     expect(said.warnings[0]).toContain("pdftotext is not on PATH");

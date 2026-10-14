@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { z } from "zod";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = join(import.meta.dir, "cli.ts");
@@ -41,11 +42,13 @@ describe("qsm-toolbox cli", () => {
   test("doctor --json is one envelope whose data is the table", () => {
     const r = run(["doctor", "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout) as {
-      code: string;
-      exit: number;
-      data: { bin: string; present: boolean; install: string }[];
-    };
+    const envelope = z
+      .object({
+        code: z.string(),
+        exit: z.number(),
+        data: z.array(z.object({ bin: z.string(), present: z.boolean(), install: z.string() })),
+      })
+      .parse(JSON.parse(r.stdout));
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
     expect(envelope.data.length).toBeGreaterThan(0);
     expect(envelope.data[0]).toHaveProperty("bin");

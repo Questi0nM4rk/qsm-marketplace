@@ -5,20 +5,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { z } from "zod";
 import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { skillFile, sourcesFile, structureFile } from "../lib/artifacts.ts";
 import { onPath, UPSTREAM } from "../lib/converters.ts";
 import { extractSources, systemDeps } from "../lib/extract.ts";
 import { assembleSkill, draftSkill, skillContents } from "../lib/generate.ts";
+import { manifestSchema } from "../lib/manifest.ts";
 import { resolveName, titleHint } from "../lib/naming.ts";
 import { scanSkill } from "../lib/scan.ts";
-import type { Source } from "../lib/sources.ts";
 import { scanInputs } from "../lib/sources.ts";
-import { analyzeText, type Structure } from "../lib/structure.ts";
+import { analyzeText } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = manifestSchema.parse(manifestJson);
 
 /** A stage that cannot go on: the file it reads is not there, or it is
  * there and unreadable. Thrown so every reader can stay a plain function. */
@@ -37,7 +38,8 @@ class StageError extends Error {
 }
 
 function text(call: Call, name: string): string | undefined {
-  return call.args[name] as string | undefined;
+  const value = call.args[name];
+  return typeof value === "string" ? value : undefined;
 }
 
 /** Every stage's files sit together, so a run is one directory a caller can
@@ -55,7 +57,7 @@ function artifact(call: Call, named: string | undefined, fallback: string): stri
   return named === undefined ? join(workDir(call), fallback) : resolve(named);
 }
 
-function readJson<T>(path: string, what: string): T {
+function readJson<T>(path: string, what: string, schema: z.ZodType<T>): T {
   if (!existsSync(path)) {
     throw new StageError(
       `${what} is not at ${path}; run the stage before this one or pass the path`,
@@ -65,7 +67,7 @@ function readJson<T>(path: string, what: string): T {
     );
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as T;
+    return schema.parse(JSON.parse(readFileSync(path, "utf8")));
   } catch (cause) {
     throw new StageError(
       `${path} is not readable JSON: ${cause instanceof Error ? cause.message : ""}`,
@@ -104,7 +106,8 @@ function partialIf(outcome: Outcome, warnings: readonly string[]): Outcome {
 }
 
 const validate: Handler = (call) => {
-  const scan = scanInputs(call.args.input as string[]);
+  const input = call.args.input;
+  const scan = scanInputs(Array.isArray(input) ? input : []);
   const path = join(workDir(call), "sources.json");
   writeJson(path, scan);
   const lines = [
@@ -123,9 +126,10 @@ const validate: Handler = (call) => {
 };
 
 const extract: Handler = (call) => {
-  const scan = readJson<{ sources: readonly Source[] }>(
+  const scan = readJson(
     artifact(call, text(call, "sources"), "sources.json"),
     "the validated source list",
+    sourcesFile,
   );
   const result = extractSources(scan.sources, systemDeps(process.env));
   const dir = workDir(call);
@@ -168,9 +172,10 @@ const analyze: Handler = (call) => {
 
 const draft: Handler = (call) => {
   const body = readText(artifact(call, text(call, "text"), "text.md"), "the consolidated text");
-  const structure = readJson<Structure>(
+  const structure = readJson(
     artifact(call, text(call, "structure"), "structure.json"),
     "the analyzed structure",
+    structureFile,
   );
   const dir = artifact(call, text(call, "out"), "draft");
   const result = draftSkill(body, structure, dir);
@@ -212,8 +217,7 @@ function skillDir(call: Call): string {
   if (named !== undefined) {
     return resolve(named);
   }
-  return readJson<{ dir: string }>(artifact(call, undefined, "skill.json"), "the assembled skill")
-    .dir;
+  return readJson(artifact(call, undefined, "skill.json"), "the assembled skill", skillFile).dir;
 }
 
 /** The verdict on a generated skill: a skill that does not pass is never done, whatever else it

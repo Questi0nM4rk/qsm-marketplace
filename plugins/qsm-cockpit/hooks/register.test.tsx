@@ -13,6 +13,15 @@ function beneath(on: On): void {
   });
 }
 
+type CallArgs = Parameters<Engine["tool"]["call"]>[0];
+
+// A call made inside an agent's loop. The engine takes `agentId` on every call, but the generated
+// ToolCallArgs omits it, so the field is added on a variable, which no excess-property check reads.
+function inLoop(args: CallArgs, agentId: string): CallArgs {
+  const call = { ...args, agentId };
+  return call;
+}
+
 const SPAWN = {
   tool_use_id: "t1",
   prompt: "sleep 20",
@@ -71,7 +80,12 @@ function heldBash(on: On, count: number) {
     await held;
     return { result: {} };
   });
-  return { reached, release: () => release() };
+  return {
+    reached,
+    release: () => {
+      release();
+    },
+  };
 }
 
 const BAND = {
@@ -165,10 +179,7 @@ test("the band shows what each agent runs and never the main chat's commands, th
   });
   await $.tool.call({ tool: "Edit", file_path: "/x.ts", old_string: "a", new_string: "b" });
   // Two calls that run now: one inside agent a1's loop, one in the main chat. Neither returns yet.
-  const inAgent = $.tool.call({ tool: "Bash", command: "sleep 20", agentId: "a1" } as unknown as {
-    tool: "Bash";
-    command: string;
-  });
+  const inAgent = $.tool.call(inLoop({ tool: "Bash", command: "sleep 20" }, "a1"));
   const inMain = $.tool.call({ tool: "Bash", command: "bun run lint" });
   await bash.reached;
   const band = await drawnBand($);
@@ -195,11 +206,15 @@ test("a shell command shows without what only frames it", async ($, on) => {
   const bash = heldBash(on, 1);
 
   await $.agent.spawn(SPAWN);
-  const call = $.tool.call({
-    tool: "Bash",
-    command: "cd /tmp && set -o pipefail && (sleep 30 && echo done) 2>&1 | tee /tmp/x.log",
-    agentId: "a1",
-  } as unknown as { tool: "Bash"; command: string });
+  const call = $.tool.call(
+    inLoop(
+      {
+        tool: "Bash",
+        command: "cd /tmp && set -o pipefail && (sleep 30 && echo done) 2>&1 | tee /tmp/x.log",
+      },
+      "a1",
+    ),
+  );
   await bash.reached;
   const drawn = await drawnBand($);
   bash.release();
@@ -226,11 +241,7 @@ test("the stage tool answers what the stage asks, and every prompt carries where
   const wrong = await $.tool.call({ tool: "mcp__qsm-cockpit__stage", stage: "SHIP" });
   await $.prompt.submit({ text: "next", wait: false, origin: { kind: "composer" } });
   await $.agent.spawn({ ...SPAWN, model: "sonnet" });
-  await $.tool.call({
-    tool: "mcp__qsm-cockpit__stage",
-    stage: "LOAD",
-    agentId: "a1",
-  } as unknown as { tool: "mcp__qsm-cockpit__stage"; stage: string });
+  await $.tool.call(inLoop({ tool: "mcp__qsm-cockpit__stage", stage: "LOAD" }, "a1"));
   const band = await drawnBand($);
 
   expect(seen[0]?.join(" ")).toContain("qsm stage: not said yet");

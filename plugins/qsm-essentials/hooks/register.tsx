@@ -20,8 +20,8 @@ export function register(on: On): void {
   on("ui.render", { component: "ToolUse" }, async ($, e, next) => {
     const { input } = e.props;
     const model =
-      e.props.tool === "Agent" && typeof input === "object" && input !== null
-        ? Reflect.get(input, "model")
+      e.props.tool === "Agent" && typeof input === "object" && input !== null && "model" in input
+        ? input.model
         : undefined;
     if (typeof model !== "string") {
       return next(e);

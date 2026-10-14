@@ -1,6 +1,6 @@
 // The cockpit's rules, apart from its wiring: the six stages and what each asks, how a model maps to
 // its tier and colour, how a tool call is said short, and what an answered question records.
-import type { Decision, Stage, StageStep } from "../types/index.d.ts";
+import type { Decision, Stage, StageStep, Task } from "../types/index.d.ts";
 
 export const STAGES: Stage[] = ["LOAD", "PLAN", "EXECUTE", "VERIFY", "LEARN", "CLOSE"];
 
@@ -53,6 +53,21 @@ const GUIDE: Record<Stage, { asks: string; done: string; next: Stage }> = {
     next: "LOAD",
   },
 };
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** The in-progress tasks `br list --json` printed: each issue that has an id and a title. */
+export function parseIssues(stdout: string): Task[] {
+  const parsed: unknown = JSON.parse(stdout);
+  const issues = isRecord(parsed) && Array.isArray(parsed.issues) ? parsed.issues : [];
+  return issues.flatMap((issue: unknown) =>
+    isRecord(issue) && typeof issue.id === "string" && typeof issue.title === "string"
+      ? [{ id: issue.id, title: issue.title }]
+      : [],
+  );
+}
 
 export function isStage(value: unknown): value is Stage {
   return typeof value === "string" && (STAGES as string[]).includes(value);
@@ -136,9 +151,13 @@ export function decisionsOf(
   ask: string,
   at: number,
 ): Decision[] {
-  const answers = (result as { answers?: Record<string, unknown> }).answers ?? {};
-  const asked = Array.isArray(args.questions) ? (args.questions as { question: string }[]) : [];
-  return asked.flatMap(({ question }) => {
+  const answers = isRecord(result) && isRecord(result.answers) ? result.answers : {};
+  const asked: unknown[] = Array.isArray(args.questions) ? args.questions : [];
+  return asked.flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.question !== "string") {
+      return [];
+    }
+    const { question } = entry;
     const answer = answers[question];
     return typeof answer === "string" ? [{ ask, question, answer, at }] : [];
   });

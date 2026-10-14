@@ -117,24 +117,24 @@ function viaFile(deps: ExtractDeps, source: Source): { text: string } | { reason
   }
 }
 
+type Converted = { text: string } | { reason: string };
+
+/** One converter per reader; a new reader without an entry here fails the type check. */
+const CONVERT: Record<Reader, (source: Source, deps: ExtractDeps) => Converted> = {
+  text: (source, deps) => ({ text: deps.readFile(source.path) }),
+  html: (source, deps) => ({ text: htmlToText(deps.readFile(source.path)) }),
+  pdftotext: (source, deps) => viaStdout(deps, "pdftotext", ["-layout", source.path, "-"]),
+  pandoc: (source, deps) => viaStdout(deps, "pandoc", ["-t", "plain", "--wrap=none", source.path]),
+  "ebook-convert": (source, deps) => viaFile(deps, source),
+};
+
 function readSource(source: Source, deps: ExtractDeps): { text: string } | { reason: string } {
   const missing = missingConverter(source.reader, deps.pathValue);
   if (missing !== null) {
     return { reason: missing };
   }
   try {
-    switch (source.reader) {
-      case "text":
-        return { text: deps.readFile(source.path) };
-      case "html":
-        return { text: htmlToText(deps.readFile(source.path)) };
-      case "pdftotext":
-        return viaStdout(deps, "pdftotext", ["-layout", source.path, "-"]);
-      case "pandoc":
-        return viaStdout(deps, "pandoc", ["-t", "plain", "--wrap=none", source.path]);
-      default:
-        return viaFile(deps, source);
-    }
+    return CONVERT[source.reader](source, deps);
   } catch (cause) {
     return { reason: cause instanceof Error ? cause.message : String(cause) };
   }
