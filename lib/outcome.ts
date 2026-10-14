@@ -77,6 +77,15 @@ export interface Envelope<T = unknown> {
   readonly data: T | null;
 }
 
+/** A call that is wrong in a way the parser could not see; runCli turns it into the usage outcome. */
+export class UsageError extends Error {}
+
+/** A JSON object: not null, not an array. Narrows the input of a reader that then checks each field
+ * it uses. */
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 export function exitOf(code: OutcomeCode): number {
   return OUTCOMES[code].exit;
 }

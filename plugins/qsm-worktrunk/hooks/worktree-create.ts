@@ -20,19 +20,15 @@
 // fails the harness's request instead of silently falling back.
 
 import { readHookEvent } from "../../../lib/hooks-kit.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 import { nodeRunner, nodeStoreIo } from "../lib/node-io.ts";
 import { writeRedirect } from "../lib/task-store.ts";
 import { gitReader, readMainCheckout } from "../lib/workspace.ts";
 import { createWorkspace, WtError } from "../lib/wt.ts";
 
-interface WorktreeCreateEvent {
-  readonly name?: unknown;
-  readonly cwd?: unknown;
-}
-
 function eventOf(): { readonly name: string; readonly cwd: string } {
-  const event = readHookEvent<WorktreeCreateEvent>();
-  if (typeof event?.name !== "string" || typeof event.cwd !== "string") {
+  const event = readHookEvent();
+  if (!isRecord(event) || typeof event.name !== "string" || typeof event.cwd !== "string") {
     throw new Error("missing name or cwd on stdin");
   }
   return { name: event.name, cwd: event.cwd };

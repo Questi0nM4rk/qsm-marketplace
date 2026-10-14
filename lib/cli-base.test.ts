@@ -1,8 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { parseCall, renderHelp, renderVerbHelp } from "./cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  optionalNumber,
+  optionalString,
+  parseCall,
+  renderHelp,
+  renderVerbHelp,
+  requiredNumber,
+  requiredString,
+  runCli,
+  stringList,
+} from "./cli-base.ts";
 import { grouped, manifest } from "./fixtures/cli-fixture.ts";
+import { isRecord, ok } from "./outcome.ts";
+import { parseManifest } from "./qsm-manifest.ts";
 
 const FIXTURE = resolve(import.meta.dir, "fixtures/cli-fixture.ts");
 
@@ -169,6 +183,15 @@ describe("through the real surface", () => {
   });
 });
 
+/** The `data` of a --json envelope on stdout; a stdout that is not an envelope object fails loud. */
+function dataOf(stdout: string): unknown {
+  const envelope: unknown = JSON.parse(stdout);
+  if (!isRecord(envelope)) {
+    throw new Error(`stdout is not an envelope: ${stdout}`);
+  }
+  return envelope.data;
+}
+
 describe("through the real surface, usage and help", () => {
   test("usage error: text mode prints usage on stderr, exit 2, handler never runs", () => {
     const r = run("echo", "bob", "--volume", "9");
@@ -198,11 +221,50 @@ describe("through the real surface, usage and help", () => {
 
   test("the handler sees typed args and the passthrough rest", () => {
     const r = run("run", "--shell", "fish", "--json", "--", "--flag", "v");
-    const parsedRun: unknown = JSON.parse(r.stdout);
-    expect(parsedRun).toMatchObject({ data: { shell: "fish", rest: ["--flag", "v"] } });
+    expect(dataOf(r.stdout)).toEqual({ shell: "fish", rest: ["--flag", "v"] });
     const e = run("echo", "bob", "--times", "2", "--loud", "--json");
-    const parsedEcho: unknown = JSON.parse(e.stdout);
-    expect(parsedEcho).toMatchObject({ data: { name: "bob", times: 2, loud: true } });
+    expect(dataOf(e.stdout)).toEqual({ name: "bob", times: 2, loud: true });
+  });
+});
+
+const call = (args: Call["args"]): Call => ({
+  verb: "v",
+  args,
+  rest: [],
+  json: true,
+  noInput: true,
+});
+
+describe("typed arg accessors and the manifest parser", () => {
+  test("each accessor reads what the parser delivers", () => {
+    const c = call({ s: "x", n: 2, b: true, l: ["a", "b"] });
+    expect([requiredString(c, "s"), optionalString(c, "none")]).toEqual(["x", undefined]);
+    expect([requiredNumber(c, "n"), optionalNumber(c, "none")]).toEqual([2, undefined]);
+    expect([flagArg(c, "b"), flagArg(c, "none")]).toEqual([true, false]);
+    expect([stringList(c, "l"), stringList(c, "none")]).toEqual([["a", "b"], []]);
+  });
+
+  test("a required arg the handler finds missing is the usage outcome through runCli", async () => {
+    const one = parseManifest({
+      qsm: { bin: { "qsm-x": "x.ts" }, commands: { "qsm-x go": { description: "go" } } },
+    });
+    const out: string[] = [];
+    const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void out.push(t) };
+    const code = await runCli(
+      one,
+      "qsm-x",
+      { go: (c: Call) => ok(requiredString(c, "name")) },
+      { argv: ["go", "--json"], io },
+    );
+    expect(code).toBe(2);
+    expect(out.join("")).toContain('"code":"usage"');
+  });
+
+  test("a manifest of the wrong shape names the file and the field", () => {
+    const bad = { qsm: { commands: { "qsm-x go": { description: 1 } } } };
+    expect(() => parseManifest(bad, "plugins/x/qsm.json")).toThrow(
+      /^plugins\/x\/qsm\.json: qsm\.commands\.qsm-x go\.description:/,
+    );
   });
 });
 

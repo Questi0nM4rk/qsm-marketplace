@@ -22,9 +22,10 @@
 // stderr and exit 0.
 
 import { readHookEvent, runMain } from "../../../lib/hooks-kit.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 import { compareTrees, type Verdict } from "../lib/compare.ts";
 import { isLangdevRepo, readGatesConfig } from "../lib/config.ts";
-import { editorOf, type HookEvent } from "../lib/hookio.ts";
+import { editorOf } from "../lib/hookio.ts";
 import {
   clearBlocks,
   type EditedTree,
@@ -111,8 +112,8 @@ function describeRegressions(regressions: readonly Regression[]): string {
 }
 
 async function main(): Promise<void> {
-  const event = readHookEvent<HookEvent>() ?? {};
-  const editor: Editor = editorOf(event);
+  const event = readHookEvent();
+  const editor: Editor = editorOf(isRecord(event) ? event : {});
   const trees = editedTrees(editor);
   if (trees.length === 0) {
     log(`agent ${editor.agentId} edited no tree this session; nothing to gate`);

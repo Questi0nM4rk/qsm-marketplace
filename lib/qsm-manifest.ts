@@ -3,54 +3,75 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-const commandArgSchema = z.object({
-  /** camelCase; a flag is `--kebab-case` on the command line */
-  name: z.string(),
-  type: z.enum(["string", "number", "boolean"]),
-  positional: z.literal(true).optional(),
-  required: z.literal(true).optional(),
-  /** every occurrence is collected into a list (a flag or a positional) */
-  repeatable: z.literal(true).optional(),
-  /** the only values accepted */
-  choices: z.array(z.string()).readonly().optional(),
-  description: z.string(),
-});
+const commandArgSchema = z
+  .object({
+    /** camelCase; a flag is `--kebab-case` on the command line */
+    name: z.string(),
+    type: z.enum(["string", "number", "boolean"]),
+    positional: z.literal(true).exactOptional(),
+    required: z.literal(true).exactOptional(),
+    /** every occurrence is collected into a list (a flag or a positional) */
+    repeatable: z.literal(true).exactOptional(),
+    /** the only values accepted */
+    choices: z.array(z.string()).readonly().exactOptional(),
+    description: z.string(),
+  })
+  .readonly();
 
-const commandDeclSchema = z.object({
-  description: z.string(),
-  args: z.array(commandArgSchema).readonly().optional(),
-  /** everything after `--` reaches the handler untouched */
-  passthrough: z.literal(true).optional(),
-  /**
-   * the verb is reached from a shell only, never as a noun method: it carries a value or a stream
-   * that has no JSON form.
-   */
-  noNoun: z.literal(true).optional(),
-});
+const commandDeclSchema = z
+  .object({
+    description: z.string(),
+    args: z.array(commandArgSchema).readonly().exactOptional(),
+    /** everything after `--` reaches the handler untouched */
+    passthrough: z.literal(true).exactOptional(),
+    /**
+     * the verb is reached from a shell only, never as a noun method: it carries a value or a
+     * stream that has no JSON form.
+     */
+    noNoun: z.literal(true).exactOptional(),
+  })
+  .readonly();
 
-const manifestSchema = z.object({
-  name: z.string().optional(),
-  qsm: z.object({
-    /** bin name -> entry script, relative to the plugin root */
-    bin: z.record(z.string(), z.string()).optional(),
-    noun: z.string().optional(),
-    /** "<bin> <verb>" -> its declaration */
-    commands: z.record(z.string(), commandDeclSchema),
-  }),
-});
+const manifestSchema = z
+  .object({
+    name: z.string().exactOptional(),
+    qsm: z
+      .object({
+        /** bin name -> entry script, relative to the plugin root */
+        bin: z.record(z.string(), z.string()).readonly().exactOptional(),
+        noun: z.string().exactOptional(),
+        /** a shell command that reports whether the plugin's upstream tools are present */
+        doctor: z.string().exactOptional(),
+        /** "<bin> <verb>" -> its declaration */
+        commands: z.record(z.string(), commandDeclSchema).readonly(),
+      })
+      .readonly(),
+  })
+  .readonly();
 
 export type CommandArg = z.infer<typeof commandArgSchema>;
 export type CommandDecl = z.infer<typeof commandDeclSchema>;
 export type QsmManifest = z.infer<typeof manifestSchema>;
 
-/** Checks the shape of a parsed qsm.json and returns it typed; throws a ZodError naming the field. */
-export function parseManifest(raw: unknown): QsmManifest {
-  return manifestSchema.parse(raw);
+/** A qsm.json that does not have the shape the parser and the generators read. */
+export class ManifestError extends Error {}
+
+/** Checks every field of a parsed qsm.json and returns it typed; throws a ManifestError naming
+ * the file and the first field that is wrong. */
+export function parseManifest(raw: unknown, file = "qsm.json"): QsmManifest {
+  const result = manifestSchema.safeParse(raw);
+  if (result.success) {
+    return result.data;
+  }
+  const [issue] = result.error.issues;
+  const field = issue === undefined || issue.path.length === 0 ? "(root)" : issue.path.join(".");
+  throw new ManifestError(`${file}: ${field}: ${issue?.message ?? "invalid"}`);
 }
 
 export function loadManifest(pluginRoot: string): QsmManifest {
-  const raw: unknown = JSON.parse(readFileSync(resolve(pluginRoot, "qsm.json"), "utf8"));
-  return parseManifest(raw);
+  const file = resolve(pluginRoot, "qsm.json");
+  const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+  return parseManifest(raw, file);
 }
 
 /** The declaration of a verb that matchVerb or verbsOf already named; a missing one is a defect. */

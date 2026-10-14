@@ -1,5 +1,5 @@
 // The one argument parser for every qsm binary.
-import { exitOf, fail, type Outcome, renderJson, renderText } from "./outcome.ts";
+import { exitOf, fail, type Outcome, renderJson, renderText, UsageError } from "./outcome.ts";
 import {
   type CommandArg,
   type CommandDecl,
@@ -32,6 +32,68 @@ export type ParseResult =
   /** `help` names the verb whose help was asked for, or "bin" */
   | { readonly ok: false; readonly help: string; readonly message: "" }
   | { readonly ok: false; readonly message: string; readonly verb?: string };
+
+// A call's args are a union of every argument type. qsm.json declares each verb's arguments and
+// parseCall has already refused a missing required one and coerced every value to its declared
+// type, so a handler reads through the accessors below. A required one that is absent is a
+// UsageError; a value of another type than the accessor asks for is a defect in the manifest or
+// the handler and throws a plain Error.
+function typeError(call: Call, name: string, wanted: string): Error {
+  return new Error(`${call.verb}: argument ${name} is not ${wanted}`);
+}
+
+export function optionalString(call: Call, name: string): string | undefined {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "string") {
+    return value;
+  }
+  throw typeError(call, name, "a string");
+}
+
+export function requiredString(call: Call, name: string): string {
+  const value = optionalString(call, name);
+  if (value === undefined) {
+    throw new UsageError(`${call.verb}: missing required argument ${name}`);
+  }
+  return value;
+}
+
+export function optionalNumber(call: Call, name: string): number | undefined {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "number") {
+    return value;
+  }
+  throw typeError(call, name, "a number");
+}
+
+export function requiredNumber(call: Call, name: string): number {
+  const value = optionalNumber(call, name);
+  if (value === undefined) {
+    throw new UsageError(`${call.verb}: missing required argument ${name}`);
+  }
+  return value;
+}
+
+/** A boolean flag: true when it was given, false when not. */
+export function flagArg(call: Call, name: string): boolean {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "boolean") {
+    return value === true;
+  }
+  throw typeError(call, name, "a boolean");
+}
+
+/** A repeatable argument; none given is an empty list. */
+export function stringList(call: Call, name: string): string[] {
+  const value = call.args[name];
+  if (value === undefined) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  throw typeError(call, name, "a list");
+}
 
 function label(arg: CommandArg): string {
   return arg.positional === true ? arg.name : `--${toKebab(arg.name)}`;
@@ -393,7 +455,8 @@ async function callHandler(handler: Handler, call: Call): Promise<Outcome> {
   try {
     return await handler(call);
   } catch (e) {
-    return fail("failed", e instanceof Error ? e.message : String(e));
+    const message = e instanceof Error ? e.message : String(e);
+    return fail(e instanceof UsageError ? "usage" : "failed", message);
   }
 }
 

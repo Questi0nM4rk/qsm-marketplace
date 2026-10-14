@@ -17,17 +17,17 @@
 // instead of silently leaving the workspace behind.
 
 import { readHookEvent } from "../../../lib/hooks-kit.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 import { nodeRunner } from "../lib/node-io.ts";
 import { removeWorkspace, WtError } from "../lib/wt.ts";
 
-interface WorktreeRemoveEvent {
-  readonly worktree_path?: unknown;
-  readonly cwd?: unknown;
-}
-
 function eventOf(): { readonly worktreePath: string; readonly cwd: string } {
-  const event = readHookEvent<WorktreeRemoveEvent>();
-  if (typeof event?.worktree_path !== "string" || typeof event.cwd !== "string") {
+  const event = readHookEvent();
+  if (
+    !isRecord(event) ||
+    typeof event.worktree_path !== "string" ||
+    typeof event.cwd !== "string"
+  ) {
     throw new Error("missing worktree_path or cwd on stdin");
   }
   return { worktreePath: event.worktree_path, cwd: event.cwd };
