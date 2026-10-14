@@ -30,8 +30,6 @@ import {
   wtVersion,
 } from "./wt.ts";
 
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest.
 async function rejection(promise: Promise<unknown>): Promise<Error | undefined> {
   try {
     await promise;
@@ -41,6 +39,8 @@ async function rejection(promise: Promise<unknown>): Promise<Error | undefined> 
   return undefined;
 }
 
+// Every sandbox this file makes is removed after the test that made it,
+// passing or failing: a `finally` inside one test would leave the rest.
 const sandboxes: string[] = [];
 
 function sandbox(): string {

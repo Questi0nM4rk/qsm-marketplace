@@ -6,9 +6,9 @@
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import { type Call, flagArg, type Handler, optionalString, runCli } from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { cacheDir } from "../lib/cache.ts";
 import { gitState } from "../lib/git.ts";
 import {
@@ -23,7 +23,7 @@ import { render } from "../lib/render.ts";
 import { describe, readStatusLine, STATUS_LINE_ENTRY, settingsPath } from "../lib/settings.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 
 /** How long a cached git state is served before a refresh is started behind
  * the frame. Counters this stale are invisible; a render that waits is not. */
@@ -85,7 +85,7 @@ function readStdin(): string {
 const renderVerb: Handler = (call: Call): Outcome => {
   const snapshot = parsePayload(readStdin());
   const nowMs = Date.now();
-  const cwd = (call.args.cwd as string | undefined) ?? snapshot.cwd ?? process.cwd();
+  const cwd = optionalString(call, "cwd") ?? snapshot.cwd ?? process.cwd();
   const dir = cacheDir(process.env);
   const git = resolveGit(dir, cwd, nowMs, GIT_MAX_AGE_MS);
   if (git.stale) {
@@ -97,14 +97,14 @@ const renderVerb: Handler = (call: Call): Outcome => {
     now: Math.floor(nowMs / MILLIS_PER_SECOND),
     // --json is read by a program, and escape sequences in a JSON payload are
     // every consumer's to strip.
-    color: call.args.noColor !== true && !call.json,
+    color: !flagArg(call, "noColor") && !call.json,
   });
   return ok({ lines }, lines.join("\n"));
 };
 
 /** The background half of the render. */
 const refreshVerb: Handler = (call: Call): Outcome => {
-  const cwd = (call.args.cwd as string | undefined) ?? process.cwd();
+  const cwd = optionalString(call, "cwd") ?? process.cwd();
   const dir = cacheDir(process.env);
   const name = gitCacheName(cwd);
   const state = gitState(cwd);
@@ -125,7 +125,7 @@ function onPath(): boolean {
 /** doctor is `missing` when the binary the status line runs is not on PATH; an unwired
  * settings entry is only reported, so a status line nobody has wired yet never fails. */
 const doctorVerb: Handler = (call: Call): Outcome => {
-  const path = (call.args.settings as string | undefined) ?? settingsPath(process.env);
+  const path = optionalString(call, "settings") ?? settingsPath(process.env);
   const state = readStatusLine(path);
   const binary = onPath();
   const lines = [`settings: ${path}`, `state: ${describe(state)}`];

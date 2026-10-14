@@ -2,9 +2,16 @@
 
 // qsm-uix: the capture kit the audit skills measure with.
 
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  type Handler,
+  optionalNumber,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { accessibilityTree, busFinding, renderTree } from "../lib/atspi.ts";
 import {
   burst,
@@ -19,20 +26,8 @@ import { UPSTREAM } from "../lib/doctor.ts";
 import { CaptureError } from "../lib/errors.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson);
 const DEFAULT_DEPTH = 32;
-
-function str(call: Call, name: string): string {
-  return call.args[name] as string;
-}
-
-function optionalStr(call: Call, name: string): string | undefined {
-  return call.args[name] as string | undefined;
-}
-
-function num(call: Call, name: string): number | undefined {
-  return call.args[name] as number | undefined;
-}
 
 type Say<R> = (result: R) => string;
 
@@ -70,55 +65,66 @@ if (import.meta.main) {
     await runCli(manifest, "qsm-uix", {
       screenshot: captured(
         (call) =>
-          screenshot({ output: optionalStr(call, "output"), out: optionalStr(call, "out") }),
+          screenshot({ output: optionalString(call, "output"), out: optionalString(call, "out") }),
         ["output", "file"],
       ),
       crop: captured(
         (call) =>
           crop({
-            input: str(call, "input"),
-            rect: str(call, "rect"),
-            zoom: num(call, "zoom"),
-            out: optionalStr(call, "out"),
+            input: requiredString(call, "input"),
+            rect: requiredString(call, "rect"),
+            zoom: optionalNumber(call, "zoom"),
+            out: optionalString(call, "out"),
           }),
         ["file", "zoom"],
       ),
       diff: captured(
-        (call) => diff({ a: str(call, "a"), b: str(call, "b"), out: optionalStr(call, "out") }),
+        (call) =>
+          diff({
+            a: requiredString(call, "a"),
+            b: requiredString(call, "b"),
+            out: optionalString(call, "out"),
+          }),
         ["distortion", "identical", "diffImage"],
       ),
       burst: captured(
         (call) =>
           burst({
-            count: num(call, "count"),
-            interval: num(call, "interval"),
-            outDir: str(call, "outDir"),
-            output: optionalStr(call, "output"),
+            count: optionalNumber(call, "count"),
+            interval: optionalNumber(call, "interval"),
+            outDir: requiredString(call, "outDir"),
+            output: optionalString(call, "output"),
           }),
         ["output", "frames"],
       ),
       "pixel-sample": captured(
-        (call) => pixelSample({ image: str(call, "image"), at: str(call, "at") }),
+        (call) =>
+          pixelSample({ image: requiredString(call, "image"), at: requiredString(call, "at") }),
         ["hex", "r", "g", "b"],
       ),
       contrast: captured(
-        (call) => contrast({ image: str(call, "image"), fg: str(call, "fg"), bg: str(call, "bg") }),
+        (call) =>
+          contrast({
+            image: requiredString(call, "image"),
+            fg: requiredString(call, "fg"),
+            bg: requiredString(call, "bg"),
+          }),
         ["ratio", "wcagAaText", "wcagAaLargeOrUi"],
       ),
       "region-stats": captured(
         (call) =>
           regionStats({
-            image: str(call, "image"),
-            rect: str(call, "rect"),
-            top: num(call, "top"),
+            image: requiredString(call, "image"),
+            rect: requiredString(call, "rect"),
+            top: optionalNumber(call, "top"),
           }),
         ["pixels", "uniqueColors", "meanLuminance", "palette"],
       ),
       "a11y-tree": captured(
         (call) => {
           const tree = accessibilityTree(
-            optionalStr(call, "app"),
-            num(call, "depth") ?? DEFAULT_DEPTH,
+            optionalString(call, "app"),
+            optionalNumber(call, "depth") ?? DEFAULT_DEPTH,
           );
           return { action: "a11y-tree", tree };
         },

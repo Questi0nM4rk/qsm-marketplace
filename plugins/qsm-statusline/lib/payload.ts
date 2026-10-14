@@ -1,5 +1,7 @@
 // The status-line payload is another program's JSON, arriving on stdin once per frame.
 
+import { isRecord } from "../../../lib/outcome.ts";
+
 export interface RateLimit {
   readonly percent: number;
   /** Epoch seconds, or null when the payload carried no usable stamp. */
@@ -21,10 +23,6 @@ export const DEFAULT_CONTEXT_SIZE = 200_000;
 
 const MILLIS_PER_SECOND = 1000;
 const NUMERIC = /^-?\d+(\.\d+)?$/;
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function at(value: unknown, ...path: string[]): unknown {
   let here: unknown = value;

@@ -3,9 +3,8 @@
 // The GitLab half of qsm-forge: a merge request's review threads as one call each ("qsm-forge gl
 // <verb>").
 
-import type { Call, Handler } from "../../../lib/cli-base.ts";
+import { type Call, type Handler, optionalString, requiredNumber } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { numberArg, textArg } from "../lib/args.ts";
 import { UsageError } from "../lib/errors.ts";
 import { runCommand } from "../lib/exec.ts";
 import { type GitlabForge, gitlabForge, replyToThread, resolveThread } from "../lib/gitlab.ts";
@@ -28,7 +27,7 @@ function said(value: unknown, lines: readonly string[]): Outcome {
 }
 
 function mr(call: Call): number {
-  return numberArg(call, "mr");
+  return requiredNumber(call, "mr");
 }
 
 async function readStdin(): Promise<string> {
@@ -83,11 +82,11 @@ async function threads({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function reply({ forge, at, call }: At): Promise<Outcome> {
-  const message = textArg(call, "message") ?? "";
+  const message = optionalString(call, "message") ?? "";
   if (message.trim().length === 0) {
     return fail("usage", "reply requires --message; nothing was posted");
   }
-  const outcome = await replyToThread(forge, mr(call), numberArg(call, "noteId"), message);
+  const outcome = await replyToThread(forge, mr(call), requiredNumber(call, "noteId"), message);
   return said({ thread: outcome.thread.id, replied: true, resolved: outcome.resolved }, [
     `replied on ${at} ${place(outcome.thread.path, outcome.thread.line)}`,
     "thread left open; resolve it with qsm-forge gl resolve",
@@ -98,8 +97,8 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
   const outcome = await resolveThread(
     forge,
     mr(call),
-    numberArg(call, "noteId"),
-    textArg(call, "message"),
+    requiredNumber(call, "noteId"),
+    optionalString(call, "message") ?? null,
   );
   const where = place(outcome.thread.path, outcome.thread.line);
   return said(
@@ -117,8 +116,8 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function submitReview({ forge, at, call }: At): Promise<Outcome> {
-  const file = textArg(call, "file");
-  const raw = file === null ? await readStdin() : readPayloadFile(file);
+  const file = optionalString(call, "file");
+  const raw = file === undefined ? await readStdin() : readPayloadFile(file);
   const payload = parseReviewPayload(raw);
   const submitted = await forge.submitReview(mr(call), payload);
   return said(submitted, [
@@ -134,7 +133,7 @@ function handler(verb: Verb): Handler {
     try {
       const project: GitlabProject = await resolveGitlabProject(
         runCommand,
-        textArg(call, "project"),
+        optionalString(call, "project") ?? null,
       );
       const at = `${project.path}!${String(mr(call))}`;
       return await verb({ forge: gitlabForge(runCommand, project), at, call });

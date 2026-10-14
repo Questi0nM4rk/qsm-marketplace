@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 /** Only the runtime itself: the notebook binary is never on it. */
@@ -49,6 +50,29 @@ function run(argv: readonly string[], env: Record<string, string> = {}) {
   return { exit: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
+/** The --json envelope as a record; anything else is a defect in the CLI. */
+function envelopeOf(stdout: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(stdout);
+  if (!isRecord(parsed)) {
+    throw new Error(`stdout is not a JSON envelope: ${stdout}`);
+  }
+  return parsed;
+}
+
+/** The envelope's data member as a record. */
+function dataOf(stdout: string): Record<string, unknown> {
+  const data = envelopeOf(stdout).data;
+  if (!isRecord(data)) {
+    throw new Error(`the envelope has no data record: ${stdout}`);
+  }
+  return data;
+}
+
+/** The strings of a list member; absent, or not a list, is an empty list. */
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+}
+
 describe("qsm-knowledge", () => {
   test("--help lists both verbs", () => {
     const r = run(["--help"]);
@@ -79,26 +103,23 @@ describe("qsm-knowledge", () => {
   test("a note with an error is failed, exit 1", () => {
     const r = run(["validate", note(GOOD.replace("type: concept", "type: journal")), "--json"]);
     expect(r.exit).toBe(1);
-    const envelope: unknown = JSON.parse(r.stdout);
-    expect(envelope).toMatchObject({ code: "failed" });
-    expect(envelope).not.toMatchObject({ data: { errors: [] } });
+    expect(envelopeOf(r.stdout)).toMatchObject({ code: "failed" });
+    expect(stringsOf(dataOf(r.stdout).errors).length).toBeGreaterThan(0);
   });
 
   test("a note whose only finding is a warning stays ok and carries it", () => {
     const body = GOOD.replace("See [[branch-by-abstraction]].", "Nothing links out.");
     const r = run(["validate", note(body), "--json"]);
     expect(r.exit).toBe(0);
-    const envelope: unknown = JSON.parse(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope).toMatchObject({ code: "ok" });
-    expect(envelope).not.toMatchObject({ warnings: [] });
-    expect(r.stdout).toContain("[[wikilink]]");
+    expect(stringsOf(envelope.warnings).join(" ")).toContain("[[wikilink]]");
   });
 
   test("doctor with the notebook binary off PATH is missing, exit 4", () => {
     const r = run(["doctor", "--json"], { PATH: BARE_PATH });
     expect(r.exit).toBe(4);
-    const envelope: unknown = JSON.parse(r.stdout);
-    expect(envelope).toMatchObject({ code: "missing" });
-    expect(envelope).not.toMatchObject({ data: { findings: [] } });
+    expect(envelopeOf(r.stdout)).toMatchObject({ code: "missing" });
+    expect(stringsOf(dataOf(r.stdout).findings).length).toBeGreaterThan(0);
   });
 });

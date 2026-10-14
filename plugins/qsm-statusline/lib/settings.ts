@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isRecord } from "./payload.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 /** What the settings entry has to run. */
 export const STATUS_LINE_COMMAND = "qsm-statusline render";

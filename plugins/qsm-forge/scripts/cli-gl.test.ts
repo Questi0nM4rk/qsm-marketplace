@@ -7,7 +7,8 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseJson } from "../lib/exec.ts";
-import { isNumber, isRecord, isString, objectOf, orNull } from "../lib/shape.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 

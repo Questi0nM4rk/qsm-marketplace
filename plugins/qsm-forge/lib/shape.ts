@@ -1,11 +1,9 @@
 // Forge answers arrive as JSON of unknown shape. A guard checks the fields the code reads and
 // narrows the value to the interface that names them, so no caller casts.
 
-export type Guard<T> = (value: unknown) => value is T;
+import { isRecord } from "../../../lib/outcome.ts";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export type Guard<T> = (value: unknown) => value is T;
 
 export const isString: Guard<string> = (value): value is string => typeof value === "string";
 export const isNumber: Guard<number> = (value): value is number => typeof value === "number";

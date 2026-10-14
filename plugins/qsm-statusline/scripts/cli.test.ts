@@ -8,6 +8,7 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 import { writeCache } from "../lib/cache.ts";
 import { gitCacheName } from "../lib/gitcache.ts";
 
@@ -101,7 +102,8 @@ describe("render", () => {
     expect(result.stdout).not.toContain(ESCAPE);
     const envelope: unknown = JSON.parse(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(result.stdout).toContain("git main: clean");
+    const lines = isRecord(envelope) && isRecord(envelope.data) ? envelope.data.lines : undefined;
+    expect(Array.isArray(lines) ? String(lines[1]) : "").toContain("git main: clean");
   });
 });
 

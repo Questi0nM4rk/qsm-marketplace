@@ -3,7 +3,7 @@
 
 import { cacheKey, isFresh, readCache, releaseLock, tryLock, writeCache } from "./cache.ts";
 import type { GitState } from "./git.ts";
-import { isRecord } from "./payload.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface GitResolution {
   /**
