@@ -29,7 +29,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
-  "env": { "node": true, "es2024": true },
+  "env": { "node": true, "es2026": true },
   "categories": {
     "correctness": "error",
     "suspicious": "error",

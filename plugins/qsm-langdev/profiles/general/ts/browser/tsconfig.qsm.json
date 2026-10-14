@@ -22,6 +22,6 @@
     "noUncheckedSideEffectImports": true,
     "strictBuiltinIteratorReturn": true,
     "useUnknownInCatchVariables": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2024", "DOM", "DOM.Iterable"]
   }
 }

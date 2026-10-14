@@ -1,71 +1,146 @@
 // qsm.json, the one source of truth for a plugin's binaries and their verbs.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { z } from "zod";
+import { isRecord } from "./outcome.ts";
 
-const commandArgSchema = z
-  .object({
-    /** camelCase; a flag is `--kebab-case` on the command line */
-    name: z.string(),
-    type: z.enum(["string", "number", "boolean"]),
-    positional: z.literal(true).exactOptional(),
-    required: z.literal(true).exactOptional(),
-    /** every occurrence is collected into a list (a flag or a positional) */
-    repeatable: z.literal(true).exactOptional(),
-    /** the only values accepted */
-    choices: z.array(z.string()).readonly().exactOptional(),
-    description: z.string(),
-  })
-  .readonly();
+export interface CommandArg {
+  /** camelCase; a flag is `--kebab-case` on the command line */
+  readonly name: string;
+  readonly type: "string" | "number" | "boolean";
+  readonly positional?: true;
+  readonly required?: true;
+  /** every occurrence is collected into a list (a flag or a positional) */
+  readonly repeatable?: true;
+  /** the only values accepted */
+  readonly choices?: readonly string[];
+  readonly description: string;
+}
 
-const commandDeclSchema = z
-  .object({
-    description: z.string(),
-    args: z.array(commandArgSchema).readonly().exactOptional(),
-    /** everything after `--` reaches the handler untouched */
-    passthrough: z.literal(true).exactOptional(),
-    /**
-     * the verb is reached from a shell only, never as a noun method: it carries a value or a
-     * stream that has no JSON form.
-     */
-    noNoun: z.literal(true).exactOptional(),
-  })
-  .readonly();
+export interface CommandDecl {
+  readonly description: string;
+  readonly args?: readonly CommandArg[];
+  /** everything after `--` reaches the handler untouched */
+  readonly passthrough?: true;
+  /**
+   * the verb is reached from a shell only, never as a noun method: it carries a value or a
+   * stream that has no JSON form.
+   */
+  readonly noNoun?: true;
+}
 
-const manifestSchema = z
-  .object({
-    name: z.string().exactOptional(),
-    qsm: z
-      .object({
-        /** bin name -> entry script, relative to the plugin root */
-        bin: z.record(z.string(), z.string()).readonly().exactOptional(),
-        noun: z.string().exactOptional(),
-        /** a shell command that reports whether the plugin's upstream tools are present */
-        doctor: z.string().exactOptional(),
-        /** "<bin> <verb>" -> its declaration */
-        commands: z.record(z.string(), commandDeclSchema).readonly(),
-      })
-      .readonly(),
-  })
-  .readonly();
-
-export type CommandArg = z.infer<typeof commandArgSchema>;
-export type CommandDecl = z.infer<typeof commandDeclSchema>;
-export type QsmManifest = z.infer<typeof manifestSchema>;
+export interface QsmManifest {
+  readonly name?: string;
+  readonly qsm: {
+    /** bin name -> entry script, relative to the plugin root */
+    readonly bin?: Readonly<Record<string, string>>;
+    readonly noun?: string;
+    /** a shell command that reports whether the plugin's upstream tools are present */
+    readonly doctor?: string;
+    /** "<bin> <verb>" -> its declaration */
+    readonly commands: Readonly<Record<string, CommandDecl>>;
+  };
+}
 
 /** A qsm.json that does not have the shape the parser and the generators read. */
 export class ManifestError extends Error {}
 
+/** Where a reader stands in one qsm.json: the file and the dotted field. */
+interface At {
+  readonly file: string;
+  readonly field: string;
+}
+
+const at = (parent: At, key: string | number): At => ({
+  file: parent.file,
+  field: parent.field === "" ? String(key) : `${parent.field}.${key}`,
+});
+
+function fail(where: At, expected: string): never {
+  throw new ManifestError(`${where.file}: ${where.field || "(root)"}: expected ${expected}`);
+}
+
+function readRecord(v: unknown, where: At): Record<string, unknown> {
+  return isRecord(v) ? v : fail(where, "an object");
+}
+
+function readString(v: unknown, where: At): string {
+  return typeof v === "string" ? v : fail(where, "a string");
+}
+
+function readOptString(v: unknown, where: At): string | undefined {
+  return v === undefined ? undefined : readString(v, where);
+}
+
+function readOptTrue(v: unknown, where: At): true | undefined {
+  return v === undefined || v === true ? v : fail(where, "true or absent");
+}
+
+function readList(v: unknown, where: At): unknown[] | undefined {
+  return v === undefined || Array.isArray(v) ? v : fail(where, "a list");
+}
+
+function readArg(v: unknown, where: At): CommandArg {
+  const r = readRecord(v, where);
+  const type = r["type"];
+  if (type !== "string" && type !== "number" && type !== "boolean") {
+    return fail(at(where, "type"), '"string", "number" or "boolean"');
+  }
+  const positional = readOptTrue(r["positional"], at(where, "positional"));
+  const required = readOptTrue(r["required"], at(where, "required"));
+  const repeatable = readOptTrue(r["repeatable"], at(where, "repeatable"));
+  const choices = readList(r["choices"], at(where, "choices"));
+  return {
+    name: readString(r["name"], at(where, "name")),
+    type,
+    ...(positional && { positional }),
+    ...(required && { required }),
+    ...(repeatable && { repeatable }),
+    ...(choices && {
+      choices: choices.map((c, i) => readString(c, at(at(where, "choices"), i))),
+    }),
+    description: readString(r["description"], at(where, "description")),
+  };
+}
+
+function readDecl(v: unknown, where: At): CommandDecl {
+  const r = readRecord(v, where);
+  const args = readList(r["args"], at(where, "args"));
+  const passthrough = readOptTrue(r["passthrough"], at(where, "passthrough"));
+  const noNoun = readOptTrue(r["noNoun"], at(where, "noNoun"));
+  return {
+    description: readString(r["description"], at(where, "description")),
+    ...(args && { args: args.map((a, i) => readArg(a, at(at(where, "args"), i))) }),
+    ...(passthrough && { passthrough }),
+    ...(noNoun && { noNoun }),
+  };
+}
+
+function readBin(v: unknown, where: At): Record<string, string> {
+  const r = readRecord(v, where);
+  return Object.fromEntries(Object.entries(r).map(([k, x]) => [k, readString(x, at(where, k))]));
+}
+
 /** Checks every field of a parsed qsm.json and returns it typed; throws a ManifestError naming
  * the file and the first field that is wrong. */
 export function parseManifest(raw: unknown, file = "qsm.json"): QsmManifest {
-  const result = manifestSchema.safeParse(raw);
-  if (result.success) {
-    return result.data;
-  }
-  const [issue] = result.error.issues;
-  const field = issue === undefined || issue.path.length === 0 ? "(root)" : issue.path.join(".");
-  throw new ManifestError(`${file}: ${field}: ${issue?.message ?? "invalid"}`);
+  const root = readRecord(raw, { file, field: "" });
+  const where = at({ file, field: "" }, "qsm");
+  const qsm = readRecord(root["qsm"], where);
+  const commands = readRecord(qsm["commands"], at(where, "commands"));
+  const name = readOptString(root["name"], { file, field: "name" });
+  const noun = readOptString(qsm["noun"], at(where, "noun"));
+  const doctor = readOptString(qsm["doctor"], at(where, "doctor"));
+  return {
+    ...(name !== undefined && { name }),
+    qsm: {
+      ...(qsm["bin"] !== undefined && { bin: readBin(qsm["bin"], at(where, "bin")) }),
+      ...(noun !== undefined && { noun }),
+      ...(doctor !== undefined && { doctor }),
+      commands: Object.fromEntries(
+        Object.entries(commands).map(([k, d]) => [k, readDecl(d, at(at(where, "commands"), k))]),
+      ),
+    },
+  };
 }
 
 export function loadManifest(pluginRoot: string): QsmManifest {

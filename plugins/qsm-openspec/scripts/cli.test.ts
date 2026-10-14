@@ -6,7 +6,6 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { z } from "zod";
 
 const CLI = join(import.meta.dir, "cli.ts");
 
@@ -50,7 +49,8 @@ describe("verbs", () => {
     const root = sandbox();
     const answer = run(root, "doctor", "--root", root, "--json");
     expect(answer.status).toBe(0);
-    expect(z.object({ code: z.string() }).parse(JSON.parse(answer.stdout)).code).toBe("ok");
+    const envelope: unknown = JSON.parse(answer.stdout);
+    expect(envelope).toMatchObject({ code: "ok" });
   });
 
   test("a --root that is not there is missing, exit 4", () => {

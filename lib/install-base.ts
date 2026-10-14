@@ -13,7 +13,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { z } from "zod";
 import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
   cliMain,
@@ -22,6 +21,7 @@ import {
   type InstallStatus,
   type Step,
 } from "./install-contract.ts";
+import { isRecord } from "./outcome.ts";
 import { binDir, buildRecordPath, type Env, fishCompletionDir } from "./paths.ts";
 import { loadManifest, type QsmManifest } from "./qsm-manifest.ts";
 
@@ -86,11 +86,19 @@ export function sha256(path: string): string {
 }
 
 /** What the bin farm last compiled, read by `qsm-setup doctor` and `relink`. */
-const buildRecordSchema = z.object({
-  bins: z.record(z.string(), z.object({ plugin: z.string(), sha256: z.string() })).readonly(),
-});
+export interface BuildRecord {
+  readonly bins: Readonly<Record<string, { readonly plugin: string; readonly sha256: string }>>;
+}
 
-export type BuildRecord = z.infer<typeof buildRecordSchema>;
+function isBuildRecord(v: unknown): v is BuildRecord {
+  return (
+    isRecord(v) &&
+    isRecord(v["bins"]) &&
+    Object.values(v["bins"]).every(
+      (b) => isRecord(b) && typeof b["plugin"] === "string" && typeof b["sha256"] === "string",
+    )
+  );
+}
 
 export function readRecord(path: string): BuildRecord | null {
   if (!existsSync(path)) {
@@ -98,7 +106,7 @@ export function readRecord(path: string): BuildRecord | null {
   }
   try {
     const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
-    return buildRecordSchema.parse(raw);
+    return isBuildRecord(raw) ? raw : null;
   } catch {
     return null;
   }

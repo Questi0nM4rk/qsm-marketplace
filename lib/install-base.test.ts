@@ -13,10 +13,10 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { z } from "zod";
 import { MARKER } from "./completions.ts";
 import { installBase, installScript } from "./install-base.ts";
 import type { InstallContext, InstallResult } from "./install-contract.ts";
+import { isRecord } from "./outcome.ts";
 
 const FIXTURE = resolve(import.meta.dir, "fixtures/plugin-fixture");
 
@@ -57,14 +57,19 @@ function fake(
   return { ctx, runs, home };
 }
 
-const installEnvelope = z.object({
-  data: z.object({ steps: z.array(z.object({ name: z.string(), status: z.string() })) }),
-});
-
 /** The steps of an install --json envelope; a stdout of any other shape throws. */
-function stepsOf(stdout: string) {
+function stepsOf(stdout: string): { name: string; status: string }[] {
   const envelope: unknown = JSON.parse(stdout);
-  return installEnvelope.parse(envelope).data.steps;
+  const steps = isRecord(envelope) && isRecord(envelope["data"]) ? envelope["data"]["steps"] : null;
+  if (!Array.isArray(steps)) {
+    throw new TypeError(`not an install envelope: ${stdout}`);
+  }
+  return steps.map((s: unknown) => {
+    if (!isRecord(s) || typeof s["name"] !== "string" || typeof s["status"] !== "string") {
+      throw new TypeError(`not an install step: ${JSON.stringify(s)}`);
+    }
+    return { name: s["name"], status: s["status"] };
+  });
 }
 
 function step(r: InstallResult, name: string) {
