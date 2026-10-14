@@ -9,6 +9,8 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parseJson } from "../lib/exec.ts";
+import { isNumber, isRecord, isString, objectOf, orNull } from "../lib/shape.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -99,12 +101,20 @@ function cli(args: readonly string[], env: Record<string, string> = {}): Run {
   return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 }
 
-function envelope(run: Run): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(run.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
-  };
+interface Envelope {
+  readonly code: string;
+  readonly exit: number;
+  readonly data: Record<string, unknown> | null;
+}
+
+const isEnvelope = objectOf<Envelope>({ code: isString, exit: isNumber, data: orNull(isRecord) });
+
+function envelope(run: Run): Envelope {
+  const parsed = parseJson(run.stdout, "qsm-forge");
+  if (!isEnvelope(parsed)) {
+    throw new Error(`not an envelope: ${run.stdout}`);
+  }
+  return parsed;
 }
 
 describe("qsm-forge gh through the shared base", () => {

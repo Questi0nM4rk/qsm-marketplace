@@ -11,7 +11,9 @@ import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { install } from "./install.ts";
 
 const sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-install-"));
-afterAll(() => rmSync(sandbox, { recursive: true, force: true }));
+afterAll(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
 
 function context(present: readonly string[], dryRun = false): InstallContext {
   return {

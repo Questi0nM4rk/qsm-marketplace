@@ -5,6 +5,7 @@
 
 import type { Call, Handler } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { numberArg, textArg } from "../lib/args.ts";
 import { UsageError } from "../lib/errors.ts";
 import { runCommand } from "../lib/exec.ts";
 import {
@@ -38,15 +39,11 @@ function said(value: unknown, lines: readonly string[]): Outcome {
 }
 
 function pr(call: Call): number {
-  return call.args.pr as number;
-}
-
-function text(call: Call, name: string): string | null {
-  return (call.args[name] as string | undefined) ?? null;
+  return numberArg(call, "pr");
 }
 
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     return "";
   }
   const chunks: Buffer[] = [];
@@ -141,7 +138,7 @@ async function comments({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function reply({ forge, at, call }: At): Promise<Outcome> {
-  const message = text(call, "message") ?? "";
+  const message = textArg(call, "message") ?? "";
   // A reply with nothing to say is the one call this wrapper will not make:
   // it would resolve a thread with an empty note under the person's name.
   if (message.trim().length === 0) {
@@ -149,7 +146,7 @@ async function reply({ forge, at, call }: At): Promise<Outcome> {
   }
   const outcome = await replyToThread(forge, {
     pr: pr(call),
-    commentId: call.args.commentId as number,
+    commentId: numberArg(call, "commentId"),
     message,
     keepOpen: call.args.noResolve === true,
   });
@@ -163,8 +160,8 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
   const outcome = await resolveThread(
     forge,
     pr(call),
-    call.args.commentId as number,
-    text(call, "message"),
+    numberArg(call, "commentId"),
+    textArg(call, "message"),
   );
   const where = place(outcome.thread.path, outcome.thread.line);
   return said(
@@ -182,7 +179,7 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function resolveAll({ forge, at, call }: At): Promise<Outcome> {
-  const outcome = await resolveAllThreads(forge, pr(call), text(call, "message"));
+  const outcome = await resolveAllThreads(forge, pr(call), textArg(call, "message"));
   const open = outcome.resolved.length + outcome.left.length;
   const where = (threadsIn: typeof outcome.resolved) =>
     threadsIn.map((thread) => `  ${place(thread.path, thread.line)}`);
@@ -207,8 +204,8 @@ async function dismissReviews({ forge, at, call }: At): Promise<Outcome> {
   const outcome = await dismissStaleReviews(
     forge,
     pr(call),
-    text(call, "author"),
-    text(call, "message"),
+    textArg(call, "author"),
+    textArg(call, "message"),
   );
   if (outcome.dismissed.length === 0) {
     return said(outcome, [`nothing to dismiss on ${at}`]);
@@ -220,7 +217,7 @@ async function dismissReviews({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function submitReview({ forge, at, call }: At): Promise<Outcome> {
-  const file = text(call, "file");
+  const file = textArg(call, "file");
   const raw = file === null ? await readStdin() : readPayloadFile(file);
   const payload = parseReviewPayload(raw);
   const submitted = await forge.submitReview(pr(call), payload);
@@ -237,7 +234,7 @@ type Verb = (at: At) => Promise<Outcome>;
 function handler(verb: Verb): Handler {
   return async (call) => {
     try {
-      const repo: GithubRepo = await resolveGithubRepo(runCommand, text(call, "repo"));
+      const repo: GithubRepo = await resolveGithubRepo(runCommand, textArg(call, "repo"));
       const at = `${repo.owner}/${repo.repo}#${String(pr(call))}`;
       return await verb({ forge: githubForge(runCommand, repo), at, call });
     } catch (error) {

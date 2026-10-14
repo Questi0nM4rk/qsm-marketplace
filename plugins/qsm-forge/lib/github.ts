@@ -2,9 +2,19 @@
 // means (the mappers), and the forge that runs one and maps the other.
 
 import { UsageError } from "./errors.ts";
-import { parseJson, type Run } from "./exec.ts";
+import { parseAs, type Run } from "./exec.ts";
 import type { GithubRepo } from "./remote.ts";
 import type { ReviewPayload } from "./review-payload.ts";
+import {
+  arrayOf,
+  type Guard,
+  isBoolean,
+  isNumber,
+  isString,
+  objectOf,
+  orAbsent,
+  orNull,
+} from "./shape.ts";
 
 interface GhComment {
   readonly id: number;
@@ -106,11 +116,21 @@ interface GqlPullRequest {
   };
 }
 
-export interface GqlPullRequestResponse {
+/** The answer to one query. Each query asks for some of the pull request's fields, so a mapper
+ * names the ones it reads. */
+export interface GqlResponse<P> {
   readonly data: {
-    readonly repository: { readonly pullRequest: GqlPullRequest | null } | null;
+    readonly repository: { readonly pullRequest: P | null } | null;
   };
 }
+
+export type GqlPullRequestResponse = GqlResponse<GqlPullRequest>;
+type ThreadsPullRequest = Pick<GqlPullRequest, "reviewThreads">;
+type ReviewsPullRequest = Pick<GqlPullRequest, "reviews">;
+type StatusPullRequest = Pick<
+  GqlPullRequest,
+  "state" | "reviewDecision" | "mergeStateStatus" | "autoMergeRequest" | "commits"
+>;
 
 interface GqlResolveResponse {
   readonly data: {
@@ -123,6 +143,82 @@ interface RestReview {
   readonly html_url: string;
   readonly state: string;
 }
+
+interface Connection<N> {
+  readonly nodes: readonly N[];
+  readonly pageInfo: GqlPageInfo;
+}
+
+type GqlCommit = GqlPullRequest["commits"]["nodes"][number];
+type GqlRollup = NonNullable<GqlCommit["commit"]["statusCheckRollup"]>;
+
+const isLogin = orNull(objectOf<{ readonly login: string }>({ login: isString }));
+const isPageInfo = objectOf<GqlPageInfo>({ hasNextPage: isBoolean, endCursor: orNull(isString) });
+const isComment = objectOf<GqlComment>({
+  databaseId: isNumber,
+  body: isString,
+  author: isLogin,
+});
+const isThread = objectOf<GqlThread>({
+  id: isString,
+  isResolved: isBoolean,
+  path: isString,
+  line: orNull(isNumber),
+  comments: objectOf<GqlThread["comments"]>({ nodes: arrayOf(isComment) }),
+});
+const isReview = objectOf<GqlReview>({ databaseId: isNumber, author: isLogin, state: isString });
+const isCheck = objectOf<GqlCheck>({
+  name: orAbsent(isString),
+  status: orAbsent(isString),
+  conclusion: orAbsent(orNull(isString)),
+});
+const isCommit = objectOf<GqlCommit>({
+  commit: objectOf<GqlCommit["commit"]>({
+    statusCheckRollup: orNull(
+      objectOf<GqlRollup>({
+        contexts: objectOf<GqlRollup["contexts"]>({ nodes: arrayOf(isCheck) }),
+      }),
+    ),
+  }),
+});
+
+function connectionOf<N>(node: Guard<N>): Guard<Connection<N>> {
+  return objectOf<Connection<N>>({ nodes: arrayOf(node), pageInfo: isPageInfo });
+}
+
+function responseOf<P extends object>(pullRequest: Guard<P>): Guard<GqlResponse<P>> {
+  return objectOf<GqlResponse<P>>({
+    data: objectOf<GqlResponse<P>["data"]>({
+      repository: orNull(
+        objectOf<{ readonly pullRequest: P | null }>({ pullRequest: orNull(pullRequest) }),
+      ),
+    }),
+  });
+}
+
+const isThreadsResponse = responseOf(
+  objectOf<ThreadsPullRequest>({ reviewThreads: connectionOf(isThread) }),
+);
+const isReviewsResponse = responseOf(
+  objectOf<ReviewsPullRequest>({ reviews: connectionOf(isReview) }),
+);
+const isStatusResponse = responseOf(
+  objectOf<StatusPullRequest>({
+    state: isString,
+    reviewDecision: orNull(isString),
+    mergeStateStatus: isString,
+    autoMergeRequest: orNull(objectOf<{ readonly enabledAt: string }>({ enabledAt: isString })),
+    commits: objectOf<GqlPullRequest["commits"]>({ nodes: arrayOf(isCommit) }),
+  }),
+);
+const isResolveResponse = objectOf<GqlResolveResponse>({
+  data: objectOf<GqlResolveResponse["data"]>({
+    resolveReviewThread: objectOf<GqlResolveResponse["data"]["resolveReviewThread"]>({
+      thread: objectOf<{ readonly isResolved: boolean }>({ isResolved: isBoolean }),
+    }),
+  }),
+});
+const isRestReview = objectOf<RestReview>({ id: isNumber, html_url: isString, state: isString });
 
 const THREAD_FIELDS = `
         nodes {
@@ -249,11 +345,7 @@ export function submitReviewArgs(repo: GithubRepo, pr: number, payload: ReviewPa
   return args;
 }
 
-function pullRequestOf(
-  response: GqlPullRequestResponse,
-  repo: GithubRepo,
-  pr: number,
-): GqlPullRequest {
+function pullRequestOf<P>(response: GqlResponse<P>, repo: GithubRepo, pr: number): P {
   const found = response.data.repository?.pullRequest ?? null;
   if (found === null) {
     throw new Error(`no pull request #${String(pr)} in ${repo.owner}/${repo.repo}`);
@@ -280,7 +372,7 @@ function threadOf(node: GqlThread): GhThread {
 }
 
 export function mapThreads(
-  response: GqlPullRequestResponse,
+  response: GqlResponse<ThreadsPullRequest>,
   repo: GithubRepo,
   pr: number,
 ): readonly GhThread[] {
@@ -292,7 +384,7 @@ function after(pageInfo: GqlPageInfo): string | null {
 }
 
 function nextThreadCursor(
-  response: GqlPullRequestResponse,
+  response: GqlResponse<ThreadsPullRequest>,
   repo: GithubRepo,
   pr: number,
 ): string | null {
@@ -300,14 +392,14 @@ function nextThreadCursor(
 }
 
 function nextReviewCursor(
-  response: GqlPullRequestResponse,
+  response: GqlResponse<ReviewsPullRequest>,
   repo: GithubRepo,
   pr: number,
 ): string | null {
   return after(pullRequestOf(response, repo, pr).reviews.pageInfo);
 }
 
-function checksOf(pullRequest: GqlPullRequest): GhCheck[] {
+function checksOf(pullRequest: StatusPullRequest): GhCheck[] {
   const rollup = pullRequest.commits.nodes.at(-1)?.commit.statusCheckRollup ?? null;
   if (rollup === null) {
     return [];
@@ -326,7 +418,7 @@ function checksOf(pullRequest: GqlPullRequest): GhCheck[] {
  * the last page.
  */
 export function mapStatus(
-  response: GqlPullRequestResponse,
+  response: GqlResponse<StatusPullRequest>,
   repo: GithubRepo,
   pr: number,
   threads: readonly GhThread[],
@@ -343,7 +435,7 @@ export function mapStatus(
 }
 
 export function mapReviews(
-  response: GqlPullRequestResponse,
+  response: GqlResponse<ReviewsPullRequest>,
   repo: GithubRepo,
   pr: number,
 ): readonly GhReview[] {
@@ -401,33 +493,34 @@ async function everyPage<T>(
 }
 
 export function githubForge(run: Run, repo: GithubRepo): GithubForge {
-  const gh = async <T>(args: readonly string[], what: string): Promise<T> =>
-    parseJson<T>(await run("gh", args), what);
+  const gh = async <T>(args: readonly string[], what: string, guard: Guard<T>): Promise<T> =>
+    parseAs(await run("gh", args), what, guard);
 
-  const connection = (query: string, pr: number, cursor: string | null) => {
+  const connection = <T>(query: string, pr: number, cursor: string | null, guard: Guard<T>) => {
     const variables: Record<string, string | number> = { owner: repo.owner, repo: repo.repo, pr };
     if (cursor !== null) {
       variables.cursor = cursor;
     }
-    return gh<GqlPullRequestResponse>(graphqlArgs(query, variables), "gh api graphql");
+    return gh(graphqlArgs(query, variables), "gh api graphql", guard);
   };
 
   const threads = (pr: number): Promise<readonly GhThread[]> =>
     everyPage<GhThread>("threads", async (cursor) => {
-      const response = await connection(THREADS_QUERY, pr, cursor);
+      const response = await connection(THREADS_QUERY, pr, cursor, isThreadsResponse);
       return [mapThreads(response, repo, pr), nextThreadCursor(response, repo, pr)] as const;
     });
 
   const reviews = (pr: number): Promise<readonly GhReview[]> =>
     everyPage<GhReview>("reviews", async (cursor) => {
-      const response = await connection(REVIEWS_QUERY, pr, cursor);
+      const response = await connection(REVIEWS_QUERY, pr, cursor, isReviewsResponse);
       return [mapReviews(response, repo, pr), nextReviewCursor(response, repo, pr)] as const;
     });
 
   const statusResponse = (pr: number) =>
-    gh<GqlPullRequestResponse>(
+    gh(
       graphqlArgs(STATUS_QUERY, { owner: repo.owner, repo: repo.repo, pr }),
       "gh api graphql",
+      isStatusResponse,
     );
 
   return {
@@ -438,9 +531,10 @@ export function githubForge(run: Run, repo: GithubRepo): GithubForge {
       await run("gh", replyArgs(repo, pr, commentId, body));
     },
     resolve: async (threadId) => {
-      const response = await gh<GqlResolveResponse>(
+      const response = await gh(
         graphqlArgs(RESOLVE_MUTATION, { threadId }),
         "gh api graphql",
+        isResolveResponse,
       );
       return response.data.resolveReviewThread.thread.isResolved;
     },
@@ -449,7 +543,7 @@ export function githubForge(run: Run, repo: GithubRepo): GithubForge {
     },
     submitReview: async (pr, payload) =>
       mapSubmittedReview(
-        await gh<RestReview>(submitReviewArgs(repo, pr, payload), "gh api pulls reviews"),
+        await gh(submitReviewArgs(repo, pr, payload), "gh api pulls reviews", isRestReview),
       ),
   };
 }

@@ -5,6 +5,7 @@
 
 import type { Call, Handler } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { numberArg, textArg } from "../lib/args.ts";
 import { UsageError } from "../lib/errors.ts";
 import { runCommand } from "../lib/exec.ts";
 import { type GitlabForge, gitlabForge, replyToThread, resolveThread } from "../lib/gitlab.ts";
@@ -27,15 +28,11 @@ function said(value: unknown, lines: readonly string[]): Outcome {
 }
 
 function mr(call: Call): number {
-  return call.args.mr as number;
-}
-
-function text(call: Call, name: string): string | null {
-  return (call.args[name] as string | undefined) ?? null;
+  return numberArg(call, "mr");
 }
 
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     return "";
   }
   const chunks: Buffer[] = [];
@@ -86,11 +83,11 @@ async function threads({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function reply({ forge, at, call }: At): Promise<Outcome> {
-  const message = text(call, "message") ?? "";
+  const message = textArg(call, "message") ?? "";
   if (message.trim().length === 0) {
     return fail("usage", "reply requires --message; nothing was posted");
   }
-  const outcome = await replyToThread(forge, mr(call), call.args.noteId as number, message);
+  const outcome = await replyToThread(forge, mr(call), numberArg(call, "noteId"), message);
   return said({ thread: outcome.thread.id, replied: true, resolved: outcome.resolved }, [
     `replied on ${at} ${place(outcome.thread.path, outcome.thread.line)}`,
     "thread left open; resolve it with qsm-forge gl resolve",
@@ -101,8 +98,8 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
   const outcome = await resolveThread(
     forge,
     mr(call),
-    call.args.noteId as number,
-    text(call, "message"),
+    numberArg(call, "noteId"),
+    textArg(call, "message"),
   );
   const where = place(outcome.thread.path, outcome.thread.line);
   return said(
@@ -120,7 +117,7 @@ async function resolve({ forge, at, call }: At): Promise<Outcome> {
 }
 
 async function submitReview({ forge, at, call }: At): Promise<Outcome> {
-  const file = text(call, "file");
+  const file = textArg(call, "file");
   const raw = file === null ? await readStdin() : readPayloadFile(file);
   const payload = parseReviewPayload(raw);
   const submitted = await forge.submitReview(mr(call), payload);
@@ -135,7 +132,10 @@ type Verb = (at: At) => Promise<Outcome>;
 function handler(verb: Verb): Handler {
   return async (call) => {
     try {
-      const project: GitlabProject = await resolveGitlabProject(runCommand, text(call, "project"));
+      const project: GitlabProject = await resolveGitlabProject(
+        runCommand,
+        textArg(call, "project"),
+      );
       const at = `${project.path}!${String(mr(call))}`;
       return await verb({ forge: gitlabForge(runCommand, project), at, call });
     } catch (error) {

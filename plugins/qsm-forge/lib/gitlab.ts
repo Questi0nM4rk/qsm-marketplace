@@ -2,7 +2,17 @@
 // means, and the forge that runs one and maps the other.
 
 import { UsageError } from "./errors.ts";
-import { parseJson, type Run } from "./exec.ts";
+import { parseAs, parseJson, type Run } from "./exec.ts";
+import {
+  arrayOf,
+  type Guard,
+  isBoolean,
+  isNumber,
+  isString,
+  objectOf,
+  orAbsent,
+  orNull,
+} from "./shape.ts";
 import type { GitlabProject } from "./remote.ts";
 import type { ReviewPayload } from "./review-payload.ts";
 
@@ -224,26 +234,86 @@ export interface GitlabForge {
 const MAX_DISCUSSION_PAGES = 20;
 
 interface GlApi {
-  readonly read: <T>(path: string) => Promise<T>;
-  readonly write: <T>(path: string, method: "POST" | "PUT", body: unknown) => Promise<T>;
+  readonly read: <T>(path: string, guard: Guard<T>) => Promise<T>;
+  /** A write whose answer is read. */
+  readonly write: <T>(
+    path: string,
+    method: "POST" | "PUT",
+    body: unknown,
+    guard: Guard<T>,
+  ) => Promise<T>;
+  /** A write whose answer is only checked to be JSON. */
+  readonly send: (path: string, method: "POST" | "PUT", body: unknown) => Promise<void>;
 }
 
+const isApiNote = objectOf<ApiNote>({
+  id: isNumber,
+  body: isString,
+  system: isBoolean,
+  resolvable: isBoolean,
+  resolved: orAbsent(isBoolean),
+  author: orAbsent(objectOf<{ readonly username?: string }>({ username: orAbsent(isString) })),
+  position: orAbsent(
+    objectOf<NonNullable<ApiNote["position"]>>({
+      new_path: orAbsent(isString),
+      old_path: orAbsent(isString),
+      new_line: orAbsent(orNull(isNumber)),
+      old_line: orAbsent(orNull(isNumber)),
+    }),
+  ),
+});
+const isApiDiscussions = arrayOf(
+  objectOf<ApiDiscussion>({
+    id: isString,
+    individual_note: isBoolean,
+    notes: arrayOf(isApiNote),
+  }),
+);
+const isApiMergeRequest = objectOf<ApiMergeRequest>({
+  state: isString,
+  detailed_merge_status: isString,
+  merge_when_pipeline_succeeds: isBoolean,
+  blocking_discussions_resolved: isBoolean,
+  web_url: isString,
+  diff_refs: objectOf<ApiMergeRequest["diff_refs"]>({
+    base_sha: isString,
+    start_sha: isString,
+    head_sha: isString,
+  }),
+  head_pipeline: orNull(objectOf<{ readonly status: string }>({ status: isString })),
+});
+const isPostedNote = objectOf<PostedNote>({ id: isNumber });
+const isPostedDiscussion = objectOf<PostedDiscussion>({ id: isString });
+
 function apiOver(run: Run): GlApi {
+  const write = async <T>(
+    path: string,
+    method: "POST" | "PUT",
+    body: unknown,
+    guard: Guard<T>,
+  ): Promise<T> =>
+    parseAs(
+      await run("glab", writeArgs(path, method), JSON.stringify(body)),
+      `glab api ${path}`,
+      guard,
+    );
   return {
-    read: async <T>(path: string): Promise<T> =>
-      parseJson<T>(await run("glab", readArgs(path)), `glab api ${path}`),
-    write: async <T>(path: string, method: "POST" | "PUT", body: unknown): Promise<T> =>
-      parseJson<T>(
+    read: async (path, guard) =>
+      parseAs(await run("glab", readArgs(path)), `glab api ${path}`, guard),
+    write,
+    send: async (path, method, body) => {
+      parseJson(
         await run("glab", writeArgs(path, method), JSON.stringify(body)),
         `glab api ${path}`,
-      ),
+      );
+    },
   };
 }
 
 async function allDiscussions(api: GlApi, project: GitlabProject, mr: number) {
   const all: ApiDiscussion[] = [];
   for (let page = 1; page <= MAX_DISCUSSION_PAGES; page += 1) {
-    const batch = await api.read<ApiDiscussion[]>(discussionsPage(project, mr, page));
+    const batch = await api.read(discussionsPage(project, mr, page), isApiDiscussions);
     all.push(...batch);
     if (batch.length < PER_PAGE) {
       return all;
@@ -262,14 +332,14 @@ async function settleApproval(
   payload: ReviewPayload,
 ): Promise<GlSubmittedReview["approval"]> {
   if (payload.decision === "approve") {
-    await api.write(approvalPath(project, mr, true), "POST", {});
+    await api.send(approvalPath(project, mr, true), "POST", {});
     return "approved";
   }
   if (payload.decision !== "request-changes") {
     return "unchanged";
   }
   try {
-    await api.write(approvalPath(project, mr, false), "POST", {});
+    await api.send(approvalPath(project, mr, false), "POST", {});
     return "withdrawn";
   } catch {
     return "unchanged";
@@ -282,20 +352,24 @@ async function postReview(
   mr: number,
   payload: ReviewPayload,
 ): Promise<GlSubmittedReview> {
-  const info = await api.read<ApiMergeRequest>(mergeRequestPath(project, mr));
+  const info = await api.read(mergeRequestPath(project, mr), isApiMergeRequest);
   let bodyNoteId: number | null = null;
   if (payload.body.trim().length > 0) {
-    const note = await api.write<PostedNote>(notesPath(project, mr), "POST", {
-      body: payload.body,
-    });
+    const note = await api.write(
+      notesPath(project, mr),
+      "POST",
+      { body: payload.body },
+      isPostedNote,
+    );
     bodyNoteId = note.id;
   }
   const inlineDiscussionIds: string[] = [];
   for (const comment of payload.inline) {
-    const created = await api.write<PostedDiscussion>(
+    const created = await api.write(
       discussionsPath(project, mr),
       "POST",
       inlineDiscussionBody(info, comment),
+      isPostedDiscussion,
     );
     inlineDiscussionIds.push(created.id);
   }
@@ -306,15 +380,15 @@ async function postReview(
 export function gitlabForge(run: Run, project: GitlabProject): GitlabForge {
   const api = apiOver(run);
   const threads = async (mr: number) => mapThreads(await allDiscussions(api, project, mr));
-  const mergeRequest = (mr: number) => api.read<ApiMergeRequest>(mergeRequestPath(project, mr));
+  const mergeRequest = (mr: number) => api.read(mergeRequestPath(project, mr), isApiMergeRequest);
   return {
     threads,
     status: async (mr) => mapStatus(await mergeRequest(mr), await threads(mr)),
     reply: async (mr, discussionId, body) => {
-      await api.write(discussionNotesPath(project, mr, discussionId), "POST", { body });
+      await api.send(discussionNotesPath(project, mr, discussionId), "POST", { body });
     },
     resolve: async (mr, discussionId) => {
-      await api.write(discussionPath(project, mr, discussionId), "PUT", { resolved: true });
+      await api.send(discussionPath(project, mr, discussionId), "PUT", { resolved: true });
     },
     submitReview: (mr, payload) => postReview(api, project, mr, payload),
   };

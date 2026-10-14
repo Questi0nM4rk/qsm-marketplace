@@ -2,6 +2,7 @@
 // recorded answer where production hands it a forge CLI.
 
 import { execFile } from "node:child_process";
+import type { Guard } from "./shape.ts";
 
 /** Runs `command` with `args`, resolves with its stdout, rejects with an
  * Error carrying what the command said. */
@@ -38,11 +39,20 @@ export const runCommand: Run = (command, args, stdin) =>
   });
 
 /** Parses what a forge CLI printed. */
-export function parseJson<T>(raw: string, what: string): T {
+export function parseJson(raw: string, what: string): unknown {
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(raw);
   } catch (cause) {
     const head = raw.trim().slice(0, 200);
     throw new Error(`${what} did not answer with JSON: ${head}`, { cause });
   }
+}
+
+/** Parses what a forge CLI printed and checks it has the shape the caller reads. */
+export function parseAs<T>(raw: string, what: string, guard: Guard<T>): T {
+  const parsed = parseJson(raw, what);
+  if (!guard(parsed)) {
+    throw new Error(`${what} answered with an unexpected shape: ${raw.trim().slice(0, 200)}`);
+  }
+  return parsed;
 }

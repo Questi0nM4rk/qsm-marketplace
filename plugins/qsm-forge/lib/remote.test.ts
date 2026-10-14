@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { UsageError } from "./errors.ts";
+import { expectRejection } from "./rejection.ts";
 import type { Run } from "./exec.ts";
 import { MissingError } from "./missing-error.ts";
 import {
@@ -68,19 +69,17 @@ describe("Repository resolution", () => {
   });
 
   test("No repository detectable", async () => {
-    await expect(resolveGithubRepo(NO_CHECKOUT, null)).rejects.toThrow(MissingError);
-    await expect(resolveGithubRepo(NO_CHECKOUT, null)).rejects.toThrow(/--repo owner\/name/);
+    await expectRejection(resolveGithubRepo(NO_CHECKOUT, null), MissingError);
+    await expectRejection(resolveGithubRepo(NO_CHECKOUT, null), /--repo owner\/name/);
   });
 
   test("a remote that is not a repository is not guessed at", async () => {
-    await expect(resolveGithubRepo(remote("git@github.com:owner"), null)).rejects.toThrow(
-      MissingError,
-    );
+    await expectRejection(resolveGithubRepo(remote("git@github.com:owner"), null), MissingError);
   });
 
   test("a malformed option is refused rather than rewritten", async () => {
-    await expect(resolveGithubRepo(NO_CHECKOUT, "owner")).rejects.toThrow(UsageError);
-    await expect(resolveGithubRepo(NO_CHECKOUT, "owner")).rejects.toThrow(/is not owner\/name/);
+    await expectRejection(resolveGithubRepo(NO_CHECKOUT, "owner"), UsageError);
+    await expectRejection(resolveGithubRepo(NO_CHECKOUT, "owner"), /is not owner\/name/);
   });
 
   test("the same holds for a GitLab project", async () => {
@@ -89,6 +88,6 @@ describe("Repository resolution", () => {
       null,
     );
     expect(project.encodedPath).toBe("group%2Fsub%2Fproject");
-    await expect(resolveGitlabProject(NO_CHECKOUT, null)).rejects.toThrow(/--project/);
+    await expectRejection(resolveGitlabProject(NO_CHECKOUT, null), /--project/);
   });
 });
