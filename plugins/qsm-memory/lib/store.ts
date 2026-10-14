@@ -143,7 +143,7 @@ function createDb(path: string): void {
     chmodSync(aside, 0o600);
     linkSync(aside, path);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+    if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) {
       throw error;
     }
   } finally {
