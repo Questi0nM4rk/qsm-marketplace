@@ -12,13 +12,19 @@ in, as text, searchable; the transcript file on disk is the full context.
 `qsm-memory` SHALL keep everything in one SQLite file, `$XDG_DATA_HOME/qsm-memory/memory.db`
 (default `~/.local/share/qsm-memory/memory.db`); `QSM_MEMORY_DB` SHALL override the path. The
 first write SHALL create the directory and the file with owner-only permissions (0600) and WAL
-journaling, so two sessions ending together both write. The archive is machine data: nothing in it
+journaling, so two sessions ending together both write; processes that open a missing database at
+once SHALL all succeed, one creating it and the rest opening it. The archive is machine data: nothing in it
 is shared, synced, or committed, and no verb SHALL delete a saved session or turn.
 
 #### Scenario: the first save creates the database with owner-only permissions
 
 - **WHEN** `qsm-memory save <transcript>` runs and no database exists
 - **THEN** the file is created at the resolved path with mode 0600 and the session is in it
+
+#### Scenario: catch-ups that start together on a missing database all save
+
+- **WHEN** four `qsm-memory save --catch-up` runs start at once and no database exists
+- **THEN** each answers `saved`, and none fails with `database is locked`
 
 #### Scenario: QSM_MEMORY_DB points the binary at another file
 
