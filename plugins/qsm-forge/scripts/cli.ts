@@ -12,7 +12,7 @@ import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as ghHandlers } from "./cli-gh.ts";
 import { handlers as glHandlers } from "./cli-gl.ts";
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-forge/qsm.json");
 
 if (import.meta.main) {
   process.exit(

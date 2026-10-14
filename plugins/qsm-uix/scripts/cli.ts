@@ -26,7 +26,7 @@ import { UPSTREAM } from "../lib/doctor.ts";
 import { CaptureError } from "../lib/errors.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-uix/qsm.json");
 const DEFAULT_DEPTH = 32;
 
 type Say<R> = (result: R) => string;

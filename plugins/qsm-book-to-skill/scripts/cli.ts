@@ -25,7 +25,7 @@ import { scanInputs } from "../lib/sources.ts";
 import { analyzeText } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-book-to-skill/qsm.json");
 
 /** A stage that cannot go on: the file it reads is not there, or it is
  * there and unreadable. Thrown so every reader can stay a plain function. */

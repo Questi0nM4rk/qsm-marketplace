@@ -9,7 +9,7 @@ import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { lines, realProber, statuses } from "../lib/doctor.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-toolbox/qsm.json");
 
 /** doctor reports; it never gates. A toolbox tool is optional, and turning a
  * missing one into a failure would fail pipelines nobody asked it to. */

@@ -20,7 +20,7 @@ import { edited, TOOLS, type ToolOutcome } from "../lib/tools.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as mcpHandlers } from "./mcp.ts";
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-index/qsm.json");
 
 function build(call: Call): Outcome {
   const path = requiredString(call, "path");

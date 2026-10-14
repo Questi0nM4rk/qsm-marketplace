@@ -14,7 +14,7 @@ import {
 } from "../lib/doctor.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-openspec/qsm.json");
 
 /** doctor is `missing` when the upstream openspec CLI is not on PATH. */
 function doctor(call: Call): Outcome {

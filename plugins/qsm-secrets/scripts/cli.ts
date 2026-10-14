@@ -43,7 +43,7 @@ import {
 import { namespaceOf, parseEnvPair } from "../lib/vault.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-secrets/qsm.json");
 
 /**
  * The three verbs that carry a value refuse `--json` outright: a value must never be serialised,

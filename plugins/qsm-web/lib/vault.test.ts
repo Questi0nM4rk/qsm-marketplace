@@ -66,7 +66,7 @@ describe("readValue", () => {
         "bw",
         (_cmd, args) => {
           seen = args;
-          return { status: 2, stdout: "", stderr: "not found" };
+          return { status: 2, stdout: "the-value", stderr: "not found" };
         },
         "an-entry",
         "username",

@@ -27,7 +27,7 @@ import { openArchive, resolveDbPath } from "../lib/store.ts";
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-memory/qsm.json");
 
 const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   "not-found": "missing",

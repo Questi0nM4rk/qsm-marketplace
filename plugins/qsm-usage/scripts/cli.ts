@@ -32,7 +32,7 @@ import { filter } from "./filter.ts";
 import { report as reportVerb } from "./report.ts";
 import { wrap } from "./wrap.ts";
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-usage/qsm.json");
 
 /**
  * A refusal raised from a helper: `usage` for a broken call, `failed` for a call that was fine and

@@ -15,7 +15,7 @@ function isStringList(x: unknown): x is string[] {
 }
 
 /** A profile that is not a list of plugin names is a defect in the file: it names the profile. */
-function toConfig(raw: unknown): SetupConfig {
+function toConfig(raw: unknown, path: string): SetupConfig {
   if (!isRecord(raw)) {
     return {};
   }
@@ -23,7 +23,7 @@ function toConfig(raw: unknown): SetupConfig {
   if (isRecord(raw.profiles)) {
     for (const [name, list] of Object.entries(raw.profiles)) {
       if (!isStringList(list)) {
-        throw new Error(`setup config: profile ${name} is not a list of plugin names`);
+        throw new Error(`${path}: profile ${name} is not a list of plugin names`);
       }
       profiles[name] = list;
     }
@@ -46,7 +46,7 @@ export function readConfig(env: Env): SetupConfig {
   } catch {
     return {};
   }
-  return toConfig(raw);
+  return toConfig(raw, path);
 }
 
 const NOT_IN_GENERAL = new Set(["qsm-builder"]);

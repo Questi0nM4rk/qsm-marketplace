@@ -8,6 +8,7 @@ import {
   flagArg,
   type Handler,
   optionalString,
+  requiredString,
   runCli,
   stringList,
 } from "../../../lib/cli-base.ts";
@@ -65,7 +66,7 @@ import {
 } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-langdev/qsm.json");
 
 function err(line: string): void {
   process.stderr.write(`${line}\n`);
@@ -615,10 +616,10 @@ const hook: Handler = guarded(async (call) => {
 
 const edited: Handler = guarded(async (call) => {
   const editor: Editor = {
-    sessionId: required(optionalString(call, "session"), "session"),
+    sessionId: requiredString(call, "session"),
     agentId: optionalString(call, "agent") ?? MAIN_AGENT,
   };
-  const text = await editFindings(editor, required(optionalString(call, "file"), "file"));
+  const text = await editFindings(editor, requiredString(call, "file"));
   return ok({ text }, text ?? "");
 });
 

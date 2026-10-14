@@ -10,7 +10,7 @@ import { validateFile } from "../lib/note.ts";
 import { doctorReport, NOTEBOOK_BIN } from "../lib/notebook.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-knowledge/qsm.json");
 
 /** A note with an error is a check that ran and found something, so the
  * verb failed; a note with only warnings passed, and carries them. */

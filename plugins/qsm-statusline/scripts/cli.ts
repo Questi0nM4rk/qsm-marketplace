@@ -23,7 +23,7 @@ import { render } from "../lib/render.ts";
 import { describe, readStatusLine, STATUS_LINE_ENTRY, settingsPath } from "../lib/settings.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = parseManifest(manifestJson);
+const manifest = parseManifest(manifestJson, "qsm-statusline/qsm.json");
 
 /** How long a cached git state is served before a refresh is started behind
  * the frame. Counters this stale are invisible; a render that waits is not. */

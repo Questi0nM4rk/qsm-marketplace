@@ -84,7 +84,7 @@ function readMain(git: ToolsProbes["git"]): Map<string, Declared> | string {
     try {
       manifest = parseManifest(JSON.parse(shown.stdout), `${MAIN}:${file}`);
     } catch (error) {
-      return `${MAIN}:${file} is not a readable qsm.json (${error instanceof Error ? error.message : String(error)})`;
+      return `not a readable qsm.json: ${error instanceof Error ? error.message : String(error)}`;
     }
     for (const [bin, d] of declared(plugin, manifest)) {
       out.set(bin, d);
