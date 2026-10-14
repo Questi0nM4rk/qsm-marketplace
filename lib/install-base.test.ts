@@ -4,6 +4,7 @@ import {
   accessSync,
   constants,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -184,6 +185,51 @@ describe("install-base dry run with extra steps", () => {
   });
 });
 
+describe("install-base plugin dependencies", () => {
+  // A plugin root with a lockfile and local file: dependencies, so no network is needed. A
+  // second dependency added after the lock makes the lockfile stale.
+  function depPlugin(stale: boolean): string {
+    const root = sandbox("qsm-dep-plugin-");
+    for (const name of ["dep", "dep2"]) {
+      mkdirSync(join(root, name));
+      writeFileSync(join(root, name, "package.json"), `{"name":"${name}","version":"1.0.0"}`);
+    }
+    const manifest = (deps: string) => `{"name":"p","private":true,"dependencies":{${deps}}}`;
+    writeFileSync(join(root, "package.json"), manifest('"dep":"file:./dep"'));
+    spawnSync("bun", ["install"], { cwd: root });
+    if (stale) {
+      writeFileSync(
+        join(root, "package.json"),
+        manifest('"dep":"file:./dep","dep2":"file:./dep2"'),
+      );
+    }
+    return root;
+  }
+
+  test("a stale lockfile is an error step that stops before compiling", async () => {
+    const d = fake();
+    const r = await installBase({ pluginRoot: depPlugin(true) })(d.ctx);
+    expect(r.status).toBe("error");
+    expect(r.steps.map((s) => s.name)).toEqual(["dependencies"]);
+    expect(step(r, "dependencies").detail).toContain("commit its bun.lock");
+  });
+
+  test("a current lockfile installs the dependency", async () => {
+    const root = depPlugin(false);
+    const d = fake();
+    const first = await installBase({ pluginRoot: root })(d.ctx);
+    expect(existsSync(join(root, "node_modules/dep/package.json"))).toBe(true);
+    expect(first.status).not.toBe("error");
+    expect(step(first, "dependencies").status).toBe("installed");
+  });
+
+  test("dry run names the install and runs nothing", async () => {
+    const d = fake({ dryRun: true });
+    const r = await installBase({ pluginRoot: depPlugin(false) })(d.ctx);
+    expect(r.detail).toContain("would run bun install --frozen-lockfile");
+  });
+});
+
 describe("install-base run twice, each run its own process", () => {
   // The in-process tests above cannot see this: a temporary file named after
   // the process id is the same name within one process, so the compare that
@@ -309,7 +355,6 @@ describe("install-base upstream and extra", () => {
   test("A user's own completion file for the same name", async () => {
     const f = fake({ present: ["bun"] });
     const dir = join(f.home, "config/fish/completions");
-    const { mkdirSync } = await import("node:fs");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "qsm-fix-a.fish"), "complete -c qsm-fix-a -e\n");
     const r = await installBase({ pluginRoot: FIXTURE })(f.ctx);

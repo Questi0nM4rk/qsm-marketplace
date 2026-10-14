@@ -70,6 +70,25 @@ describe("show", () => {
     );
   });
 
+  test("a long session stops at the character budget, a huge first turn is cut", () => {
+    const db = archive();
+    const long = new TranscriptBuilder({ sessionId: "long-3" });
+    for (let i = 0; i < 23; i++) {
+      long.human("u".repeat(3000)).assistant("a".repeat(3000));
+    }
+    writeFileSync(join(transcriptDir, "long-3.jsonl"), long.text());
+    saveTranscript(db, join(transcriptDir, "long-3.jsonl"));
+
+    const out = show(db, "long-3").split("\n");
+    expect(out.filter((line) => line.startsWith("#"))).toHaveLength(6);
+    expect(out.at(-1)).toBe("next: --lines 7-46");
+
+    const huge = new TranscriptBuilder({ sessionId: "huge-4" }).human("h".repeat(50_000)).text();
+    writeFileSync(join(transcriptDir, "huge-4.jsonl"), huge);
+    saveTranscript(db, join(transcriptDir, "huge-4.jsonl"));
+    expect(show(db, "huge-4")).toEndWith("[turn cut at 20000 of 50009 characters]");
+  });
+
   test("an id prefix that matches one session is accepted, two is ambiguous", () => {
     expect(resolveSession(archive(), "abc").id).toBe("abc-1");
     expect(() => resolveSession(archive(), "ab")).toThrow(MemError);

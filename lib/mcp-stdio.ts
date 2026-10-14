@@ -3,15 +3,23 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 
 const STOP_SIGNALS = ["SIGTERM", "SIGINT"] as const;
 
-/** Serves `server` on stdin/stdout until stdin closes, the transport closes,
- * or SIGTERM or SIGINT arrives; then closes the server and resolves. */
-export async function serveStdio(server: McpServer): Promise<void> {
+/** What serveStdio needs of a plugin's SDK server. Lib names no SDK type: the plugin's own copy
+ * of the SDK is the only one in the program. */
+interface Servable<Transport> {
+  connect: (transport: Transport) => Promise<void>;
+  close: () => Promise<void>;
+  server: { onclose?: (() => void) | undefined };
+}
+
+/** Serves `server` over `transport` (the plugin's stdio transport) until stdin closes, the
+ * transport closes, or SIGTERM or SIGINT arrives; then closes the server and resolves. */
+export async function serveStdio<Transport>(
+  server: Servable<Transport>,
+  transport: Transport,
+): Promise<void> {
   const { promise: released, resolve: release } = Promise.withResolvers<void>();
   const onRelease = () => {
     release();
@@ -22,7 +30,7 @@ export async function serveStdio(server: McpServer): Promise<void> {
   process.stdin.once("end", onRelease);
   server.server.onclose = onRelease;
   try {
-    await server.connect(new StdioServerTransport());
+    await server.connect(transport);
     await released;
   } finally {
     for (const signal of STOP_SIGNALS) {
@@ -63,14 +71,15 @@ export interface ServerProcess {
   restOfStdout: () => Promise<string>;
 }
 
-/** The `initialize` request a client opens every session with. */
-export function initialize(id: number): Message {
+/** The `initialize` request a client opens every session with; `protocolVersion` is the plugin
+ * SDK's LATEST_PROTOCOL_VERSION. */
+export function initialize(id: number, protocolVersion: string): Message {
   return {
     jsonrpc: "2.0",
     id,
     method: "initialize",
     params: {
-      protocolVersion: LATEST_PROTOCOL_VERSION,
+      protocolVersion,
       capabilities: {},
       clientInfo: { name: "qsm-probe", version: "0" },
     },

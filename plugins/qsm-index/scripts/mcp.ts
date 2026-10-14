@@ -1,5 +1,6 @@
 // The `mcp serve` verb of qsm-index.
 
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Handler } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { ok } from "../../../lib/outcome.ts";
@@ -9,7 +10,7 @@ export const handlers: Record<string, Handler> = {
   // The verb holds until the client lets go. Nothing else is written to
   // stdout: that is the protocol's channel.
   "mcp serve": async () => {
-    await serveStdio(buildServer());
+    await serveStdio(buildServer(), new StdioServerTransport());
     return ok();
   },
 };

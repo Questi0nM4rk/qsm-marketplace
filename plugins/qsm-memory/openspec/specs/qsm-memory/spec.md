@@ -12,13 +12,19 @@ in, as text, searchable; the transcript file on disk is the full context.
 `qsm-memory` SHALL keep everything in one SQLite file, `$XDG_DATA_HOME/qsm-memory/memory.db`
 (default `~/.local/share/qsm-memory/memory.db`); `QSM_MEMORY_DB` SHALL override the path. The
 first write SHALL create the directory and the file with owner-only permissions (0600) and WAL
-journaling, so two sessions ending together both write. The archive is machine data: nothing in it
+journaling, so two sessions ending together both write; processes that open a missing database at
+once SHALL all succeed, one creating it and the rest opening it. The archive is machine data: nothing in it
 is shared, synced, or committed, and no verb SHALL delete a saved session or turn.
 
 #### Scenario: the first save creates the database with owner-only permissions
 
 - **WHEN** `qsm-memory save <transcript>` runs and no database exists
 - **THEN** the file is created at the resolved path with mode 0600 and the session is in it
+
+#### Scenario: catch-ups that start together on a missing database all save
+
+- **WHEN** four `qsm-memory save --catch-up` runs start at once and no database exists
+- **THEN** each answers `saved`, and none fails with `database is locked`
 
 #### Scenario: QSM_MEMORY_DB points the binary at another file
 
@@ -158,9 +164,12 @@ nothing else.
 stored with the session and print every conversation turn in it, tool calls as `#<n> tool <name>
 <input>` and tool results as `#<n> result: <text>`, numbered by position in the file. When that
 file is gone, `--full` SHALL fail as `missing`, name the path, and say the saved text is all that
-is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at most 200 turns
-and ends with `next: --lines <b+1>-<b+200>` when more remain. A session id prefix that matches
-one session SHALL be accepted.
+is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at most 20 000
+characters of turns, so a whole session never lands in the reader's context, and ends with
+`next: --lines <b+1>-<last>` when more remain, `b` the last turn printed and `last` the last turn
+asked for. A first turn longer than the budget alone is cut there and says
+`[turn cut at 20000 of <n> characters]`; the rest of that turn is not readable through show. A session id prefix that
+matches one session SHALL be accepted.
 
 #### Scenario: show prints the conversation text
 
@@ -181,6 +190,11 @@ one session SHALL be accepted.
 
 - **WHEN** a session has 10 turns and `show <id> --lines 20-30` runs
 - **THEN** it answers `no turns in 20-30; the session has 10`
+
+#### Scenario: a long session stops at the character budget
+
+- **WHEN** a session has 46 turns of 3 000 characters each and `show <id>` runs
+- **THEN** it prints turns 1 to 6 and ends with `next: --lines 7-46`
 
 ### Requirement: List answers what was done when
 
@@ -443,7 +457,7 @@ it saves more than it costs.
 | Secret shapes | ~10 regexes, ours | Only `note` refuses; the archive holds only the text a person and the model wrote. |
 | Tests | `bun test`, `:memory:` database, `mkdtempSync`, a transcript builder, a stub task tool | Nothing touches the real archive or the real transcript directory. |
 
-Two dependencies, the MCP SDK with `zod`, in the root `package.json`. Everything else is stdlib or
+Two dependencies, the MCP SDK with `zod`, in the plugin's own `package.json`. Everything else is stdlib or
 ours. A `bun build --compile` binary is about 90 MB because it embeds the runtime.
 
 ## Extension points
