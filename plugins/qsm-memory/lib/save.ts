@@ -176,7 +176,7 @@ export function unsavedTranscripts(db: Database, projects: string): string[] {
       pending.push([path, mtime]);
     }
   }
-  return pending.sort((a, b) => a[1] - b[1]).map(([path]) => path);
+  return pending.toSorted((a, b) => a[1] - b[1]).map(([path]) => path);
 }
 
 export interface CatchUpResult {

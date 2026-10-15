@@ -70,7 +70,8 @@ test("the session-start hook asks before the first index of a repository", () =>
 
 test("the first ask warns that a repository above 5000 files will be large", () => {
   const { repo, env, files } = sleepyWorld();
-  moreFiles(repo, 5000); // with src/a.ts, 5001
+  // with src/a.ts, 5001
+  moreFiles(repo, 5000);
 
   const { context } = hook(repo, env);
 
@@ -83,7 +84,8 @@ test("a stale index of at most 5000 files is refreshed in the background without
   const { repo, env, files } = sleepyWorld();
   buildIndex(repo, { cwd: "/", run: fakeRunner().run, env });
   const before = readStatus(files.status)?.started_at;
-  moreFiles(repo, 4999); // with src/a.ts, 5000
+  // with src/a.ts, 5000
+  moreFiles(repo, 4999);
 
   expect(hook(repo, env)).toEqual(silent);
 

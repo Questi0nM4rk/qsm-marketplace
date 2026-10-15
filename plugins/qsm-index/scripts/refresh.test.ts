@@ -75,7 +75,12 @@ test("the twentieth distinct edited file starts a refresh", async () => {
 test("editing the same file again does not count twice", () => {
   const { repo, env, files } = indexedWorld();
 
-  expect(editsAreOk(new Array(20).fill(join(repo, "src", "a.ts")), env)).toBe(true);
+  expect(
+    editsAreOk(
+      Array.from({ length: 20 }, () => join(repo, "src", "a.ts")),
+      env,
+    ),
+  ).toBe(true);
 
   expect(existsSync(files.log)).toBe(false);
 });

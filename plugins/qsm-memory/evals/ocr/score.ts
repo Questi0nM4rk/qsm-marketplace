@@ -52,7 +52,7 @@ const byCritical = (count: (kind: Critical) => number): Record<Critical, number>
   negation: count("negation"),
 });
 
-const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const fold = (s: string) => s.normalize("NFD").replaceAll(/\p{M}/gu, "").toLowerCase();
 const words = (s: string) => fold(s).match(/[\p{L}\p{N}_!-]+/gu) ?? [];
 function jaccard(a: string, b: string): number {
   const x = new Set(words(a));
@@ -88,7 +88,7 @@ function negFlips(g: string, c: string): number {
 const nameKey = (name: string | undefined, key: string | undefined) =>
   name !== undefined && name !== ""
     ? words(name === "ME" ? "me" : name)
-        .sort()
+        .toSorted()
         .join(" ")
     : (key ?? "");
 const senderKey = (m: Msg) => nameKey(m.sender, m.sender_key);
@@ -162,9 +162,12 @@ function scorePair(g: Msg, c: Msg, crit: Record<Critical, number>, why: boolean)
   return { chars: gt.length, edits: lev(gt, ct), editsFolded: lev(fold(gt), fold(ct)) };
 }
 
+// an attachment-only bubble has no text to align
+const hasText = (m: Msg) => (m.text ?? "").trim() !== "";
+const hit = (a: Decision, list: Decision[]) =>
+  list.some((b) => jaccard(a.text ?? "", b.text ?? "") >= 0.6);
+
 export function scoreThread(gold: Thread, cand: Thread | undefined, why = false): ThreadScore {
-  // an attachment-only bubble has no text to align
-  const hasText = (m: Msg) => (m.text ?? "").trim() !== "";
   const gm = (gold.messages ?? []).filter(hasText);
   const cm = (cand?.messages ?? []).filter(hasText);
   const crit = byCritical(() => 0);
@@ -201,8 +204,6 @@ export function scoreThread(gold: Thread, cand: Thread | undefined, why = false)
     );
   const gd = gold.decisions ?? [];
   const cd = cand?.decisions ?? [];
-  const hit = (a: Decision, list: Decision[]) =>
-    list.some((b) => jaccard(a.text ?? "", b.text ?? "") >= 0.6);
   return {
     critical: crit,
     msgs: gm.length,
@@ -251,7 +252,7 @@ export function scoreDir(dir: string, why = false): RunScore[] {
   );
   return readdirSync(join(dir, "runs"))
     .filter((f) => f.endsWith(".json"))
-    .sort()
+    .toSorted()
     .map((run) => {
       let parsed: Record<string, Thread>;
       try {
