@@ -273,7 +273,8 @@
       "plugins/**/*.ts",
       "plugins/**/*.tsx",
       "!**/hooks/noun.generated.ts",
-      "!**/types/index.d.ts"
+      "!**/types/index.d.ts",
+      "!!**/.claude"
     ]
   },
   "javascript": {
