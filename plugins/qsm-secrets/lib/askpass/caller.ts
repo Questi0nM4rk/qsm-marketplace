@@ -32,8 +32,7 @@ export function callerOf(pid: number): Caller {
       .split("\0")
       .join(" ")
       .replaceAll(/\s+/g, " ")
-      .trim()
-      .slice(0, 300);
+      .trim();
   } catch {
     cmdline = "";
   }

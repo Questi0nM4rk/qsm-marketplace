@@ -171,6 +171,18 @@ describe("providers", () => {
     expect(() => decide.request(input([], "nope"))).toThrow("not an ask request");
   });
 
+  test("decide shows the whole input, however long", () => {
+    const command = `echo ${"x".repeat(900)} END`;
+    const request = JSON.stringify({
+      id: "a2",
+      toolName: "Bash",
+      toolInput: { command },
+      reply: "",
+    });
+    const shown = providerOf("decide").request(input([], request));
+    expect(shown.subject).toContain(command);
+  });
+
   test("an unknown kind is a usage error that names the kinds", () => {
     expect(() => providerOf("toString")).toThrow("unknown askpass kind");
   });

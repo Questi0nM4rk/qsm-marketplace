@@ -33,10 +33,10 @@ function parse(text: string): AskRequest {
   );
 }
 
-/** What the person is asked to allow: the tool and the start of its input. */
+/** What the person is asked to allow: the tool and all of its input; the pane scrolls what is long. */
 function subjectOf(request: AskRequest): string {
   const input = JSON.stringify(request.toolInput ?? {});
-  return `${request.toolName} ${input}`.slice(0, 300);
+  return `${request.toolName} ${input}`;
 }
 
 export const decide: Provider = {

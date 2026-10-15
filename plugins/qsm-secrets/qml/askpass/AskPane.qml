@@ -32,6 +32,66 @@ FocusScope {
 
     Keys.onEscapePressed: pane.answer("cancel")
 
+    // Text the person approves is never cut: it wraps at any character and, past maxHeight, scrolls
+    // (wheel, or Up, Down, PageUp, PageDown on the pane) with a marker that says so.
+    component FullText: Item {
+        id: view
+        property alias text: label.text
+        property alias color: label.color
+        property alias font: label.font
+        property real maxHeight: 160
+        readonly property bool overflows: label.implicitHeight > maxHeight
+        function scrollBy(dy: real): void {
+            flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + dy))
+        }
+
+        Layout.fillWidth: true
+        visible: label.text !== ""
+        implicitHeight: Math.min(label.implicitHeight, maxHeight) + (overflows ? hint.implicitHeight : 0)
+
+        Flickable {
+            id: flick
+            width: parent.width
+            height: Math.min(label.implicitHeight, view.maxHeight)
+            contentWidth: width
+            contentHeight: label.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            flickableDirection: Flickable.VerticalFlick
+
+            Text {
+                id: label
+                width: flick.width
+                wrapMode: Text.WrapAnywhere
+            }
+        }
+        Text {
+            id: hint
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            visible: view.overflows
+            text: "scroll for the rest (" + Math.round(flick.visibleArea.heightRatio * 100) + "% shown)"
+            color: Theme.textMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.textXs
+        }
+    }
+
+    readonly property var views: [subjectView, promptView, cmdlineView]
+    function scrollBy(dy: real): void {
+        const view = views.find(v => v.overflows)
+        if (view !== undefined)
+            view.scrollBy(dy)
+    }
+    Keys.onUpPressed: scrollBy(-40)
+    Keys.onDownPressed: scrollBy(40)
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
+            scrollBy(event.key === Qt.Key_PageUp ? -160 : 160)
+            event.accepted = true
+        }
+    }
+
     Rectangle {
         id: card
         anchors.fill: parent
@@ -80,36 +140,31 @@ FocusScope {
                 }
             }
 
-            Text {
-                Layout.fillWidth: true
-                visible: text !== ""
+            FullText {
+                id: promptView
+                maxHeight: 96
                 text: pane.request === null ? "" : pane.request.prompt
                 color: Theme.text
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.textMd
-                wrapMode: Text.Wrap
-                maximumLineCount: 4
-                elide: Text.ElideRight
             }
 
             Rectangle {
                 Layout.fillWidth: true
-                visible: subject.text !== ""
-                implicitHeight: subject.implicitHeight + Theme.space3 * 2
+                visible: subjectView.text !== ""
+                implicitHeight: subjectView.implicitHeight + Theme.space3 * 2
                 radius: Theme.radiusSm
                 color: Theme.surfaceRaised
 
-                Text {
-                    id: subject
+                FullText {
+                    id: subjectView
                     anchors.fill: parent
                     anchors.margins: Theme.space3
+                    maxHeight: 200
                     text: pane.request === null ? "" : pane.request.subject
                     color: Theme.text
                     font.family: Theme.technicalFontFamily
                     font.pixelSize: Theme.textSm
-                    wrapMode: Text.WrapAnywhere
-                    maximumLineCount: 4
-                    elide: Text.ElideRight
                 }
             }
 
@@ -131,7 +186,7 @@ FocusScope {
                     color: Theme.text
                     font.family: Theme.technicalFontFamily
                     font.pixelSize: Theme.textSm
-                    elide: Text.ElideMiddle
+                    wrapMode: Text.WrapAnywhere
                 }
                 Text {
                     Layout.fillWidth: true
@@ -141,15 +196,13 @@ FocusScope {
                     font.family: Theme.technicalFontFamily
                     font.pixelSize: Theme.textSm
                 }
-                Text {
-                    Layout.fillWidth: true
-                    visible: text !== ""
+                FullText {
+                    id: cmdlineView
+                    maxHeight: 72
                     text: pane.request === null ? "" : pane.request.requestedBy.cmdline
                     color: Theme.textMuted
                     font.family: Theme.technicalFontFamily
                     font.pixelSize: Theme.textSm
-                    maximumLineCount: 1
-                    elide: Text.ElideRight
                 }
             }
 

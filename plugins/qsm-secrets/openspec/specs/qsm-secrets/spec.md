@@ -559,7 +559,10 @@ SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`,
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`,
+directory, and, after a `cd` to a known directory, by the directory it is relative to. `${NAME}` SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`,
+`XDG_RUNTIME_DIR` and `PASSWORD_STORE_DIR`, and a braced form of one of them with an operator
+(`${NAME:-x}`, `${NAME#x}`, `${!NAME}`) SHALL be refused as `unreadable-command`, because its value
+cannot be known without running the shell. It SHALL deny `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`,
 `kwallet-query` and `op`; `busctl`, `gdbus`, `dbus-send`, `dbus-monitor` and `qdbus` when a word names
 the secrets service by bus name or object path (`org.freedesktop.secrets`, `org.freedesktop.Secret`,
 `/org/freedesktop/secrets`) or holds an expansion, because a destination the guard cannot read could
@@ -614,6 +617,14 @@ because the hook sandbox cannot load WebAssembly.
 - **WHEN** an agent runs `cat "$XDG_DATA_HOME/keyrings/login.keyring"`, or a reader on a symbolic link to
   that file
 - **THEN** the call is denied as keyring files, and `ls` of the directory is not
+
+#### Scenario: a braced variable is the same path
+
+- **WHEN** an agent runs `cat ${XDG_DATA_HOME}/keyrings/login.keyring`, `cat "${HOME}/.password-store/x"`
+  or `cat ${PASSWORD_STORE_DIR}/x`
+- **THEN** the call is denied as keyring files, `cat ${XDG_RUNTIME_DIR}/qsm-secrets/s1/kubeconfig` as
+  rendered config, `cat ${XDG_DATA_HOME:-/x}/keyrings/login.keyring` as `unreadable-command`, and
+  `cat ${HOME}/README.md` is not denied
 
 #### Scenario: the rendered config is handed over, never read
 
@@ -730,8 +741,10 @@ of those kinds, because the consumers' environment variables (`SUDO_ASKPASS`, `S
 read the link's name as the kind. `qsm-secrets askpass enable` SHALL print the fish lines for the
 kinds named and write nothing. The pane SHALL show the asking process (the parent): its executable
 path, the first 12 hex of the sha256 of that executable and its command line, and SHALL hide the
-typed text when the prompt asks for a password, passphrase or secret. `ssh` and `git` answers are
-asked once and never stored.
+typed text when the prompt asks for a password, passphrase or secret. The prompt, the subject (the tool
+and its whole input for `decide`) and the command line SHALL be shown in full, never cut: what does not
+fit its box scrolls and says so, because the person must not allow what part of it hid. `ssh` and
+`git` answers are asked once and never stored.
 
 #### Scenario: sudo -A through the link
 
@@ -748,6 +761,12 @@ asked once and never stored.
 
 - **WHEN** hook-kit runs `$HOOK_KIT_ASKPASS` with an ask request on stdin and the person presses Allow
 - **THEN** stdout is an ask response with the same id and `allow`
+
+#### Scenario: a long request is shown whole
+
+- **WHEN** a `decide` request carries a 600-character input
+- **THEN** the request's subject holds all 600 characters, and the pane wraps it and scrolls with a
+  marker when it does not fit
 
 #### Scenario: a second run changes nothing
 
