@@ -447,7 +447,7 @@ for (const flavor of FLAVORS) {
           run.stdout
             .trim()
             .split("\n")
-            .sort((a, b) => a.localeCompare(b)),
+            .toSorted((a, b) => a.localeCompare(b)),
         ).toEqual(["capture/cap_x", "qsm/github-token", "qsm/npm-token", "work/work-token"]);
         expect(leaked(run)).toBeNull();
       });
@@ -782,7 +782,7 @@ for (const flavor of FLAVORS) {
           expect(cli(["render", template, "--out", out, "--session", "s9"]).code).toBe(0);
         }
         const session = join(runtime, "qsm-secrets", "s9");
-        expect(readdirSync(session).sort((a, b) => a.localeCompare(b))).toEqual(["one", "two"]);
+        expect(readdirSync(session).toSorted((a, b) => a.localeCompare(b))).toEqual(["one", "two"]);
         const other = join(runtime, "qsm-secrets", "s10");
         mkdirSync(other, { recursive: true });
         const run = cli(["clean", "--session", "s9", "--json"]);

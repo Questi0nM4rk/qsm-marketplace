@@ -367,8 +367,8 @@ async function run(
     ...Object.keys(manifest.qsm.bin ?? {}).map((bin) =>
       completionStep(completionDir, bin, manifest),
     ),
+    ...(await extraSteps(config, ctx)),
   ];
-  steps.push(...(await extraSteps(config, ctx)));
   return steps;
 }
 

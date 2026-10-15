@@ -32,7 +32,7 @@ function treeHash(dir: string): string | null {
   }
   const hash = createHash("sha256");
   const walk = (at: string): void => {
-    for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) =>
+    for (const entry of readdirSync(at, { withFileTypes: true }).toSorted((a, b) =>
       a.name.localeCompare(b.name),
     )) {
       const path = join(at, entry.name);

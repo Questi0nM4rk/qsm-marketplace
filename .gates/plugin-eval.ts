@@ -205,13 +205,18 @@ function readHashes(file: string): Record<string, { hash: string; ok: boolean }>
   return out;
 }
 
+function passed(arms: Arm[]): number {
+  return arms.filter((a) => a.passed === true).length;
+}
+
+function turns(arms: Arm[]): string {
+  return arms.length === 0
+    ? "n/a"
+    : String(Math.round(arms.reduce((n, a) => n + (a.turns ?? 0), 0) / arms.length));
+}
+
 /** A verdict per case from the aggregate results of the runs. */
 function verdicts(files: string[]): Verdict[] {
-  const passed = (arms: Arm[]) => arms.filter((a) => a.passed === true).length;
-  const turns = (arms: Arm[]) =>
-    arms.length === 0
-      ? "n/a"
-      : String(Math.round(arms.reduce((n, a) => n + (a.turns ?? 0), 0) / arms.length));
   return files.flatMap((file) => {
     return parseCases(file).map((c) => {
       const w = c.arms?.with ?? [];

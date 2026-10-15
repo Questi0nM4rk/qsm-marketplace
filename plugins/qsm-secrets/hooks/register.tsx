@@ -259,14 +259,16 @@ function mapTexts(content: ApiContentBlock[], map: (text: string) => string): Ap
   return content.map(mapBlock);
 }
 
+function withheld(reason: string): string {
+  return `qsm-secrets: this text could not be masked and was withheld (${reason.slice(0, 300)})`;
+}
+
+function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAppendInput {
+  return { ...e, message: { ...e.message, content } };
+}
+
 /** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
 function registerMask(on: On): void {
-  const withheld = (reason: string): string =>
-    `qsm-secrets: this text could not be masked and was withheld (${reason.slice(0, 300)})`;
-  const rewritten = (e: SessionAppendInput, content: ApiContentBlock[]): SessionAppendInput => ({
-    ...e,
-    message: { ...e.message, content },
-  });
   on("session.append", async ($, e, next) => {
     const texts: string[] = [];
     mapTexts(e.message.content, (text) => {
