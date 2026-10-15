@@ -54,10 +54,7 @@ export function openReplySocket(env: Env): ReplySocket {
   chmodSync(dir, 0o700);
   const path = join(dir, "reply.sock");
 
-  let settle: (reply: Reply | null) => void = () => undefined;
-  const answer = new Promise<Reply | null>((resolve) => {
-    settle = resolve;
-  });
+  const { promise: answer, resolve: settle } = Promise.withResolvers<Reply | null>();
   const buffers = new WeakMap<object, string>();
   const listener = listen({
     unix: path,

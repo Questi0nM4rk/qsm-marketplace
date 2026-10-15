@@ -46,7 +46,7 @@ export function libName(spec: string): string {
   const s = withoutVersion(
     stripLocator(spec.trim().replace(/^(?:pypi|crates|gitlab|bitbucket):(.+)$/, "$1")),
   );
-  const last = s.split("/").filter(Boolean).at(-1) ?? s;
+  const last = s.split("/").findLast(Boolean) ?? s;
   return last.toLowerCase();
 }
 

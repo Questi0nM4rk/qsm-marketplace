@@ -143,7 +143,7 @@ test("a Grep with no path is judged by the working directory", async ($, on) => 
 const glob = (input: { pattern: string; path?: string }) => ({ tool: "Glob", ...input }) as never;
 
 test("a Glob under the pass store, or with a pattern that starts there, is denied", async ($, on) => {
-  fileHost(on, undefined);
+  fileHost(on);
   on("session.cwd", () => ({ value: "/home/p/project" }));
 
   const byPath = await $.tool.call(glob({ pattern: "**/*.gpg", path: "/home/p/.password-store" }));
@@ -159,7 +159,7 @@ test("a Glob under the pass store, or with a pattern that starts there, is denie
 });
 
 test("a Glob from the home directory lists names and is not denied", async ($, on) => {
-  fileHost(on, undefined);
+  fileHost(on);
   on("session.cwd", () => ({ value: "/home/p" }));
 
   const listed = await $.tool.call(glob({ pattern: "*.md" }));

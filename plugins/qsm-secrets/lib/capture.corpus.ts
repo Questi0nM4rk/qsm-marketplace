@@ -39,8 +39,11 @@ function random(alphabet: string, length: number): string {
   return out;
 }
 
+function part(value: object): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
 function jwt(): string {
-  const part = (value: object): string => Buffer.from(JSON.stringify(value)).toString("base64url");
   const header = part({ alg: "HS256", typ: "JWT" });
   const payload = part({
     sub: random(DIGITS, 10),

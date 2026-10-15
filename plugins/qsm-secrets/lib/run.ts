@@ -257,16 +257,10 @@ export function runScrub(target: string): { path: string; scrubbed: number } {
   let scrubbed = 0;
   for (const file of transcriptFiles(path)) {
     const lines = readFileSync(file, "utf8").split("\n");
-    let changed = false;
-    const swapped = lines.map((line) => {
-      const out = scrubLine(line, values);
-      if (out !== line) {
-        changed = true;
-        scrubbed += 1;
-      }
-      return out;
-    });
-    if (changed) {
+    const swapped = lines.map((line) => scrubLine(line, values));
+    const changed = swapped.filter((out, i) => out !== lines[i]).length;
+    scrubbed += changed;
+    if (changed > 0) {
       const temp = join(dirname(file), `.${process.pid}.scrub`);
       writeFileSync(temp, swapped.join("\n"), { mode: statSync(file).mode });
       renameSync(temp, file);
@@ -416,6 +410,12 @@ export function runGet(namespace: string, key: string): { namespace: string; key
   return { namespace, key };
 }
 
+function label(side: { namespace: string; key: string }): string {
+  return side.namespace === LEGACY_NAMESPACE
+    ? `legacy/${side.key}`
+    : `${side.namespace}/${side.key}`;
+}
+
 /**
  * `rename`: the value is read into this process and written under the new name, never printed.
  * The new entry is read back and compared before the old one goes, so a failed step leaves the old
@@ -427,8 +427,6 @@ export function runRename(
   to: { namespace: string; key: string },
 ): { from: string; to: string } {
   const legacy = from.namespace === LEGACY_NAMESPACE;
-  const label = (side: { namespace: string; key: string }): string =>
-    side.namespace === LEGACY_NAMESPACE ? `legacy/${side.key}` : `${side.namespace}/${side.key}`;
   if (from.namespace === to.namespace && from.key === to.key) {
     fail("rename needs two different names", "pass a new <to> or --to-folder", "usage");
   }

@@ -339,6 +339,10 @@ function renderGroupHelp(
   return `usage: ${bin} ${group} <verb> [args] [--json] [--no-input]\n\n${column(rows)}\n\nrun ${bin} ${group} <verb> --help for its arguments\n`;
 }
 
+function describe(arg: CommandArg): string {
+  return `${arg.description}${arg.repeatable === true ? " (repeatable)" : ""}`;
+}
+
 export function renderVerbHelp(manifest: QsmManifest, bin: string, verb: string): string {
   const verbs = verbsOf(manifest, bin);
   const decl = verbs.get(verb);
@@ -357,8 +361,6 @@ export function renderVerbHelp(manifest: QsmManifest, bin: string, verb: string)
     "[--json] [--no-input]",
     ...(decl.passthrough === true ? ["[-- <args...>]"] : []),
   ].join(" ");
-  const describe = (arg: CommandArg) =>
-    `${arg.description}${arg.repeatable === true ? " (repeatable)" : ""}`;
   const rows: (readonly [string, string])[] = [
     ...positionals.map((a) => [positionalUsage(a), describe(a)] as const),
     ...flags.map((a) => [flagUsage(a), describe(a)] as const),

@@ -78,13 +78,13 @@ describe("install", () => {
       expect(existsSync(join(bin, "qsm-web"))).toBe(true);
       stubUpstreamBins(bin);
 
-      const env = { ...process.env, QSM_MARKETPLACE: resolve(PLUGIN, "..", "..") } as Record<
-        string,
-        string
-      >;
-      env.PATH = `${bin}:${process.env.PATH ?? ""}`;
-      env.HOME = home;
-      env.XDG_CONFIG_HOME = join(home, "c");
+      const env = {
+        ...process.env,
+        QSM_MARKETPLACE: resolve(PLUGIN, "..", ".."),
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        HOME: home,
+        XDG_CONFIG_HOME: join(home, "c"),
+      } as Record<string, string>;
       const doctor = spawnSync(join(bin, "qsm-web"), ["doctor", "--json"], {
         encoding: "utf8",
         env,

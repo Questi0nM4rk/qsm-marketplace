@@ -72,7 +72,7 @@ function runResolver(target: string, projectDir: string | undefined): string {
   if (r.status !== 0) {
     throw new FetchError("failed", `the resolver failed for "${target}" (exit ${r.status})`);
   }
-  const cached = (r.stdout ?? "").trim().split(/\r?\n/).filter(Boolean).pop() ?? "";
+  const cached = (r.stdout ?? "").trim().split(/\r?\n/).findLast(Boolean) ?? "";
   if (cached.length === 0 || !existsSync(cached)) {
     throw new FetchError("failed", `the resolver returned no usable path for "${target}"`);
   }
