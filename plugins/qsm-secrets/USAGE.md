@@ -18,7 +18,8 @@ qsm-secrets askpass enable [--sudo] [--ssh] [--git] [--decide]
 `{ text, captured: [{ id, suffix }], taken: [name] }`; a `name=value` becomes `{{secret:qsm/<name>}}`
 and its id is `qsm/<name>`, and a name already stored is listed in `taken` and its value gets a
 `cap_<hex>`); `scrub <transcript|session>` replaces captured values left
-in a transcript. Neither prints a value.
+in a transcript, and fails `blocked` (exit 5) naming the key when a stored value cannot be read, as in a locked
+vault, leaving the transcript as it was. Neither prints a value.
 
 `guard` reads a Bash command on stdin and answers `ok`, or `blocked` (exit 5) with a code and the
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,

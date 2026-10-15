@@ -172,13 +172,21 @@ export function runScrub(target: string): { path: string; scrubbed: number } {
   const path = target.includes("/") ? target : locateTranscript(target);
   let text = readFileSync(path, "utf8");
   const ids = placeholderIds(text);
-  const backend = ids.length === 0 ? undefined : activeBackend();
+  if (ids.length === 0) {
+    return { path, scrubbed: 0 };
+  }
+  const backend = activeBackend();
+  const stored = backend.entries();
   let scrubbed = 0;
-  for (const id of backend === undefined ? [] : ids) {
+  for (const id of ids) {
     const { namespace, key } = locate(id);
-    const bytes = backend?.read(namespace, key);
-    if (bytes === null || bytes === undefined) {
+    if (!keyExists(stored, namespace, key)) {
       continue;
+    }
+    const bytes = backend.read(namespace, key);
+    if (bytes === null) {
+      // A stored key that cannot be read (a locked vault) would stay in the transcript: refuse instead.
+      fail(`cannot read ${namespace}/${key} to scrub it`, "unlock the vault", "blocked");
     }
     const value = new TextDecoder().decode(bytes);
     // The transcript is JSON lines: a value holding a quote or a backslash sits there escaped.

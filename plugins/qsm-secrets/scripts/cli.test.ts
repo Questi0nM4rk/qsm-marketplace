@@ -25,6 +25,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { FAKE_QS } from "../lib/askpass/fake-qs.ts";
 
+interface Manifest {
+  readonly qsm: { readonly commands: Record<string, unknown> };
+}
+
 const CLI = resolve(import.meta.dir, "cli.ts");
 const PANE = resolve(import.meta.dir, "../qml/askpass");
 
@@ -109,7 +113,8 @@ const placeholderOf = (id: string): string => `{{${"secret"}:${id}}}`;
 
 /** A secret-tool over `store`: `search` prints the `secret =` line on stdout and the attributes on
  * stderr, in a different order per item. Without a terminal `store` reads stdin; with one it
- * stands in for the prompt and takes FAKE_TYPED. */
+ * stands in for the prompt and takes FAKE_TYPED. FAKE_LOCKED names the one key whose value cannot
+ * be read, as a locked vault answers. */
 function fakeSecretTool(store: string): string {
   return `#!/bin/sh
 store='${store}'
@@ -136,6 +141,7 @@ case "$verb" in
     while [ $# -gt 0 ]; do
       case "$1" in namespace) ns="$2" ;; key) key="$2" ;; esac; shift
     done
+    [ "$key" = "$FAKE_LOCKED" ] && exit 1
     if [ -z "$ns" ]; then
       for f in "$store"/*__"$key"; do [ -f "$f" ] && { cat "$f"; exit 0; }; done; exit 1
     fi
@@ -158,7 +164,8 @@ esac
 }
 
 /** A stateful rbw over `store`: one file per folder__name, and `<file>.user` when the row's user is
- * not this wrapper. `add` takes the value from stdin, or from FAKE_TYPED where stdin is a terminal. */
+ * not this wrapper. `add` takes the value from stdin, or from FAKE_TYPED where stdin is a terminal.
+ * FAKE_LOCKED names the one entry `get` cannot read. */
 function fakeRbw(store: string): string {
   return `#!/bin/sh
 store='${store}'
@@ -182,7 +189,8 @@ case "$verb" in
     done ;;
   unlocked) exit 0 ;;
   config) printf '{"email": "someone@example.test"}\\n' ;;
-  get) [ -f "$store/\${folder}__\${name}" ] || { echo "couldn't find entry for '$name'" >&2; exit 1; }
+  get) [ "$name" = "$FAKE_LOCKED" ] && { echo "vault is locked" >&2; exit 1; }
+       [ -f "$store/\${folder}__\${name}" ] || { echo "couldn't find entry for '$name'" >&2; exit 1; }
        cat "$store/\${folder}__\${name}"; echo ;;
   add) if [ -t 0 ]; then printf '%s' "$FAKE_TYPED" > "$store/\${folder}__\${name}"; else cat > "$store/\${folder}__\${name}"; fi ;;
   remove) [ -f "$store/\${folder}__\${name}" ] || { echo "couldn't find entry for '$name'" >&2; exit 1; }
@@ -199,6 +207,8 @@ interface Flavor {
   readonly absent: readonly [string, string];
   /** How many prerequisites `doctor` probes when all is well, and when the binary is gone. */
   readonly checks: readonly [number, number];
+  /** What storing a value of several lines does: rbw keeps one line, libsecret keeps all. */
+  readonly multiline: "refused" | "stored";
 }
 
 const FLAVORS: readonly Flavor[] = [
@@ -207,12 +217,14 @@ const FLAVORS: readonly Flavor[] = [
     fake: fakeRbw,
     absent: ["rbw is not on PATH", "cargo install rbw"],
     checks: [5, 5],
+    multiline: "refused",
   },
   {
     name: "libsecret",
     fake: fakeSecretTool,
     absent: ["secret-tool is not on PATH", "install libsecret"],
     checks: [3, 2],
+    multiline: "stored",
   },
 ];
 
@@ -228,8 +240,13 @@ describe("the shared CLI base", () => {
   test("--help lists every verb qsm.json declares", () => {
     const run = cli(["--help"]);
     expect(run.code).toBe(0);
-    for (const verb of ["pipe", "env", "set", "has", "list", "inspect", "rm", "get", "doctor"]) {
-      expect(run.stdout).toContain(`  ${verb}`);
+    const declared = Object.keys(
+      (JSON.parse(readFileSync(resolve(import.meta.dir, "../qsm.json"), "utf8")) as Manifest).qsm
+        .commands,
+    ).map((name) => name.replace("qsm-secrets ", ""));
+    expect(declared.length).toBeGreaterThan(18);
+    for (const verb of declared) {
+      expect(run.stdout).toMatch(new RegExp(`^  ${verb} {2,}\\S`, "m"));
     }
   });
 
@@ -672,6 +689,86 @@ for (const flavor of FLAVORS) {
       });
     });
 
+    describe("clean", () => {
+      test("removes the session's directory with every rendered file, and a second run is ok", () => {
+        const template = join(runtime, "template");
+        writeFileSync(template, `token=${placeholderOf("qsm/npm-token")}`);
+        for (const out of ["one", "two"]) {
+          expect(cli(["render", template, "--out", out, "--session", "s9"]).code).toBe(0);
+        }
+        const session = join(runtime, "qsm-secrets", "s9");
+        expect(readdirSync(session).sort((a, b) => a.localeCompare(b))).toEqual(["one", "two"]);
+        const other = join(runtime, "qsm-secrets", "s10");
+        mkdirSync(other, { recursive: true });
+        const run = cli(["clean", "--session", "s9", "--json"]);
+        expect(run.code).toBe(0);
+        expect(envelope(run).data).toEqual({ dir: session });
+        expect(existsSync(session)).toBe(false);
+        expect(existsSync(other)).toBe(true);
+        expect(leaked(run)).toBeNull();
+        expect(cli(["clean", "--session", "s9"]).code).toBe(0);
+      });
+    });
+
+    describe("scrub", () => {
+      // Outside the projects directory, or prune would count its placeholders as named.
+      const transcript = (): string => join(runtime, "scrub.jsonl");
+      const line = (): string =>
+        `{"text":"${CAPTURED_VALUE} ${placeholderOf("cap_x")} ${NPM_VALUE} ${placeholderOf("qsm/npm-token")} ${placeholderOf("cap_gone")}"}\n`;
+      beforeEach(() => writeFileSync(transcript(), line()));
+
+      test("swaps every stored value still in the transcript for its placeholder, once", () => {
+        const run = cli(["scrub", transcript(), "--json"]);
+        expect(run.code).toBe(0);
+        expect(envelope(run).data).toMatchObject({ scrubbed: 2 });
+        expect(leaked(run)).toBeNull();
+        const text = readFileSync(transcript(), "utf8");
+        expect(text).not.toContain(CAPTURED_VALUE);
+        expect(text).not.toContain(NPM_VALUE);
+        expect(text).toContain(placeholderOf("cap_x"));
+        expect(envelope(cli(["scrub", transcript(), "--json"])).data).toMatchObject({
+          scrubbed: 0,
+        });
+      });
+
+      test("a transcript with no placeholder is not changed and needs no backend", () => {
+        writeFileSync(transcript(), "plain text\n");
+        const run = cli(["scrub", transcript()], { backend: false });
+        expect(run.code).toBe(0);
+        expect(readFileSync(transcript(), "utf8")).toBe("plain text\n");
+      });
+
+      test("a stored value that cannot be read is blocked, names the key, and changes nothing", () => {
+        const run = cli(["scrub", transcript(), "--json"], { env: { FAKE_LOCKED: "cap_x" } });
+        expect(run.code).toBe(5);
+        const body = envelope(run) as unknown as { code: string; message: string };
+        expect(body.code).toBe("blocked");
+        expect(body.message).toContain("capture/cap_x");
+        expect(readFileSync(transcript(), "utf8")).toBe(line());
+      });
+    });
+
+    describe("a value of several lines", () => {
+      const multi = "first line of it\nsecond line of it";
+      beforeEach(() => put("qsm", "multi", multi));
+
+      test(`is ${flavor.multiline} by ${flavor.name} when rename copies it`, () => {
+        const run = cli(["rename", "multi", "moved-multi"]);
+        if (flavor.multiline === "stored") {
+          expect(run.code).toBe(0);
+          expect(readFileSync(file("qsm", "moved-multi"), "utf8").trim()).toBe(multi);
+          expect(existsSync(file("qsm", "multi"))).toBe(false);
+        } else {
+          expect(run.code).toBe(1);
+          expect(run.stderr).toContain("stores one line");
+          expect(run.stderr).toContain("use libsecret");
+          expect(existsSync(file("qsm", "moved-multi"))).toBe(false);
+          expect(readFileSync(file("qsm", "multi"), "utf8")).toBe(multi);
+        }
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
     describe("rename", () => {
       beforeEach(() => {
         put("qsm", "old-name", "s3cret-value");
@@ -717,6 +814,41 @@ for (const flavor of FLAVORS) {
         expect(bad.code).toBe(1);
         expect(bad.stderr).toContain("exited 7");
         expect(leaked(bad)).toBeNull();
+      });
+
+      test("ok when the probe accepts the value, failed when it rejects it, in either case silent", () => {
+        const accepts = ["sh", "-c", `test "$V" = ${VALUE}`];
+        const ok = cli(["check", "github-token=V", "--", ...accepts]);
+        expect(ok.code).toBe(0);
+        expect(ok.stdout.trim()).toBe("ok: sh");
+        expect(ok.stderr).toBe("");
+        const revoked = cli(["check", "npm-token=V", "--", ...accepts]);
+        expect(revoked.code).toBe(1);
+        expect(revoked.stderr).toContain("exited 1");
+        expect(cli(["check", "github-token=V", "--", "true"]).code).toBe(0);
+        expect(cli(["check", "github-token=V", "--", "false"]).code).toBe(1);
+        expect(leaked(revoked)).toBeNull();
+      });
+
+      test("a probe that prints the value prints nothing to the caller", () => {
+        const loud = cli(["check", "github-token=V", "--", "sh", "-c", 'echo "$V"; echo "$V" >&2']);
+        expect(loud.code).toBe(0);
+        expect(leaked(loud)).toBeNull();
+        expect(loud.stdout.trim()).toBe("ok: sh");
+        expect(loud.stderr).toBe("");
+      });
+
+      test("a key that is not stored is missing and the probe never runs", () => {
+        const run = cli([
+          "check",
+          "nope=V",
+          "--",
+          "sh",
+          "-c",
+          `echo ran > ${join(runtime, "ran")}`,
+        ]);
+        expect(run.code).toBe(4);
+        expect(existsSync(join(runtime, "ran"))).toBe(false);
       });
     });
 
@@ -798,14 +930,38 @@ for (const flavor of FLAVORS) {
     describe("a backend that is not installed", () => {
       // An absent backend is an absent prerequisite, not work that ran and went wrong: every verb
       // that reaches it says `missing` (exit 4) and names the install step.
-      for (const args of [["has", "github-token"], ["list"], ["inspect"], ["mask", "--all"]]) {
-        test(`${args.join(" ")} reports missing, exit 4, and names the install step`, () => {
-          const run = cli([...args, "--json"], { backend: false, input: "[]" });
+      const token = `ghp_${"aB3dE9".repeat(6)}`;
+      const template = (): string => {
+        const path = join(runtime, "template");
+        writeFileSync(path, `x ${placeholderOf("qsm/github-token")}`);
+        return path;
+      };
+      const absent: Record<string, () => { args: string[]; input: string }> = {
+        has: () => ({ args: ["has", "github-token"], input: "" }),
+        list: () => ({ args: ["list"], input: "" }),
+        inspect: () => ({ args: ["inspect"], input: "" }),
+        rm: () => ({ args: ["rm", "github-token"], input: "" }),
+        rename: () => ({ args: ["rename", "github-token", "other"], input: "" }),
+        prune: () => ({ args: ["prune"], input: "" }),
+        pipe: () => ({ args: ["pipe", "github-token", "--", "cat"], input: "" }),
+        env: () => ({ args: ["env", "github-token=V", "--", "true"], input: "" }),
+        check: () => ({ args: ["check", "github-token=V", "--", "true"], input: "" }),
+        "mask --all": () => ({ args: ["mask", "--all"], input: "[]" }),
+        scrub: () => ({ args: ["scrub", "s"], input: "" }),
+        render: () => ({
+          args: ["render", template(), "--out", "o", "--session", "s1"],
+          input: "",
+        }),
+        capture: () => ({ args: ["capture"], input: `deploy-key=${token}` }),
+      };
+      for (const [verb, build] of Object.entries(absent)) {
+        test(`${verb} reports missing, exit 4, and names the install step`, () => {
+          const { args, input } = build();
+          // No --json: pipe and env refuse it, and exit 4 is `missing` for every verb.
+          const run = cli(args, { backend: false, input });
           expect(run.code).toBe(4);
-          const parsed = envelope(run) as unknown as { code: string; message: string };
-          expect(parsed.code).toBe("missing");
-          expect(parsed.message).toContain(flavor.absent[0]);
-          expect(parsed.message).toContain(flavor.absent[1]);
+          expect(run.stderr).toContain(flavor.absent[0]);
+          expect(run.stderr).toContain(flavor.absent[1]);
         });
       }
     });

@@ -251,15 +251,23 @@ under another convention remain reachable by key name.
 
 ### Requirement: One backend interface, two implementations, one test
 
-qsm-secrets SHALL reach its store through one interface of five operations (set, has, deliver a
-value to a command, list names, remove) with two implementations, `bitwarden` (through `rbw`) and
-`libsecret` (through `secret-tool`). One conformance test SHALL run against both and SHALL pass for
-both before either ships.
+qsm-secrets SHALL reach its store through one interface of six operations (set, has, deliver a
+value to a command, list names, remove, health) with two implementations, `bitwarden` (through
+`rbw`) and `libsecret` (through `secret-tool`). One conformance test SHALL run against both and SHALL
+pass for both before either ships; it SHALL cover every verb `qsm.json` declares that reaches a
+store, and a backend's own limit SHALL be stated here and asserted per backend.
 
 #### Scenario: both backends pass the same conformance test
 
 - **WHEN** the conformance test runs against the `bitwarden` and the `libsecret` backend
 - **THEN** every operation passes for both
+
+#### Scenario: a multi-line value is stored by libsecret and refused by bitwarden
+
+- **WHEN** a value of several lines is stored, as `rename` does when it copies one
+- **THEN** `libsecret` stores it and reads it back whole, and `bitwarden` fails with a message that
+  says `rbw` stores one line and names libsecret for a multi-line secret, because `rbw add` takes
+  the first line of its editor file as the password
 
 ### Requirement: The backend is chosen at activation
 
@@ -536,6 +544,12 @@ session ends either way.
 
 - **WHEN** the scrub fails at the session end
 - **THEN** the session directory is still removed and the log names the scrub's cause
+
+#### Scenario: a stored value cannot be read at the scrub
+
+- **WHEN** the transcript names a stored key whose value cannot be read, as in a locked vault
+- **THEN** `scrub` fails `blocked` naming the key and leaves the transcript as it was, and a key the
+  transcript names that is not stored is skipped, because there is no value to remove
 
 ### Requirement: An agent is routed to the wrapper instead of reading a value itself
 
