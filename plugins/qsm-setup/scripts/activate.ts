@@ -168,12 +168,17 @@ function activatedVersions(home: string, env: ActivationContext["env"], rel: str
         try {
           return [git(home, env, ["show", `${sha}:${rel}`])];
         } catch {
-          return []; // a commit that removed the file
+          // a commit that removed the file
+          return [];
         }
       });
   } catch {
     return [];
   }
+}
+
+function readIfExists(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
 /** Every file the choice writes, with its content; throws naming the file on broken markers. */
@@ -182,14 +187,18 @@ function targets(
   env: ActivationContext["env"],
   choice: Exclude<InstructionsChoice, "skip">,
 ): Target[] {
-  const existing = (path: string) => (existsSync(path) ? readFileSync(path, "utf8") : null);
   const generated = GENERATED.map((rel): Target => {
     const path = resolve(home, rel);
     const source = readFileSync(resolve(SRC, rel), "utf8");
     const recognised = (text: string) =>
       text === source || activatedVersions(home, env, rel).includes(text);
     try {
-      const { text, kept, frontReplaced } = mergeBlock(existing(path), source, choice, recognised);
+      const { text, kept, frontReplaced } = mergeBlock(
+        readIfExists(path),
+        source,
+        choice,
+        recognised,
+      );
       return { path, content: text, kept, frontReplaced };
     } catch (e) {
       throw new Error(`${path}: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
@@ -198,7 +207,12 @@ function targets(
   const settings = resolve(home, "settings.json");
   return [
     ...generated,
-    { path: settings, content: selectStyle(existing(settings)), kept: false, frontReplaced: false },
+    {
+      path: settings,
+      content: selectStyle(readIfExists(settings)),
+      kept: false,
+      frontReplaced: false,
+    },
   ];
 }
 

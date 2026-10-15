@@ -330,7 +330,7 @@ describe("the person's own text and the generated area meet at their edges", () 
     const { home, claudeHome } = sandbox();
     await install(context(home, claudeHome));
     const style = read(claudeHome, "output-styles/qsm.md");
-    writeIn(claudeHome, "output-styles/qsm.md", style.replace(/\n/g, "\r\n"));
+    writeIn(claudeHome, "output-styles/qsm.md", style.replaceAll("\n", "\r\n"));
 
     await install(context(home, claudeHome));
 
@@ -350,7 +350,7 @@ describe("line endings and marker shape", () => {
     writeIn(
       claudeHome,
       "rules/git.md",
-      `above\r\n\r\n${rule.replace(/\n/g, "\r\n")}\r\nmine below\r\n`,
+      `above\r\n\r\n${rule.replaceAll("\n", "\r\n")}\r\nmine below\r\n`,
     );
 
     await install(context(home, claudeHome));
