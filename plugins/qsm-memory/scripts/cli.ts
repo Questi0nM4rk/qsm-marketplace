@@ -31,12 +31,14 @@ const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   secret: "blocked",
 };
 
-function memOutcome(error: MemError): Outcome {
-  const outcome = fail(OUTCOME_OF[error.code], `${error.code}: ${error.message}`, {
+/** The message once; in text mode the next step follows on its own `  next:` line, as the MCP tools
+ * and qsm-secrets print it, and under --json it is only in `data.next`. */
+function memOutcome(error: MemError, json: boolean): Outcome {
+  const message = json ? error.message : `${error.message}\n  next: ${error.next}`;
+  return fail(OUTCOME_OF[error.code], message, {
     code: error.code,
     next: error.next,
   });
-  return { ...outcome, warnings: [`next: ${error.next}`] };
 }
 
 /** Every verb's handler wrapped once: a MemError comes back as its own
@@ -50,7 +52,7 @@ function guarded(handlers: Readonly<Record<string, Handler>>): Record<string, Ha
           return await handler(call);
         } catch (error) {
           if (error instanceof MemError) {
-            return memOutcome(error);
+            return memOutcome(error, call.json);
           }
           throw error;
         }

@@ -181,7 +181,9 @@ When nothing matches the output SHALL be `no session matches` and nothing else.
 #### Scenario: a --since nobody can parse is refused
 
 - **WHEN** `list --since "last week"` or `search x --since 7days` runs
-- **THEN** it exits `usage` naming the value and the accepted forms, and prints no session
+- **THEN** it exits `usage` naming the value and the accepted forms, and prints no session; the
+  message appears once, with no code written into it, and the next step follows on its own
+  `  next:` line, never as a warning
 
 #### Scenario: --since narrows to sessions that ended after the date
 

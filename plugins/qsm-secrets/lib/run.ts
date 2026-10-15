@@ -95,13 +95,18 @@ export function runMask(ids: readonly string[]): { text: string } {
   const backend = activeBackend();
   const values = ids.map((id) => {
     const { namespace, key } = locate(id);
-    return { id, value: backend.read(namespace, key), namespace, key };
-  });
-  let text = readFileSync(0, "utf8");
-  for (const { id, value, namespace, key } of values) {
-    if (value === null) {
+    // Listed first: a key that is listed but reads null is unreadable (locked), not absent.
+    if (!keyExists(backend.entries(), namespace, key)) {
       missing(namespace, key);
     }
+    const value = backend.read(namespace, key);
+    if (value === null) {
+      fail(`cannot read ${namespace}/${key} to mask it`, "unlock the vault", "blocked");
+    }
+    return { id, value };
+  });
+  let text = readFileSync(0, "utf8");
+  for (const { id, value } of values) {
     // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
     text = text.replaceAll(new TextDecoder().decode(value), `{{secret:${id}}}`);
   }

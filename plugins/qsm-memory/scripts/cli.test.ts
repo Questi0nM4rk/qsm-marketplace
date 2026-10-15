@@ -166,7 +166,14 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     const r = run(box, ["list", "--since", "last week", "--json"]);
     expect(r.exit).toBe(2);
     expect(JSON.parse(r.stdout).message).toContain("--since takes Nd or a date (got 'last week')");
-    expect(run(box, ["search", "x", "--since", "7days"]).exit).toBe(2);
+    const text = run(box, ["search", "x", "--since", "7days"]);
+    expect(text.exit).toBe(2);
+    expect(text.stderr.split("\n").slice(0, 2)).toEqual([
+      "--since takes Nd or a date (got '7days')",
+      "  next: e.g. --since 7d or 2026-09-30",
+    ]);
+    expect(text.stderr).not.toContain("usage: usage");
+    expect(text.stderr).not.toContain("warning:");
   });
 
   test("a catch-up with a file it cannot read is partial, names it, and saves the rest", () => {
