@@ -112,7 +112,9 @@ test("a git commit through Bash starts a refresh for the session's cwd", async (
   await bash($, "(git commit -qm x)");
 
   expect(r.text).toBe("tool output");
-  expect(seen.runs).toEqual(new Array(2).fill("qsm-index reindex /repo --if-indexed --json"));
+  expect(seen.runs).toEqual(
+    Array.from({ length: 2 }, () => "qsm-index reindex /repo --if-indexed --json"),
+  );
 });
 
 test("a Bash call that does not commit starts nothing", async ($, on) => {

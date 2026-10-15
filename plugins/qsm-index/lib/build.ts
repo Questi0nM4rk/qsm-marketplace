@@ -88,7 +88,8 @@ function linkGraph(repo: string, files: CacheFiles, env: Env): string | null {
       return null;
     }
     if (code === "EINVAL") {
-      return null; // a real directory
+      // a real directory
+      return null;
     }
     throw cause;
   }

@@ -173,7 +173,7 @@ export function parseTranscript(text: string): Transcript {
   const all = records(text);
   const turns = all.flatMap((record) => recordTurns(record, false));
   const human = turns.filter((turn) => turn.role === "user");
-  const aiTitle = all.filter((r) => r.type === "ai-title" && typeof r.aiTitle === "string").at(-1);
+  const aiTitle = all.findLast((r) => r.type === "ai-title" && typeof r.aiTitle === "string");
   const cwd = all.find((r) => typeof r.cwd === "string")?.cwd ?? null;
   const title = aiTitle?.aiTitle ?? (human[0] === undefined ? null : firstLine(human[0].text));
   return { cwd, title, turns, humanTurns: human.length };

@@ -52,5 +52,5 @@ export function symbolsOf(graph: Graph, file: string): CodeSymbol[] {
 
 /** The last symbol starting at or above `line`. */
 export function enclosing(symbols: readonly CodeSymbol[], line: number): CodeSymbol | undefined {
-  return symbols.filter((symbol) => symbol.line <= line).at(-1);
+  return symbols.findLast((symbol) => symbol.line <= line);
 }

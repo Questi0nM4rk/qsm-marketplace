@@ -240,14 +240,15 @@ const runMcp: Handler = async () => {
   return ok();
 };
 
+const stamp = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => (line === "" ? line : `${new Date().toISOString()} ${line}`))
+    .join("\n");
+
 /** stdout and stderr with an ISO timestamp before every line, so save.log can be read against
  * the commit that fixed a failure in it. */
 function stamped() {
-  const stamp = (text: string) =>
-    text
-      .split("\n")
-      .map((line) => (line === "" ? line : `${new Date().toISOString()} ${line}`))
-      .join("\n");
   return {
     stdout: (text: string) => process.stdout.write(stamp(text)),
     stderr: (text: string) => process.stderr.write(stamp(text)),
