@@ -283,6 +283,42 @@ function innerStarts(name: string, args: readonly Word[]): number[] {
   return name === "xargs" || name === "command" ? flagged(name, words) : [];
 }
 
+type WordPart = Word["parts"][number];
+type ParamPart = Extract<WordPart, { type: "ParamExp" }>;
+
+/** The variables the guard resolves into a protected path; the same set `expand` substitutes. */
+const PATH_VARIABLES = new Set(["HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "PASSWORD_STORE_DIR"]);
+
+/** `${NAME}` with no operator, index, slice or replacement: the same value as `$NAME`. */
+function plainBraced(part: ParamPart): boolean {
+  return (
+    !part.short &&
+    part.param !== null &&
+    part.exp === null &&
+    part.index === null &&
+    part.slice === null &&
+    part.repl === null &&
+    !part.excl &&
+    !part.length &&
+    !part.width &&
+    part.names === ""
+  );
+}
+
+/** One part as the shell would hand it on. shell-ast writes a braced expansion as `${...}`, which
+ * loses the name, so a plain `${NAME}` is spelled out here and reads like `$NAME`. */
+function partText(part: WordPart, word: Word): string {
+  if (part.type === "ParamExp" && plainBraced(part)) {
+    return `\${${part.param?.value ?? ""}}`;
+  }
+  if (part.type === "DblQuoted") {
+    return part.parts.map((inner) => partText(inner, word)).join("");
+  }
+  return wordToParts({ ...word, parts: [part] })
+    .map((out) => (out.kind === "literal" ? out.value : out.sourceText))
+    .join("");
+}
+
 /** A word as the shell would hand it on, with an expansion left as written. The types say a
  * redirect always has a word, the processor serializes a missing one as null, and a missing word
  * names nothing, so it reads as empty text rather than throwing; judgeRedirect refuses a redirect
@@ -291,9 +327,27 @@ function textOf(word: Word | null | undefined): string {
   if (word === null || word === undefined) {
     return "";
   }
-  return wordToParts(word)
-    .map((part) => (part.kind === "literal" ? part.value : part.sourceText))
-    .join("");
+  if (word.parts.length === 0) {
+    return "";
+  }
+  return word.parts.map((part) => partText(part, word)).join("");
+}
+
+/** A path variable with an operator (`${XDG_DATA_HOME:-x}`, `${HOME#/}`, `${!HOME}`) has a value the
+ * guard cannot know without running the shell, so it cannot tell where the command points. */
+function judgeParameters(ast: ShellFile): Refusal | null {
+  for (const part of findAll(ast, "ParamExp")) {
+    const name = part.param?.value;
+    if (name !== undefined && PATH_VARIABLES.has(name) && !part.short && !plainBraced(part)) {
+      return refuse(
+        "unreadable-command",
+        `\${${name}...}`,
+        `\`\${${name}...}\` has a value the guard cannot work out, so it cannot tell whether it names a credential path.`,
+        `Write the path with \`$${name}\` or \`\${${name}}\` and no operator.`,
+      );
+    }
+  }
+  return null;
 }
 
 const basename = (command: string): string => command.slice(command.lastIndexOf("/") + 1);
@@ -600,6 +654,10 @@ function followCd(call: CallExprNode, ctx: Context): void {
 }
 
 async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> {
+  const parameter = judgeParameters(ast);
+  if (parameter !== null) {
+    return parameter;
+  }
   const stmts = findAll(ast, "Stmt");
   const redirected = ctx.fd3Out || stmts.some((stmt) => stmt.redirs.some(fd3ToOutput));
   const inner: Context = { ...ctx, fd3Out: redirected };
