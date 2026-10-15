@@ -129,7 +129,9 @@ function registerStage(on: On): void {
       await update($, currentAsk, () => askTitle(e.text));
     }
     return next({ ...e, context: [...(e.context ?? []), line] });
-  }).catch((_$, e, next) => next(e)); // a reminder that fails never holds the prompt
+  })
+    // a reminder that fails never holds the prompt
+    .catch((_$, e, next) => next(e));
 }
 
 /** What an agent runs now: set before its call, back to thinking after it. */
@@ -170,7 +172,9 @@ function registerRecords(on: On): void {
       refreshLater($);
     }
     return result;
-  }).catch((_$, e, next) => next(e)); // an observer never blocks a call
+  })
+    // an observer never blocks a call
+    .catch((_$, e, next) => next(e));
 }
 
 /** Every agent the session starts, and how and when its turn ends; the main chat's turn too. */

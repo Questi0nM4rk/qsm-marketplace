@@ -79,8 +79,7 @@ function outcomeOf(name: string, r: RunResult): InstallOutcome {
   const last = r.stderr
     .trim()
     .split("\n")
-    .filter((l) => l.length > 0)
-    .at(-1);
+    .findLast((l) => l.length > 0);
   // An installer that printed no envelope cannot say what it did, so it did
   // not install: loud, never an empty success.
   const why = `installer exited ${r.code} and printed no envelope`;
