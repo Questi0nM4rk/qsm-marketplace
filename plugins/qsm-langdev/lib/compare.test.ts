@@ -1266,6 +1266,27 @@ test("failed run: a checker whose output cannot be read is not measured, its std
   expect(runOutcome(verdicts, true).code).toBe("blocked");
 });
 
+test("failed run: a Python crash is named by its exception, not by the Traceback line", async () => {
+  const { root, head } = repoWith({ "a.txt": "alpha\n" });
+  write(root, { "a.txt": `alpha\n${MARKER} fresh\n` });
+  stage(root);
+  const crashed: CheckSpec = {
+    ...MARKED,
+    name: "crashed",
+    binary: "sh",
+    args: () => [
+      "-c",
+      "echo 'not a finding'; printf 'Traceback (most recent call last):\\n  File \"x.py\", line 1\\nModuleNotFoundError: No module named y\\n' >&2; exit 2",
+    ],
+  };
+
+  const { verdicts } = await runWith(root, head, crashed);
+
+  expect(verdicts.map((v) => v.summary)).toEqual([
+    "crashed: not measured: ModuleNotFoundError: No module named y; retry",
+  ]);
+});
+
 test("failed run: a checker killed by a signal is not measured, never worse", async () => {
   const { root, head } = repoWith({ "a.txt": "alpha\n" });
   write(root, { "a.txt": `alpha\n${MARKER} fresh\n` });

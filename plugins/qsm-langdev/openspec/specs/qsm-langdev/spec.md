@@ -204,7 +204,8 @@ rules, and supply-chain scanning. A checker that runs past its time limit SHALL 
 measured, naming the limit and the retry, and SHALL NOT be reported as worse. So SHALL a checker
 whose run ended with output its parser cannot read, a tool error rather than findings:
 `<checker>: not measured: <cause>; retry`, the cause the tool's own words (semgrep's JSON `errors`,
-else the first line of stderr that says something, else the exit code), and it SHALL NOT be stored.
+else the first line of stderr that says something, or the last when a Python traceback opens it,
+else the exit code), and it SHALL NOT be stored.
 Output the parser reads is measured whatever the exit code: semgrep exiting 1 with results is
 findings. A run with a checker not measured and none worse answers `blocked`, never `ok`: nothing
 proved the tree no worse. A worse checker in the same run answers `worse`. The stop gate logs a
@@ -476,15 +477,14 @@ and its thresholds, read live from the one registry every other verb reads.
 
 ### Requirement: Generated files are outside the quality gates, never the safety gates
 
-A path the repository's `.gitattributes` marks `linguist-generated` or `export-ignore` is owned by
-a generator. Every quality checker (duplication, dead code, complexity, lint, types, and
-`structure`) SHALL leave it out of what it scores, on either side. The marker is the one definition
-of "generated"; this plugin keeps no list of its own. The jscpd checker is handed the scored files,
-not the root. A checker whose registry row declares `guardsSafety` (semgrep, bandit, devskim,
-dotnet-vulnerable) SHALL keep the unnarrowed set, and the `secrets`, `entropy` and
-content-denylist gates read the staged files, so none of these ever skip a generated file.
-Whole-project tools (knip, depcruise, bun check) read the tree through their own configuration and are
-not narrowed.
+A path the repository's `.gitattributes` marks `linguist-generated` or `export-ignore` is owned by a
+generator. Every quality checker (duplication, dead code, complexity, lint, types, and `structure`)
+SHALL leave it out of what it scores, on either side. The marker is the one definition of
+"generated"; this plugin keeps no list of its own. The jscpd checker is handed the scored files, not
+the root. A checker whose registry row declares `guardsSafety` (semgrep, bandit, devskim,
+dotnet-vulnerable) SHALL keep the unnarrowed set, and the `secrets`, `entropy` and content-denylist
+gates read the staged files, so none of these ever skip a generated file. Whole-project tools (knip,
+depcruise, bun check) read the tree through their own configuration and are not narrowed.
 
 #### Scenario: A generated file changes
 

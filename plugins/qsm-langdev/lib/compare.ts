@@ -273,12 +273,14 @@ const CAUSE_MAX_CHARS = 200;
  * code.
  */
 function failureCause(spec: CheckSpec, stdout: string, stderr: string, exitCode: number): string {
+  const lines = stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /[\p{L}\p{N}]/u.test(line));
+  // A Python crash opens with "Traceback" and names its exception on the last line.
   const said =
     spec.failure?.(stdout) ??
-    stderr
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => /[\p{L}\p{N}]/u.test(line));
+    (lines[0]?.startsWith("Traceback") === true ? lines.at(-1) : lines[0]);
   if (said === undefined) {
     return `unreadable ${spec.binary} output (exit ${exitCode})`;
   }
