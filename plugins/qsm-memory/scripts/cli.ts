@@ -31,10 +31,11 @@ const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   secret: "blocked",
 };
 
-/** The message once and the next step on its own `  next:` line, as the MCP tools and qsm-secrets
- * print it; the shared renderer adds the outcome's own code line after a message of several lines. */
-function memOutcome(error: MemError): Outcome {
-  return fail(OUTCOME_OF[error.code], `${error.message}\n  next: ${error.next}`, {
+/** The message once; in text mode the next step follows on its own `  next:` line, as the MCP tools
+ * and qsm-secrets print it, and under --json it is only in `data.next`. */
+function memOutcome(error: MemError, json: boolean): Outcome {
+  const message = json ? error.message : `${error.message}\n  next: ${error.next}`;
+  return fail(OUTCOME_OF[error.code], message, {
     code: error.code,
     next: error.next,
   });
@@ -51,7 +52,7 @@ function guarded(handlers: Readonly<Record<string, Handler>>): Record<string, Ha
           return await handler(call);
         } catch (error) {
           if (error instanceof MemError) {
-            return memOutcome(error);
+            return memOutcome(error, call.json);
           }
           throw error;
         }

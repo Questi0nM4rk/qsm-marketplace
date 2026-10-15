@@ -635,6 +635,12 @@ for (const flavor of FLAVORS) {
         expect(cli(["mask", "--id", "nope"], { input: "x" }).code).toBe(4);
       });
 
+      test("--id of a stored key that cannot be read is blocked, not missing", () => {
+        const run = cli(["mask", "--id", "cap_x"], { input: "x", env: { FAKE_LOCKED: "cap_x" } });
+        expect(run.code).toBe(5);
+        expect(run.stderr).toContain("cap_x");
+      });
+
       test("--all masks every stored value of every namespace in each string", () => {
         const rows = [`tok=${CAPTURED_VALUE} and ${NPM_VALUE}`, "nothing here", ""];
         const run = cli(["mask", "--all", "--json"], { input: JSON.stringify(rows) });
@@ -929,7 +935,8 @@ for (const flavor of FLAVORS) {
 
     describe("a backend that is not installed", () => {
       // An absent backend is an absent prerequisite, not work that ran and went wrong: every verb
-      // that reaches it says `missing` (exit 4) and names the install step.
+      // that reaches it says `missing` (exit 4) and names the install step. `set` (needs a terminal)
+      // and `get` (needs a caller-opened fd 3) refuse before the backend and have their own cases.
       const token = `ghp_${"aB3dE9".repeat(6)}`;
       const template = (): string => {
         const path = join(runtime, "template");
@@ -946,6 +953,7 @@ for (const flavor of FLAVORS) {
         pipe: () => ({ args: ["pipe", "github-token", "--", "cat"], input: "" }),
         env: () => ({ args: ["env", "github-token=V", "--", "true"], input: "" }),
         check: () => ({ args: ["check", "github-token=V", "--", "true"], input: "" }),
+        "mask --id": () => ({ args: ["mask", "--id", "github-token"], input: "x" }),
         "mask --all": () => ({ args: ["mask", "--all"], input: "[]" }),
         scrub: () => ({ args: ["scrub", "s"], input: "" }),
         render: () => ({

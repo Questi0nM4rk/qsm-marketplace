@@ -255,7 +255,8 @@ qsm-secrets SHALL reach its store through one interface of six operations (set, 
 value to a command, list names, remove, health) with two implementations, `bitwarden` (through
 `rbw`) and `libsecret` (through `secret-tool`). One conformance test SHALL run against both and SHALL
 pass for both before either ships; it SHALL cover every verb `qsm.json` declares that reaches a
-store, and a backend's own limit SHALL be stated here and asserted per backend.
+store without a terminal or a caller-opened channel (`set` and `get` refuse before the backend and
+have their own scenarios), and a backend's own limit SHALL be stated here and asserted per backend.
 
 #### Scenario: both backends pass the same conformance test
 
