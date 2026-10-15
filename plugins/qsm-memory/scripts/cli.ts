@@ -31,12 +31,13 @@ const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   secret: "blocked",
 };
 
+/** The message once and the next step on its own `  next:` line, as the MCP tools and qsm-secrets
+ * print it; the shared renderer adds the outcome's own code line after a message of several lines. */
 function memOutcome(error: MemError): Outcome {
-  const outcome = fail(OUTCOME_OF[error.code], `${error.code}: ${error.message}`, {
+  return fail(OUTCOME_OF[error.code], `${error.message}\n  next: ${error.next}`, {
     code: error.code,
     next: error.next,
   });
-  return { ...outcome, warnings: [`next: ${error.next}`] };
 }
 
 /** Every verb's handler wrapped once: a MemError comes back as its own
