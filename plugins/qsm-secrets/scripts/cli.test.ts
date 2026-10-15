@@ -634,6 +634,40 @@ for (const flavor of FLAVORS) {
       });
     });
 
+    describe("scrub", () => {
+      test("swaps every stored value in the transcript and its subagents, named or not", () => {
+        const project = join(home, ".claude", "projects", "scrub");
+        mkdirSync(join(project, "s1", "subagents"), { recursive: true });
+        const row = `{"attachment":{"content":"note ${NPM_VALUE}"}}\n`;
+        writeFileSync(join(project, "s1.jsonl"), row);
+        writeFileSync(join(project, "s1", "subagents", "agent-a.jsonl"), row);
+        const run = cli(["scrub", "s1"]);
+        expect(run.code).toBe(0);
+        const masked = `{"attachment":{"content":"note ${placeholderOf("qsm/npm-token")}"}}\n`;
+        expect(readFileSync(join(project, "s1.jsonl"), "utf8")).toBe(masked);
+        expect(readFileSync(join(project, "s1", "subagents", "agent-a.jsonl"), "utf8")).toBe(
+          masked,
+        );
+        expect(leaked(run)).toBeNull();
+      });
+
+      test("a stored value equal to a structural id is left in the structure and swapped in the text", () => {
+        const project = join(home, ".claude", "projects", "scrub");
+        mkdirSync(project, { recursive: true });
+        const row = (v: string): string =>
+          `${JSON.stringify({ sessionId: NPM_VALUE, cwd: `/x/${NPM_VALUE}`, message: { content: `id ${NPM_VALUE}` } })}\n`.replaceAll(
+            NPM_VALUE,
+            v,
+          );
+        writeFileSync(join(project, "s2.jsonl"), row(NPM_VALUE));
+        expect(cli(["scrub", "s2"]).code).toBe(0);
+        const done = JSON.parse(readFileSync(join(project, "s2.jsonl"), "utf8"));
+        expect(done.sessionId).toBe(NPM_VALUE);
+        expect(done.cwd).toBe(`/x/${NPM_VALUE}`);
+        expect(done.message.content).toBe(`id ${placeholderOf("qsm/npm-token")}`);
+      });
+    });
+
     describe("render", () => {
       const template = (text: string): string => {
         const path = join(runtime, "template");

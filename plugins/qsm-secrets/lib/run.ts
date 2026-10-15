@@ -10,7 +10,7 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { home } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
@@ -119,6 +119,28 @@ function placeholderOf(namespace: string, key: string): string {
 }
 
 /**
+ * Every stored value of every namespace long enough to mask, longest first so that a value that
+ * contains another is swapped first and the shorter one cannot leave a stub. A listed key that
+ * cannot be read (a locked vault) would pass unmasked: refuse instead.
+ */
+function storedValues(): { value: string; placeholder: string }[] {
+  const backend = activeBackend();
+  return backend
+    .entries()
+    .flatMap((entry) => {
+      const bytes = backend.read(entry.folder, entry.name);
+      if (bytes === null) {
+        fail(`cannot read ${entry.folder}/${entry.name} to mask it`, "unlock the vault", "blocked");
+      }
+      const value = new TextDecoder().decode(bytes);
+      return value.length < MIN_MASKED
+        ? []
+        : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
+    })
+    .sort((a, b) => b.value.length - a.value.length);
+}
+
+/**
  * `mask --all`: stdin is a JSON array of strings; each comes back with every stored value of every
  * namespace swapped for its placeholder. The backend is read once, however many strings there are.
  */
@@ -130,22 +152,7 @@ export function runMaskAll(): { texts: string[] } {
   if (!backendChosen()) {
     return { texts: parsed as string[] };
   }
-  const backend = activeBackend();
-  const values = backend
-    .entries()
-    .flatMap((entry) => {
-      const bytes = backend.read(entry.folder, entry.name);
-      if (bytes === null) {
-        // A listed key that cannot be read (a locked vault) would pass unmasked: refuse instead.
-        fail(`cannot read ${entry.folder}/${entry.name} to mask it`, "unlock the vault", "blocked");
-      }
-      const value = new TextDecoder().decode(bytes);
-      return value.length < MIN_MASKED
-        ? []
-        : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
-    })
-    // A value that contains another is masked first, so the shorter one cannot leave a stub.
-    .sort((a, b) => b.value.length - a.value.length);
+  const values = storedValues();
   const texts = (parsed as string[]).map((text) =>
     values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
   );
@@ -162,37 +169,104 @@ function locateTranscript(sessionId: string): string {
   return found ?? fail(`no transcript for ${sessionId}`, `looked under ${projects}`, "missing");
 }
 
+/** The transcript's files: the session's own and those of the subagents it ran, in `<id>/subagents/`. */
+function transcriptFiles(path: string): string[] {
+  const subagents = join(dirname(path), basename(path, ".jsonl"), "subagents");
+  const inner = existsSync(subagents)
+    ? readdirSync(subagents)
+        .filter((name) => name.endsWith(".jsonl"))
+        .map((name) => join(subagents, name))
+    : [];
+  return [path, ...inner];
+}
+
+/** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
+const STRUCTURAL_KEYS = new Set([
+  "sessionId",
+  "uuid",
+  "parentUuid",
+  "cwd",
+  "transcript_path",
+  "agentId",
+  "toolUseID",
+  "tool_use_id",
+]);
+
+/** The text with every stored value swapped for its placeholder. */
+function swapIn(text: string, values: { value: string; placeholder: string }[]): string {
+  let out = text;
+  for (const { value, placeholder } of values) {
+    out = out.replaceAll(value, placeholder);
+  }
+  return out;
+}
+
+/** The parsed JSON with every stored value swapped inside its string values, structural keys left alone. */
+function swapDeep(node: unknown, values: { value: string; placeholder: string }[]): unknown {
+  if (typeof node === "string") {
+    return swapIn(node, values);
+  }
+  if (Array.isArray(node)) {
+    return node.map((item) => swapDeep(item, values));
+  }
+  if (node !== null && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node).map(([key, child]) => [
+        key,
+        STRUCTURAL_KEYS.has(key) ? child : swapDeep(child, values),
+      ]),
+    );
+  }
+  return node;
+}
+
 /**
- * `scrub`: in a transcript (a path, or a session id) every captured value that still appears is
- * swapped for its placeholder. Only ids the file already names a placeholder for are read, so a
- * transcript with no capture needs no backend. The file is replaced by a rename, never edited in place.
+ * `scrub`: in a transcript (a path, or a session id) and in its subagents' every stored value of
+ * every namespace that still appears is swapped for its placeholder, because the engine stores an
+ * attachment's payload and a tool's structured record as made, whatever the mask hook rewrote. Only
+ * the text inside a line's string values is swapped, never a structural field (`sessionId`, `uuid`,
+ * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
+ * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
  */
 export function runScrub(target: string): { path: string; scrubbed: number } {
   const path = target.includes("/") ? target : locateTranscript(target);
-  let text = readFileSync(path, "utf8");
-  const ids = placeholderIds(text);
-  const backend = ids.length === 0 ? undefined : activeBackend();
+  const values = backendChosen() ? storedValues() : [];
   let scrubbed = 0;
-  for (const id of backend === undefined ? [] : ids) {
-    const { namespace, key } = locate(id);
-    const bytes = backend?.read(namespace, key);
-    if (bytes === null || bytes === undefined) {
-      continue;
-    }
-    const value = new TextDecoder().decode(bytes);
-    // The transcript is JSON lines: a value holding a quote or a backslash sits there escaped.
-    for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) {
-      if (text.includes(form)) {
-        text = text.replaceAll(form, `{{secret:${id}}}`);
-        scrubbed += 1;
+  for (const file of transcriptFiles(path)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+    let changed = false;
+    const swapped = lines.map((line) => {
+      if (
+        !values.some(
+          ({ value }) => line.includes(value) || line.includes(JSON.stringify(value).slice(1, -1)),
+        )
+      ) {
+        return line;
       }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        // A line cut off mid-write has no structure to protect.
+        const text = swapIn(line, values);
+        changed = changed || text !== line;
+        scrubbed += text !== line ? 1 : 0;
+        return text;
+      }
+      const text = JSON.stringify(swapDeep(parsed, values));
+      if (text === JSON.stringify(parsed)) {
+        return line;
+      }
+      changed = true;
+      scrubbed += 1;
+      return text;
+    });
+    if (changed) {
+      const temp = join(dirname(file), `.${process.pid}.scrub`);
+      writeFileSync(temp, swapped.join("\n"), { mode: statSync(file).mode });
+      renameSync(temp, file);
     }
-  }
-  if (scrubbed > 0) {
-    const temp = join(dirname(path), `.${process.pid}.scrub`);
-    writeFileSync(temp, text, { mode: statSync(path).mode });
-    renameSync(temp, path);
   }
   return { path, scrubbed };
 }

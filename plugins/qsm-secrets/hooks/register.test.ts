@@ -328,6 +328,47 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
   expect(toast).toContain("session.append");
 });
 
+test("a tool result of any tool is masked in its nested text, and a media block is kept as it is", async ($, on) => {
+  let sent: string[] = [];
+  on("process.run", (_$, e) => {
+    sent = JSON.parse((e as { init: { stdin: string } }).init.stdin) as string[];
+    const texts = sent.map((text) => text.replaceAll("VALUE", "{{secret:cap_1}}"));
+    return {
+      value: {
+        ...RAN,
+        stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts } }),
+      },
+    };
+  });
+  const image = {
+    type: "image",
+    source: { type: "base64", media_type: "image/png", data: "VALUE" },
+  };
+  for (const tool of ["Read", "Grep", "mcp__plugin_qsm-memory_qsm-memory__notes", "Agent"]) {
+    const stored = await $.session.append({
+      door: "tool-result" as const,
+      origin: { kind: "tool" as const, tool },
+      uuid: `u-${tool}`,
+      message: {
+        type: "user" as const,
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "t1",
+            content: [{ type: "text", text: `${tool} says VALUE` }, image],
+          },
+        ],
+      },
+    });
+    const [block] = stored.message?.content ?? [];
+    expect(block?.content).toEqual([
+      { type: "text", text: `${tool} says {{secret:cap_1}}` },
+      image,
+    ]);
+    expect(sent).toEqual([`${tool} says VALUE`]);
+  }
+});
+
 /** Toasts are dropped and log lines kept in `logs`, so a test reads what the hook logged. */
 function quietUi(on: On, logs: string[]): void {
   on("ui.toast", () => ({ value: undefined }));
