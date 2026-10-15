@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -32,9 +32,9 @@ const WORK_VALUE = "work-value-1";
 const CAPTURED_VALUE = "hunter2-x";
 const VALUE_MARKERS = [VALUE, NPM_VALUE, WORK_VALUE, CAPTURED_VALUE, "s3cret-value", "other-value"];
 
-/** A directory with nothing in it, so the no-backend case runs against a
- * PATH that provably cannot resolve a backend. */
-let emptyDir = "";
+/** A directory holding only a link to the runtime, so the no-backend case runs against a PATH
+ * that provably cannot resolve a backend, even where the runtime shares its directory with one. */
+let runtimeOnlyDir = "";
 
 function writeScript(path: string, body: string): void {
   writeFileSync(path, body);
@@ -42,11 +42,12 @@ function writeScript(path: string, body: string): void {
 }
 
 beforeAll(() => {
-  emptyDir = mkdtempSync(join(tmpdir(), "qsm-secrets-empty-"));
+  runtimeOnlyDir = mkdtempSync(join(tmpdir(), "qsm-secrets-runtime-"));
+  symlinkSync(process.execPath, join(runtimeOnlyDir, "bun"));
 });
 
 afterAll(() => {
-  rmSync(emptyDir, { recursive: true, force: true });
+  rmSync(runtimeOnlyDir, { recursive: true, force: true });
 });
 
 interface Run {
@@ -55,13 +56,10 @@ interface Run {
   readonly stderr: string;
 }
 
-/** With a backend: its directory first. Without one: a PATH that holds the
- * empty directory and the runtime's own directory and nothing else, so no
- * backend installed on the machine running these tests can answer. */
+/** With a backend: its directory first. Without one: the runtime alone, so no backend installed
+ * on the machine running these tests can answer. */
 function pathWith(bin: string | null): string {
-  return bin === null
-    ? `${emptyDir}:${dirname(process.execPath)}`
-    : `${bin}:${process.env.PATH ?? ""}`;
+  return bin === null ? runtimeOnlyDir : `${bin}:${process.env.PATH ?? ""}`;
 }
 
 /** EDITOR is pinned rather than inherited: the doctor's editor check reads
@@ -198,13 +196,13 @@ const FLAVORS: readonly Flavor[] = [
     name: "rbw",
     fake: fakeRbw,
     absent: ["rbw is not on PATH", "cargo install rbw"],
-    checks: [5, 5],
+    checks: [6, 6],
   },
   {
     name: "libsecret",
     fake: fakeSecretTool,
     absent: ["secret-tool is not on PATH", "install libsecret"],
-    checks: [3, 2],
+    checks: [4, 3],
   },
 ];
 

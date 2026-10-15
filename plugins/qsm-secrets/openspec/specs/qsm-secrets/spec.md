@@ -216,6 +216,13 @@ step for each failed check, without exposing any stored value.
   missing-prerequisite result and names the step to fix it, and every other
   check still runs and reports
 
+#### Scenario: The guard cannot parse
+
+- **WHEN** the guard's parser cannot load or refuses the command `true`
+- **THEN** the diagnostic verb reports the guard parser check failed with the
+  parser's error and names the reinstall step, because that guard denies
+  every Bash call and the doctor is the only command it lets through
+
 ### Requirement: Select which stored namespace a call reads or writes
 
 The wrapper SHALL default to one namespace of its own and SHALL let the

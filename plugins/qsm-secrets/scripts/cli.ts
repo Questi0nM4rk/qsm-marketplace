@@ -10,7 +10,7 @@ import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import { stateDir } from "../../../lib/paths.ts";
 import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
 import { activeBackend } from "../lib/backend.ts";
-import { formatChecks } from "../lib/doctor.ts";
+import { type Check, formatChecks } from "../lib/doctor.ts";
 import { SecretError } from "../lib/errors.ts";
 import { guardCommand } from "../lib/guard.ts";
 import { runClean, runRender } from "../lib/render.ts";
@@ -240,18 +240,36 @@ const clean: Handler = (call) =>
     );
   });
 
+const REINSTALL =
+  "run `bun install` in the marketplace checkout, then `qsm-setup install qsm-secrets`";
+
+/** The guard's parser, run on a command it must allow, because a guard that cannot parse denies every Bash call. */
+async function guardCheck(): Promise<Check> {
+  const name = "guard parser";
+  try {
+    const refusal = await guardCommand("true", { home: process.env.HOME });
+    return refusal === null
+      ? { name, ok: true, detail: "allows `true`", fix: null }
+      : { name, ok: false, detail: `refused \`true\`: ${refusal.reason}`, fix: REINSTALL };
+  } catch (error) {
+    return { name, ok: false, detail: String(error), fix: REINSTALL };
+  }
+}
+
 /**
  * Every check probes a prerequisite: the backend on PATH, an account, an unlocked vault, an
- * editor, a listable namespace.
+ * editor, a listable namespace, and the guard's parser.
  */
-const doctor: Handler = (call) =>
-  attempt(() => {
+const doctor: Handler = async (call) => {
+  const parser = await guardCheck();
+  return attempt(() => {
     const ns = namespace(call);
-    const checks = activeBackend().health(ns, process.env);
+    const checks = [...activeBackend().health(ns, process.env), parser];
     const healthy = checks.every((check) => check.ok);
     const data = { namespace: ns, checks, ok: healthy };
     return healthy ? ok(data, formatChecks(checks)) : fail("missing", formatChecks(checks), data);
   });
+};
 
 if (import.meta.main) {
   process.exit(

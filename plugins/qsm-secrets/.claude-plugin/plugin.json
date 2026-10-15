@@ -1,7 +1,7 @@
 {
   "name": "qsm-secrets",
   "version": "0.1.0",
-  "description": "A credential reaches the command that needs it without its value reaching the agent: one compiled binary, qsm-secrets, that resolves a key from a Bitwarden vault through the rbw agent and hands the value straight to a consumer on its input stream or in one environment variable, while every browsing verb reports metadata alone.",
+  "description": "A credential reaches the command that needs it without its value reaching the agent: one compiled binary, qsm-secrets, that resolves a key from a Bitwarden vault through the rbw agent, or from the local Secret Service through libsecret, and hands the value straight to a consumer on its input stream or in one environment variable, while every browsing verb reports metadata alone.",
   "types": "./types/index.d.ts",
   "keywords": [
     "secrets",

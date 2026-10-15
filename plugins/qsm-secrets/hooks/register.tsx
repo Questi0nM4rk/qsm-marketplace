@@ -1,7 +1,7 @@
 // qsm-secrets' function-hooks module: the noun, `$.secrets`, one method per verb, and the guard that
 // refuses a Bash command that would print a stored credential into the tool result (the decision is
-// `qsm-secrets guard`, which reads the command's syntax tree and needs the WASM parser this sandbox
-// cannot load), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
+// `qsm-secrets guard`, which reads the command's syntax tree with the WASM parser compiled into the
+// binary, because this sandbox cannot load it), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
 // before the prompt enters the session (the decision is `qsm-secrets capture`), and the use of a
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
