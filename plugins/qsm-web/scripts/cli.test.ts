@@ -4,7 +4,8 @@
 // prerequisite, or inside --dry-run.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { symlinkSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
@@ -25,8 +26,13 @@ const DryRunEnvelope = z.object({
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
-/** Only the runtime itself: a bin the tier looks for is never on it. */
-const BARE_PATH = dirname(process.execPath);
+/** A directory holding only a link to the runtime: a bin the tier looks for is never on it, wherever
+ * the runtime is installed (its own directory may be /usr/bin). */
+function barePath(): string {
+  const dir = sandboxDir("qsm-web-bare-");
+  symlinkSync(process.execPath, join(dir, "bun"));
+  return dir;
+}
 
 function run(argv: readonly string[], env: Record<string, string> = {}) {
   const home = sandboxDir("qsm-web-cli-");
@@ -74,7 +80,7 @@ describe("qsm-web opensrc", () => {
 
 describe("qsm-web doctor", () => {
   test("on a machine with no web bin reports missing, exit 4", () => {
-    const r = run(["doctor", "--json"], { PATH: BARE_PATH });
+    const r = run(["doctor", "--json"], { PATH: barePath() });
     expect(r.exit).toBe(4);
     const envelope = DoctorEnvelope.parse(JSON.parse(r.stdout));
     expect(envelope).toMatchObject({ code: "missing", exit: 4 });
@@ -145,7 +151,7 @@ describe("qsm-web browserbox", () => {
 
   test("Container runtime unavailable", () => {
     const r = run(["browserbox", "ls", "--json"], {
-      PATH: BARE_PATH,
+      PATH: barePath(),
       QSM_CONTAINER_RUNTIME: "",
     });
     expect(r.exit).toBe(4);
