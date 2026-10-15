@@ -90,27 +90,37 @@ export function runCapture(): Capture {
   });
 }
 
+/** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
+function readToMask(backend: Backend, namespace: string, key: string): Uint8Array {
+  const bytes = backend.read(namespace, key);
+  if (bytes === null) {
+    fail(`cannot read ${namespace}/${key} to mask it`, "unlock the vault", "blocked");
+  }
+  return bytes;
+}
+
 /** `mask`: the text piped on stdin with each named id's stored value swapped for its placeholder. */
 export function runMask(ids: readonly string[]): { text: string } {
   const backend = activeBackend();
+  const rows = backend.entries();
   const values = ids.map((id) => {
     const { namespace, key } = locate(id);
-    // Listed first: a key that is listed but reads null is unreadable (locked), not absent.
-    if (!keyExists(backend.entries(), namespace, key)) {
+    if (!keyExists(rows, namespace, key)) {
       missing(namespace, key);
     }
-    const value = backend.read(namespace, key);
-    if (value === null) {
-      fail(`cannot read ${namespace}/${key} to mask it`, "unlock the vault", "blocked");
-    }
-    return { id, value };
-  });
-  let text = readFileSync(0, "utf8");
-  for (const { id, value } of values) {
     // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
-    text = text.replaceAll(new TextDecoder().decode(value), `{{secret:${id}}}`);
-  }
-  return { text };
+    return {
+      value: new TextDecoder().decode(readToMask(backend, namespace, key)),
+      placeholder: `{{secret:${id}}}`,
+    };
+  });
+  return { text: swapIn(readFileSync(0, "utf8"), values) };
+}
+
+/** A stored value and what replaces it. */
+interface Swap {
+  value: string;
+  placeholder: string;
 }
 
 /** A stored value shorter than this is not masked: it would match inside ordinary words. */
@@ -128,16 +138,15 @@ function placeholderOf(namespace: string, key: string): string {
  * contains another is swapped first and the shorter one cannot leave a stub. A listed key that
  * cannot be read (a locked vault) would pass unmasked: refuse instead.
  */
-function storedValues(): { value: string; placeholder: string }[] {
+function storedValues(): Swap[] {
+  if (!backendChosen()) {
+    return [];
+  }
   const backend = activeBackend();
   return backend
     .entries()
     .flatMap((entry) => {
-      const bytes = backend.read(entry.folder, entry.name);
-      if (bytes === null) {
-        fail(`cannot read ${entry.folder}/${entry.name} to mask it`, "unlock the vault", "blocked");
-      }
-      const value = new TextDecoder().decode(bytes);
+      const value = new TextDecoder().decode(readToMask(backend, entry.folder, entry.name));
       return value.length < MIN_MASKED
         ? []
         : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
@@ -154,14 +163,8 @@ export function runMaskAll(): { texts: string[] } {
   if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
-  if (!backendChosen()) {
-    return { texts: parsed as string[] };
-  }
   const values = storedValues();
-  const texts = (parsed as string[]).map((text) =>
-    values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
-  );
-  return { texts };
+  return { texts: (parsed as string[]).map((text) => swapIn(text, values)) };
 }
 
 const projectsDir = (): string => join(home(process.env), ".claude", "projects");
@@ -174,15 +177,10 @@ function locateTranscript(sessionId: string): string {
   return found ?? fail(`no transcript for ${sessionId}`, `looked under ${projects}`, "missing");
 }
 
-/** The transcript's files: the session's own and those of the subagents it ran, in `<id>/subagents/`. */
+/** The transcript's files: the session's own and those of the subagents it ran, under `<id>/`. */
 function transcriptFiles(path: string): string[] {
-  const subagents = join(dirname(path), basename(path, ".jsonl"), "subagents");
-  const inner = existsSync(subagents)
-    ? readdirSync(subagents)
-        .filter((name) => name.endsWith(".jsonl"))
-        .map((name) => join(subagents, name))
-    : [];
-  return [path, ...inner];
+  const own = join(dirname(path), basename(path, ".jsonl"));
+  return [path, ...(existsSync(own) ? allTranscripts(own) : [])];
 }
 
 /** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
@@ -198,7 +196,7 @@ const STRUCTURAL_KEYS = new Set([
 ]);
 
 /** The text with every stored value swapped for its placeholder. */
-function swapIn(text: string, values: { value: string; placeholder: string }[]): string {
+function swapIn(text: string, values: Swap[]): string {
   let out = text;
   for (const { value, placeholder } of values) {
     out = out.replaceAll(value, placeholder);
@@ -207,7 +205,7 @@ function swapIn(text: string, values: { value: string; placeholder: string }[]):
 }
 
 /** The parsed JSON with every stored value swapped inside its string values, structural keys left alone. */
-function swapDeep(node: unknown, values: { value: string; placeholder: string }[]): unknown {
+function swapDeep(node: unknown, values: Swap[]): unknown {
   if (typeof node === "string") {
     return swapIn(node, values);
   }
@@ -225,6 +223,23 @@ function swapDeep(node: unknown, values: { value: string; placeholder: string }[
   return node;
 }
 
+/** The line with every stored value swapped; the line itself when nothing changed. */
+function scrubLine(line: string, values: Swap[]): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    // A line cut off mid-write has no structure to protect; the JSON-escaped form is swapped too.
+    const escaped = values.map(({ value, placeholder }) => ({
+      value: JSON.stringify(value).slice(1, -1),
+      placeholder,
+    }));
+    return swapIn(swapIn(line, values), escaped);
+  }
+  const text = JSON.stringify(swapDeep(parsed, values));
+  return text === JSON.stringify(parsed) ? line : text;
+}
+
 /**
  * `scrub`: in a transcript (a path, or a session id) and in its subagents' every stored value of
  * every namespace that still appears is swapped for its placeholder, because the engine stores an
@@ -233,39 +248,22 @@ function swapDeep(node: unknown, values: { value: string; placeholder: string }[
  * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
  * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
+ * ponytail: temp-then-rename is local on purpose: it keeps the file's mode, and the shared copy lives in a plugin.
  */
 export function runScrub(target: string): { path: string; scrubbed: number } {
   const path = target.includes("/") ? target : locateTranscript(target);
-  const values = backendChosen() ? storedValues() : [];
+  const values = storedValues();
   let scrubbed = 0;
   for (const file of transcriptFiles(path)) {
     const lines = readFileSync(file, "utf8").split("\n");
     let changed = false;
     const swapped = lines.map((line) => {
-      if (
-        !values.some(
-          ({ value }) => line.includes(value) || line.includes(JSON.stringify(value).slice(1, -1)),
-        )
-      ) {
-        return line;
+      const out = scrubLine(line, values);
+      if (out !== line) {
+        changed = true;
+        scrubbed += 1;
       }
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        // A line cut off mid-write has no structure to protect.
-        const text = swapIn(line, values);
-        changed = changed || text !== line;
-        scrubbed += text !== line ? 1 : 0;
-        return text;
-      }
-      const text = JSON.stringify(swapDeep(parsed, values));
-      if (text === JSON.stringify(parsed)) {
-        return line;
-      }
-      changed = true;
-      scrubbed += 1;
-      return text;
+      return out;
     });
     if (changed) {
       const temp = join(dirname(file), `.${process.pid}.scrub`);
@@ -502,11 +500,11 @@ export function runRename(
   return { from: label(from), to: label(to) };
 }
 
-/** Every transcript under `~/.claude/projects`, subagent ones included. */
-function allTranscripts(projects: string): string[] {
-  return readdirSync(projects, { recursive: true, encoding: "utf8" })
+/** Every transcript under a directory, subagent ones included. */
+function allTranscripts(root: string): string[] {
+  return readdirSync(root, { recursive: true, encoding: "utf8" })
     .filter((name) => name.endsWith(".jsonl"))
-    .map((name) => join(projects, name));
+    .map((name) => join(root, name));
 }
 
 /**
