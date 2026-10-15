@@ -20,9 +20,10 @@
 //   does not stay quiet, it invents findings.
 // - The named rules below.
 //
-// There is no oxlint-disable comment anywhere. A finding worth suppressing at
-// a call site is evidence the rule was the wrong rule to enable, so it comes
-// out here instead.
+// A finding worth suppressing at a call site is evidence the rule was the wrong
+// rule to enable, so it comes out here instead. The one exception is where the
+// engine's own declarations are wrong: its tool names list no Grep or Glob, so
+// qsm-secrets casts those names under a disable comment that says so.
 //
 // Target: node. `node:` imports and `process` are the runtime, not a mistake.
 {
@@ -66,7 +67,21 @@
     // Every loop it flags runs ordered work that stops at the first failure:
     // the gate runner must not start a gate after one has already failed.
     // Running them together would change what the program does.
-    "eslint/no-await-in-loop": "off"
+    "eslint/no-await-in-loop": "off",
+    // It guards a callback that receives arguments it did not expect, as
+    // `["1", "7"].map(parseInt)` passes the index as the radix. Every flagged
+    // call passes a function written for that callback, so wrapping each in an
+    // arrow adds noise and finds nothing.
+    "unicorn/no-array-callback-reference": "off",
+    // It asks for mutation instead of a spread copy inside `map`. The copy is
+    // the intent: the input stays unchanged, and the arrays are small.
+    "oxc/no-map-spread": "off",
+    // The MCP SDK's transport exposes `onclose` as a property and has no
+    // addEventListener, so the rule's fix does not exist there.
+    "unicorn/prefer-add-event-listener": "off",
+    // parseFloat reads the number at the start of a text ("0.93 SSIM" -> 0.93);
+    // Number() of the same text is NaN. The difference is the point.
+    "unicorn/prefer-number-coercion": "off"
   },
   "overrides": [
     {
@@ -75,18 +90,26 @@
       // awaiting a non-promise. At run time it is a promise, and without the
       // await the assertion runs after the test has passed.
       "files": ["**/*.test.ts", "**/*.test.tsx"],
-      "rules": { "typescript/await-thenable": "off" }
+      "rules": {
+        "typescript/await-thenable": "off",
+        // A test helper stays inside the describe it serves, next to the
+        // tests that read it, even when it captures nothing.
+        "unicorn/consistent-function-scoping": "off"
+      }
     },
     {
       // A function-hooks module is typed against the generated claude-code
       // declarations, and two type-aware rules take 30 s or more per file on
       // them (measured: no-misused-promises 40 s on one 6 KB noun.generated.ts,
       // strict-void-return 6 s), against 0.2 s for any other file. Off there
-      // only; tsc still checks every hooks module through its own tsconfig.
+      // only; bun check still checks every hooks module through its own
+      // tsconfig. The engine's error chain is `.catch(($, e, next) => next(e))`,
+      // a callback the promise rule takes for a Node-style one.
       "files": ["plugins/*/hooks/**"],
       "rules": {
         "typescript/no-misused-promises": "off",
-        "typescript/strict-void-return": "off"
+        "typescript/strict-void-return": "off",
+        "promise/no-callback-in-promise": "off"
       }
     }
   ],
