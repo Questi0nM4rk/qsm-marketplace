@@ -1,0 +1,17 @@
+# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns
+# this file. General plus the defensible optional checks. Rejected with
+# sandbox evidence (see profile survey): quote-safe-variables and
+# require-variable-braces (style churn duplicating quoting checks),
+# check-extra-masked-returns and check-set-e-suppressed (fire on ordinary
+# idioms like `echo "$(date)"`), avoid-negated-conditions (no behavior
+# difference).
+
+source-path=SCRIPTDIR
+external-sources=true
+
+enable=add-default-case
+enable=avoid-nullary-conditions
+enable=check-unassigned-uppercase
+enable=deprecate-which
+enable=require-double-brackets
+enable=useless-use-of-cat

@@ -42,8 +42,6 @@ __pycache__/
 adapters/claude/modules/qsm-book-to-skill/skills/
 adapters/claude/modules/qsm-book-to-skill/dist/
 
-# qsm-langdev per-tree cache (the import graph), rebuilt from the tree
-.qsm-langdev/
 plugins/*/evals/results/
 
 # qsm-builder lens: generated into each marketplace, rewritten on every run
