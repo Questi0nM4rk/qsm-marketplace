@@ -68,16 +68,17 @@ interface Side {
   files: readonly string[];
 }
 
+// A path the materialized tree does not hold (`export-ignore` keeps a
+// generated file out of `git archive`) is not the checker's to score.
+const held = (dir: string, listed: readonly string[]): string[] =>
+  listed.filter((path) => existsSync(join(dir, path)));
+
 /** Hands `fn` the tree at `ref`: a scratch materialization of the working
  * tree (never the live directory itself — an ignored path such as
  * node_modules/ or dist/ must never enter a score just because it sits on
  * disk), or a scratch copy of a commit. Either way removed once `fn`
  * settles. */
 function withSide<T>(root: string, ref: string, fn: (side: Side) => Promise<T>): Promise<T> {
-  // A path the materialized tree does not hold (`export-ignore` keeps a
-  // generated file out of `git archive`) is not the checker's to score.
-  const held = (dir: string, listed: readonly string[]) =>
-    listed.filter((path) => existsSync(join(dir, path)));
   const files = sidePaths(root, ref);
   if (files === null) {
     throw new Error(`git could not list the tree at ${ref}`);
@@ -136,7 +137,7 @@ async function mapLimit<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
-  const results = new Array<R>(items.length);
+  const results: R[] = [];
   const queue = items.entries();
   const worker = async (): Promise<void> => {
     for (const [index, item] of queue) {
@@ -598,6 +599,9 @@ interface KeptSide extends Side {
 
 type Scored = Extract<Score, { tally: Tally }>;
 
+const failedCause = (one: Score): string | undefined =>
+  "reason" in one && one.failedRun === true ? one.reason : undefined;
+
 /** A side that could not be scored: past the time limit, or a run whose
  * output could not be read, is not measured; any other reason fails. */
 function unscored(name: string, current: Score, previous: Score, timeoutMs: number): CheckerResult {
@@ -605,8 +609,6 @@ function unscored(name: string, current: Score, previous: Score, timeoutMs: numb
     const summary = `${name}: not measured: timed out after ${(timeoutMs / 1000).toFixed(1)}s; retry`;
     return { pass: false, notMeasured: true, summary };
   }
-  const failedCause = (one: Score): string | undefined =>
-    "reason" in one && one.failedRun === true ? one.reason : undefined;
   const previousCause = failedCause(previous);
   const failed =
     failedCause(current) ??
@@ -901,6 +903,8 @@ function resolveGiven(
   return only === undefined ? given : given.filter((path) => only.includes(path));
 }
 
+const proForm = (spec: CheckSpec): boolean => spec.prePush?.pro !== undefined;
+
 /** The selected checkers as they run at the run's enforcement point under
  * its semgrep engine, the warning a login that did not get the Pro engine
  * gives, and, by name, the community form of each checker that runs under
@@ -913,7 +917,6 @@ function engage(
 ): { engaged: CheckSpec[]; warnings: string[]; community: Map<string, CheckSpec> } {
   const point = options.at ?? "pre-commit";
   const community = new Map<string, CheckSpec>();
-  const proForm = (spec: CheckSpec) => spec.prePush?.pro !== undefined;
   if (point === "pre-commit" || !selected.some(proForm)) {
     const engaged = selected.map((spec) => asRunAt(spec, point, "community"));
     return { engaged, warnings: [], community };

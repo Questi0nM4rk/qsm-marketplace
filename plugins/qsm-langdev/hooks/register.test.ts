@@ -20,7 +20,8 @@ const write = ($: Parameters<Body>[0]) =>
   $.tool.call({ tool: "Write", file_path: "/repo/notes.md", content: "x\n" });
 
 /** The bottom of the chain, and every verb argv the module ran. */
-function host(on: On, answer: { exit: number; data: unknown } = { exit: 0, data: { text: null } }) {
+function host(on: On, answer?: { exit: number; data: unknown }) {
+  const reply = answer ?? { exit: 0, data: { text: null } };
   const runs: string[] = [];
   on("tool.call", { tool: "Bash" }, () => ({
     result: { stdout: "", stderr: "", interrupted: false, isImage: false },
@@ -33,12 +34,12 @@ function host(on: On, answer: { exit: number; data: unknown } = { exit: 0, data:
     runs.push(e.argv.join(" "));
     const stdout = JSON.stringify({
       code: "ok",
-      exit: answer.exit,
+      exit: reply.exit,
       message: "",
-      data: answer.data,
+      data: reply.data,
     });
     const flags = { isStdoutTruncated: false, isStderrTruncated: false };
-    return { value: { exitCode: answer.exit, stdout, stderr: "", ...flags } };
+    return { value: { exitCode: reply.exit, stdout, stderr: "", ...flags } };
   });
   return runs;
 }

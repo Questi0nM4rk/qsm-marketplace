@@ -108,11 +108,12 @@ export function readTasks(root: string): TaskRead {
   }
 }
 
+const word = (c: string | undefined): boolean => c !== undefined && /[a-z0-9-]/.test(c);
+
 /** Whether a title names `name` as a whole word (a hyphen continues a name). */
 export function names(title: string, name: string): boolean {
   const lower = title.toLowerCase();
   const want = name.toLowerCase();
-  const word = (c: string | undefined) => c !== undefined && /[a-z0-9-]/.test(c);
   for (let at = lower.indexOf(want); at >= 0; at = lower.indexOf(want, at + 1)) {
     if (!(word(lower[at - 1]) || word(lower[at + want.length]))) {
       return true;

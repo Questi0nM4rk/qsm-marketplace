@@ -9,7 +9,8 @@ import { basename, join, resolve } from "node:path";
 import { errorMessage } from "../lib/json.ts";
 
 export const UPSTREAM_REPO = "https://github.com/sentrux/sentrux";
-export const UPSTREAM_COMMIT = "f36da08a53e7f06c5b6aec33eb05816b371000ea"; // pragma: allowlist secret
+// pragma: allowlist secret
+export const UPSTREAM_COMMIT = "f36da08a53e7f06c5b6aec33eb05816b371000ea";
 export const PATCH = resolve(import.meta.dir, "..", "sentrux", "wiring.patch");
 
 /** Every file this plugin owns outright, and where upstream's tree wants it.
