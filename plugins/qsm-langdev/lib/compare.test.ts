@@ -610,8 +610,8 @@ function commitAll(root: string, message: string): string {
 
 /** A sandbox whose only commit holds `files`, with `a.ts` then changed to
  * `2` and staged: the one change every store test starts from. */
-function changedRepo(files: Record<string, string> = { "a.ts": "1\n" }) {
-  const { root, head } = repoWith(files);
+function changedRepo(files?: Record<string, string>) {
+  const { root, head } = repoWith(files ?? { "a.ts": "1\n" });
   write(root, { "a.ts": "2\n" });
   stage(root);
   return { root, head };

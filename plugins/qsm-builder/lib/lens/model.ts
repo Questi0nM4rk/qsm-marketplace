@@ -261,12 +261,13 @@ const FOCUS: Record<string, string> = {
   last_message: "the agent's final reply",
 };
 
+const times = (n: number): string => (n === 1 ? "once" : `${n} times`);
+
 /** How often a `tool_used` grader wants the tool called, in words. */
 function countWords(tool: string, min: number, max: number | null): string {
   if (max === 0) {
     return `never called the ${tool} tool`;
   }
-  const times = (n: number) => (n === 1 ? "once" : `${n} times`);
   if (max === null) {
     return `called the ${tool} tool at least ${times(min)}`;
   }
@@ -358,13 +359,14 @@ interface Run {
   readonly date: string;
 }
 
+const none = (noResult: string): { result: null; noResult: string } => ({ result: null, noResult });
+
 /** The latest run that holds the case; or why there is none. */
 function resultOf(
   results: readonly Run[],
   name: string,
   hasDir: boolean,
 ): { result: CaseResult | null; noResult: string } {
-  const none = (noResult: string) => ({ result: null, noResult });
   if (!hasDir) {
     return none("no results");
   }

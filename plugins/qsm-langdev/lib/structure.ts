@@ -261,6 +261,11 @@ export type StructureResult =
     }
   | { status: "not-scored"; reason: string; install?: string };
 
+function added(before: string[], after: string[]): string[] {
+  const had = new Set(before);
+  return after.filter((entry) => !had.has(entry)).toSorted((a, b) => a.localeCompare(b));
+}
+
 /** Scores two already-on-disk directory trees against each other: never touches git. */
 function score(referenceTree: string, shippedTree: string, testFiles: number): StructureResult {
   if (!(existsSync(join(referenceTree, RULES_REL)) && existsSync(join(shippedTree, RULES_REL)))) {
@@ -285,10 +290,6 @@ function score(referenceTree: string, shippedTree: string, testFiles: number): S
       install: INSTALL_LINE,
     };
   }
-  const added = (before: string[], after: string[]): string[] => {
-    const had = new Set(before);
-    return after.filter((entry) => !had.has(entry)).toSorted((a, b) => a.localeCompare(b));
-  };
   return {
     status: "scored",
     reference: reference.score,

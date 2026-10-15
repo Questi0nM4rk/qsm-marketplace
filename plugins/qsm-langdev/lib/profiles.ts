@@ -74,7 +74,8 @@ export function hasScaffoldedConfig(root: string, language: Language): boolean {
     }
   }
   if (names.size === 0) {
-    return true; // no profile ships anything for this language at all
+    // no profile ships anything for this language at all
+    return true;
   }
   return [...names].some((name) => existsSync(join(root, name)));
 }
