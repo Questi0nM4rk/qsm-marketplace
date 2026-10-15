@@ -1,0 +1,5 @@
+---
+type: regex
+pattern: 'qsm-secrets\s+env\s+deploy-token=DEPLOY_TOKEN\s+--\s+\./deploy\.sh'
+flags: i
+---
