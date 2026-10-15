@@ -81,7 +81,11 @@
     "unicorn/prefer-add-event-listener": "off",
     // parseFloat reads the number at the start of a text ("0.93 SSIM" -> 0.93);
     // Number() of the same text is NaN. The difference is the point.
-    "unicorn/prefer-number-coercion": "off"
+    "unicorn/prefer-number-coercion": "off",
+    // It reads every `.length` as a count, so `!part.length` on shell-ast's
+    // boolean `${#NAME}` flag is a finding. A number in a condition is already
+    // a finding of typescript/strict-boolean-expressions, which reads the type.
+    "unicorn/explicit-length-check": "off"
   },
   "overrides": [
     {
@@ -115,8 +119,10 @@
   ],
   // The two generated files are derived from qsm.json by lib/generate-noun.ts
   // and proven fresh by the generated gate, so the linter does not read them.
+  // QML's JavaScript opens with `.pragma library`, which is not ECMAScript.
   "ignorePatterns": [
     ".claude/**",
+    "plugins/*/qml/**/*.js",
     "**/dist/**",
     "**/node_modules/**",
     "**/hooks/noun.generated.ts",

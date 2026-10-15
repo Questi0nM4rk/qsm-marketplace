@@ -9,7 +9,7 @@ import { basename, join, resolve } from "node:path";
 import { errorMessage } from "../lib/json.ts";
 
 export const UPSTREAM_REPO = "https://github.com/sentrux/sentrux";
-// pragma: allowlist secret
+// pragma: allowlist nextline secret
 export const UPSTREAM_COMMIT = "f36da08a53e7f06c5b6aec33eb05816b371000ea";
 export const PATCH = resolve(import.meta.dir, "..", "sentrux", "wiring.patch");
 

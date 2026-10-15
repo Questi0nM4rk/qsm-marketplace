@@ -34,9 +34,10 @@ function sandbox(): string {
 
 afterEach(removeSandboxes);
 
+const HIT: RunResult = { ok: true, stdout: "hit\n", detail: "" };
+
 /** Records every external call but git's, which it answers as if each directory were the top
  * level of its own repository. */
-const HIT: RunResult = { ok: true, stdout: "hit\n", detail: "" };
 
 function recorder(result: RunResult = HIT) {
   const calls: string[][] = [];

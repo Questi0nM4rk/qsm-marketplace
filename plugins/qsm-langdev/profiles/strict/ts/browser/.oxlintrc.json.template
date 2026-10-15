@@ -78,7 +78,11 @@
     "oxc/no-map-spread": "off",
     // parseFloat reads the number at the start of a text ("0.93 SSIM" ->
     // 0.93); Number() of the same text is NaN. The two are not substitutes.
-    "unicorn/prefer-number-coercion": "off"
+    "unicorn/prefer-number-coercion": "off",
+    // It reads every `.length` as a count, a library's boolean field named
+    // length included. A number in a condition is already a finding of
+    // typescript/strict-boolean-expressions, which reads the type.
+    "unicorn/explicit-length-check": "off"
   },
   "overrides": [
     {

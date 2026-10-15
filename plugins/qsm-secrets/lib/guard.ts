@@ -295,8 +295,6 @@ const PATH_VARIABLES = new Set(["HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "PAS
 
 /** `${NAME}` with no operator, index, slice or replacement: the same value as `$NAME`. */
 function plainBraced(part: ParamPart): boolean {
-  // `${#NAME}`, the length operator; named apart because `.length` reads as an array length
-  const { length: hasLength } = part;
   return (
     !part.short &&
     part.param !== null &&
@@ -305,7 +303,8 @@ function plainBraced(part: ParamPart): boolean {
     part.slice === null &&
     part.repl === null &&
     !part.excl &&
-    !hasLength &&
+    // `${#NAME}`, the length operator
+    !part.length &&
     !part.width &&
     part.names === ""
   );

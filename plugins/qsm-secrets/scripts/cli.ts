@@ -152,7 +152,10 @@ const askpass: Handler = (call) =>
   call.json
     ? fail("blocked", NO_JSON)
     : attemptAsync(() =>
-        ask(requiredString(call, "kind"), call.rest, { env: process.env, namespace: namespace(call) }),
+        ask(requiredString(call, "kind"), call.rest, {
+          env: process.env,
+          namespace: namespace(call),
+        }),
       );
 
 /** Only the lines print; the file the person puts them in is theirs. */
