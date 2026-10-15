@@ -274,7 +274,7 @@
       "plugins/**/*.tsx",
       "!**/hooks/noun.generated.ts",
       "!**/types/index.d.ts",
-      "!!**/.claude"
+      "!!.claude"
     ]
   },
   "javascript": {
