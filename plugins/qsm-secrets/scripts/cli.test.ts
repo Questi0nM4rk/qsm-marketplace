@@ -1342,6 +1342,8 @@ describe("guard", () => {
     ["qsm-secrets --folder x askpass sudo -- x", "askpass-pane"],
     ["qsm-secrets askpass --folder x sudo -- x", "askpass-pane"],
     ["qsm-secrets askpass --folder=x --kind=git", "askpass-pane"],
+    ["qsm-secrets askpass -- sudo x", "askpass-pane"],
+    ["qsm-secrets -- askpass sudo x", "askpass-pane"],
     ["sudo qsm-secrets askpass ssh -- Passphrase:", "askpass-pane"],
     ["qs ipc -p /x call ask$(echo pass) request x", "askpass-pane"],
     [`nc -U ${"$"}XDG_RUNTIME_DIR/qsm-askpass/abc/reply.sock`, "askpass-pane"],

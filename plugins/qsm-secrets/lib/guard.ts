@@ -428,10 +428,10 @@ function runsAskpass(name: string, texts: readonly string[]): boolean {
   if (name.startsWith(LINK_PREFIX)) {
     return true;
   }
-  // Every word before `--` counts, flag values included, so a flag placed before the kind cannot
-  // hide it: `askpass` with any linked kind among them is refused, which fails closed.
-  const end = texts.indexOf("--");
-  const words = (end === -1 ? texts : texts.slice(0, end)).map((t) => t.replace(/^--?[\w-]+=/, ""));
+  // Every word counts, flag values and words after `--` included, so neither a flag nor `--`
+  // placed before the kind can hide it: `askpass` with any linked kind among them is refused,
+  // which fails closed.
+  const words = texts.map((t) => t.replace(/^--?[\w-]+=/, ""));
   return (
     name === "qsm-secrets" &&
     words.includes("askpass") &&
