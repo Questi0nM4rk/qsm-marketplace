@@ -59,7 +59,12 @@
       // awaiting a non-promise. At run time it is a promise, and without the
       // await the assertion runs after the test has passed.
       "files": ["**/*.test.ts", "**/*.test.tsx"],
-      "rules": { "typescript/await-thenable": "off" }
+      "rules": {
+        "typescript/await-thenable": "off",
+        // A test helper stays inside the describe it serves, next to the
+        // tests that read it, even when it captures nothing.
+        "unicorn/consistent-function-scoping": "off"
+      }
     }
   ],
   "ignorePatterns": ["**/dist/**", "**/node_modules/**"]

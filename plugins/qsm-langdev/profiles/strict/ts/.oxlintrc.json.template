@@ -63,7 +63,18 @@
     // It asks for deep readonly on every parameter type, a library's own
     // types included, which the code cannot change. Measured: 1,592 findings on
     // a 600-file tree, half of all it reported.
-    "typescript/prefer-readonly-parameter-types": "off"
+    "typescript/prefer-readonly-parameter-types": "off",
+    // It guards a callback that receives arguments it did not expect, as
+    // `["1", "7"].map(parseInt)` passes the index as the radix. Measured on a
+    // 600-file tree: every one of 48 findings passed a function written for
+    // that callback, so the wrapping it asks for added noise and found nothing.
+    "unicorn/no-array-callback-reference": "off",
+    // It asks for mutation instead of a spread copy inside `map`. The copy
+    // keeps the input unchanged, which is usually the intent.
+    "oxc/no-map-spread": "off",
+    // parseFloat reads the number at the start of a text ("0.93 SSIM" ->
+    // 0.93); Number() of the same text is NaN. The two are not substitutes.
+    "unicorn/prefer-number-coercion": "off"
   },
   "overrides": [
     {
@@ -72,7 +83,12 @@
       // awaiting a non-promise. At run time it is a promise, and without the
       // await the assertion runs after the test has passed.
       "files": ["**/*.test.ts", "**/*.test.tsx"],
-      "rules": { "typescript/await-thenable": "off" }
+      "rules": {
+        "typescript/await-thenable": "off",
+        // A test helper stays inside the describe it serves, next to the
+        // tests that read it, even when it captures nothing.
+        "unicorn/consistent-function-scoping": "off"
+      }
     }
   ],
   "ignorePatterns": ["**/dist/**", "**/node_modules/**"]
