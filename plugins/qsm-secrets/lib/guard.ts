@@ -428,8 +428,15 @@ function runsAskpass(name: string, texts: readonly string[]): boolean {
   if (name.startsWith(LINK_PREFIX)) {
     return true;
   }
-  const [verb, kind] = texts.filter((t) => !t.startsWith("-"));
-  return name === "qsm-secrets" && verb === "askpass" && linkedKinds().includes(kind ?? "");
+  // Every word before `--` counts, flag values included, so a flag placed before the kind cannot
+  // hide it: `askpass` with any linked kind among them is refused, which fails closed.
+  const end = texts.indexOf("--");
+  const words = (end === -1 ? texts : texts.slice(0, end)).map((t) => t.replace(/^--?[\w-]+=/, ""));
+  return (
+    name === "qsm-secrets" &&
+    words.includes("askpass") &&
+    words.some((w) => linkedKinds().includes(w))
+  );
 }
 
 /** The pane's doors: its entry points, and its IPC target, which an expansion word could spell
