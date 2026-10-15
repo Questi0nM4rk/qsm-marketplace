@@ -55,14 +55,18 @@ function key(call: Call): string {
 
 /** A SecretError carries its own outcome code and the next step; anything
  * else is a bug and keeps travelling. */
+function secretFailure(error: unknown): Outcome {
+  if (error instanceof SecretError) {
+    return fail(error.code, `${error.message}\n  next: ${error.next}`);
+  }
+  throw error;
+}
+
 function attempt(run: () => Outcome): Outcome {
   try {
     return run();
   } catch (error) {
-    if (error instanceof SecretError) {
-      return fail(error.code, `${error.message}\n  next: ${error.next}`);
-    }
-    throw error;
+    return secretFailure(error);
   }
 }
 
@@ -132,10 +136,7 @@ async function attemptAsync(run: () => Promise<Outcome>): Promise<Outcome> {
   try {
     return await run();
   } catch (error) {
-    if (error instanceof SecretError) {
-      return fail(error.code, `${error.message}\n  next: ${error.next}`);
-    }
-    throw error;
+    return secretFailure(error);
   }
 }
 

@@ -327,9 +327,6 @@ function textOf(word: Word | null | undefined): string {
   if (word === null || word === undefined) {
     return "";
   }
-  if (word.parts.length === 0) {
-    return "";
-  }
   return word.parts.map((part) => partText(part, word)).join("");
 }
 
@@ -438,8 +435,11 @@ function runsAskpass(name: string, texts: readonly string[]): boolean {
 /** The pane's doors: its entry points, and its IPC target, which an expansion word could spell
  * without the text saying `askpass`. */
 function judgeAskpass(name: string, texts: readonly string[], shown: string): Refusal | null {
+  if (!(name.startsWith(LINK_PREFIX) || name === "qsm-secrets" || QUICKSHELL_TOOLS.has(name))) {
+    return null;
+  }
   const ipc = QUICKSHELL_TOOLS.has(name) && texts.includes("ipc");
-  const spelled = ipc && (texts.includes("askpass") || texts.some((t) => /[$`]/.test(t)));
+  const spelled = ipc && (texts.includes("askpass") || texts.some((t) => EXPANDS.test(t)));
   return runsAskpass(name, texts) || spelled
     ? refuse("askpass-pane", shown, ASKPASS_WHY, ASKPASS_INSTEAD)
     : null;
@@ -654,10 +654,6 @@ function followCd(call: CallExprNode, ctx: Context): void {
 }
 
 async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> {
-  const parameter = judgeParameters(ast);
-  if (parameter !== null) {
-    return parameter;
-  }
   const stmts = findAll(ast, "Stmt");
   const redirected = ctx.fd3Out || stmts.some((stmt) => stmt.redirs.some(fd3ToOutput));
   const inner: Context = { ...ctx, fd3Out: redirected };
@@ -741,7 +737,9 @@ async function judgeSource(source: string, ctx: Context): Promise<Refusal | null
     }
     throw error;
   }
-  return await judgeFile(ast, ctx);
+  // A path variable with an operator needs a `${`; most commands have none, so skip the tree walk.
+  const parameter = source.includes("${") ? judgeParameters(ast) : null;
+  return parameter ?? (await judgeFile(ast, ctx));
 }
 
 /** The refusal for a Bash command, or null when nothing in it reads a stored value. */

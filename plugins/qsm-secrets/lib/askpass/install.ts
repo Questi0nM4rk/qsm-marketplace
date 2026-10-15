@@ -86,7 +86,7 @@ function linkSteps(ctx: InstallContext): Step[] {
   }
   for (const name of wanted) {
     const path = join(dir, name);
-    const here = existsSync(path) || lstatSync(path, { throwIfNoEntry: false }) !== undefined;
+    const here = lstatSync(path, { throwIfNoEntry: false }) !== undefined;
     if (here && !isOurLink(path)) {
       steps.push({
         name: `link ${name}`,

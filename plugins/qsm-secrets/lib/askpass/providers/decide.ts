@@ -3,6 +3,7 @@
 
 import { ok } from "../../../../../lib/outcome.ts";
 import { fail } from "../../errors.ts";
+import { reasonOf } from "../answer.ts";
 import type { Provider } from "../types.ts";
 
 interface AskRequest {
@@ -41,7 +42,6 @@ function subjectOf(request: AskRequest): string {
 
 export const decide: Provider = {
   env: [["HOOK_KIT_ASKPASS", "LINK"]],
-  link: true,
   request: (input) => {
     const request = parse(input.stdin());
     return { kind: "decide", prompt: request.reason, subject: subjectOf(request), masked: false };
@@ -49,15 +49,10 @@ export const decide: Provider = {
   finish: (input, reply) => {
     const { id } = parse(input.stdin());
     const allowed = reply.action === "allow";
-    const reason = allowed
-      ? undefined
-      : reply.action === "deny"
-        ? "denied by the person"
-        : "cancelled by the person";
     const response = {
       id,
       decision: allowed ? "allow" : "deny",
-      ...(reason === undefined ? {} : { reason }),
+      ...(allowed ? {} : { reason: reasonOf(reply) }),
       by: "qsm-secrets askpass",
       decidedAt: new Date().toISOString(),
     };

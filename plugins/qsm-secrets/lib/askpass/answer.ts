@@ -4,12 +4,14 @@
 import { fail, type Outcome, ok } from "../../../../lib/outcome.ts";
 import type { Input, PaneRequest, Provider, Reply } from "./types.ts";
 
-/** The outcome of a reply that is no allow: what the person did, as a reason. */
+/** What the person did when the reply is no allow, as a reason. */
+export function reasonOf(reply: Reply): string {
+  return reply.action === "deny" ? "denied by the person" : "cancelled by the person";
+}
+
+/** The outcome of a reply that is no allow. */
 export function refusal(reply: Reply): Outcome {
-  return fail(
-    "failed",
-    reply.action === "deny" ? "denied by the person" : "cancelled by the person",
-  );
+  return fail("failed", reasonOf(reply));
 }
 
 interface AnswerOnce {
@@ -23,7 +25,6 @@ interface AnswerOnce {
 export function answerOnce(spec: AnswerOnce): Provider {
   return {
     env: spec.env,
-    link: true,
     request: (input: Input): PaneRequest => {
       const prompt = input.argv[0] ?? "Password:";
       return { kind: spec.kind, prompt, subject: "", masked: spec.masked(prompt) };

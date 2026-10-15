@@ -4,10 +4,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { sleep, which } from "bun";
+import type { Env } from "../../../../lib/paths.ts";
 import { fail } from "../errors.ts";
 import { paneDir } from "./paths.ts";
-
-type Env = Record<string, string | undefined>;
 
 const TARGET = "askpass";
 const TRIES = 40;

@@ -14,7 +14,6 @@ function keyOf(argv: readonly string[]): string {
 
 export const secret: Provider = {
   env: [],
-  link: false,
   request: (input) => ({
     kind: "secret",
     prompt: "A new secret is asked for",

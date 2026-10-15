@@ -3,6 +3,7 @@
 
 import { readFileSync } from "node:fs";
 import { type Outcome, fail as stop } from "../../../../lib/outcome.ts";
+import type { Env } from "../../../../lib/paths.ts";
 import { callerOf } from "./caller.ts";
 import { providerOf } from "./index.ts";
 import { dismissPane, showPane } from "./pane.ts";
@@ -15,7 +16,7 @@ const SIGNALS = { SIGHUP: 1, SIGINT: 2, SIGTERM: 15 } as const;
 export const TIMEOUT_MS = 120_000;
 
 export interface AskOptions {
-  readonly env: Record<string, string | undefined>;
+  readonly env: Env;
   readonly namespace: string;
   readonly timeoutMs?: number;
   /** who the pane names as asking; the parent of this process unless a test says otherwise */
@@ -44,10 +45,14 @@ export async function ask(
   const socket = openReplySocket(options.env);
   // ssh kills its askpass after a notice, and Ctrl-C reaches it at a prompt: the request leaves the
   // screen and the socket directory goes, as on any other exit.
+  const timeout = options.timeoutMs ?? TIMEOUT_MS;
+  const cleanup = (): void => {
+    dismissPane(options.env, socket.nonce);
+    socket.close();
+  };
   const stops = Object.entries(SIGNALS).map(([name, number]) => {
     const onSignal = (): void => {
-      dismissPane(options.env, socket.nonce);
-      socket.close();
+      cleanup();
       process.exit(128 + number);
     };
     process.on(name, onSignal);
@@ -59,10 +64,10 @@ export async function ask(
       ...request,
       nonce: socket.nonce,
       socketPath: socket.path,
-      timeoutMs: options.timeoutMs ?? TIMEOUT_MS,
+      timeoutMs: timeout,
       requestedBy: caller,
     });
-    const reply = await socket.wait(options.timeoutMs ?? TIMEOUT_MS);
+    const reply = await socket.wait(timeout);
     return reply === null
       ? stop("failed", "timed out waiting for the person")
       : provider.finish(input, reply);
@@ -70,7 +75,6 @@ export async function ask(
     for (const release of stops) {
       release();
     }
-    dismissPane(options.env, socket.nonce);
-    socket.close();
+    cleanup();
   }
 }

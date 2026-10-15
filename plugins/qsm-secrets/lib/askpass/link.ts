@@ -8,7 +8,7 @@ import { LINK_PREFIX } from "./paths.ts";
 /** The kinds that are reached through a link. */
 export function linkedKinds(): string[] {
   return Object.entries(PROVIDERS)
-    .filter(([, provider]) => provider.link)
+    .filter(([, provider]) => provider.env.some(([, value]) => value === "LINK"))
     .map(([kind]) => kind);
 }
 

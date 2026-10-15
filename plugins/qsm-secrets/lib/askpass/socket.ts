@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { listen } from "bun";
+import type { Env } from "../../../../lib/paths.ts";
 import { fail } from "../errors.ts";
 import type { Action, Reply } from "./types.ts";
 
@@ -35,7 +36,7 @@ export function parseReply(line: string, nonce: string): Reply | null {
   }
 }
 
-export function openReplySocket(env: Record<string, string | undefined>): ReplySocket {
+export function openReplySocket(env: Env): ReplySocket {
   const runtime = env.XDG_RUNTIME_DIR;
   if (runtime === undefined || runtime === "") {
     fail(

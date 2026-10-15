@@ -123,10 +123,12 @@ function registerFileGuard(on: On): void {
       if (target === undefined) {
         return next(e);
       }
-      const home = await $.env.get("HOME");
-      const dataHome = await $.env.get("XDG_DATA_HOME");
-      const runtimeDir = await $.env.get("XDG_RUNTIME_DIR");
-      const passwordStore = await $.env.get("PASSWORD_STORE_DIR");
+      const [home, dataHome, runtimeDir, passwordStore] = await Promise.all([
+        $.env.get("HOME"),
+        $.env.get("XDG_DATA_HOME"),
+        $.env.get("XDG_RUNTIME_DIR"),
+        $.env.get("PASSWORD_STORE_DIR"),
+      ]);
       const env: PathEnv = { home, dataHome, runtimeDir, passwordStore };
       const roots = protectedRoots(env);
       let real: string | undefined;

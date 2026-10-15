@@ -2,6 +2,7 @@
 // argv of `qs ipc call`, which any process of this user can read.
 
 import type { Outcome } from "../../../../lib/outcome.ts";
+import type { Env } from "../../../../lib/paths.ts";
 
 /** What the person pressed. `cancel` is Escape or the close button; `deny` is the second action. */
 export type Action = "allow" | "deny" | "cancel";
@@ -28,7 +29,7 @@ export interface Input {
   /** the words after the kind: sudo, ssh and git put the prompt text first */
   readonly argv: readonly string[];
   /** the consumer's environment: ssh says what kind of prompt this is in `SSH_ASKPASS_PROMPT` */
-  readonly env: Record<string, string | undefined>;
+  readonly env: Env;
   readonly namespace: string;
   /** stdin, read when a provider asks (decide); never read otherwise */
   readonly stdin: () => string;
@@ -36,10 +37,8 @@ export interface Input {
 
 /** One consumer. Adding a kind is one of these plus one row in `index.ts` and one in the pane. */
 export interface Provider {
-  /** the environment variables `askpass enable` prints for it; empty when it has no link */
+  /** the environment variables `askpass enable` prints for it; a `LINK` value is the executable path of `qsm-askpass-<kind>`, which install links because a consumer takes a path with no arguments; empty when it has no link */
   readonly env: readonly (readonly [name: string, value: "LINK" | string])[];
-  /** the consumer takes an executable path with no arguments, so install links `qsm-askpass-<kind>` */
-  readonly link: boolean;
   /** argv and stdin to what the pane shows; throws a SecretError for input it cannot use */
   request: (input: Input) => PaneRequest;
   /** the person's answer to the consumer's result: stdout is the outcome's message */
