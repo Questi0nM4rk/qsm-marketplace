@@ -16,7 +16,7 @@ import { orientOutcome } from "../lib/orient.ts";
 import { projectOf } from "../lib/project.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
-import { bounded, formatList, LIST_LIMIT, listSessions, show } from "../lib/sessions.ts";
+import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
 import { openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
@@ -140,7 +140,7 @@ const runList: Handler = (call) => {
   if (call.args.unsaved === true) {
     const paths = unsavedTranscripts(db, projectsDir(env()));
     return ok(
-      { rows: paths.slice(0, limit), more: Math.max(0, paths.length - limit) },
+      page(paths, limit),
       paths.length === 0 ? "nothing unsaved" : bounded(paths, limit),
     );
   }
@@ -149,7 +149,7 @@ const runList: Handler = (call) => {
     ...(str(call.args.project) === undefined ? {} : { project: str(call.args.project) as string }),
   });
   return ok(
-    { rows: rows.slice(0, limit), more: Math.max(0, rows.length - limit) },
+    page(rows, limit),
     formatList(rows, limit),
   );
 };

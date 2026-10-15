@@ -134,13 +134,16 @@ export function listSessions(db: Database, options: ListOptions = {}): SessionRo
 
 export const LIST_LIMIT = 20;
 
-/** The first `limit` lines, and `N more: --limit <all>` when there are others, so a list never
- * lands whole in the reader's context. */
+/** The first `limit` items and how many more there are, so a list never lands whole in the
+ * reader's context. */
+export function page<T>(items: readonly T[], limit: number): { rows: T[]; more: number } {
+  return { rows: items.slice(0, limit), more: Math.max(0, items.length - limit) };
+}
+
+/** The first `limit` lines, and `N more: --limit <all>` when there are others. */
 export function bounded(lines: readonly string[], limit: number = LIST_LIMIT): string {
-  const more = lines.length - limit;
-  return more > 0
-    ? [...lines.slice(0, limit), `${more} more: --limit ${lines.length}`].join("\n")
-    : lines.join("\n");
+  const { rows, more } = page(lines, limit);
+  return more > 0 ? [...rows, `${more} more: --limit ${lines.length}`].join("\n") : rows.join("\n");
 }
 
 export function formatList(rows: readonly SessionRow[], limit: number = LIST_LIMIT): string {
