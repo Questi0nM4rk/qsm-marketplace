@@ -1,5 +1,5 @@
 ---
 type: regex
-pattern: 'stag(e|ed)[^\n]{0,120}(rule|fire|report)|(rule|fire|report)[^\n]{0,120}stag(e|ed)'
+pattern: 'stag[^\n]{0,80}(file|one of)[^\n]{0,80}(approved|name)'
 flags: i
 ---

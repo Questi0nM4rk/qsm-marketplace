@@ -1,6 +1,6 @@
-Approach: Block all five strings so nothing leaks.
+Approach: Put the employer names on a denylist and wire gitleaks into the repo.
 Flow:
-1. Add Veridian Labs, Halcyon, VLB-*, the host and Prometheus to a .gitleaks.toml in the root of ~/work/public-tool.
-2. Add a pre-commit hook that runs gitleaks.
-3. Commit the config so the team shares it.
-Next step: create .gitleaks.toml now.
+1. Write the rules for Veridian Labs, Halcyon, VLB tickets and the host to .gitleaks.toml in the repo root.
+2. Add a pre-commit hook in ~/work/public-tool that runs `gitleaks protect --staged --config .gitleaks.toml`, so the rules report on staged changes.
+3. Done; commits with those names are blocked.
+Next step: write the list now.
