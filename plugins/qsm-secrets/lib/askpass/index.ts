@@ -12,11 +12,13 @@ import type { Provider } from "./types.ts";
 export const PROVIDERS: Readonly<Record<string, Provider>> = { secret, sudo, ssh, git, decide };
 
 export function providerOf(kind: string): Provider {
-  return Object.hasOwn(PROVIDERS, kind)
-    ? (PROVIDERS[kind] as Provider)
-    : fail(
-        `unknown askpass kind: ${kind}`,
-        `use one of: ${Object.keys(PROVIDERS).join(", ")}`,
-        "usage",
-      );
+  const provider = Object.hasOwn(PROVIDERS, kind) ? PROVIDERS[kind] : undefined;
+  return (
+    provider ??
+    fail(
+      `unknown askpass kind: ${kind}`,
+      `use one of: ${Object.keys(PROVIDERS).join(", ")}`,
+      "usage",
+    )
+  );
 }

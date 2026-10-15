@@ -6,25 +6,31 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 
-interface Quote {
-  author?: string;
-  author_key?: string;
-  text?: string;
-}
-interface Msg {
-  sender?: string;
-  sender_key?: string;
-  quote?: Quote | null;
-  text?: string;
-}
-interface Decision {
-  text?: string;
-}
-export interface Thread {
-  messages?: Msg[];
-  decisions?: Decision[];
-}
+const QuoteSchema = z.object({
+  author: z.string().optional(),
+  author_key: z.string().optional(),
+  text: z.string().optional(),
+});
+const MsgSchema = z.object({
+  sender: z.string().optional(),
+  sender_key: z.string().optional(),
+  quote: QuoteSchema.nullish(),
+  text: z.string().optional(),
+});
+const DecisionSchema = z.object({ text: z.string().optional() });
+const ThreadSchema = z.object({
+  messages: z.array(MsgSchema).optional(),
+  decisions: z.array(DecisionSchema).optional(),
+});
+type Quote = z.infer<typeof QuoteSchema>;
+type Msg = z.infer<typeof MsgSchema>;
+type Decision = z.infer<typeof DecisionSchema>;
+export type Thread = z.infer<typeof ThreadSchema>;
+
+/** threads.json: each thread letter to the blob hashes of its screenshots. */
+export const ThreadsSchema = z.record(z.string(), z.array(z.string()));
 
 /** The errors that make a transcription unsafe to keep instead of the image. */
 export const CRITICAL = [
@@ -37,6 +43,15 @@ export const CRITICAL = [
 ] as const;
 export type Critical = (typeof CRITICAL)[number];
 
+const byCritical = (count: (kind: Critical) => number): Record<Critical, number> => ({
+  omitted_message: count("omitted_message"),
+  hallucinated: count("hallucinated"),
+  wrong_speaker: count("wrong_speaker"),
+  quote: count("quote"),
+  id_or_number: count("id_or_number"),
+  negation: count("negation"),
+});
+
 const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const words = (s: string) => fold(s).match(/[\p{L}\p{N}_!-]+/gu) ?? [];
 function jaccard(a: string, b: string): number {
@@ -48,15 +63,15 @@ function jaccard(a: string, b: string): number {
 function lev(a: string, b: string): number {
   const d = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i += 1) {
-    let prev = d[0] as number;
+    let prev = d[0] ?? 0;
     d[0] = i;
     for (let j = 1; j <= b.length; j += 1) {
-      const t = d[j] as number;
-      d[j] = Math.min(t + 1, (d[j - 1] as number) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      const t = d[j] ?? 0;
+      d[j] = Math.min(t + 1, (d[j - 1] ?? 0) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
       prev = t;
     }
   }
-  return d[b.length] as number;
+  return d[b.length] ?? 0;
 }
 /** Ids, codes and numbers that must survive character for character. */
 const ids = (s: string) =>
@@ -71,7 +86,7 @@ function negFlips(g: string, c: string): number {
 // The key comes from the name the model read, so a model that sorts its own key wrong is not
 // a wrong speaker.
 const nameKey = (name: string | undefined, key: string | undefined) =>
-  name
+  name !== undefined && name !== ""
     ? words(name === "ME" ? "me" : name)
         .sort()
         .join(" ")
@@ -152,7 +167,7 @@ export function scoreThread(gold: Thread, cand: Thread | undefined, why = false)
   const hasText = (m: Msg) => (m.text ?? "").trim() !== "";
   const gm = (gold.messages ?? []).filter(hasText);
   const cm = (cand?.messages ?? []).filter(hasText);
-  const crit = Object.fromEntries(CRITICAL.map((k) => [k, 0])) as Record<Critical, number>;
+  const crit = byCritical(() => 0);
   const pairs = align(gm, cm);
   crit.omitted_message = gm.length - pairs.length;
   crit.hallucinated = cm.length - pairs.length;
@@ -171,7 +186,11 @@ export function scoreThread(gold: Thread, cand: Thread | undefined, why = false)
     }
   }
   const text = pairs
-    .map(([gi, ci]) => scorePair(gm[gi] as Msg, cm[ci] as Msg, crit, why))
+    .flatMap(([gi, ci]) => {
+      const g = gm[gi];
+      const c = cm[ci];
+      return g === undefined || c === undefined ? [] : [scorePair(g, c, crit, why)];
+    })
     .reduce(
       (a, x) => ({
         chars: a.chars + x.chars,
@@ -203,9 +222,7 @@ export interface RunScore {
 }
 
 const sum = (xs: ThreadScore[]): ThreadScore => {
-  const crit = Object.fromEntries(
-    CRITICAL.map((k) => [k, xs.reduce((a, x) => a + x.critical[k], 0)]),
-  ) as Record<Critical, number>;
+  const crit = byCritical((k) => xs.reduce((a, x) => a + x.critical[k], 0));
   const add = (k: Exclude<keyof ThreadScore, "critical">) => xs.reduce((a, x) => a + x[k], 0);
   return {
     critical: crit,
@@ -223,11 +240,13 @@ const sum = (xs: ThreadScore[]): ThreadScore => {
 
 /** Every runs/*.json in `dir` scored against gold/<thread>.json for each thread in threads.json. */
 export function scoreDir(dir: string, why = false): RunScore[] {
-  const threads = Object.keys(JSON.parse(readFileSync(join(dir, "threads.json"), "utf8")));
+  const threads = Object.keys(
+    ThreadsSchema.parse(JSON.parse(readFileSync(join(dir, "threads.json"), "utf8"))),
+  );
   const gold = new Map(
     threads.map((t) => [
       t,
-      JSON.parse(readFileSync(join(dir, "gold", `${t}.json`), "utf8")) as Thread,
+      ThreadSchema.parse(JSON.parse(readFileSync(join(dir, "gold", `${t}.json`), "utf8"))),
     ]),
   );
   return readdirSync(join(dir, "runs"))
@@ -236,7 +255,9 @@ export function scoreDir(dir: string, why = false): RunScore[] {
     .map((run) => {
       let parsed: Record<string, Thread>;
       try {
-        parsed = JSON.parse(readFileSync(join(dir, "runs", run), "utf8"));
+        parsed = z
+          .record(z.string(), ThreadSchema)
+          .parse(JSON.parse(readFileSync(join(dir, "runs", run), "utf8")));
       } catch {
         return { run, totals: null };
       }
@@ -245,7 +266,7 @@ export function scoreDir(dir: string, why = false): RunScore[] {
       }
       return {
         run,
-        totals: sum(threads.map((t) => scoreThread(gold.get(t) as Thread, parsed[t], why))),
+        totals: sum(threads.map((t) => scoreThread(gold.get(t) ?? {}, parsed[t], why))),
       };
     });
 }
@@ -298,7 +319,7 @@ export function report(rows: RunScore[]): string {
 
 if (import.meta.main) {
   const [, , dir] = process.argv;
-  if (!dir) {
+  if (dir === undefined || dir === "") {
     process.stderr.write("usage: bun score.ts <fixtures dir>\n");
     process.exit(2);
   }

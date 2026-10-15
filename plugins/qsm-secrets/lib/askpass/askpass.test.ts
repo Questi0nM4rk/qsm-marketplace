@@ -58,6 +58,19 @@ const env = (extra: Record<string, string> = {}): Record<string, string | undefi
   ...extra,
 });
 
+/** The message the promise rejected with; the test fails when it resolved. */
+async function rejection(promise: Promise<unknown>): Promise<string> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error("expected the promise to reject");
+}
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
 describe("the reply line", () => {
   test("takes the nonce and a known action, and nothing else", () => {
     const line = (body: object): string => JSON.stringify(body);
@@ -92,8 +105,12 @@ describe("the reply socket", () => {
     const send = async (body: object): Promise<void> => {
       const { connect } = await import("node:net");
       await new Promise<void>((done) => {
-        const client = connect(socket.path, () => client.end(`${JSON.stringify(body)}\n`));
-        client.on("close", () => done());
+        const client = connect(socket.path, () => {
+          client.end(`${JSON.stringify(body)}\n`);
+        });
+        client.on("close", () => {
+          done();
+        });
       });
     };
     await send({ nonce: "wrong", action: "allow", value: "x" });
@@ -160,9 +177,13 @@ describe("providers", () => {
       reason: "r",
     });
     expect(decide.request(input([], request))).toMatchObject({ kind: "decide", prompt: "r" });
-    const allowed = JSON.parse(decide.finish(input([], request), reply("allow")).message ?? "");
+    const allowed: unknown = JSON.parse(
+      decide.finish(input([], request), reply("allow")).message ?? "",
+    );
     expect(allowed).toMatchObject({ id: "a1", decision: "allow" });
-    const cancelled = JSON.parse(decide.finish(input([], request), reply("cancel")).message ?? "");
+    const cancelled: unknown = JSON.parse(
+      decide.finish(input([], request), reply("cancel")).message ?? "",
+    );
     expect(cancelled).toMatchObject({
       id: "a1",
       decision: "deny",
@@ -224,7 +245,7 @@ describe("ask", () => {
     expect(outcome).toMatchObject({ code: "ok", message: TYPED });
     const logged = readFileSync(log, "utf8");
     expect(logged).not.toContain(TYPED);
-    const show = (JSON.parse(logged.split("\n")[1] ?? "[]") as string[]).at(-1) ?? "";
+    const show = strings(JSON.parse(logged.split("\n")[1] ?? "[]")).at(-1) ?? "";
     expect(JSON.parse(show)).toMatchObject({ kind: "sudo", requestedBy: { pid: process.pid } });
     expect(logged).toContain(`"-p","${QML}"`);
     expect(existsSync(join(runtime, "qsm-askpass"))).toBe(false);
@@ -243,12 +264,12 @@ describe("ask", () => {
   test("a pane that cannot be reached is missing", async () => {
     const empty = join(root, "nothing");
     mkdirSync(empty, { recursive: true });
-    await expect(ask("sudo", ["p"], options({ env: env({ PATH: empty }) }))).rejects.toThrow(
+    expect(await rejection(ask("sudo", ["p"], options({ env: env({ PATH: empty }) })))).toContain(
       "quickshell (qs) is not on PATH",
     );
-    await expect(
-      ask("sudo", ["p"], options({ env: env({ QSM_ASKPASS_QML: empty }) })),
-    ).rejects.toThrow("not installed");
+    expect(
+      await rejection(ask("sudo", ["p"], options({ env: env({ QSM_ASKPASS_QML: empty }) }))),
+    ).toContain("not installed");
     expect(readdirSync(runtime)).toEqual([]);
   });
 });
@@ -278,7 +299,7 @@ describe("a signal", () => {
   test("SIGTERM withdraws the request and removes the socket directory", async () => {
     rmSync(log, { force: true });
     const child = spawn(["bun", CLI, "askpass", "sudo", "--", "p"], {
-      env: env({ FAKE_ACTION: "none" }) as Record<string, string>,
+      env: env({ FAKE_ACTION: "none" }),
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -313,10 +334,7 @@ describe("a consumer that runs $SUDO_ASKPASS", () => {
     const run = (extra: Record<string, string>) =>
       spawnSync(fakeSudo, [], {
         encoding: "utf8",
-        env: { ...env(extra), SUDO_ASKPASS: join(out, "qsm-askpass-sudo") } as Record<
-          string,
-          string
-        >,
+        env: { ...env(extra), SUDO_ASKPASS: join(out, "qsm-askpass-sudo") },
       });
     const allowed = run({ FAKE_ACTION: "allow", FAKE_VALUE: TYPED });
     expect(allowed.status).toBe(0);

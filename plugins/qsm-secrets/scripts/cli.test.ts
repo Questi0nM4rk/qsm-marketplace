@@ -727,10 +727,12 @@ for (const flavor of FLAVORS) {
           );
         writeFileSync(join(project, "s2.jsonl"), row(NPM_VALUE));
         expect(cli(["scrub", "s2"]).code).toBe(0);
-        const done = JSON.parse(readFileSync(join(project, "s2.jsonl"), "utf8"));
-        expect(done.sessionId).toBe(NPM_VALUE);
-        expect(done.cwd).toBe(`/x/${NPM_VALUE}`);
-        expect(done.message.content).toBe(`id ${placeholderOf("qsm/npm-token")}`);
+        const done: unknown = JSON.parse(readFileSync(join(project, "s2.jsonl"), "utf8"));
+        expect(done).toMatchObject({
+          sessionId: NPM_VALUE,
+          cwd: `/x/${NPM_VALUE}`,
+          message: { content: `id ${placeholderOf("qsm/npm-token")}` },
+        });
       });
     });
 
@@ -798,7 +800,9 @@ for (const flavor of FLAVORS) {
       const transcript = (): string => join(runtime, "scrub.jsonl");
       const line = (): string =>
         `{"text":"${CAPTURED_VALUE} ${placeholderOf("cap_x")} ${NPM_VALUE} ${placeholderOf("qsm/npm-token")} ${placeholderOf("cap_gone")}"}\n`;
-      beforeEach(() => writeFileSync(transcript(), line()));
+      beforeEach(() => {
+        writeFileSync(transcript(), line());
+      });
 
       test("swaps every stored value still in the transcript for its placeholder, once", () => {
         const run = cli(["scrub", transcript(), "--json"]);
@@ -817,7 +821,7 @@ for (const flavor of FLAVORS) {
       test("a stored value that cannot be read is blocked, names the key, and changes nothing", () => {
         const run = cli(["scrub", transcript(), "--json"], { env: { FAKE_LOCKED: "cap_x" } });
         expect(run.code).toBe(5);
-        const body = envelope(run) as unknown as { code: string; message: string };
+        const body = envelope(run);
         expect(body.code).toBe("blocked");
         expect(body.message).toContain("capture/cap_x");
         expect(readFileSync(transcript(), "utf8")).toBe(line());
@@ -826,7 +830,9 @@ for (const flavor of FLAVORS) {
 
     describe("a value of several lines", () => {
       const multi = "first line of it\nsecond line of it";
-      beforeEach(() => put("qsm", "multi", multi));
+      beforeEach(() => {
+        put("qsm", "multi", multi);
+      });
 
       test(`is ${flavor.multiline} by ${flavor.name} when rename copies it`, () => {
         const run = cli(["rename", "multi", "moved-multi"]);
@@ -1318,7 +1324,7 @@ describe("guard", () => {
     ["sudo -u root gopass show x", "vault-reader"],
     [`gpg -d ${passStore}/work/token.gpg`, "keyring-files"],
     ["gpg -d ~/.password-store/work/token.gpg", "keyring-files"],
-    [`cat ${"$"}PASSWORD_STORE_DIR/work/token.gpg`, "keyring-files"],
+    [`cat $PASSWORD_STORE_DIR/work/token.gpg`, "keyring-files"],
     [`gpg -d < ${passStore}/work/token.gpg`, "keyring-files"],
     [`cd ${passStore} && gpg -d work/token.gpg`, "keyring-files"],
     ["busctl --user call org.freedesktop.secrets /a b c", "bus-secrets"],
@@ -1333,9 +1339,9 @@ describe("guard", () => {
     ],
     ["dbus-send --session --dest=org.free''desktop.secrets /a x.y", "bus-secrets"],
     ["qdbus org.freedesktop.secrets /org/freedesktop/secrets", "bus-secrets"],
-    [`gdbus call -e -d ${"$"}DEST -o /a -m b`, "bus-secrets"],
-    [`d=org.freedesktop.secrets; busctl --user call ${"$"}{d} /a b c`, "bus-secrets"],
-    [`busctl --user call ${"$"}(printf x) /a b c`, "bus-secrets"],
+    [`gdbus call -e -d $DEST -o /a -m b`, "bus-secrets"],
+    [`d=org.freedesktop.secrets; busctl --user call \${d} /a b c`, "bus-secrets"],
+    [`busctl --user call $(printf x) /a b c`, "bus-secrets"],
     ["gdbus call -e -d org.freedesktop.secrets -o /a -m b", "bus-secrets"],
     [`cat ${keyrings}/login.keyring`, "keyring-files"],
     [`cat ${keyrings}/../keyrings/login.keyring`, "keyring-files"],
@@ -1365,16 +1371,16 @@ describe("guard", () => {
     [`cd ${keyrings} && cat login.keyring`, "keyring-files"],
     ["cat $XDG_DATA_HOME/keyr*/login.keyring", "keyring-files"],
     ["cat $XDG_DATA_HOME/k?yrings/login.keyring", "keyring-files"],
-    [`cat ${"$"}{XDG_DATA_HOME}/keyrings/login.keyring`, "keyring-files"],
-    [`cat "${"$"}{XDG_DATA_HOME}/keyrings/login.keyring"`, "keyring-files"],
-    [`cat ${"$"}{HOME}/.password-store/work/token.gpg`, "keyring-files"],
-    [`cat ${"$"}{PASSWORD_STORE_DIR}/work/token.gpg`, "keyring-files"],
-    [`cat ${"$"}{XDG_RUNTIME_DIR}/qsm-secrets/s1/kubeconfig`, "rendered-config"],
-    [`bash -c 'cat ${"$"}{XDG_DATA_HOME}/keyrings/login.keyring'`, "keyring-files"],
-    [`cat ${"$"}{XDG_DATA_HOME:-/x}/keyrings/login.keyring`, "unreadable-command"],
-    [`cat ${"$"}{HOME#/}/.password-store/x`, "unreadable-command"],
-    [`cat ${"$"}{XDG_RUNTIME_DIR:+/r}/qsm-secrets/s1/kubeconfig`, "unreadable-command"],
-    [`cat ${"$"}{PASSWORD_STORE_DIR-/p}/x`, "unreadable-command"],
+    [`cat \${XDG_DATA_HOME}/keyrings/login.keyring`, "keyring-files"],
+    [`cat "\${XDG_DATA_HOME}/keyrings/login.keyring"`, "keyring-files"],
+    [`cat \${HOME}/.password-store/work/token.gpg`, "keyring-files"],
+    [`cat \${PASSWORD_STORE_DIR}/work/token.gpg`, "keyring-files"],
+    [`cat \${XDG_RUNTIME_DIR}/qsm-secrets/s1/kubeconfig`, "rendered-config"],
+    [`bash -c 'cat \${XDG_DATA_HOME}/keyrings/login.keyring'`, "keyring-files"],
+    [`cat \${XDG_DATA_HOME:-/x}/keyrings/login.keyring`, "unreadable-command"],
+    [`cat \${HOME#/}/.password-store/x`, "unreadable-command"],
+    [`cat \${XDG_RUNTIME_DIR:+/r}/qsm-secrets/s1/kubeconfig`, "unreadable-command"],
+    [`cat \${PASSWORD_STORE_DIR-/p}/x`, "unreadable-command"],
     ["qs ipc -p /x call askpass show '{}'", "askpass-pane"],
     ["env A=1 quickshell ipc call askpass dismiss n", "askpass-pane"],
     ["bash -c 'qs -p /x ipc call askpass show {}'", "askpass-pane"],
@@ -1388,8 +1394,8 @@ describe("guard", () => {
     ["qsm-secrets -- askpass sudo x", "askpass-pane"],
     ["sudo qsm-secrets askpass ssh -- Passphrase:", "askpass-pane"],
     ["qs ipc -p /x call ask$(echo pass) request x", "askpass-pane"],
-    [`nc -U ${"$"}XDG_RUNTIME_DIR/qsm-askpass/abc/reply.sock`, "askpass-pane"],
-    [`ls ${"$"}XDG_RUNTIME_DIR/qsm-askpass`, "askpass-pane"],
+    [`nc -U $XDG_RUNTIME_DIR/qsm-askpass/abc/reply.sock`, "askpass-pane"],
+    [`ls $XDG_RUNTIME_DIR/qsm-askpass`, "askpass-pane"],
   ])("%s is refused as %s", (command, code) => {
     expect(verdict(command.replace("LINK", join(data, "harmless-name")))).toBe(code);
   });
@@ -1418,7 +1424,7 @@ describe("guard", () => {
     "qsm-secrets env k=V -- npm publish",
     "find . -name '*.ts' -exec wc -l {} ;",
     "cd $HOME && cat README.md",
-    `cat ${"$"}{HOME}/README.md ${"$"}{XDG_CONFIG_HOME}/app.conf ${"$"}{FOO:-x}`,
+    `cat \${HOME}/README.md \${XDG_CONFIG_HOME}/app.conf \${FOO:-x}`,
     "flock /tmp/l make build",
     `qsm-secrets get deploy-key ${channel("/tmp/deploy.key")}`,
     `qsm-secrets get deploy-key ${channel("&-")}`,

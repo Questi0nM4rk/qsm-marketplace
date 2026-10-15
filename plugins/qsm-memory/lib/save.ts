@@ -5,7 +5,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import { basename, dirname, join } from "node:path";
-import { fail } from "./errors.ts";
+import { fail, messageOf } from "./errors.ts";
 import { projectOf } from "./project.ts";
 import { parseTranscript, sessionIdOf, type Turn } from "./transcript.ts";
 
@@ -151,7 +151,7 @@ function mtimeOf(path: string): number | null {
   try {
     return statSync(path).mtimeMs;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return null;
     }
     throw error;
@@ -212,7 +212,7 @@ export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): Cat
         skipped += 1;
       }
     } catch (error) {
-      failed.push(`${path}: ${(error as Error).message}`);
+      failed.push(`${path}: ${messageOf(error)}`);
     }
   }
   return { saved, skipped, remain: pending.length - tried, failed };

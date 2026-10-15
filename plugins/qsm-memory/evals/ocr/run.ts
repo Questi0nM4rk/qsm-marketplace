@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { blobPath } from "../../lib/blobs.ts";
-import { report, scoreDir } from "./score.ts";
+import { report, scoreDir, ThreadsSchema } from "./score.ts";
 
 const TIMEOUT_MS = 20 * 60 * 1000;
 const say = (line: string) => process.stdout.write(`${line}\n`);
@@ -20,14 +20,15 @@ const say = (line: string) => process.stdout.write(`${line}\n`);
 const { values } = parseArgs({
   options: { model: { type: "string" }, runs: { type: "string", default: "3" } },
 });
-const { model } = values;
+const { model: requested } = values;
 const runs = Number(values.runs);
-if (!(model && Number.isInteger(runs)) || runs < 1) {
+if (requested === undefined || requested === "" || !Number.isInteger(runs) || runs < 1) {
   process.stderr.write(
     "usage: QSM_MEMORY_OCR_FIXTURES=<dir> bun run.ts --model <haiku|sonnet|opus> [--runs N]\n",
   );
   process.exit(2);
 }
+const model = requested;
 const dir = process.env.QSM_MEMORY_OCR_FIXTURES ?? "";
 if (!existsSync(join(dir, "threads.json"))) {
   process.stderr.write(
@@ -38,9 +39,7 @@ if (!existsSync(join(dir, "threads.json"))) {
 
 // The model reads each screenshot by a name that says its thread and its place in the thread.
 // The view is rebuilt on every run, so a run that was killed leaves nothing that the next run reads.
-const threads: Record<string, string[]> = JSON.parse(
-  readFileSync(join(dir, "threads.json"), "utf8"),
-);
+const threads = ThreadsSchema.parse(JSON.parse(readFileSync(join(dir, "threads.json"), "utf8")));
 const view = join(dir, ".view");
 rmSync(view, { recursive: true, force: true });
 const listing: string[] = [];
@@ -76,22 +75,20 @@ function jsonOf(text: string): string {
 /** One `claude -p` run with only the Read tool; killed after TIMEOUT_MS. */
 function one(i: number): Promise<void> {
   const started = Date.now();
-  const args = [
-    "-p",
-    "--model",
-    model as string,
-    "--allowedTools",
-    "Read",
-    "--output-format",
-    "text",
-  ];
+  const args = ["-p", "--model", model, "--allowedTools", "Read", "--output-format", "text"];
   const child = spawn("claude", args, { cwd: view, stdio: ["pipe", "pipe", "pipe"] });
   const out: Buffer[] = [];
   const err: Buffer[] = [];
-  child.stdout.on("data", (b: Buffer) => out.push(b));
-  child.stderr.on("data", (b: Buffer) => err.push(b));
+  child.stdout.on("data", (b: Buffer) => {
+    out.push(b);
+  });
+  child.stderr.on("data", (b: Buffer) => {
+    err.push(b);
+  });
   child.stdin.end(prompt);
-  const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    child.kill();
+  }, TIMEOUT_MS);
   return new Promise((resolve) => {
     child.on("close", (code) => {
       clearTimeout(timer);

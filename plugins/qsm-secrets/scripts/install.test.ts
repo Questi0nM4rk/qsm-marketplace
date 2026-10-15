@@ -83,7 +83,7 @@ describe("install: the askpass pane and its links", () => {
     }
     expect(lstatSync(stale, { throwIfNoEntry: false })).toBeUndefined();
     expect(first.steps.find((s) => s.name === "link qsm-askpass-old")?.detail).toContain("removed");
-    expect(JSON.parse(readFileSync(palette, "utf8")).accent).toMatch(/^#[0-9A-F]{6}$/);
+    expect(readFileSync(palette, "utf8")).toMatch(/"accent":\s*"#[0-9A-F]{6}"/);
 
     writeFileSync(palette, '{"accent": "#FFFFFF"}');
     const second = await install(context({ present: ["bun", "rbw"] }));
@@ -95,8 +95,12 @@ describe("install: the askpass pane and its links", () => {
   }, 60_000);
 
   test("a file that is not our link is reported and left alone", async () => {
-    rmSync(links[0] as string);
-    writeFileSync(links[0] as string, "mine");
+    const [first] = links;
+    if (first === undefined) {
+      throw new Error("no link to replace");
+    }
+    rmSync(first);
+    writeFileSync(first, "mine");
     const r = await install(context({ present: ["bun", "rbw"] }));
     expect(r.steps.find((s) => s.name === "link qsm-askpass-sudo")?.status).toBe("error");
   }, 60_000);

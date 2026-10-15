@@ -141,7 +141,10 @@ describe("catch-up", () => {
     const { root, dir } = projects();
     const path = write(join(dir, "aaa.jsonl"), new TranscriptBuilder().human("a").text());
     saveTranscript(d, path, { now: () => "2026-09-30T10:00:00.000Z" });
-    utimesSync(path, new Date("2026-09-30T09:00:00Z"), new Date("2026-09-30T09:00:00Z"));
+    const at = (iso: string): void => {
+      utimesSync(path, new Date(iso), new Date(iso));
+    };
+    at("2026-09-30T09:00:00Z");
     expect(unsavedTranscripts(d, root)).toEqual([]);
 
     utimesSync(path, new Date("2026-09-30T11:00:00Z"), new Date("2026-09-30T11:00:00Z"));
@@ -171,7 +174,9 @@ describe("catch-up", () => {
       join(dir, "aaa.jsonl"),
       new TranscriptBuilder({ sessionId: "aaa" }).headless("run it").assistant("done").text(),
     );
-    const at = (iso: string) => utimesSync(path, new Date(iso), new Date(iso));
+    const at = (iso: string): void => {
+      utimesSync(path, new Date(iso), new Date(iso));
+    };
     at("2026-09-30T09:00:00Z");
     expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 1, remain: 0, failed: [] });
 

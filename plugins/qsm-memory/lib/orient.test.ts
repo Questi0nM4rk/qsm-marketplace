@@ -29,7 +29,7 @@ function archive(project: string, titles: readonly string[]): Database {
 }
 
 /** A work tree with a `.beads/` and a PATH holding a `br` that answers like the real one. */
-function tracker(): { cwd: string; env: Record<string, string> } {
+function tracker(): { cwd: string; bin: string; env: Record<string, string> } {
   const root = sandboxDir("qsm-memory-orient-");
   const cwd = join(root, "repo");
   const bin = join(root, "bin");
@@ -49,7 +49,7 @@ esac
 `,
   );
   chmodSync(br, 0o755);
-  return { cwd, env: { PATH: `${bin}:${process.env.PATH ?? ""}` } };
+  return { cwd, bin, env: { PATH: `${bin}:${process.env.PATH ?? ""}` } };
 }
 
 describe("orient", () => {
@@ -126,9 +126,8 @@ describe("orient, what a session left behind", () => {
 
 describe("orient, limits", () => {
   test("only the three tasks it shows are resolved with br show", () => {
-    const { cwd, env } = tracker();
+    const { cwd, bin, env } = tracker();
     const db = archive(cwd, ["one"]);
-    const bin = (env.PATH as string).split(":")[0] as string;
     const log = join(bin, "calls");
     const items = Array.from({ length: 8 }, (_, i) => `{"id":"x-${i}","title":"t${i}"}`).join(",");
     writeFileSync(

@@ -6,11 +6,14 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { listen } from "bun";
+import { isRecord } from "../../../../lib/outcome.ts";
 import type { Env } from "../../../../lib/paths.ts";
 import { fail } from "../errors.ts";
 import type { Action, Reply } from "./types.ts";
 
-const ACTIONS: readonly string[] = ["allow", "deny", "cancel"];
+const ACTIONS: ReadonlySet<unknown> = new Set<Action>(["allow", "deny", "cancel"]);
+
+const isAction = (value: unknown): value is Action => ACTIONS.has(value);
 const MAX_LINE = 64 * 1024;
 
 export interface ReplySocket {
@@ -25,12 +28,12 @@ export interface ReplySocket {
 /** A line as a reply, or null: wrong shape, wrong nonce, or an action the pane never sends. */
 export function parseReply(line: string, nonce: string): Reply | null {
   try {
-    const body = JSON.parse(line) as Record<string, unknown>;
-    if (body.nonce !== nonce || typeof body.action !== "string" || !ACTIONS.includes(body.action)) {
+    const body: unknown = JSON.parse(line);
+    if (!isRecord(body) || body.nonce !== nonce || !isAction(body.action)) {
       return null;
     }
     const value = typeof body.value === "string" ? body.value : "";
-    return { nonce, action: body.action as Action, value };
+    return { nonce, action: body.action, value };
   } catch {
     return null;
   }
@@ -83,7 +86,9 @@ export function openReplySocket(env: Env): ReplySocket {
     wait: async (timeoutMs) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const late = new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), timeoutMs);
+        timer = setTimeout(() => {
+          resolve(null);
+        }, timeoutMs);
       });
       try {
         return await Promise.race([answer, late]);

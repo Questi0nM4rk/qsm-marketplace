@@ -14,6 +14,8 @@ const CLI = resolve(import.meta.dir, "cli.ts");
 
 const envelopeSchema = z.object({ code: z.string(), message: z.string(), data: z.unknown() });
 
+const partialSchema = envelopeSchema.extend({ warnings: z.array(z.string()) });
+
 /** The `--json` envelope a verb printed. */
 const envelopeOf = (stdout: string) => envelopeSchema.parse(JSON.parse(stdout));
 
@@ -151,9 +153,11 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     const text = run(box, ["list", "--limit", "3"]).stdout.trimEnd().split("\n");
     expect(text).toHaveLength(4);
     expect(text.at(-1)).toBe("1 more: --limit 4");
-    const json = JSON.parse(run(box, ["list", "--limit", "3", "--json"]).stdout);
-    expect(json.data.rows).toHaveLength(3);
-    expect(json.data.more).toBe(1);
+    const listed = z
+      .object({ rows: z.array(z.unknown()), more: z.number() })
+      .parse(envelopeOf(run(box, ["list", "--limit", "3", "--json"]).stdout).data);
+    expect(listed.rows).toHaveLength(3);
+    expect(listed.more).toBe(1);
     expect(run(box, ["list", "--limit", "0"]).exit).toBe(2);
     expect(run(box, ["list", "--limit", "2.5"]).exit).toBe(2);
   });
@@ -171,7 +175,7 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     run(box, ["save", "--catch-up"]);
     const r = run(box, ["list", "--since", "last week", "--json"]);
     expect(r.exit).toBe(2);
-    expect(JSON.parse(r.stdout).message).toContain("--since takes Nd or a date (got 'last week')");
+    expect(envelopeOf(r.stdout).message).toContain("--since takes Nd or a date (got 'last week')");
     const text = run(box, ["search", "x", "--since", "7days"]);
     expect(text.exit).toBe(2);
     expect(text.stderr.split("\n").slice(0, 2)).toEqual([
@@ -187,7 +191,7 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     transcript(box, "ok1.jsonl", new TranscriptBuilder({ sessionId: "ok1" }).human("x").text());
     mkdirSync(join(box.projects, "bad.jsonl"));
     const r = run(box, ["save", "--catch-up", "--json"]);
-    const out = JSON.parse(r.stdout);
+    const out = partialSchema.parse(JSON.parse(r.stdout));
     expect(r.exit).toBe(0);
     expect(out.code).toBe("partial");
     expect(out.message).toBe("saved 1, 1 failed, 0 remain");
@@ -268,7 +272,11 @@ describe("qsm-memory cli, contract", () => {
     // git stays reachable: without it the project key fails first, which is its own error.
     const bin = join(box.home, "bin");
     mkdirSync(bin);
-    symlinkSync(which("git") as string, join(bin, "git"));
+    const git = which("git");
+    if (git === null) {
+      throw new Error("git is not on PATH");
+    }
+    symlinkSync(git, join(bin, "git"));
     const r = run(box, ["orient", "--json"], {
       ...env(box),
       PATH: `${dirname(process.execPath)}:${bin}`,

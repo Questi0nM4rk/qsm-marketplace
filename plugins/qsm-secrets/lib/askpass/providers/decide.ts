@@ -1,7 +1,7 @@
 // HOOK_KIT_ASKPASS: hook-kit spawns this with an ask request (protocol 2) on stdin and reads an ask
 // response from stdout. Allow or deny only; a failure is a non-zero exit, which hook-kit reads as deny.
 
-import { ok } from "../../../../../lib/outcome.ts";
+import { isRecord, ok } from "../../../../../lib/outcome.ts";
 import { fail } from "../../errors.ts";
 import { reasonOf } from "../answer.ts";
 import type { Provider } from "../types.ts";
@@ -15,8 +15,13 @@ interface AskRequest {
 
 function parse(text: string): AskRequest {
   try {
-    const body = JSON.parse(text) as Record<string, unknown>;
-    if (typeof body.id === "string" && body.id !== "" && typeof body.toolName === "string") {
+    const body: unknown = JSON.parse(text);
+    if (
+      isRecord(body) &&
+      typeof body.id === "string" &&
+      body.id !== "" &&
+      typeof body.toolName === "string"
+    ) {
       return {
         id: body.id,
         toolName: body.toolName,

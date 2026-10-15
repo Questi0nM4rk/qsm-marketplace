@@ -139,28 +139,22 @@ test("a Grep with no path is judged by the working directory", async ($, on) => 
   expect(ran.result).toBe("ran");
 });
 
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the engine's declared tool names list no Glob
+const glob = (input: { pattern: string; path?: string }) => ({ tool: "Glob", ...input }) as never;
+
 test("a Glob under the pass store, or with a pattern that starts there, is denied", async ($, on) => {
   fileHost(on, undefined);
   on("session.cwd", () => ({ value: "/home/p/project" }));
 
-  const byPath = await $.tool.call({
-    tool: "Glob",
-    pattern: "**/*.gpg",
-    path: "/home/p/.password-store",
-  } as never);
+  const byPath = await $.tool.call(glob({ pattern: "**/*.gpg", path: "/home/p/.password-store" }));
   expect(byPath.deny).toContain("keyring-files");
-  const byPattern = await $.tool.call({
-    tool: "Glob",
-    pattern: "/home/p/.password-store/**",
-  } as never);
+  const byPattern = await $.tool.call(glob({ pattern: "/home/p/.password-store/**" }));
   expect(byPattern.deny).toContain("keyring-files");
-  const ordinary = await $.tool.call({ tool: "Glob", pattern: "src/**/*.ts" } as never);
+  const ordinary = await $.tool.call(glob({ pattern: "src/**/*.ts" }));
   expect(ordinary.result).toBe("ran");
-  const relative = await $.tool.call({
-    tool: "Glob",
-    pattern: "../.password-store/**",
-    path: "/home/p/project",
-  } as never);
+  const relative = await $.tool.call(
+    glob({ pattern: "../.password-store/**", path: "/home/p/project" }),
+  );
   expect(relative.deny).toContain("keyring-files");
 });
 
@@ -168,7 +162,7 @@ test("a Glob from the home directory lists names and is not denied", async ($, o
   fileHost(on, undefined);
   on("session.cwd", () => ({ value: "/home/p" }));
 
-  const listed = await $.tool.call({ tool: "Glob", pattern: "*.md" } as never);
+  const listed = await $.tool.call(glob({ pattern: "*.md" }));
   expect(listed.result).toBe("ran");
 });
 
@@ -332,7 +326,10 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
 test("a tool result of any tool is masked in its nested text, and a media block is kept as it is", async ($, on) => {
   let sent: string[] = [];
   on("process.run", (_$, e) => {
-    sent = JSON.parse((e as { init: { stdin: string } }).init.stdin) as string[];
+    const stdin: unknown = JSON.parse(e.init?.stdin ?? "[]");
+    sent = Array.isArray(stdin)
+      ? stdin.filter((text): text is string => typeof text === "string")
+      : [];
     const texts = sent.map((text) => text.replaceAll("VALUE", "{{secret:cap_1}}"));
     return {
       value: {
