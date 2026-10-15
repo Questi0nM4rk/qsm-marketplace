@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# The tree Claude Code installs qsm-marketplace from moved (a commit, a merge, a rebase): rebuild
+# every bin and refresh every installed plugin's cache in the background, so the next session runs
+# this commit and never an older copy. A worker's worktree is another tree and touches nothing.
+# post-merge and post-rewrite are links to this file.
+set -euo pipefail
+
+config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+source=$(jq -r '."qsm-marketplace".source.path // empty' "$config/plugins/known_marketplaces.json")
+[ "$(git rev-parse --show-toplevel)" = "$source" ] || exit 0
+
+log=${XDG_STATE_HOME:-$HOME/.local/state}/qsm/refresh.log
+mkdir -p "$(dirname "$log")"
+# The hook's GIT_DIR and GIT_INDEX_FILE would point the git calls of claude at this commit's index.
+unset $(git rev-parse --local-env-vars)
+(
+  setsid flock "$log.lock" bash -c '
+    set -euo pipefail
+    echo "== $(date -Is) $(git -C "$1" rev-parse --short HEAD)"
+    cd "$1"
+    qsm-setup install --all
+    jq -r ".plugins | keys[] | select(endswith(\"@qsm-marketplace\"))" "$2/plugins/installed_plugins.json" |
+      while read -r plugin; do claude plugin update "$plugin"; done
+  ' refresh "$source" "$config" >>"$log" 2>&1 </dev/null ||
+    notify-send -u critical "qsm refresh failed" "$log"
+) &
