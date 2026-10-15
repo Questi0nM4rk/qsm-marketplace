@@ -899,8 +899,11 @@ the default path, never to the path `QSM_ASKPASS_QML` names.
   `SSH_ASKPASS_PROMPT`: `confirm` is Allow or Deny with exit 0 or 1 and no text, `none` is a notice row
   (`notice` in the kinds tables) with no answer to give.
 - **Outcome codes.** Root `lib/outcome.ts` is unchanged: a timeout and a cancel are `failed` with a reason.
-- **Theme.** `Theme.qml` is a copy of the desktop shell's Deep Night tokens, a file of this plugin; the pane
-  runs without that shell.
+- **Theme.** The pane's colours are the qsm palette. `qml/askpass/colors.json` holds the defaults, a dark
+  pastel purple; install writes them once to `$XDG_CONFIG_HOME/qsm-marketplace/colors.json` and never
+  replaces that file, because it is the person's to edit. The binary passes the file's path to the pane's
+  instance as `QSM_COLORS`; the pane rereads it when it changes, and a key that is missing or not a
+  `#RRGGBB` or `#AARRGGBB` colour keeps its default. Sizes, spacing and fonts stay in `Theme.qml`.
 - **ssh and git are Authorize-style.** Their answers are a passphrase or a password for a remote, asked once
   and never stored; only `secret` goes to the vault.
 - **Sudo timestamp.** A cached sudo credential skips the askpass, so no pane appears; `sudo -k` or

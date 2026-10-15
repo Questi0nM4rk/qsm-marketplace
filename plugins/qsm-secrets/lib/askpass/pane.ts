@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { sleep, which } from "bun";
 import type { Env } from "../../../../lib/paths.ts";
 import { fail } from "../errors.ts";
-import { paneDir } from "./paths.ts";
+import { colorsPath, paneDir } from "./paths.ts";
 
 const TARGET = "askpass";
 const TRIES = 40;
@@ -39,7 +39,7 @@ export async function showPane(env: Env, request: object): Promise<void> {
     );
   }
   // -n: an instance of this config already running is kept, not doubled.
-  qs(["-p", dir, "-n", "-d"], env);
+  qs(["-p", dir, "-n", "-d"], { ...env, QSM_COLORS: colorsPath(env) });
   let last = "";
   for (let attempt = 0; attempt < TRIES; attempt += 1) {
     const called = qs(["ipc", "-p", dir, "call", TARGET, "request", JSON.stringify(request)], env);

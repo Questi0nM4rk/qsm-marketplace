@@ -1,22 +1,60 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 
-// Tokens copied from the running desktop shell's Deep Night theme (qsm-desktop shell/theme/Theme.qml
-// and shell/themes/deep-night.json). A copy, not an import: this pane runs without that shell.
-// The two derived surfaces are the shell's lift of surface, written as a tint of text over surface.
+// The colours are the qsm palette: colors.json beside this file holds the defaults, and the person's
+// own file, whose path the binary passes as QSM_COLORS, overrides any key it sets. The pane rereads
+// that file when it changes. A key missing or not a #RRGGBB or #AARRGGBB colour keeps its default.
 QtObject {
-    readonly property color background: "#1B1027"
-    readonly property color surface: "#2E203C"
+    id: theme
+
+    property var chosen: ({})
+    readonly property var defaults: JSON.parse(shipped.text())
+
+    property FileView shipped: FileView {
+        path: Qt.resolvedUrl("colors.json").toString().replace(/^file:\/\//, "")
+        blockLoading: true
+    }
+
+    property FileView own: FileView {
+        path: Quickshell.env("QSM_COLORS") ?? ""
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: theme.chosen = theme.parse(text())
+        onLoadFailed: theme.chosen = ({})
+    }
+
+    function parse(text: string): var {
+        try {
+            const value = JSON.parse(text)
+            if (value !== null && typeof value === "object")
+                return value
+        } catch (e) {
+        }
+        console.warn(`qsm palette: ${own.path} is not a JSON object; the defaults apply`)
+        return {}
+    }
+
+    function pick(key: string): color {
+        const value = chosen[key]
+        return typeof value === "string" && /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) ? value : defaults[key]
+    }
+
+    readonly property color background: pick("background")
+    readonly property color surface: pick("surface")
     readonly property color surfaceRaised: Qt.tint(surface, Qt.rgba(text.r, text.g, text.b, 0.08))
     readonly property color outline: Qt.tint(surface, Qt.rgba(text.r, text.g, text.b, 0.2))
-    readonly property color text: "#F6F1FB"
-    readonly property color textMuted: "#BCAECA"
-    readonly property color accent: "#C7A8EB"
-    readonly property color warning: "#E8C58A"
-    readonly property color danger: "#FF8B94"
-    readonly property color success: "#91D6C2"
-    readonly property color shadow: "#000000"
+    readonly property color text: pick("text")
+    readonly property color textMuted: pick("textMuted")
+    readonly property color accent: pick("accent")
+    readonly property color warning: pick("warning")
+    readonly property color danger: pick("danger")
+    readonly property color success: pick("success")
+    readonly property color shadow: pick("shadow")
 
     readonly property string fontFamily: "CaskaydiaCove Nerd Font"
     readonly property string technicalFontFamily: "CaskaydiaCove Nerd Font Mono"

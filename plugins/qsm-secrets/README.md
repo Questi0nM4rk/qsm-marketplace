@@ -92,6 +92,8 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 - The askpass pane runs on Quickshell (`qs` on PATH) as an instance of its own, started on demand and
   addressed by its config path. Without `qs` or the installed pane the call answers `missing`; there
   is no terminal fallback. 120 seconds without an answer, or Escape, is `failed` with the reason.
+- The pane's colours are the qsm palette in `~/.config/qsm-marketplace/colors.json`, which install
+  writes once from the defaults and never replaces; an open pane takes an edit at once.
 - The pane names the parent process that asked, with its executable and the first 12 hex of its
   sha256, so you see which binary wants the answer. It is not proof: the request's nonce is in the
   argv of `qs ipc call`, which any process of your user can read, so one outside the guard can write

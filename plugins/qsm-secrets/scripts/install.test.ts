@@ -3,7 +3,15 @@
 // a sandbox home, because the verdict is the base's upstream step.
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
@@ -59,6 +67,7 @@ describe("install: the askpass pane and its links", () => {
   const bins = join(sandbox, "bin");
   const pane = join(sandbox, ".local", "share", "qsm", "askpass", "qml", "shell.qml");
   const links = ["sudo", "ssh", "git", "decide"].map((k) => join(bins, `qsm-askpass-${k}`));
+  const palette = join(sandbox, "qsm-marketplace", "colors.json");
 
   test("copies the pane and links each consumer, a second run changes nothing, a stale link goes", async () => {
     rmSync(dirname(pane), { recursive: true, force: true });
@@ -72,12 +81,15 @@ describe("install: the askpass pane and its links", () => {
     }
     expect(lstatSync(stale, { throwIfNoEntry: false })).toBeUndefined();
     expect(first.steps.find((s) => s.name === "link qsm-askpass-old")?.detail).toContain("removed");
+    expect(JSON.parse(readFileSync(palette, "utf8")).accent).toMatch(/^#[0-9A-F]{6}$/);
 
+    writeFileSync(palette, '{"accent": "#FFFFFF"}');
     const second = await install(context({ present: ["bun", "rbw"] }));
     const askpass = second.steps.filter(
-      (s) => s.name === "askpass pane" || s.name.startsWith("link "),
+      (s) => s.name === "askpass pane" || s.name === "palette" || s.name.startsWith("link "),
     );
     expect(askpass.every((s) => s.status === "already")).toBe(true);
+    expect(readFileSync(palette, "utf8")).toBe('{"accent": "#FFFFFF"}');
   }, 60_000);
 
   test("a file that is not our link is reported and left alone", async () => {

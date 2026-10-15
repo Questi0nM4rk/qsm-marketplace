@@ -1,6 +1,8 @@
 // What the plugin puts on the machine for the askpass path besides its binary: the pane's QML,
-// copied where `qs -p` can run it, and one `qsm-askpass-<kind>` link per consumer that takes an
-// executable path with no arguments. Both are cleaned before they are written, and named.
+// copied where `qs -p` can run it, one `qsm-askpass-<kind>` link per consumer that takes an
+// executable path with no arguments, and the person's palette file, written once from the defaults.
+// The pane and the links are cleaned before they are written, and named; the palette is the
+// person's to edit and is never replaced.
 
 import { createHash } from "node:crypto";
 import {
@@ -15,11 +17,11 @@ import {
   symlinkSync,
   unlinkSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { InstallContext, Step } from "../../../../lib/install-contract.ts";
 import { binDir } from "../../../../lib/paths.ts";
 import { linkedKinds } from "./link.ts";
-import { installedPaneDir, LINK_PREFIX } from "./paths.ts";
+import { colorsPath, installedPaneDir, LINK_PREFIX } from "./paths.ts";
 
 const BIN = "qsm-secrets";
 
@@ -58,6 +60,24 @@ function paneStep(ctx: InstallContext, source: string): Step {
   mkdirSync(join(target, ".."), { recursive: true });
   cpSync(source, target, { recursive: true });
   return { name, status: "installed", detail: `copied the pane to ${target}` };
+}
+
+function colorsStep(ctx: InstallContext, defaults: string): Step {
+  const name = "palette";
+  const target = colorsPath(ctx.env);
+  if (existsSync(target)) {
+    return { name, status: "already", detail: `kept your colours at ${target}` };
+  }
+  if (ctx.dryRun) {
+    return { name, status: "skipped", detail: `would write the default colours to ${target}` };
+  }
+  mkdirSync(dirname(target), { recursive: true });
+  cpSync(defaults, target);
+  return {
+    name,
+    status: "installed",
+    detail: `wrote the default colours to ${target}; edit it to change them`,
+  };
 }
 
 /** Whether `path` is a link to our binary: the only thing this installer ever removes or replaces. */
@@ -111,5 +131,6 @@ function linkSteps(ctx: InstallContext): Step[] {
 }
 
 export function askpassSteps(ctx: InstallContext, pluginRoot: string): Step[] {
-  return [paneStep(ctx, join(pluginRoot, "qml", "askpass")), ...linkSteps(ctx)];
+  const pane = join(pluginRoot, "qml", "askpass");
+  return [paneStep(ctx, pane), colorsStep(ctx, join(pane, "colors.json")), ...linkSteps(ctx)];
 }
