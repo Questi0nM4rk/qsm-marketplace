@@ -20,11 +20,14 @@ if (args[0] === "ipc" && at !== -1) {
     action: process.env.FAKE_ACTION ?? "allow",
     value: process.env.FAKE_VALUE ?? "",
   });
-  const socket = connect(request.socketPath, () => socket.end(line + "\\n"));
-  socket.on("close", () => {
-    console.log("queued");
-    process.exit(0);
-  });
+  // The asker waits in spawnSync for this process, so it cannot close its side yet: exit once the
+  // line is flushed, as the real pane answers after \`qs ipc call\` has returned.
+  const socket = connect(request.socketPath, () =>
+    socket.end(line + "\\n", () => {
+      console.log("queued");
+      process.exit(0);
+    }),
+  );
   socket.on("error", () => process.exit(1));
 }
 `;
