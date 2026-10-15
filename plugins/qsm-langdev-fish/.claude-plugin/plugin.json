@@ -1,6 +1,5 @@
 {
   "name": "qsm-langdev-fish",
-  "version": "0.1.0",
   "description": "Fish shell idioms for an agent writing scripts, functions and config, beside the qsm-langdev gate that checks them.",
   "keywords": [
     "fish",

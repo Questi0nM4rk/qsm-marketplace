@@ -10,7 +10,7 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { home } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
@@ -23,7 +23,7 @@ import {
 } from "./entries.ts";
 import { fail } from "./errors.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
-import { WRAPPER_MARK } from "./vault.ts";
+import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
 /** The file descriptor `get` writes to. */
 const CHANNEL_FD = 3;
@@ -31,7 +31,12 @@ const CHANNEL_FD = 3;
 const PIPE_HINT = "use qsm-secrets pipe <key> -- <cmd> or qsm-secrets env <key>=<VAR> -- <cmd>";
 
 function missing(namespace: string, key: string): never {
-  const where = namespace === "" ? "the vault" : `namespace ${namespace}`;
+  const where =
+    namespace === ""
+      ? "the vault"
+      : namespace === LEGACY_NAMESPACE
+        ? "the entries stored before namespaces"
+        : `namespace ${namespace}`;
   fail(
     `not stored: ${key}`,
     `check ${where} with qsm-secrets list or qsm-secrets inspect`,
@@ -86,22 +91,37 @@ export function runCapture(): Capture {
   });
 }
 
+/** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
+function readToMask(backend: Backend, namespace: string, key: string): Uint8Array {
+  const bytes = backend.read(namespace, key);
+  if (bytes === null) {
+    fail(`cannot read ${namespace}/${key} to mask it`, "unlock the vault", "blocked");
+  }
+  return bytes;
+}
+
 /** `mask`: the text piped on stdin with each named id's stored value swapped for its placeholder. */
 export function runMask(ids: readonly string[]): { text: string } {
   const backend = activeBackend();
+  const rows = backend.entries();
   const values = ids.map((id) => {
     const { namespace, key } = locate(id);
-    return { id, value: backend.read(namespace, key), namespace, key };
-  });
-  let text = readFileSync(0, "utf8");
-  for (const { id, value, namespace, key } of values) {
-    if (value === null) {
+    if (!keyExists(rows, namespace, key)) {
       missing(namespace, key);
     }
     // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
-    text = text.replaceAll(new TextDecoder().decode(value), `{{secret:${id}}}`);
-  }
-  return { text };
+    return {
+      value: new TextDecoder().decode(readToMask(backend, namespace, key)),
+      placeholder: `{{secret:${id}}}`,
+    };
+  });
+  return { text: swapIn(readFileSync(0, "utf8"), values) };
+}
+
+/** A stored value and what replaces it. */
+interface Swap {
+  value: string;
+  placeholder: string;
 }
 
 /** A stored value shorter than this is not masked: it would match inside ordinary words. */
@@ -115,6 +135,27 @@ function placeholderOf(namespace: string, key: string): string {
 }
 
 /**
+ * Every stored value of every namespace long enough to mask, longest first so that a value that
+ * contains another is swapped first and the shorter one cannot leave a stub. A listed key that
+ * cannot be read (a locked vault) would pass unmasked: refuse instead.
+ */
+function storedValues(): Swap[] {
+  if (!backendChosen()) {
+    return [];
+  }
+  const backend = activeBackend();
+  return backend
+    .entries()
+    .flatMap((entry) => {
+      const value = new TextDecoder().decode(readToMask(backend, entry.folder, entry.name));
+      return value.length < MIN_MASKED
+        ? []
+        : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
+    })
+    .toSorted((a, b) => b.value.length - a.value.length);
+}
+
+/**
  * `mask --all`: stdin is a JSON array of strings; each comes back with every stored value of every
  * namespace swapped for its placeholder. The backend is read once, however many strings there are.
  */
@@ -123,29 +164,8 @@ export function runMaskAll(): { texts: string[] } {
   if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
-  if (!backendChosen()) {
-    return { texts: parsed };
-  }
-  const backend = activeBackend();
-  const values = backend
-    .entries()
-    .flatMap((entry) => {
-      const bytes = backend.read(entry.folder, entry.name);
-      if (bytes === null) {
-        // A listed key that cannot be read (a locked vault) would pass unmasked: refuse instead.
-        fail(`cannot read ${entry.folder}/${entry.name} to mask it`, "unlock the vault", "blocked");
-      }
-      const value = new TextDecoder().decode(bytes);
-      return value.length < MIN_MASKED
-        ? []
-        : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
-    })
-    // A value that contains another is masked first, so the shorter one cannot leave a stub.
-    .toSorted((a, b) => b.value.length - a.value.length);
-  const texts = parsed.map((text) =>
-    values.reduce((masked, { value, placeholder }) => masked.replaceAll(value, placeholder), text),
-  );
-  return { texts };
+  const values = storedValues();
+  return { texts: parsed.map((text: string) => swapIn(text, values)) };
 }
 
 const projectsDir = (): string => join(home(process.env), ".claude", "projects");
@@ -158,37 +178,99 @@ function locateTranscript(sessionId: string): string {
   return found ?? fail(`no transcript for ${sessionId}`, `looked under ${projects}`, "missing");
 }
 
+/** The transcript's files: the session's own and those of the subagents it ran, under `<id>/`. */
+function transcriptFiles(path: string): string[] {
+  const own = join(dirname(path), basename(path, ".jsonl"));
+  return [path, ...(existsSync(own) ? allTranscripts(own) : [])];
+}
+
+/** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
+const STRUCTURAL_KEYS = new Set([
+  "sessionId",
+  "uuid",
+  "parentUuid",
+  "cwd",
+  "transcript_path",
+  "agentId",
+  "toolUseID",
+  "tool_use_id",
+]);
+
+/** The text with every stored value swapped for its placeholder. */
+function swapIn(text: string, values: Swap[]): string {
+  let out = text;
+  for (const { value, placeholder } of values) {
+    out = out.replaceAll(value, placeholder);
+  }
+  return out;
+}
+
+/** The parsed JSON with every stored value swapped inside its string values, structural keys left alone. */
+function swapDeep(node: unknown, values: Swap[]): unknown {
+  if (typeof node === "string") {
+    return swapIn(node, values);
+  }
+  if (Array.isArray(node)) {
+    return node.map((item) => swapDeep(item, values));
+  }
+  if (node !== null && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node).map(([key, child]) => [
+        key,
+        STRUCTURAL_KEYS.has(key) ? child : swapDeep(child, values),
+      ]),
+    );
+  }
+  return node;
+}
+
+/** The line with every stored value swapped; the line itself when nothing changed. */
+function scrubLine(line: string, values: Swap[]): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    // A line cut off mid-write has no structure to protect; the JSON-escaped form is swapped too.
+    const escaped = values.map(({ value, placeholder }) => ({
+      value: JSON.stringify(value).slice(1, -1),
+      placeholder,
+    }));
+    return swapIn(swapIn(line, values), escaped);
+  }
+  const text = JSON.stringify(swapDeep(parsed, values));
+  return text === JSON.stringify(parsed) ? line : text;
+}
+
 /**
- * `scrub`: in a transcript (a path, or a session id) every captured value that still appears is
- * swapped for its placeholder. Only ids the file already names a placeholder for are read, so a
- * transcript with no capture needs no backend. The file is replaced by a rename, never edited in place.
+ * `scrub`: in a transcript (a path, or a session id) and in its subagents' every stored value of
+ * every namespace that still appears is swapped for its placeholder, because the engine stores an
+ * attachment's payload and a tool's structured record as made, whatever the mask hook rewrote. Only
+ * the text inside a line's string values is swapped, never a structural field (`sessionId`, `uuid`,
+ * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
+ * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
+ * ponytail: temp-then-rename is local on purpose: it keeps the file's mode, and the shared copy lives in a plugin.
  */
 export function runScrub(target: string): { path: string; scrubbed: number } {
   const path = target.includes("/") ? target : locateTranscript(target);
-  let text = readFileSync(path, "utf8");
-  const ids = placeholderIds(text);
-  const backend = ids.length === 0 ? undefined : activeBackend();
+  const values = storedValues();
   let scrubbed = 0;
-  for (const id of backend === undefined ? [] : ids) {
-    const { namespace, key } = locate(id);
-    const bytes = backend?.read(namespace, key);
-    if (bytes === null || bytes === undefined) {
-      continue;
-    }
-    const value = new TextDecoder().decode(bytes);
-    // The transcript is JSON lines: a value holding a quote or a backslash sits there escaped.
-    for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) {
-      if (text.includes(form)) {
-        text = text.replaceAll(form, `{{secret:${id}}}`);
+  for (const file of transcriptFiles(path)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+    let changed = false;
+    const swapped = lines.map((line) => {
+      const out = scrubLine(line, values);
+      if (out !== line) {
+        changed = true;
         scrubbed += 1;
       }
+      return out;
+    });
+    if (changed) {
+      const temp = join(dirname(file), `.${process.pid}.scrub`);
+      writeFileSync(temp, swapped.join("\n"), { mode: statSync(file).mode });
+      renameSync(temp, file);
     }
-  }
-  if (scrubbed > 0) {
-    const temp = join(dirname(path), `.${process.pid}.scrub`);
-    writeFileSync(temp, text, { mode: statSync(path).mode });
-    renameSync(temp, path);
   }
   return { path, scrubbed };
 }
@@ -337,22 +419,40 @@ export function runGet(namespace: string, key: string): { namespace: string; key
 /**
  * `rename`: the value is read into this process and written under the new name, never printed.
  * The new entry is read back and compared before the old one goes, so a failed step leaves the old
- * name intact; a target that exists is refused, never overwritten.
+ * name intact; a target that exists is refused, never overwritten. An entry stored before
+ * namespaces existed is the source when `from.namespace` is `LEGACY_NAMESPACE`.
  */
 export function runRename(
   from: { namespace: string; key: string },
   to: { namespace: string; key: string },
 ): { from: string; to: string } {
+  const legacy = from.namespace === LEGACY_NAMESPACE;
   const label = (side: { namespace: string; key: string }): string =>
-    `${side.namespace}/${side.key}`;
+    side.namespace === LEGACY_NAMESPACE ? `legacy/${side.key}` : `${side.namespace}/${side.key}`;
   if (from.namespace === to.namespace && from.key === to.key) {
     fail("rename needs two different names", "pass a new <to> or --to-folder", "usage");
   }
-  const backend = backendHolding(from.namespace, from.key);
-  if (keyExists(backend.entries(), to.namespace, to.key)) {
+  const backend = activeBackend();
+  const rows = backend.entries(true);
+  if (!keyExists(rows, from.namespace, from.key)) {
+    missing(from.namespace, from.key);
+  }
+  if (keyExists(rows, to.namespace, to.key)) {
     fail(
       `already stored: ${label(to)}`,
       "pick another name, or remove it with qsm-secrets rm",
+      "blocked",
+    );
+  }
+  // An entry with no namespace is found and removed by its key alone, which matches every entry of
+  // that key in every namespace too, so it moves only when nothing else carries the name.
+  const shared = rows.find(
+    (row) => legacy && row.name === from.key && row.folder !== from.namespace,
+  );
+  if (shared !== undefined) {
+    fail(
+      `${from.key} is also stored in namespace ${shared.folder}, and the old entry cannot be told apart from it`,
+      `rename the one in ${shared.folder} to another name first`,
       "blocked",
     );
   }
@@ -360,29 +460,52 @@ export function runRename(
   if (value === null) {
     missing(from.namespace, from.key);
   }
-  backend.store(to.namespace, to.key, value);
-  const copy = backend.read(to.namespace, to.key);
-  if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
-    backend.remove(to.namespace, to.key);
+  // Removing the old entry matches by key alone, so with the same key in the target it would take
+  // the new entry too. Then the value waits under a spare key until the old entry is gone; either
+  // way the value is stored before anything is removed.
+  const holds = legacy && to.key === from.key ? `${to.key}.qsm-rename` : to.key;
+  if (holds !== to.key && keyExists(rows, to.namespace, holds)) {
     fail(
-      `the copy at ${label(to)} did not read back equal, nothing renamed`,
-      `${label(from)} is untouched`,
+      `${label({ namespace: to.namespace, key: holds })} is stored`,
+      "remove that leftover with qsm-secrets rm, then rename again",
+      "blocked",
     );
   }
-  if (!backend.remove(from.namespace, from.key)) {
+  const copyTo = (key: string): void => {
+    try {
+      backend.store(to.namespace, key, value);
+    } catch (error) {
+      backend.remove(to.namespace, key);
+      throw error;
+    }
+    const copy = backend.read(to.namespace, key);
+    if (copy === null || !Buffer.from(copy).equals(Buffer.from(value))) {
+      backend.remove(to.namespace, key);
+      fail(
+        `the copy at ${label({ namespace: to.namespace, key })} did not read back equal, nothing renamed`,
+        `${label(from)} is untouched`,
+      );
+    }
+  };
+  copyTo(holds);
+  if (!backend.remove(from.namespace, from.key) && !legacy) {
     fail(
       `copied to ${label(to)} but could not remove ${label(from)}`,
       `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
     );
   }
+  if (holds !== to.key) {
+    copyTo(to.key);
+    backend.remove(to.namespace, holds);
+  }
   return { from: label(from), to: label(to) };
 }
 
-/** Every transcript under `~/.claude/projects`, subagent ones included. */
-function allTranscripts(projects: string): string[] {
-  return readdirSync(projects, { recursive: true, encoding: "utf8" })
+/** Every transcript under a directory, subagent ones included. */
+function allTranscripts(root: string): string[] {
+  return readdirSync(root, { recursive: true, encoding: "utf8" })
     .filter((name) => name.endsWith(".jsonl"))
-    .map((name) => join(projects, name));
+    .map((name) => join(root, name));
 }
 
 /**

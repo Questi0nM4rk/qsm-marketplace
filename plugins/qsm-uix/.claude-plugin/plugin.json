@@ -1,6 +1,5 @@
 {
   "name": "qsm-uix",
-  "version": "0.1.0",
   "description": "Designs and verifies user interfaces: a stack-neutral design source skill, measured audits of visuals, interaction and accessibility (WCAG 2.2 AA, European Accessibility Act), stack skills for QML, CSS, React and terminal output, a capture kit binary that turns the screen into numbers, and the rendering of findings for a human reader.",
   "types": "./types/index.d.ts",
   "keywords": [

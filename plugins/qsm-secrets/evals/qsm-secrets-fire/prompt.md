@@ -2,7 +2,7 @@
 name: qsm-secrets-fire
 tags: [fire]
 runs: 3
-max_turns: 4
+max_turns: 2
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 

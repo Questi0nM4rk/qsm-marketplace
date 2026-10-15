@@ -2,7 +2,7 @@
 name: unrelated-coding-negative
 tags: [negative]
 runs: 3
-max_turns: 6
+max_turns: 2
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 

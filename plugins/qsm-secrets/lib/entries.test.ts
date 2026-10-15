@@ -40,8 +40,12 @@ describe("storedKeys", () => {
     expect(storedKeys(parseEntries(ROWS), "qsm")).toEqual(["github-token", "npm-token"]);
   });
 
-  test("the empty namespace is the whole vault", () => {
-    expect(storedKeys(parseEntries(ROWS), "")).toEqual(["elsewhere", "github-token", "npm-token"]);
+  test("the empty namespace is the whole vault, each key with its namespace", () => {
+    expect(storedKeys(parseEntries(ROWS), "")).toEqual([
+      "qsm/github-token",
+      "qsm/npm-token",
+      "work/elsewhere",
+    ]);
   });
 });
 

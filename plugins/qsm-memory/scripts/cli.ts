@@ -9,11 +9,13 @@ import {
   type Handler,
   optionalNumber,
   optionalString,
+  requiredString,
   runCli,
 } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
+import { blobPath, putBlob } from "../lib/blobs.ts";
 import { startDetached } from "../lib/detach.ts";
 import { type ErrorCode, MemError, messageOf } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
@@ -22,7 +24,7 @@ import { orientOutcome } from "../lib/orient.ts";
 import { projectOf } from "../lib/project.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
-import { formatList, listSessions, show } from "../lib/sessions.ts";
+import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
 import { openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
@@ -37,12 +39,14 @@ const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
   secret: "blocked",
 };
 
-function memOutcome(error: MemError): Outcome {
-  const outcome = fail(OUTCOME_OF[error.code], `${error.code}: ${error.message}`, {
+/** The message once; in text mode the next step follows on its own `  next:` line, as the MCP tools
+ * and qsm-secrets print it, and under --json it is only in `data.next`. */
+function memOutcome(error: MemError, json: boolean): Outcome {
+  const message = json ? error.message : `${error.message}\n  next: ${error.next}`;
+  return fail(OUTCOME_OF[error.code], message, {
     code: error.code,
     next: error.next,
   });
-  return { ...outcome, warnings: [`next: ${error.next}`] };
 }
 
 /** Every verb's handler wrapped once: a MemError comes back as its own
@@ -56,7 +60,7 @@ function guarded(handlers: Readonly<Record<string, Handler>>): Record<string, Ha
           return await handler(call);
         } catch (error) {
           if (error instanceof MemError) {
-            return memOutcome(error);
+            return memOutcome(error, call.json);
           }
           throw error;
         }
@@ -75,6 +79,7 @@ function saveDetached(transcript: string | undefined, catchUpAll: boolean, cwd?:
       ...(transcript === undefined ? [] : [transcript]),
       ...(catchUpAll ? ["--catch-up"] : []),
       ...(cwd === undefined ? [] : ["--cwd", cwd]),
+      "--log",
     ],
     env(),
   );
@@ -97,7 +102,11 @@ const runSave: Handler = (call) => {
   if (catchUpAll) {
     const r = catchUp(db, projectsDir(env()));
     const skipped = r.skipped === 0 ? "" : `, ${r.skipped} skipped`;
-    return ok(r, `saved ${r.saved}${skipped}, ${r.remain} remain`);
+    const failed = r.failed.length === 0 ? "" : `, ${r.failed.length} failed`;
+    const message = `saved ${r.saved}${skipped}${failed}, ${r.remain} remain`;
+    return r.failed.length === 0
+      ? ok(r, message)
+      : { code: "partial", message, data: r, warnings: r.failed };
   }
   if (transcript === undefined) {
     return fail("usage", "save needs a transcript path or --catch-up");
@@ -110,8 +119,8 @@ const runSave: Handler = (call) => {
 
 const runSearch: Handler = (call) => {
   const limit = optionalNumber(call, "limit");
-  if (limit !== undefined && limit <= 0) {
-    return fail("usage", `--limit must be a positive number (got '${limit}')`);
+  if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
+    return fail("usage", `--limit must be a positive whole number (got '${limit}')`);
   }
   const query = optionalString(call, "query");
   if (query === undefined) {
@@ -144,10 +153,14 @@ const runShow: Handler = (call) => {
 };
 
 const runList: Handler = (call) => {
+  const limit = optionalNumber(call, "limit") ?? LIST_LIMIT;
+  if (!Number.isInteger(limit) || limit <= 0) {
+    return fail("usage", `--limit must be a positive whole number (got '${limit}')`);
+  }
   const db = openArchive(env());
   if (flagArg(call, "unsaved")) {
     const paths = unsavedTranscripts(db, projectsDir(env()));
-    return ok(paths, paths.length === 0 ? "nothing unsaved" : paths.join("\n"));
+    return ok(page(paths, limit), paths.length === 0 ? "nothing unsaved" : bounded(paths, limit));
   }
   const since = optionalString(call, "since");
   const project = optionalString(call, "project");
@@ -155,7 +168,17 @@ const runList: Handler = (call) => {
     ...(since === undefined ? {} : { since }),
     ...(project === undefined ? {} : { project }),
   });
-  return ok(rows, formatList(rows));
+  return ok(page(rows, limit), formatList(rows, limit));
+};
+
+const runBlobPut: Handler = (call) => {
+  const r = putBlob(env(), requiredString(call, "file"));
+  return ok(r, `${r.sha256}  ${r.path}${r.stored ? "" : " (already stored)"}`);
+};
+
+const runBlobPath: Handler = (call) => {
+  const path = blobPath(env(), requiredString(call, "sha256"));
+  return ok({ path }, path);
 };
 
 const runNote: Handler = (call) => {
@@ -217,6 +240,20 @@ const runMcp: Handler = async () => {
   return ok();
 };
 
+/** stdout and stderr with an ISO timestamp before every line, so save.log can be read against
+ * the commit that fixed a failure in it. */
+function stamped() {
+  const stamp = (text: string) =>
+    text
+      .split("\n")
+      .map((line) => (line === "" ? line : `${new Date().toISOString()} ${line}`))
+      .join("\n");
+  return {
+    stdout: (text: string) => process.stdout.write(stamp(text)),
+    stderr: (text: string) => process.stderr.write(stamp(text)),
+  };
+}
+
 if (import.meta.main) {
   process.exit(
     await runCli(
@@ -227,12 +264,15 @@ if (import.meta.main) {
         search: runSearch,
         show: runShow,
         list: runList,
+        "blob put": runBlobPut,
+        "blob path": runBlobPath,
         note: runNote,
         notes: runNotes,
         orient: runOrient,
         doctor: runDoctor,
         mcp: runMcp,
       }),
+      process.argv[2] === "save" && process.argv.includes("--log") ? { io: stamped() } : {},
     ),
   );
 }

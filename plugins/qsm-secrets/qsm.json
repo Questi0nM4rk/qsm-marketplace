@@ -10,7 +10,7 @@
         "passthrough": true,
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets env": {
@@ -19,40 +19,59 @@
         "passthrough": true,
         "args": [
           { "name": "pair", "type": "string", "positional": true, "required": true, "description": "<key>=<ENVVAR>" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets set": {
         "description": "Store a new key; the value is typed into the vault's own prompt and is never an argument or stdin",
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the key name to store under" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to write (default: qsm)" },
+          { "name": "gui", "type": "boolean", "description": "collect the value in the askpass pane instead of the terminal; the value goes to the backend and never to the caller" }
+        ]
+      },
+      "qsm-secrets askpass": {
+        "noNoun": true,
+        "description": "Ask the person for one answer in the askpass pane and give it to the consumer that asked: sudo -A, ssh and git take the typed text on stdout, decide takes a hook-kit ask request on stdin and answers allow or deny; run through the qsm-askpass-<kind> links the install makes, the consumer's words follow a -- separator",
+        "passthrough": true,
+        "args": [
+          { "name": "kind", "type": "string", "positional": true, "required": true, "description": "secret, sudo, ssh, git or decide" },
+          { "name": "folder", "type": "string", "description": "the namespace to write, for the secret kind (default: qsm)" }
+        ]
+      },
+      "qsm-secrets askpass enable": {
+        "description": "Print the fish lines that point SUDO_ASKPASS, SSH_ASKPASS, GIT_ASKPASS or HOOK_KIT_ASKPASS at the installed links; it writes nothing, the person puts them in their own config",
+        "args": [
+          { "name": "sudo", "type": "boolean", "description": "SUDO_ASKPASS, for sudo -A" },
+          { "name": "ssh", "type": "boolean", "description": "SSH_ASKPASS, preferred over the terminal" },
+          { "name": "git", "type": "boolean", "description": "GIT_ASKPASS" },
+          { "name": "decide", "type": "boolean", "description": "HOOK_KIT_ASKPASS, for hook-kit's escalation" }
         ]
       },
       "qsm-secrets has": {
         "description": "Report whether the key is stored: ok when it is, missing when it is not; never a value",
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets list": {
-        "description": "Print the key names this wrapper stored in the namespace; never a value",
+        "description": "Print the key names this wrapper stored, never a value: in one namespace, or as <namespace>/<key> in every namespace when none is named",
         "args": [
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: QSM_SECRETS_FOLDER, else every namespace)" }
         ]
       },
       "qsm-secrets inspect": {
         "description": "Print name, username and folder for every entry in the namespace, whoever stored it; never a value",
         "args": [
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets rm": {
         "description": "Remove a stored key; reports missing rather than a silent success when it was not stored",
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to write (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to write (default: qsm)" }
         ]
       },
       "qsm-secrets rename": {
@@ -60,8 +79,9 @@
         "args": [
           { "name": "from", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
           { "name": "to", "type": "string", "positional": true, "required": true, "description": "the new key name" },
-          { "name": "folder", "type": "string", "description": "the folder of the stored key (default: qsm)" },
-          { "name": "toFolder", "type": "string", "description": "the folder to move it to (default: the same folder)" }
+          { "name": "folder", "type": "string", "description": "the namespace of the stored key (default: qsm)" },
+          { "name": "toFolder", "type": "string", "description": "the namespace to move it to (default: the same namespace; with --legacy, qsm)" },
+          { "name": "legacy", "type": "boolean", "description": "the source is an entry stored before namespaces existed (libsecret only), so it has no namespace" }
         ]
       },
       "qsm-secrets prune": {
@@ -76,7 +96,7 @@
         "passthrough": true,
         "args": [
           { "name": "pair", "type": "string", "positional": true, "required": true, "description": "<key>=<ENVVAR>" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets get": {
@@ -84,7 +104,7 @@
         "description": "Write the value to file descriptor 3, which the caller opens; refuses when it is closed",
         "args": [
           { "name": "key", "type": "string", "positional": true, "required": true, "description": "the stored key name" },
-          { "name": "folder", "type": "string", "description": "the rbw folder to read (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to read (default: qsm)" }
         ]
       },
       "qsm-secrets guard": {
@@ -102,7 +122,7 @@
         ]
       },
       "qsm-secrets scrub": {
-        "description": "Replace every captured value that is still in a transcript with its placeholder, by rewriting the file atomically; never prints a value",
+        "description": "Replace every stored value that is still in a transcript, and in its subagents' transcripts, with its placeholder, by rewriting each file atomically; never prints a value",
         "args": [
           { "name": "transcript", "type": "string", "positional": true, "required": true, "description": "a transcript path, or a session id, found as <id>.jsonl under ~/.claude/projects" },
           { "name": "detach", "type": "boolean", "description": "start the scrub in a detached process and return at once" }
@@ -125,7 +145,7 @@
       "qsm-secrets doctor": {
         "description": "Probe every prerequisite the other verbs depend on and name the fix for each failed check",
         "args": [
-          { "name": "folder", "type": "string", "description": "the rbw folder to probe (default: qsm)" }
+          { "name": "folder", "type": "string", "description": "the namespace to probe (default: qsm)" }
         ]
       }
     }

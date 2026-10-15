@@ -93,6 +93,7 @@
   // The two generated files are derived from qsm.json by lib/generate-noun.ts
   // and proven fresh by the generated gate, so the linter does not read them.
   "ignorePatterns": [
+    ".claude/**",
     "**/dist/**",
     "**/node_modules/**",
     "**/hooks/noun.generated.ts",

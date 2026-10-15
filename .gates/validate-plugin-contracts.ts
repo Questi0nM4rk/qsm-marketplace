@@ -94,10 +94,15 @@ for (const dir of pluginDirs()) {
   if (existsSync(manifest)) {
     const json = readJson(manifest);
     if (isRecord(json)) {
-      for (const k of ["name", "version", "description"]) {
+      for (const k of ["name", "description"]) {
         if (!isText(json[k])) {
           findings.push(`${rel(manifest)}: ${k} must be a non-empty string`);
         }
+      }
+      if ("version" in json) {
+        findings.push(
+          `${rel(manifest)}: version must be absent, so Claude Code keys the plugin cache by commit`,
+        );
       }
       if (json.name !== name) {
         findings.push(`${rel(manifest)}: name must equal the directory name ${name}`);

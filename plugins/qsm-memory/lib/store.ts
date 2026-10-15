@@ -2,8 +2,8 @@
 
 import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, linkSync, mkdirSync, rmSync } from "node:fs";
-import os from "node:os";
 import { dirname, join } from "node:path";
+import { dataDir } from "../../../lib/paths.ts";
 import { typedText } from "./transcript.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -15,8 +15,7 @@ export function resolveDbPath(env: Env): string {
   if (override !== undefined && override.length > 0) {
     return override;
   }
-  const data = env.XDG_DATA_HOME ?? join(env.HOME ?? os.homedir(), ".local", "share");
-  return join(data, "qsm-memory", "memory.db");
+  return join(dataDir(env), "qsm-memory", "memory.db");
 }
 
 // A turn is what a person or the model said, as text. The full context, tool calls and results
@@ -114,6 +113,8 @@ function purgeHarnessTurns(db: Database): void {
 export function applySchema(db: Database): void {
   db.run(SCHEMA_SQL);
   purgeHarnessTurns(db);
+  // A skip written before the session gained its first typed prompt; save deletes it now.
+  db.run("DELETE FROM skipped WHERE id IN (SELECT id FROM sessions)");
 }
 
 /** Opens (creating if absent) the database at `path`: owner-only file and

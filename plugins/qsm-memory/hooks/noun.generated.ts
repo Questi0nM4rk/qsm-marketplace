@@ -18,10 +18,12 @@ export interface VerbRow {
 }
 
 export const verbs: Readonly<Record<string, VerbRow>> = {
-  save: { words: ["qsm-memory","save"], args: [{ name: "transcript", flag: null }, { name: "catchUp", flag: "--catch-up", boolean: true }, { name: "cwd", flag: "--cwd" }, { name: "detach", flag: "--detach", boolean: true }] },
+  save: { words: ["qsm-memory","save"], args: [{ name: "transcript", flag: null }, { name: "catchUp", flag: "--catch-up", boolean: true }, { name: "cwd", flag: "--cwd" }, { name: "detach", flag: "--detach", boolean: true }, { name: "log", flag: "--log", boolean: true }] },
   search: { words: ["qsm-memory","search"], args: [{ name: "query", flag: null }, { name: "limit", flag: "--limit" }, { name: "since", flag: "--since" }, { name: "project", flag: "--project" }] },
   show: { words: ["qsm-memory","show"], args: [{ name: "session", flag: null }, { name: "full", flag: "--full", boolean: true }, { name: "lines", flag: "--lines" }] },
-  list: { words: ["qsm-memory","list"], args: [{ name: "since", flag: "--since" }, { name: "project", flag: "--project" }, { name: "unsaved", flag: "--unsaved", boolean: true }] },
+  list: { words: ["qsm-memory","list"], args: [{ name: "since", flag: "--since" }, { name: "project", flag: "--project" }, { name: "unsaved", flag: "--unsaved", boolean: true }, { name: "limit", flag: "--limit" }] },
+  blobPut: { words: ["qsm-memory","blob","put"], args: [{ name: "file", flag: null }] },
+  blobPath: { words: ["qsm-memory","blob","path"], args: [{ name: "sha256", flag: null }] },
   note: { words: ["qsm-memory","note"], args: [{ name: "text", flag: null }, { name: "expires", flag: "--expires" }, { name: "keep", flag: "--keep", boolean: true }, { name: "global", flag: "--global", boolean: true }, { name: "drop", flag: "--drop" }] },
   notes: { words: ["qsm-memory","notes"], args: [{ name: "all", flag: "--all", boolean: true }] },
   orient: { words: ["qsm-memory","orient"], args: [{ name: "cwd", flag: "--cwd" }] },

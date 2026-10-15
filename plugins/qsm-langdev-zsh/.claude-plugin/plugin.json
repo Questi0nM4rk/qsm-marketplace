@@ -1,6 +1,5 @@
 {
   "name": "qsm-langdev-zsh",
-  "version": "0.1.0",
   "description": "Zsh idioms and the places zsh is not bash, beside the qsm-langdev gate that checks the script.",
   "keywords": [
     "zsh",

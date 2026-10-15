@@ -69,7 +69,7 @@ describe("checkManifest", () => {
   });
 
   test("every violation is reported, not the first one alone", () => {
-    const found = checkManifest(JSON.stringify({ name: "Bad Name", hooks: null }));
+    const found = checkManifest(JSON.stringify({ name: "Bad Name", version: "v1", hooks: null }));
     expect(found).toHaveLength(6);
     expect(found.join("\n")).toContain("kebab-case");
     expect(found.join("\n")).toContain("version");

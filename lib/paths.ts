@@ -28,6 +28,11 @@ export function setupConfigPath(env: Env): string {
   return join(base, "qsm", "setup.json");
 }
 
+/** The XDG data home: `XDG_DATA_HOME`, else `~/.local/share`. */
+export function dataDir(env: Env): string {
+  return env.XDG_DATA_HOME ?? join(home(env), ".local", "share");
+}
+
 /** Where qsm keeps machine state; `QSM_SETUP_STATE_DIR` overrides. */
 export function stateDir(env: Env): string {
   const base = env.XDG_STATE_HOME ?? join(home(env), ".local", "state");

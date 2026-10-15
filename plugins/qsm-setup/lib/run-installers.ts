@@ -49,13 +49,19 @@ export const bunRunner: Runner = (installer, dryRun) => {
 export type ActivationReader = (activation: string) => ActivationReport | string;
 
 export const bunActivationReader: ActivationReader = (activation) => {
+  // Bun's spawnSync without `env` passes the environment the process started with, not
+  // process.env as it is now; a caller that set CLAUDE_CONFIG_DIR would read the wrong home.
   const r = spawnSync("bun", [activation, "--status", "--json"], {
     encoding: "utf8",
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const envelope = parseEnvelope(r.stdout);
   if (envelope !== null && isActivationReport(envelope.data)) {
     return envelope.data;
+  }
+  if (envelope !== null && envelope.data === null) {
+    return envelope.message;
   }
   const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
   return `status exited ${r.status} and printed no envelope: ${last}`;

@@ -31,6 +31,9 @@ function checkName(json: Record<string, unknown>, found: string[]): void {
 
 function checkVersion(json: Record<string, unknown>, found: string[]): void {
   const { version } = json;
+  if (version === undefined) {
+    return;
+  }
   if (!isText(version)) {
     found.push(`version must be a non-empty string, found ${show(version)}`);
   } else if (!DOTTED_TRIPLE.test(version)) {

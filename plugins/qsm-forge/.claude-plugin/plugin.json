@@ -1,6 +1,5 @@
 {
   "name": "qsm-forge",
-  "version": "0.1.0",
   "description": "Review threads on a pull or merge request as one atomic call each: one compiled binary, qsm-forge, with a gh group for GitHub and a gl group for GitLab, that read, answer, resolve, dismiss, and submit under the person's own forge credentials, with a hook that keeps raw platform calls off the review surface.",
   "types": "./types/index.d.ts",
   "keywords": [

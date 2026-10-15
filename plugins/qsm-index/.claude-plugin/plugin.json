@@ -1,6 +1,5 @@
 {
   "name": "qsm-index",
-  "version": "0.1.0",
   "description": "Two lenses over a local tree beside grep: a structural dependency graph and a semantic cache, built in the background and read through four MCP tools that never block.",
   "types": "./types/index.d.ts",
   "keywords": [

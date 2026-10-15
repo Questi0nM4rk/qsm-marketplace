@@ -72,7 +72,9 @@ touching its users (Cockburn, ports and adapters).
 5. **One canonical owner per concept.** Search before adding; edit in place; never `v2` copies.
 6. **No versioning, no history in the tree.** When a decision changes, the old form is deleted
    everywhere it appears: no deprecated markers, no renamed-from notes, no dates, no changelogs,
-   no "previously". Git is the only history.
+   no "previously". Git is the only history. A `plugin.json` carries no `version`: Claude Code
+   then names the plugin's cache after the commit, so `claude plugin update` picks up each new
+   commit; a pinned version keeps the old copy forever. Enforced by `validate-plugin-contracts`.
 7. **The plugin is the install unit.** `scripts/install.ts` exports `install(ctx)` from
    `lib/install-contract.ts`; a plugin that needs another names it in the `dependencies` array of
    its `.claude-plugin/plugin.json`, with its reason in the spec (Architecture, rule 2), and never

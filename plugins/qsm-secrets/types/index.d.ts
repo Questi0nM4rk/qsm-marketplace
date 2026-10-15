@@ -5,6 +5,13 @@ export type Secrets = {
   set(options: {
     key: string;
     folder?: string;
+    gui?: boolean;
+  }): Promise<unknown>;
+  askpassEnable(options: {
+    sudo?: boolean;
+    ssh?: boolean;
+    git?: boolean;
+    decide?: boolean;
   }): Promise<unknown>;
   has(options: {
     key: string;
@@ -25,6 +32,7 @@ export type Secrets = {
     to: string;
     folder?: string;
     toFolder?: string;
+    legacy?: boolean;
   }): Promise<unknown>;
   prune(options: {
     dryRun?: boolean;

@@ -33,7 +33,7 @@ It stores no facts, rules or decisions; the one thing written is a short note fo
 
 `qsm-memory notes`; `qsm-memory search "<words>" [--since 7d]`; `qsm-memory show <id> [--lines a-b]`
 (`--full` adds tool calls and results); `qsm-memory list --since 7d` for "what did we do this
-week"; `qsm-memory note "<task-id>: <state>" [--expires N] [--keep]`. Search yourself, because a hit
+week"; `qsm-memory note "<task-id>: <state>" [--expires <N>] [--keep]`. Search yourself, because a hit
 line and a turn window cost little and a dispatched agent costs a whole context; the
 `qsm-memory:recall` agent is the last resort for a question your own searches did not settle.
 Saving is the hooks' job.
