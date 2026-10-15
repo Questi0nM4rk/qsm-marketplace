@@ -180,11 +180,53 @@ function transcriptFiles(path: string): string[] {
   return [path, ...inner];
 }
 
+/** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
+const STRUCTURAL_KEYS = new Set([
+  "sessionId",
+  "uuid",
+  "parentUuid",
+  "cwd",
+  "transcript_path",
+  "agentId",
+  "toolUseID",
+  "tool_use_id",
+]);
+
+/** The text with every stored value swapped for its placeholder. */
+function swapIn(text: string, values: { value: string; placeholder: string }[]): string {
+  let out = text;
+  for (const { value, placeholder } of values) {
+    out = out.replaceAll(value, placeholder);
+  }
+  return out;
+}
+
+/** The parsed JSON with every stored value swapped inside its string values, structural keys left alone. */
+function swapDeep(node: unknown, values: { value: string; placeholder: string }[]): unknown {
+  if (typeof node === "string") {
+    return swapIn(node, values);
+  }
+  if (Array.isArray(node)) {
+    return node.map((item) => swapDeep(item, values));
+  }
+  if (node !== null && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node).map(([key, child]) => [
+        key,
+        STRUCTURAL_KEYS.has(key) ? child : swapDeep(child, values),
+      ]),
+    );
+  }
+  return node;
+}
+
 /**
  * `scrub`: in a transcript (a path, or a session id) and in its subagents' every stored value of
  * every namespace that still appears is swapped for its placeholder, because the engine stores an
- * attachment's payload and a tool's structured record as made, whatever the mask hook rewrote. The
- * file is replaced by a rename, never edited in place.
+ * attachment's payload and a tool's structured record as made, whatever the mask hook rewrote. Only
+ * the text inside a line's string values is swapped, never a structural field (`sessionId`, `uuid`,
+ * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
+ * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
  */
 export function runScrub(target: string): { path: string; scrubbed: number } {
@@ -192,21 +234,37 @@ export function runScrub(target: string): { path: string; scrubbed: number } {
   const values = backendChosen() ? storedValues() : [];
   let scrubbed = 0;
   for (const file of transcriptFiles(path)) {
-    let text = readFileSync(file, "utf8");
+    const lines = readFileSync(file, "utf8").split("\n");
     let changed = false;
-    for (const { value, placeholder } of values) {
-      // The transcript is JSON lines: a value holding a quote or a backslash sits there escaped.
-      for (const form of new Set([value, JSON.stringify(value).slice(1, -1)])) {
-        if (text.includes(form)) {
-          text = text.replaceAll(form, placeholder);
-          scrubbed += 1;
-          changed = true;
-        }
+    const swapped = lines.map((line) => {
+      if (
+        !values.some(
+          ({ value }) => line.includes(value) || line.includes(JSON.stringify(value).slice(1, -1)),
+        )
+      ) {
+        return line;
       }
-    }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        // A line cut off mid-write has no structure to protect.
+        const text = swapIn(line, values);
+        changed = changed || text !== line;
+        scrubbed += text !== line ? 1 : 0;
+        return text;
+      }
+      const text = JSON.stringify(swapDeep(parsed, values));
+      if (text === JSON.stringify(parsed)) {
+        return line;
+      }
+      changed = true;
+      scrubbed += 1;
+      return text;
+    });
     if (changed) {
       const temp = join(dirname(file), `.${process.pid}.scrub`);
-      writeFileSync(temp, text, { mode: statSync(file).mode });
+      writeFileSync(temp, swapped.join("\n"), { mode: statSync(file).mode });
       renameSync(temp, file);
     }
   }

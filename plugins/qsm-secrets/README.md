@@ -25,7 +25,7 @@ this plugin can go.
 | Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable. |
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
 | Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
-| Hook | `session.end` | Scrubs captured values from the transcript and removes rendered files. |
+| Hook | `session.end` | Scrubs every stored value from the transcript and its subagents' and removes rendered files. |
 | CLI | `qsm-secrets` | 20 verbs, see [USAGE.md](USAGE.md). |
 | Pane | `qml/askpass/` | A Quickshell pane that asks the person for a secret, a `sudo -A`, ssh or git answer, or an allow or deny, and returns it to the asker. |
 

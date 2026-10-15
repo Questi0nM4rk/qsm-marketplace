@@ -534,7 +534,7 @@ the same user can read the file while the session lives.
 - **WHEN** the session ends
 - **THEN** the session's directory no longer exists
 
-### Requirement: A session end scrubs captured values from the transcript
+### Requirement: A session end scrubs stored values from the transcript
 
 The engine writes a submitted prompt raw into the transcript before any hook runs, so the session
 end SHALL replace every stored value of every namespace still in the transcript, and in the
@@ -542,7 +542,12 @@ transcripts of the subagents the session ran, with its placeholder, by rewriting
 in a detached process, and SHALL print no value: the engine stores a submitted prompt, a tool
 result's structured record and an attachment's payload as made, whatever the mask hook rewrote, so
 a value named by no placeholder in the file is swapped too. A value of fewer than six characters is
-not swapped. The
+not swapped. The swap
+SHALL touch only the text inside a line's string values, never a structural field (`sessionId`,
+`uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id), because a stored value
+equal to an id would otherwise break the resume and the links between transcripts. A scrub that
+fails leaves its cause in the log, because it runs detached and its outcome is seen nowhere else.
+The
 scrub SHALL start before the session directory is removed, so a failed removal cannot skip it, and
 the removal SHALL run even when the scrub fails: each step runs and reports on its own, and the
 session ends either way.
@@ -557,6 +562,11 @@ session ends either way.
 - **WHEN** a session ends and its transcript, or a subagent's, holds a stored value in an
   attachment's payload and no placeholder anywhere
 - **THEN** the file holds the placeholder and not the value
+
+#### Scenario: a stored value equal to a session id leaves the structure intact
+
+- **WHEN** a stored value equals the `sessionId` of the transcript line that also quotes it in text
+- **THEN** the `sessionId` field is unchanged and the quoted text holds the placeholder
 
 #### Scenario: a failed scrub still removes the rendered files
 
