@@ -25,7 +25,9 @@ export function callerOf(pid: number): Caller {
   }
   let cmdline = "";
   try {
-    cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll(/[\s\0]+/g, " ").trim();
+    cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf8")
+      .replaceAll(/[\s\0]+/g, " ")
+      .trim();
   } catch {
     // an unreadable command line is shown as empty
   }

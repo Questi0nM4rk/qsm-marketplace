@@ -139,19 +139,13 @@ const runList: Handler = (call) => {
   const db = openArchive(env());
   if (call.args.unsaved === true) {
     const paths = unsavedTranscripts(db, projectsDir(env()));
-    return ok(
-      page(paths, limit),
-      paths.length === 0 ? "nothing unsaved" : bounded(paths, limit),
-    );
+    return ok(page(paths, limit), paths.length === 0 ? "nothing unsaved" : bounded(paths, limit));
   }
   const rows = listSessions(db, {
     ...(str(call.args.since) === undefined ? {} : { since: str(call.args.since) as string }),
     ...(str(call.args.project) === undefined ? {} : { project: str(call.args.project) as string }),
   });
-  return ok(
-    page(rows, limit),
-    formatList(rows, limit),
-  );
+  return ok(page(rows, limit), formatList(rows, limit));
 };
 
 const runNote: Handler = (call) => {
