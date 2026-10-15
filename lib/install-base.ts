@@ -112,6 +112,34 @@ function recordBin(env: Env, plugin: string, bin: string, binPath: string): void
   writeRecord(path, { bins });
 }
 
+/** The last line of a failed command's stderr, the cause an error step names. */
+function lastLine(stderr: string): string {
+  return stderr.trim().split("\n").at(-1) ?? "";
+}
+
+/** A plugin with a package.json has npm dependencies of its own. */
+function hasDeps(pluginRoot: string): boolean {
+  return existsSync(join(pluginRoot, "package.json"));
+}
+
+/** The plugin's own npm dependencies, installed from its lockfile before anything compiles. */
+function dependencyStep(pluginRoot: string): Step | null {
+  if (!hasDeps(pluginRoot)) {
+    return null;
+  }
+  const name = "dependencies";
+  const done = spawnSync("bun", ["install", "--frozen-lockfile"], {
+    cwd: pluginRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (done.status !== 0) {
+    const detail = `bun install failed in ${pluginRoot}: ${lastLine(done.stderr)}; run \`bun install\` in the plugin and commit its bun.lock`;
+    return { name, status: "error", detail };
+  }
+  return { name, status: "installed", detail: "ran bun install --frozen-lockfile" };
+}
+
 /** Compiles `entry` to `outFile`, replacing it only when the bytes differ. */
 function compile(pluginRoot: string, entry: string, outFile: string): Step {
   const name = basename(outFile);
@@ -132,8 +160,11 @@ function compile(pluginRoot: string, entry: string, outFile: string): Step {
     if (existsSync(tmp)) {
       unlinkSync(tmp);
     }
-    const why = built.stderr.trim().split("\n").at(-1) ?? "";
-    return { name, status: "error", detail: `bun build failed for ${entry}: ${why}` };
+    return {
+      name,
+      status: "error",
+      detail: `bun build failed for ${entry}: ${lastLine(built.stderr)}`,
+    };
   }
   if (existsSync(outFile) && sha256(outFile) === sha256(tmp)) {
     unlinkSync(tmp);
@@ -258,15 +289,14 @@ function completionStep(dir: string, bin: string, manifest: QsmManifest): Step {
 function plan(config: InstallBaseConfig, manifest: QsmManifest, ctx: InstallContext): Step[] {
   // the extra steps are asked too, with ctx.dryRun set, so their plan lines land here
   const bins = binDir(ctx.env);
-  const lines = Object.entries(manifest.qsm.bin ?? {}).map(
-    ([bin, entry]) => `would compile ${entry} to ${join(bins, bin)}`,
-  );
-  for (const h of declaredHooks(config.pluginRoot)) {
-    lines.push(`would compile ${h.entry} to dist/${h.name}`);
-  }
-  for (const name of staleDist(config.pluginRoot)) {
-    lines.push(`would remove dist/${name}`);
-  }
+  const lines = [
+    ...(hasDeps(config.pluginRoot) ? ["would run bun install --frozen-lockfile"] : []),
+    ...Object.entries(manifest.qsm.bin ?? {}).map(
+      ([bin, entry]) => `would compile ${entry} to ${join(bins, bin)}`,
+    ),
+    ...declaredHooks(config.pluginRoot).map((h) => `would compile ${h.entry} to dist/${h.name}`),
+    ...staleDist(config.pluginRoot).map((name) => `would remove dist/${name}`),
+  ];
   const completions = Object.keys(manifest.qsm.bin ?? {}).map(
     (bin) => `would write ${join(fishCompletionDir(ctx.env), `${bin}.fish`)}`,
   );
@@ -305,7 +335,13 @@ async function run(
   ctx: InstallContext,
 ): Promise<Step[]> {
   const completionDir = fishCompletionDir(ctx.env);
+  const deps = dependencyStep(config.pluginRoot);
+  // a plugin that cannot install its dependencies cannot compile either; stop at the cause
+  if (deps?.status === "error") {
+    return [deps];
+  }
   const steps: Step[] = [
+    ...(deps === null ? [] : [deps]),
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
     ...(config.upstream ?? []).map((t) => installUpstream(ctx, t)),

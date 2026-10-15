@@ -1,9 +1,9 @@
 // One SQLite database per machine: the archive of sessions and the short-term notes.
 
 import { Database } from "bun:sqlite";
-import { chmodSync, existsSync, mkdirSync } from "node:fs";
-import os from "node:os";
+import { chmodSync, existsSync, linkSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { dataDir } from "../../../lib/paths.ts";
 import { typedText } from "./transcript.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -15,8 +15,7 @@ export function resolveDbPath(env: Env): string {
   if (override !== undefined && override.length > 0) {
     return override;
   }
-  const data = env.XDG_DATA_HOME ?? join(env.HOME ?? os.homedir(), ".local", "share");
-  return join(data, "qsm-memory", "memory.db");
+  return join(dataDir(env), "qsm-memory", "memory.db");
 }
 
 // A turn is what a person or the model said, as text. The full context, tool calls and results
@@ -114,22 +113,45 @@ function purgeHarnessTurns(db: Database): void {
 export function applySchema(db: Database): void {
   db.run(SCHEMA_SQL);
   purgeHarnessTurns(db);
+  // A skip written before the session gained its first typed prompt; save deletes it now.
+  db.run("DELETE FROM skipped WHERE id IN (SELECT id FROM sessions)");
 }
 
 /** Opens (creating if absent) the database at `path`: owner-only file and
  * directory, WAL, a busy timeout so two hooks ending together both write. */
 export function openDb(path: string): Database {
-  const dir = dirname(path);
-  const fresh = !existsSync(path);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const db = new Database(path);
-  if (fresh) {
-    chmodSync(path, 0o600);
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  if (!existsSync(path)) {
+    createDb(path);
   }
+  const db = new Database(path);
   db.run("PRAGMA busy_timeout = 5000");
-  db.run("PRAGMA journal_mode = WAL");
   applySchema(db);
   return db;
+}
+
+/** Builds a new database beside `path` and links it into place. `PRAGMA journal_mode = WAL` on a
+ * file another process is opening fails at once with "database is locked", past the busy timeout;
+ * a private file has no other opener, WAL stays in its header, and a link that loses the race to
+ * another creator leaves the winner's file. */
+function createDb(path: string): void {
+  const aside = `${path}.${process.pid}.new`;
+  try {
+    const db = new Database(aside);
+    db.run("PRAGMA journal_mode = WAL");
+    applySchema(db);
+    db.close();
+    chmodSync(aside, 0o600);
+    linkSync(aside, path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+  } finally {
+    for (const file of [aside, `${aside}-wal`, `${aside}-shm`]) {
+      rmSync(file, { force: true });
+    }
+  }
 }
 
 /** The archive for this environment. */

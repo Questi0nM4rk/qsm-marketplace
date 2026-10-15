@@ -23,7 +23,7 @@ keeps every transcript for good and searches them itself, this plugin has no rea
 | Skill | `memory` | Search the archive before asking you again, act on the hit, write one note at a handoff. |
 | Agent | `recall` | Answers one question about earlier sessions, every claim cited as `<session-id> #<turn> <date>`. |
 | Hook | `session.start`, `session.end` | Save main sessions the archive lacks, in a background process. |
-| Hook | `prompt.submit`, `session.compact` | Give the first prompt of a session, the first after a compaction, and the first after /clear, a briefing of at most 1000 characters. |
+| Hook | `prompt.submit`, `session.compact` | Give the first prompt of a session, the first after a compaction, and the first after /clear, a briefing of at most 1500 characters. |
 | MCP | `qsm-memory` | `search`, `show`, `list`, `notes` and `note` as tools. |
 | CLI | `qsm-memory` | 9 verbs, see [USAGE.md](USAGE.md). |
 
@@ -62,8 +62,8 @@ Every verb takes `--json`. A note expires in 14 days unless you pass `--keep`.
   older sessions, and `show --full` fails as `missing` once Claude Code deletes the transcript.
   `show` still prints the saved text.
 - The hooks save in a background process. What it did, or why it failed, is appended to `save.log`
-  beside the archive.
+  beside the archive, each line with its date and time.
 - A subagent transcript, and a session in which nobody typed a prompt, is not saved. The first
   start after install saves at most twenty old transcripts. `qsm-memory list --unsaved` shows the
-  rest.
+  rest. `list` prints at most 20 lines unless you pass `--limit`.
 - A project with a task tracker and no task tool on `PATH` fails the briefing as `missing`.

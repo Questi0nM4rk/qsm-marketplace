@@ -118,7 +118,7 @@ failure, not a silent success, when the key was not stored.
 
 ### Requirement: Rename a stored key without exposing its value
 
-The wrapper SHALL rename a stored key, optionally into another folder, on both backends, with the
+The wrapper SHALL rename a stored key, optionally into another namespace, on both backends, with the
 value read and written inside its own process and never printed. It SHALL write the new entry and
 read it back equal before it removes the old one, and SHALL refuse, as blocked, a target that is
 already stored.
@@ -133,6 +133,26 @@ already stored.
 
 - **WHEN** the caller renames a key to a name that is already stored
 - **THEN** the wrapper refuses with `blocked` and both entries are unchanged
+
+#### Scenario: A libsecret entry stored before namespaces existed is moved
+
+- **WHEN** an entry with no namespace is stored and the caller runs `rename <key> <new> --legacy`
+- **THEN** the entry is stored under `qsm` (or `--to-folder`) with the same value, the old one is
+  gone, no value is printed, and the error that `list` and `mask` raise for such an entry names
+  `qsm-secrets rename <key> <new> --legacy`
+
+#### Scenario: A legacy entry shares its name with a namespaced one
+
+- **WHEN** `rename --legacy` names a key that another namespace also holds
+- **THEN** the wrapper refuses with `blocked`, naming that namespace, and both entries are unchanged,
+  because the old entry is found and removed by its key alone and would take the other with it
+
+#### Scenario: A legacy entry keeps its name
+
+- **WHEN** `rename --legacy` gives the new entry the same key as the old one
+- **THEN** the value is stored under a spare key in the target and read back, the old entry is
+  removed, the final key is stored and read back, and the spare one is removed, so at no point is
+  the value held only in the process; a leftover spare key is refused as `blocked`
 
 #### Scenario: The copy does not read back equal
 
@@ -238,15 +258,24 @@ under another convention remain reachable by key name.
 
 ### Requirement: One backend interface, two implementations, one test
 
-qsm-secrets SHALL reach its store through one interface of five operations (set, has, deliver a
-value to a command, list names, remove) with two implementations, `bitwarden` (through `rbw`) and
-`libsecret` (through `secret-tool`). One conformance test SHALL run against both and SHALL pass for
-both before either ships.
+qsm-secrets SHALL reach its store through one interface of six operations (set, has, deliver a
+value to a command, list names, remove, health) with two implementations, `bitwarden` (through
+`rbw`) and `libsecret` (through `secret-tool`). One conformance test SHALL run against both and SHALL
+pass for both before either ships; it SHALL cover every verb `qsm.json` declares that reaches a
+store without a terminal or a caller-opened channel (`set` and `get` refuse before the backend and
+have their own scenarios), and a backend's own limit SHALL be stated here and asserted per backend.
 
 #### Scenario: both backends pass the same conformance test
 
 - **WHEN** the conformance test runs against the `bitwarden` and the `libsecret` backend
 - **THEN** every operation passes for both
+
+#### Scenario: a multi-line value is stored by libsecret and refused by bitwarden
+
+- **WHEN** a value of several lines is stored, as `rename` does when it copies one
+- **THEN** `libsecret` stores it and reads it back whole, and `bitwarden` fails with a message that
+  says `rbw` stores one line and names libsecret for a multi-line secret, because `rbw add` takes
+  the first line of its editor file as the password
 
 ### Requirement: The backend is chosen at activation
 
@@ -297,6 +326,12 @@ its first operation it SHALL check, in one process, that the session bus names
 
 `list` SHALL print the names of stored keys for both backends. A value SHALL NOT appear in its
 output, its error text, or its JSON envelope, whatever the backend's own listing prints.
+
+#### Scenario: list with no namespace named shows every namespace
+
+- **WHEN** `list` runs with no `--folder` and `QSM_SECRETS_FOLDER` unset, on either backend
+- **THEN** it prints every key this wrapper stored as `<namespace>/<key>`, the capture namespace
+  included, and with a namespace named it prints that namespace's bare key names only
 
 #### Scenario: list never prints a value
 
@@ -441,13 +476,29 @@ other. The hook SHALL run one `qsm-secrets mask --all` process per row, which re
 once. A value shorter than six characters SHALL NOT be masked, because it would match inside
 ordinary words. When the mask fails, the row's text SHALL be replaced by a notice that it was
 withheld and a toast SHALL say so, because a row that could not be masked may hold a value. The
-limit: a value printed re-encoded (base64, escaped) is not masked, and a media block is kept as it
-is.
+result of every tool takes this door, Read, Grep, an MCP tool and the hand-back of an Agent
+included, so none has a list of its own. What cannot be masked is named, because a reader should
+not assume it is: a value printed re-encoded (base64, escaped); a value of fewer than six
+characters; a value inside a media block (an image or a PDF is kept as it is); the screen, an SDK
+stream and Remote Control, which may show a row just before its rewrite; and the structured record
+of a tool result and an attachment's payload, which the engine stores as made (the transcript
+scrub below covers those two once the session ends).
 
 #### Scenario: a value in a tool result is masked
 
 - **WHEN** a tool result contains a stored value, whether or not its command named an id
 - **THEN** the row is stored with the placeholder in its place and the model reads the placeholder
+
+#### Scenario: a printing consumer is masked like any other
+
+- **WHEN** `qsm-secrets env <key>=V -- printenv V` prints the value
+- **THEN** the result holds the placeholder and not the value
+
+#### Scenario: a result of Read, Grep, an MCP tool or an Agent is masked
+
+- **WHEN** one of those tools returns text holding a stored value
+- **THEN** the row is stored with the placeholder in its place, and a media block in the same result
+  is kept as it is
 
 #### Scenario: a file read returns a stored value
 
@@ -499,11 +550,20 @@ the same user can read the file while the session lives.
 - **WHEN** the session ends
 - **THEN** the session's directory no longer exists
 
-### Requirement: A session end scrubs captured values from the transcript
+### Requirement: A session end scrubs stored values from the transcript
 
 The engine writes a submitted prompt raw into the transcript before any hook runs, so the session
-end SHALL replace every captured value still in the transcript with its `{{secret:<id>}}`
-placeholder, by rewriting the file atomically in a detached process, and SHALL print no value. The
+end SHALL replace every stored value of every namespace still in the transcript, and in the
+transcripts of the subagents the session ran, with its placeholder, by rewriting each file atomically
+in a detached process, and SHALL print no value: the engine stores a submitted prompt, a tool
+result's structured record and an attachment's payload as made, whatever the mask hook rewrote, so
+a value named by no placeholder in the file is swapped too. A value of fewer than six characters is
+not swapped. The swap
+SHALL touch only the text inside a line's string values, never a structural field (`sessionId`,
+`uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id), because a stored value
+equal to an id would otherwise break the resume and the links between transcripts. A scrub that
+fails leaves its cause in the log, because it runs detached and its outcome is seen nowhere else.
+The
 scrub SHALL start before the session directory is removed, so a failed removal cannot skip it, and
 the removal SHALL run even when the scrub fails: each step runs and reports on its own, and the
 session ends either way.
@@ -513,10 +573,27 @@ session ends either way.
 - **WHEN** a session ends after a secret was pasted and captured
 - **THEN** the transcript file holds the placeholder and not the value
 
+#### Scenario: a value stored in a payload the mask cannot reach is swapped
+
+- **WHEN** a session ends and its transcript, or a subagent's, holds a stored value in an
+  attachment's payload and no placeholder anywhere
+- **THEN** the file holds the placeholder and not the value
+
+#### Scenario: a stored value equal to a session id leaves the structure intact
+
+- **WHEN** a stored value equals the `sessionId` of the transcript line that also quotes it in text
+- **THEN** the `sessionId` field is unchanged and the quoted text holds the placeholder
+
 #### Scenario: a failed scrub still removes the rendered files
 
 - **WHEN** the scrub fails at the session end
 - **THEN** the session directory is still removed and the log names the scrub's cause
+
+#### Scenario: a stored value cannot be read at the scrub
+
+- **WHEN** the transcript names a stored key whose value cannot be read, as in a locked vault
+- **THEN** `scrub` fails `blocked` naming the key and leaves the transcript as it was, and a key the
+  transcript names that is not stored is skipped, because there is no value to remove
 
 ### Requirement: An agent is routed to the wrapper instead of reading a value itself
 
@@ -540,11 +617,21 @@ SHALL resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`,
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. It SHALL deny `secret-tool` (every verb), `rbw`, `bw` and `pass`; `busctl`, `gdbus` and
-`dbus-send` naming `org.freedesktop.secrets`; a reader of the keyring directory or the vault's data
-directory, by the spelling of the path or the file it resolves to; `python -c` or `node -e` naming a
-keyring library; a reader of the rendered config directory; a reader of a credential file; and
-`qsm-secrets get` with descriptor 3 pointed at the output. It SHALL allow `qsm-secrets` itself
+directory, and, after a `cd` to a known directory, by the directory it is relative to. `${NAME}` SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`,
+`XDG_RUNTIME_DIR` and `PASSWORD_STORE_DIR`, and a braced form of one of them with an operator
+(`${NAME:-x}`, `${NAME#x}`, `${!NAME}`) SHALL be refused as `unreadable-command`, because its value
+cannot be known without running the shell. It SHALL deny `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`,
+`kwallet-query` and `op`; `busctl`, `gdbus`, `dbus-send`, `dbus-monitor` and `qdbus` when a word names
+the secrets service by bus name or object path (`org.freedesktop.secrets`, `org.freedesktop.Secret`,
+`/org/freedesktop/secrets`) or holds an expansion, because a destination the guard cannot read could
+be that service; a reader of the keyring directory, the vault's data directory or the pass store
+(`~/.password-store` and `$PASSWORD_STORE_DIR`), `gpg` included, by the spelling of the path or the
+file it resolves to; `python -c` or `node -e` naming a keyring library; a reader of the rendered
+config directory; a reader of a credential file; and `qsm-secrets get` with descriptor 3 pointed at
+the output. Every refusal names the `qsm-secrets` verb to use instead. The guard is a denylist of
+doors to the stored credentials: it does not judge an interpreter's script file (`python3 x.py`),
+which is a named gap, not a verdict. A statement with no words (`A=1`) and a redirect with no word
+name nothing and are judged as nothing. It SHALL allow `qsm-secrets` itself
 otherwise and every ordinary command, and a command it cannot parse is denied with the cause, never
 allowed. A function hook on `tool.call` for Bash SHALL run the verb on the command as written, before
 the id substitution, through `$.process.run` and deny with the verb's reason; a verb that cannot
@@ -570,6 +657,14 @@ because the hook sandbox cannot load WebAssembly.
 - **WHEN** an agent runs `cd <data dir> && cat keyrings/login.keyring` or `cat <data dir>/keyr*/login.keyring`
 - **THEN** the call is denied as keyring files
 
+#### Scenario: every door to a store is closed
+
+- **WHEN** an agent runs `gopass show x`, `keepassxc-cli show db e`, `kwallet-query -r e w`,
+  `op read op://v/i/f`, `secret-tool search --all service qsm`, `gpg -d ~/.password-store/x.gpg`,
+  or `busctl call <dest> /org/freedesktop/secrets b c`, or a bus tool with `"$DEST"` as its destination
+- **THEN** the call is denied, the reason names the `qsm-secrets` verb to use instead, and
+  `busctl --user list`, `ls ~/.password-store` and `gpg --list-keys` are not denied
+
 #### Scenario: a lookup is not a run
 
 - **WHEN** an agent runs `command -v rbw`, `which rbw` or `echo rbw get`
@@ -580,6 +675,14 @@ because the hook sandbox cannot load WebAssembly.
 - **WHEN** an agent runs `cat "$XDG_DATA_HOME/keyrings/login.keyring"`, or a reader on a symbolic link to
   that file
 - **THEN** the call is denied as keyring files, and `ls` of the directory is not
+
+#### Scenario: a braced variable is the same path
+
+- **WHEN** an agent runs `cat ${XDG_DATA_HOME}/keyrings/login.keyring`, `cat "${HOME}/.password-store/x"`
+  or `cat ${PASSWORD_STORE_DIR}/x`
+- **THEN** the call is denied as keyring files, `cat ${XDG_RUNTIME_DIR}/qsm-secrets/s1/kubeconfig` as
+  rendered config, `cat ${XDG_DATA_HOME:-/x}/keyrings/login.keyring` as `unreadable-command`, and
+  `cat ${HOME}/README.md` is not denied
 
 #### Scenario: the rendered config is handed over, never read
 
@@ -609,17 +712,25 @@ because the hook sandbox cannot load WebAssembly.
 - **THEN** the call is denied and the reason names the verb, its exit code and its stderr, unless the
   command is exactly `qsm-secrets doctor`, which runs
 
-### Requirement: Read and Grep do not open the credential files
+### Requirement: Read, Grep and Glob do not open the credential files
 
-A function hook on `tool.call` for `Read` and `Grep` SHALL deny a path inside the keyring directory,
-the vault's data directory or the rendered config directory, by its spelling or the file it resolves
-to, and a `Grep` whose path holds one of them (a `Grep` with no path is judged by the session's
-working directory), and SHALL answer with the wrapper to use instead.
+A function hook on `tool.call` for `Read`, `Grep` and `Glob` SHALL deny a path inside the keyring
+directory, the vault's data directory, the pass store or the rendered config directory, by its
+spelling or the file it resolves to, and a `Grep` whose path holds one of them (with no path, the
+session's working directory is judged), and SHALL deny a `Glob` whose path is inside one or whose
+pattern starts inside one, judged by its part before the first wildcard and, when that part is
+relative, joined to the Glob's path (a `Glob` lists names, like `ls`, so a path above a store is
+allowed), and SHALL answer with the wrapper to use instead.
 
 #### Scenario: a file read of the keyring is denied
 
 - **WHEN** an agent reads a file in the keyring directory, or through a link that leads there
 - **THEN** the call is denied and the reason names `qsm-secrets pipe`
+
+#### Scenario: a Glob of the pass store is denied
+
+- **WHEN** an agent globs inside `~/.password-store`, or with a pattern that starts there
+- **THEN** the call is denied, and a Glob of `src/**/*.ts` is not
 
 #### Scenario: an ordinary file is read
 
@@ -642,3 +753,159 @@ person approves; and SHALL never print a matched line or a credential.
 
 - **WHEN** a name was not found in a local source
 - **THEN** it is proposed only if the person added it by hand
+
+### Requirement: A new secret may be collected in a pane the person types into
+
+`qsm-secrets set <key> --gui` SHALL collect the value in the askpass pane, a Quickshell overlay the
+person types into, and SHALL hand it to the backend on stdin so the caller never receives it. The
+terminal path of `set` SHALL stay as it is. The pane's request SHALL carry no secret value, and the
+pane's answer SHALL travel on a one-shot unix socket the binary created, never in argv or stdout.
+The call SHALL fail, storing nothing, when the person cancels or denies (`failed`, "cancelled by the
+person"), when no answer arrives in 120 seconds (`failed`, "timed out waiting for the person"), or
+when the value is empty; and SHALL answer `missing`, with no terminal fallback, when `qs` is not on
+PATH or the pane is not installed.
+
+#### Scenario: the person types a value in the pane
+
+- **WHEN** the caller runs `set <key> --gui` and the person types a value and presses Save
+- **THEN** the backend holds that value under the key, the call prints `stored <key>`, and the value
+  is in no output and in no argv
+
+#### Scenario: the person cancels
+
+- **WHEN** the person presses Escape or Cancel in the pane
+- **THEN** nothing is stored and the call fails with "cancelled by the person"
+
+#### Scenario: no answer in time
+
+- **WHEN** 120 seconds pass without an answer
+- **THEN** the call fails with "timed out waiting for the person", the pane request is withdrawn and
+  the reply socket's directory is removed
+
+#### Scenario: no Quickshell
+
+- **WHEN** `qs` is not on PATH
+- **THEN** the call answers `missing`, names `qs`, and stores nothing
+
+### Requirement: Consumers that ask for a password get it from the pane
+
+`qsm-secrets askpass <kind> -- <the consumer's words>` SHALL show one request in the pane and return
+the answer in the shape the consumer reads: for `sudo`, `ssh` and `git` the typed text on stdout and
+exit 0 on Allow, and no stdout and exit 1 with the reason on Deny, Escape or a timeout; for `decide` an
+ask response of hook-kit's protocol 2 with the request's id and `allow` or `deny`, read from an ask
+request on stdin. Install SHALL link `qsm-askpass-<kind>` to the binary in the bin directory for each
+of those kinds, because the consumers' environment variables (`SUDO_ASKPASS`, `SSH_ASKPASS`,
+`GIT_ASKPASS`, `HOOK_KIT_ASKPASS`) hold one executable path with no arguments, and the binary SHALL
+read the link's name as the kind. `qsm-secrets askpass enable` SHALL print the fish lines for the
+kinds named and write nothing. The pane SHALL show the asking process (the parent): its executable
+path, the first 12 hex of the sha256 of that executable and its command line, and SHALL hide the
+typed text when the prompt asks for a password, passphrase or secret. The prompt, the subject (the tool
+and its whole input for `decide`) and the command line SHALL be shown in full, never cut: what does not
+fit its box scrolls and says so, because the person must not allow what part of it hid. `ssh` and
+`git` answers are asked once and never stored.
+
+#### Scenario: sudo -A through the link
+
+- **WHEN** a consumer runs `$SUDO_ASKPASS "[sudo] password for me: "` and the person types a password
+  and presses Allow
+- **THEN** the password is the consumer's stdout followed by a newline and the exit is 0
+
+#### Scenario: the person denies
+
+- **WHEN** the person presses Deny
+- **THEN** stdout is empty, stderr says "denied by the person" and the exit is 1
+
+#### Scenario: a hook-kit ask
+
+- **WHEN** hook-kit runs `$HOOK_KIT_ASKPASS` with an ask request on stdin and the person presses Allow
+- **THEN** stdout is an ask response with the same id and `allow`
+
+#### Scenario: a long request is shown whole
+
+- **WHEN** a `decide` request carries a 600-character input
+- **THEN** the request's subject holds all 600 characters, and the pane wraps it and scrolls with a
+  marker when it does not fit
+
+#### Scenario: a second run changes nothing
+
+- **WHEN** install runs twice
+- **THEN** the second run reports the pane and every link unchanged, and a link of a kind that no longer
+  exists is removed and named
+
+### Requirement: The pane is one component and a table of kinds
+
+The pane SHALL be one QML component driven by one kinds table, and a provider SHALL be one file in
+`lib/askpass/providers/` listed in one table in `lib/askpass/index.ts`. Adding a kind SHALL need one row
+in each table, a provider file and no other change. The pane SHALL run as a Quickshell instance of its
+own, started on demand with `qs -p <installed dir> -n -d` and always addressed with `-p`, so a call never
+reaches the desktop shell's instance. The guard SHALL refuse, with the code `askpass-pane`, an agent's
+Bash command that is `qs ipc ... askpass`, a `qs ipc` call with an expansion word, a call of a
+`qsm-askpass-<kind>` link or of `qsm-secrets askpass <kind>` for a kind that prints its answer (`sudo`,
+`ssh`, `git`, `decide`), and any command that names `$XDG_RUNTIME_DIR/qsm-askpass`; the links are entry
+points for the consumers that run them themselves, and `sudo -A <cmd>` stays allowed. The pane SHALL
+accept a request only when its socket path is `$XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock` for its
+own 128-bit hex nonce, SHALL give each request its own 120 seconds, and the binary SHALL withdraw the
+request and remove the directory on SIGTERM, SIGINT and SIGHUP. Install SHALL write the pane only to
+the default path, never to the path `QSM_ASKPASS_QML` names.
+
+#### Scenario: an agent calls the pane's target
+
+- **WHEN** an agent runs `qs ipc -p <dir> call askpass request '{...}'` through Bash
+- **THEN** the call is denied with `askpass-pane`, and `qs ipc call qsm toggle` is not
+
+#### Scenario: an agent runs the consumer entry point itself
+
+- **WHEN** an agent runs `qsm-askpass-sudo "[sudo] password: "` or `qsm-secrets askpass sudo -- "..."`
+  through Bash, or `nc -U $XDG_RUNTIME_DIR/qsm-askpass/<nonce>/reply.sock`
+- **THEN** the call is denied with `askpass-pane`, while `sudo -A true` and `qsm-secrets set <key> --gui`
+  are not
+
+#### Scenario: a signal ends the call
+
+- **WHEN** the call receives SIGTERM while it waits for the person
+- **THEN** the pane request is withdrawn, the reply socket's directory is removed and the exit is 143
+
+#### Scenario: ssh asks a yes or no, or shows a notice
+
+- **WHEN** ssh runs the link with `SSH_ASKPASS_PROMPT=confirm` and the person presses Allow
+- **THEN** stdout is empty and the exit is 0; with Deny the exit is 1; with `none` the pane shows the
+  prompt as a notice and the exit is 0
+
+## Design
+
+- **One binary.** Iron Law 8 holds: `askpass` is a verb of `qsm-secrets`. A compiled bun binary reports
+  the name it was run as in `process.argv0` (measured through a symlink), so install links
+  `qsm-askpass-<kind>` to it and the binary rewrites its argv to `askpass <kind> -- <words>`. A shell
+  shim would add a file with its own path and hash for nothing; a link also keeps `/proc/<pid>/exe` the
+  verified binary.
+- **Quickshell on demand.** The pane's QML is copied by install to `$XDG_DATA_HOME/qsm/askpass/qml`
+  (Iron Law 9: nothing runs through a path into the repository). The first request starts
+  `qs -p <dir> -n -d`; later ones find it. The IPC target is `askpass` and its functions are `request` and
+  `withdraw`: `show` is a subcommand name of `qs ipc`, so a function called `show` is parsed as that
+  subcommand and the call is refused as a usage error (found in the live run, which a fake `qs` hid).
+- **Caller binding.** The binary makes the reply socket in a 0700 directory named by a 128-bit random nonce
+  under `$XDG_RUNTIME_DIR/qsm-askpass`, the socket is 0600, the first line whose nonce matches is the answer,
+  and the directory is removed in a `finally`. The guard refuses the pane's IPC target from an agent's Bash.
+  **Known gap:** peer credentials on the socket are not checked. The nonce and the socket path travel in the
+  argv of `qs ipc call`, which any process of the user can read in `/proc/<pid>/cmdline`, so a same-user
+  process outside the agent's Bash guard can connect to the real socket and write a forged answer, `allow`
+  for `decide` included, while the person still looks at the pane. The pane accepts only the one socket
+  path the binary makes, the guard refuses an agent's Bash that names that directory, and the pane's
+  display of the asking executable and its hash lets the person notice; nothing stops a determined
+  same-user process.
+- **`askpass enable` has no `--secrets`.** The secret kind has no environment variable, because it is
+  reached through `set --gui`, so `enable` takes `--sudo`, `--ssh`, `--git` and `--decide` only.
+- **ssh prompt modes.** `SSH_ASKPASS_REQUIRE=prefer` sends every ssh prompt here, so the ssh provider reads
+  `SSH_ASKPASS_PROMPT`: `confirm` is Allow or Deny with exit 0 or 1 and no text, `none` is a notice row
+  (`notice` in the kinds tables) with no answer to give.
+- **Outcome codes.** Root `lib/outcome.ts` is unchanged: a timeout and a cancel are `failed` with a reason.
+- **Theme.** `Theme.qml` is a copy of the desktop shell's Deep Night tokens, a file of this plugin; the pane
+  runs without that shell.
+- **ssh and git are Authorize-style.** Their answers are a passphrase or a password for a remote, asked once
+  and never stored; only `secret` goes to the vault.
+- **Sudo timestamp.** A cached sudo credential skips the askpass, so no pane appears; `sudo -k` or
+  `timestamp_timeout=0` is the person's setting, documented in INSTALL.md.
+- **No test-only submit.** Nothing in the IPC target answers on the person's behalf, because that is the
+  same-user bypass; the live run types into the pane with `wtype`.
+- **The asking process** is the parent of the binary. For `sudo` that is sudo, which another uid owns, so
+  its executable may be unreadable and the pane says so; its command line is the command sudo will run.

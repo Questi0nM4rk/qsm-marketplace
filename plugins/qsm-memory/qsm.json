@@ -28,6 +28,11 @@
             "name": "detach",
             "type": "boolean",
             "description": "run the save in a detached qsm-memory process and return at once; its outcome is appended to save.log beside the archive"
+          },
+          {
+            "name": "log",
+            "type": "boolean",
+            "description": "print every output line with an ISO timestamp before it; the detached save sets it for save.log"
           }
         ]
       },
@@ -81,7 +86,7 @@
         ]
       },
       "qsm-memory list": {
-        "description": "One line per saved session, newest first: date, project, id, turns, title; --unsaved names transcripts on disk the archive lacks",
+        "description": "One line per saved session, newest first: date, project, id, turns, title, at most --limit lines (default 20); --unsaved names transcripts on disk the archive lacks",
         "args": [
           {
             "name": "since",
@@ -97,6 +102,11 @@
             "name": "unsaved",
             "type": "boolean",
             "description": "transcripts the archive lacks or has an older copy of; saves nothing"
+          },
+          {
+            "name": "limit",
+            "type": "number",
+            "description": "max lines (default 20); more end with 'N more: --limit <M>'"
           }
         ]
       },
@@ -166,7 +176,7 @@
         ]
       },
       "qsm-memory orient": {
-        "description": "The session-start block, at most 1000 characters, built with no model call: this project's last 5 saved sessions, the in-progress tasks and their epics from the task tool, the active notes, and how to search",
+        "description": "The session-start block, at most 1500 characters, built with no model call: this project's last 3 saved sessions, the in-progress tasks and their epics from the task tool, the active notes, and how to search",
         "args": [
           {
             "name": "cwd",

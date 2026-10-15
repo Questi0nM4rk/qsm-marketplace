@@ -18,12 +18,13 @@ export interface VerbRow {
 }
 
 export const verbs: Readonly<Record<string, VerbRow>> = {
-  set: { words: ["qsm-secrets","set"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }] },
+  set: { words: ["qsm-secrets","set"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }, { name: "gui", flag: "--gui", boolean: true }] },
+  askpassEnable: { words: ["qsm-secrets","askpass","enable"], args: [{ name: "sudo", flag: "--sudo", boolean: true }, { name: "ssh", flag: "--ssh", boolean: true }, { name: "git", flag: "--git", boolean: true }, { name: "decide", flag: "--decide", boolean: true }] },
   has: { words: ["qsm-secrets","has"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }] },
   list: { words: ["qsm-secrets","list"], args: [{ name: "folder", flag: "--folder" }] },
   inspect: { words: ["qsm-secrets","inspect"], args: [{ name: "folder", flag: "--folder" }] },
   rm: { words: ["qsm-secrets","rm"], args: [{ name: "key", flag: null }, { name: "folder", flag: "--folder" }] },
-  rename: { words: ["qsm-secrets","rename"], args: [{ name: "from", flag: null }, { name: "to", flag: null }, { name: "folder", flag: "--folder" }, { name: "toFolder", flag: "--to-folder" }] },
+  rename: { words: ["qsm-secrets","rename"], args: [{ name: "from", flag: null }, { name: "to", flag: null }, { name: "folder", flag: "--folder" }, { name: "toFolder", flag: "--to-folder" }, { name: "legacy", flag: "--legacy", boolean: true }] },
   prune: { words: ["qsm-secrets","prune"], args: [{ name: "dryRun", flag: "--dry-run", boolean: true }] },
   guard: { words: ["qsm-secrets","guard"], args: [] },
   capture: { words: ["qsm-secrets","capture"], args: [] },

@@ -1,11 +1,15 @@
 // What the vault's own fields mean to this wrapper: which folder a call works in, which entries are
 // ours, and the one value shape a verb still has to read (`<key>=<ENVVAR>`).
 
-/** The rbw folder a call reads and writes when the caller names none. */
+/** The namespace a call reads and writes when the caller names none. */
 export const DEFAULT_NAMESPACE = "qsm";
 
 /** rbw's username field on every entry this wrapper stored. */
 export const WRAPPER_MARK = "qsm-secrets";
+
+/** The namespace of an entry stored before namespaces existed (libsecret only): it has none, so this
+ * holds a NUL, which no command-line argument can spell and so no real namespace can equal. */
+export const LEGACY_NAMESPACE = "\0legacy";
 
 /** The folder this call works in: `--folder` first, then the environment, then the default. */
 export function namespaceOf(
@@ -13,6 +17,15 @@ export function namespaceOf(
   env: Record<string, string | undefined>,
 ): string {
   return folder ?? env.QSM_SECRETS_FOLDER ?? DEFAULT_NAMESPACE;
+}
+
+/** The folder `list` works in: `--folder`, then the environment, and with neither, every namespace
+ * (the empty namespace). */
+export function listScopeOf(
+  folder: string | undefined,
+  env: Record<string, string | undefined>,
+): string {
+  return folder ?? env.QSM_SECRETS_FOLDER ?? "";
 }
 
 export interface EnvPair {

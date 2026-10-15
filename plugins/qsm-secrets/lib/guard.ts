@@ -20,6 +20,8 @@ import {
   wordToLit,
   wordToParts,
 } from "@questi0nm4rk/shell-ast";
+import { linkedKinds } from "./askpass/link.ts";
+import { LINK_PREFIX } from "./askpass/paths.ts";
 import {
   expand,
   globMentioned,
@@ -41,6 +43,7 @@ export type RefusalCode =
   | "credential-file"
   | "fd3-to-output"
   | "single-quoted-placeholder"
+  | "askpass-pane"
   | "unreadable-command";
 
 export interface Refusal {
@@ -54,11 +57,27 @@ export interface Refusal {
 const USE_WRAPPER =
   "Use `qsm-secrets pipe <key> -- <cmd>` or `qsm-secrets env <key>=<VAR> -- <cmd>`: the value reaches the command without reaching this transcript.";
 
+const PASS_STORE_INSTEAD =
+  "A pass entry is not reachable through a wrapper: run it in your own terminal, or move the key into the vault with `qsm-secrets set <key>` and use `qsm-secrets pipe <key> -- <cmd>`.";
+
 function refuse(code: RefusalCode, command: string, why: string, instead: string): Refusal {
   return { code, command, reason: `[qsm-secrets ${code}] ${why} ${instead}` };
 }
 
-const VAULT_TOOLS: ReadonlySet<string> = new Set(["secret-tool", "rbw", "bw", "pass"]);
+const VAULT_TOOLS: ReadonlySet<string> = new Set([
+  "secret-tool",
+  "rbw",
+  "bw",
+  "pass",
+  "gopass",
+  "keepassxc-cli",
+  "kwallet-query",
+  "op",
+]);
+/** The secrets service by its bus name or its object path, either of which names it to a bus tool. */
+const SECRETS_SERVICE = /org[./]freedesktop[./]secret/i;
+/** A word whose value the shell decides later, so the guard cannot read where it points. */
+const EXPANDS = /[$`]/;
 const BUS_TOOLS: ReadonlySet<string> = new Set([
   "busctl",
   "gdbus",
@@ -67,6 +86,7 @@ const BUS_TOOLS: ReadonlySet<string> = new Set([
   "qdbus",
   "qdbus6",
 ]);
+const QUICKSHELL_TOOLS: ReadonlySet<string> = new Set(["qs", "quickshell"]);
 const INTERPRETERS = /^(python[\d.]*|node|nodejs|bun|deno|ruby|perl)$/;
 const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(["-c", "-e", "-p", "--eval", "--print"]);
 const KEYRING_LIBRARY = /keyring|secretstorage|keytar|libsecret|org\.freedesktop\.secret/i;
@@ -263,11 +283,68 @@ function innerStarts(name: string, args: readonly Word[]): number[] {
   return name === "xargs" || name === "command" ? flagged(name, words) : [];
 }
 
-/** A word as the shell would hand it on, with an expansion left as written. */
-function textOf(word: Word): string {
-  return wordToParts(word)
-    .map((part) => (part.kind === "literal" ? part.value : part.sourceText))
+type WordPart = Word["parts"][number];
+type ParamPart = Extract<WordPart, { type: "ParamExp" }>;
+
+/** The variables the guard resolves into a protected path; the same set `expand` substitutes. */
+const PATH_VARIABLES = new Set(["HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "PASSWORD_STORE_DIR"]);
+
+/** `${NAME}` with no operator, index, slice or replacement: the same value as `$NAME`. */
+function plainBraced(part: ParamPart): boolean {
+  return (
+    !part.short &&
+    part.param !== null &&
+    part.exp === null &&
+    part.index === null &&
+    part.slice === null &&
+    part.repl === null &&
+    !part.excl &&
+    !part.length &&
+    !part.width &&
+    part.names === ""
+  );
+}
+
+/** One part as the shell would hand it on. shell-ast writes a braced expansion as `${...}`, which
+ * loses the name, so a plain `${NAME}` is spelled out here and reads like `$NAME`. */
+function partText(part: WordPart, word: Word): string {
+  if (part.type === "ParamExp" && plainBraced(part)) {
+    return `\${${part.param?.value ?? ""}}`;
+  }
+  if (part.type === "DblQuoted") {
+    return part.parts.map((inner) => partText(inner, word)).join("");
+  }
+  return wordToParts({ ...word, parts: [part] })
+    .map((out) => (out.kind === "literal" ? out.value : out.sourceText))
     .join("");
+}
+
+/** A word as the shell would hand it on, with an expansion left as written. The types say a
+ * redirect always has a word, the processor serializes a missing one as null, and a missing word
+ * names nothing, so it reads as empty text rather than throwing; judgeRedirect refuses a redirect
+ * with no word before this is reached. */
+function textOf(word: Word | null | undefined): string {
+  if (word === null || word === undefined) {
+    return "";
+  }
+  return word.parts.map((part) => partText(part, word)).join("");
+}
+
+/** A path variable with an operator (`${XDG_DATA_HOME:-x}`, `${HOME#/}`, `${!HOME}`) has a value the
+ * guard cannot know without running the shell, so it cannot tell where the command points. */
+function judgeParameters(ast: ShellFile): Refusal | null {
+  for (const part of findAll(ast, "ParamExp")) {
+    const name = part.param?.value;
+    if (name !== undefined && PATH_VARIABLES.has(name) && !part.short && !plainBraced(part)) {
+      return refuse(
+        "unreadable-command",
+        `\${${name}...}`,
+        `\`\${${name}...}\` has a value the guard cannot work out, so it cannot tell whether it names a credential path.`,
+        `Write the path with \`$${name}\` or \`\${${name}}\` and no operator.`,
+      );
+    }
+  }
+  return null;
 }
 
 const basename = (command: string): string => command.slice(command.lastIndexOf("/") + 1);
@@ -333,6 +410,48 @@ function pathHit(text: string, ctx: Context): Root | undefined {
   return real === undefined ? undefined : reaches(real, ctx.roots, ctx.env, false);
 }
 
+const ASKPASS_WHY =
+  "the askpass pane asks the person and prints the answer, so the typed text would be this tool result, or would be sent to a socket the caller names.";
+const ASKPASS_INSTEAD =
+  "Ask through `qsm-secrets set <key> --gui`; sudo, ssh, git and hook-kit run the `qsm-askpass-<kind>` links themselves, and `sudo -A <cmd>` is allowed.";
+
+/** The reply socket's directory of the pane: any command that names it could forge an answer. */
+function askpassRoot(env: PathEnv): Root[] {
+  return env.runtimeDir === undefined || env.runtimeDir === ""
+    ? []
+    : [{ path: `${env.runtimeDir}/qsm-askpass`, kind: "askpass" }];
+}
+
+/** Whether the call is a consumer-only entry point of the pane: a `qsm-askpass-<kind>` link, or
+ * `qsm-secrets askpass <kind>` for a kind that prints its answer. */
+function runsAskpass(name: string, texts: readonly string[]): boolean {
+  if (name.startsWith(LINK_PREFIX)) {
+    return true;
+  }
+  // Every word counts, flag values and words after `--` included, so neither a flag nor `--`
+  // placed before the kind can hide it: `askpass` with any linked kind among them is refused,
+  // which fails closed.
+  const words = texts.map((t) => t.replace(/^--?[\w-]+=/, ""));
+  return (
+    name === "qsm-secrets" &&
+    words.includes("askpass") &&
+    words.some((w) => linkedKinds().includes(w))
+  );
+}
+
+/** The pane's doors: its entry points, and its IPC target, which an expansion word could spell
+ * without the text saying `askpass`. */
+function judgeAskpass(name: string, texts: readonly string[], shown: string): Refusal | null {
+  if (!(name.startsWith(LINK_PREFIX) || name === "qsm-secrets" || QUICKSHELL_TOOLS.has(name))) {
+    return null;
+  }
+  const ipc = QUICKSHELL_TOOLS.has(name) && texts.includes("ipc");
+  const spelled = ipc && (texts.includes("askpass") || texts.some((t) => EXPANDS.test(t)));
+  return runsAskpass(name, texts) || spelled
+    ? refuse("askpass-pane", shown, ASKPASS_WHY, ASKPASS_INSTEAD)
+    : null;
+}
+
 function isGet(name: string, texts: readonly string[]): boolean {
   return name === "qsm-secrets" && texts.find((t) => !t.startsWith("-")) === "get";
 }
@@ -340,6 +459,10 @@ function isGet(name: string, texts: readonly string[]): boolean {
 function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal | null {
   const texts = words.map(textOf);
   const shown = `${name} ${texts.join(" ")}`.trim().slice(0, 80);
+  const pane = judgeAskpass(name, texts, shown);
+  if (pane !== null) {
+    return pane;
+  }
   if (name === "qsm-secrets") {
     return ctx.fd3Out && isGet(name, texts)
       ? refuse(
@@ -358,11 +481,11 @@ function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal 
       `${USE_WRAPPER} To store one, \`qsm-secrets set <key>\`; to browse, \`qsm-secrets list\` or \`qsm-secrets has <key>\`.`,
     );
   }
-  if (BUS_TOOLS.has(name) && texts.some((t) => /org\.freedesktop\.secret/i.test(t))) {
+  if (BUS_TOOLS.has(name) && texts.some((t) => SECRETS_SERVICE.test(t) || EXPANDS.test(t))) {
     return refuse(
       "bus-secrets",
       shown,
-      "this talks to the secret service over the bus, which can return a stored credential.",
+      "this talks over the bus to the secret service, or to a destination the guard cannot read, and the secret service can return a stored credential.",
       `${USE_WRAPPER} To browse, \`qsm-secrets list\`.`,
     );
   }
@@ -392,12 +515,17 @@ function judgePaths(
 ): Refusal | null {
   for (const text of texts) {
     const hit = pathHit(text, ctx);
+    if (hit?.kind === "askpass") {
+      return refuse("askpass-pane", shown, ASKPASS_WHY, ASKPASS_INSTEAD);
+    }
     if (hit?.kind === "store" && !NAMES_ONLY.has(name)) {
       return refuse(
         "keyring-files",
         shown,
-        `\`${name}\` is pointed at the keyring or the vault's data directory, whose files hold stored credentials.`,
-        USE_WRAPPER,
+        `\`${name}\` is pointed at a secret store (the keyring, the vault's data directory or the pass store), whose files hold stored credentials.`,
+        hit.path.endsWith("/.password-store") || hit.path === ctx.env.passwordStore
+          ? PASS_STORE_INSTEAD
+          : USE_WRAPPER,
       );
     }
     if (hit?.kind === "rendered" && (READERS.has(name) || name === "cd" || name === "pushd")) {
@@ -425,9 +553,25 @@ function judgePaths(
 }
 
 function judgeRedirect(redirect: Redirect, ctx: Context): Refusal | null {
+  if (redirect.word === null || redirect.word === undefined) {
+    return refuse(
+      "unreadable-command",
+      redirect.op,
+      "a redirect's target could not be read, so the guard cannot tell what it opens.",
+      "Rewrite the redirect with a plain file name.",
+    );
+  }
   const target = textOf(redirect.word);
   if (INPUT_OPS.has(redirect.op)) {
     const hit = pathHit(target, ctx);
+    if (hit?.kind === "askpass") {
+      return refuse(
+        "askpass-pane",
+        `${redirect.op} ${target}`.slice(0, 80),
+        ASKPASS_WHY,
+        ASKPASS_INSTEAD,
+      );
+    }
     if (hit !== undefined) {
       return refuse(
         hit.kind === "store" ? "keyring-files" : "rendered-config",
@@ -600,7 +744,9 @@ async function judgeSource(source: string, ctx: Context): Promise<Refusal | null
     }
     throw error;
   }
-  return await judgeFile(ast, ctx);
+  // A path variable with an operator needs a `${`; most commands have none, so skip the tree walk.
+  const parameter = source.includes("${") ? judgeParameters(ast) : null;
+  return parameter ?? (await judgeFile(ast, ctx));
 }
 
 /** The refusal for a Bash command, or null when nothing in it reads a stored value. */
@@ -608,7 +754,7 @@ export async function guardCommand(command: string, env: PathEnv): Promise<Refus
   return await judgeSource(command, {
     cwd: {},
     env,
-    roots: protectedRoots(env),
+    roots: [...protectedRoots(env), ...askpassRoot(env)],
     fd3Out: false,
     depth: 0,
   });

@@ -1,0 +1,7 @@
+{
+  "name": "qsm-secrets",
+  "private": true,
+  "dependencies": {
+    "@questi0nm4rk/shell-ast": "0.8.1-beta.0"
+  }
+}

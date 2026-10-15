@@ -11,10 +11,11 @@ and straightforward: we value each other's time and do not overcomplicate. Singl
 
 ```text
 .claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
+lib/                              # layer 0, imports no third-party package (a plugin's packages are in its own package.json, installed by its installer): install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
+  package.json + bun.lock         # the plugin's own npm dependencies, only when it has any; the install base runs `bun install --frozen-lockfile` before it compiles
   lib/ scripts/ skills/ agents/ commands/ hooks/ openspec/
   README.md                       # always, opens with `## Why it exists`; INSTALL.md + USAGE.md only with a bin
 .gates/                           # bun run validate
@@ -71,7 +72,9 @@ touching its users (Cockburn, ports and adapters).
 5. **One canonical owner per concept.** Search before adding; edit in place; never `v2` copies.
 6. **No versioning, no history in the tree.** When a decision changes, the old form is deleted
    everywhere it appears: no deprecated markers, no renamed-from notes, no dates, no changelogs,
-   no "previously". Git is the only history.
+   no "previously". Git is the only history. A `plugin.json` carries no `version`: Claude Code
+   then names the plugin's cache after the commit, so `claude plugin update` picks up each new
+   commit; a pinned version keeps the old copy forever. Enforced by `validate-plugin-contracts`.
 7. **The plugin is the install unit.** `scripts/install.ts` exports `install(ctx)` from
    `lib/install-contract.ts`; a plugin that needs another names it in the `dependencies` array of
    its `.claude-plugin/plugin.json`, with its reason in the spec (Architecture, rule 2), and never

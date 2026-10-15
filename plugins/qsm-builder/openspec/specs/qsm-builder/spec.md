@@ -116,8 +116,8 @@ it, and SHALL NOT be a per-model rewriting manual.
 ### Requirement: Plugin manifest validation on write
 
 The plugin SHALL run a check every time an agent writes or edits a file
-named `plugin.json`. The check SHALL confirm name is kebab-case, version
-starts with a dotted triple of numbers, description is non-empty, author is
+named `plugin.json`. The check SHALL confirm name is kebab-case, version,
+when present, starts with a dotted triple of numbers, description is non-empty, author is
 a string or an object naming one, keywords is an array of strings, and, when
 a `hooks` key is present, that it is a string ending `.json` rather than
 null. The check SHALL block the action and report every violation found when

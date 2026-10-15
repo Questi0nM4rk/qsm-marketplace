@@ -7,6 +7,7 @@ export type Memory = {
     catchUp?: boolean;
     cwd?: string;
     detach?: boolean;
+    log?: boolean;
   }): Promise<unknown>;
   search(options: {
     query: string;
@@ -23,6 +24,7 @@ export type Memory = {
     since?: string;
     project?: string;
     unsaved?: boolean;
+    limit?: number;
   }): Promise<unknown>;
   blobPut(options: {
     file: string;

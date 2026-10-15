@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
 import { removeSandboxes, sandbox } from "../lib/test-repo.ts";
 
@@ -152,7 +153,7 @@ describe("qsm-index mcp serve", () => {
       env: { PATH: process.env.PATH ?? "", HOME: home, XDG_CONFIG_HOME: join(home, "c") },
     });
     try {
-      await server.request(initialize(1));
+      await server.request(initialize(1, LATEST_PROTOCOL_VERSION));
       server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
       const listed = await server.request({ jsonrpc: "2.0", id: 2, method: "tools/list" });
       const tools = (listed.result as { tools: { name: string }[] }).tools.map((t) => t.name);

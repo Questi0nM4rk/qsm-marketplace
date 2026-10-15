@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "qsm-secrets",
+      "dependencies": {
+        "@questi0nm4rk/shell-ast": "0.8.1-beta.0",
+      },
+    },
+  },
+  "packages": {
+    "@questi0nm4rk/shell-ast": ["@questi0nm4rk/shell-ast@0.8.1-beta.0", "", {}, "sha512-V86/WimS6+0/KHFy3yqIddnnAG6seKX6Z4MRcKHoQfH4Ncy1MSEiRA4GMtkZexvkMGJ7P+4EAoV7U3hFrW9NhQ=="],
+  }
+}

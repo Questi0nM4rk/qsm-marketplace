@@ -107,6 +107,7 @@ const PROTECTED_READS: [string, string | undefined][] = [
   ["/home/p/.local/share/keyrings/login.keyring", undefined],
   ["/home/p/.local/share/rbw/db", undefined],
   ["/run/user/1/qsm-secrets/s1/kubeconfig", undefined],
+  ["/home/p/.password-store/work/token.gpg", undefined],
   ["/tmp/harmless-name", "/home/p/.local/share/keyrings/login.keyring"],
 ];
 for (const [path, real] of PROTECTED_READS) {
@@ -132,6 +133,39 @@ test("a Grep with no path is judged by the working directory", async ($, on) => 
   cwd = "/home/p/project";
   const ran = await $.tool.call({ tool: "Grep", pattern: "x" } as never);
   expect(ran.result).toBe("ran");
+});
+
+test("a Glob under the pass store, or with a pattern that starts there, is denied", async ($, on) => {
+  fileHost(on, undefined);
+  on("session.cwd", () => ({ value: "/home/p/project" }));
+
+  const byPath = await $.tool.call({
+    tool: "Glob",
+    pattern: "**/*.gpg",
+    path: "/home/p/.password-store",
+  } as never);
+  expect(byPath.deny).toContain("keyring-files");
+  const byPattern = await $.tool.call({
+    tool: "Glob",
+    pattern: "/home/p/.password-store/**",
+  } as never);
+  expect(byPattern.deny).toContain("keyring-files");
+  const ordinary = await $.tool.call({ tool: "Glob", pattern: "src/**/*.ts" } as never);
+  expect(ordinary.result).toBe("ran");
+  const relative = await $.tool.call({
+    tool: "Glob",
+    pattern: "../.password-store/**",
+    path: "/home/p/project",
+  } as never);
+  expect(relative.deny).toContain("keyring-files");
+});
+
+test("a Glob from the home directory lists names and is not denied", async ($, on) => {
+  fileHost(on, undefined);
+  on("session.cwd", () => ({ value: "/home/p" }));
+
+  const listed = await $.tool.call({ tool: "Glob", pattern: "*.md" } as never);
+  expect(listed.result).toBe("ran");
 });
 
 test("a Read of an ordinary file runs", async ($, on) => {
@@ -292,6 +326,47 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
   expect(texts.join("\n")).not.toContain("VALUE");
   expect(texts[0]).toContain("withheld");
   expect(toast).toContain("session.append");
+});
+
+test("a tool result of any tool is masked in its nested text, and a media block is kept as it is", async ($, on) => {
+  let sent: string[] = [];
+  on("process.run", (_$, e) => {
+    sent = JSON.parse((e as { init: { stdin: string } }).init.stdin) as string[];
+    const texts = sent.map((text) => text.replaceAll("VALUE", "{{secret:cap_1}}"));
+    return {
+      value: {
+        ...RAN,
+        stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts } }),
+      },
+    };
+  });
+  const image = {
+    type: "image",
+    source: { type: "base64", media_type: "image/png", data: "VALUE" },
+  };
+  for (const tool of ["Read", "Grep", "mcp__plugin_qsm-memory_qsm-memory__notes", "Agent"]) {
+    const stored = await $.session.append({
+      door: "tool-result" as const,
+      origin: { kind: "tool" as const, tool },
+      uuid: `u-${tool}`,
+      message: {
+        type: "user" as const,
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "t1",
+            content: [{ type: "text", text: `${tool} says VALUE` }, image],
+          },
+        ],
+      },
+    });
+    const [block] = stored.message?.content ?? [];
+    expect(block?.content).toEqual([
+      { type: "text", text: `${tool} says {{secret:cap_1}}` },
+      image,
+    ]);
+    expect(sent).toEqual([`${tool} says VALUE`]);
+  }
 });
 
 /** Toasts are dropped and log lines kept in `logs`, so a test reads what the hook logged. */
