@@ -634,6 +634,24 @@ for (const flavor of FLAVORS) {
       });
     });
 
+    describe("scrub", () => {
+      test("swaps every stored value in the transcript and its subagents, named or not", () => {
+        const project = join(home, ".claude", "projects", "scrub");
+        mkdirSync(join(project, "s1", "subagents"), { recursive: true });
+        const row = `{"attachment":{"content":"note ${NPM_VALUE}"}}\n`;
+        writeFileSync(join(project, "s1.jsonl"), row);
+        writeFileSync(join(project, "s1", "subagents", "agent-a.jsonl"), row);
+        const run = cli(["scrub", "s1"]);
+        expect(run.code).toBe(0);
+        const masked = `{"attachment":{"content":"note ${placeholderOf("qsm/npm-token")}"}}\n`;
+        expect(readFileSync(join(project, "s1.jsonl"), "utf8")).toBe(masked);
+        expect(readFileSync(join(project, "s1", "subagents", "agent-a.jsonl"), "utf8")).toBe(
+          masked,
+        );
+        expect(leaked(run)).toBeNull();
+      });
+    });
+
     describe("render", () => {
       const template = (text: string): string => {
         const path = join(runtime, "template");

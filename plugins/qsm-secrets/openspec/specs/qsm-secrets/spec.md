@@ -460,13 +460,29 @@ other. The hook SHALL run one `qsm-secrets mask --all` process per row, which re
 once. A value shorter than six characters SHALL NOT be masked, because it would match inside
 ordinary words. When the mask fails, the row's text SHALL be replaced by a notice that it was
 withheld and a toast SHALL say so, because a row that could not be masked may hold a value. The
-limit: a value printed re-encoded (base64, escaped) is not masked, and a media block is kept as it
-is.
+result of every tool takes this door, Read, Grep, an MCP tool and the hand-back of an Agent
+included, so none has a list of its own. What cannot be masked is named, because a reader should
+not assume it is: a value printed re-encoded (base64, escaped); a value of fewer than six
+characters; a value inside a media block (an image or a PDF is kept as it is); the screen, an SDK
+stream and Remote Control, which may show a row just before its rewrite; and the structured record
+of a tool result and an attachment's payload, which the engine stores as made (the transcript
+scrub below covers those two once the session ends).
 
 #### Scenario: a value in a tool result is masked
 
 - **WHEN** a tool result contains a stored value, whether or not its command named an id
 - **THEN** the row is stored with the placeholder in its place and the model reads the placeholder
+
+#### Scenario: a printing consumer is masked like any other
+
+- **WHEN** `qsm-secrets env <key>=V -- printenv V` prints the value
+- **THEN** the result holds the placeholder and not the value
+
+#### Scenario: a result of Read, Grep, an MCP tool or an Agent is masked
+
+- **WHEN** one of those tools returns text holding a stored value
+- **THEN** the row is stored with the placeholder in its place, and a media block in the same result
+  is kept as it is
 
 #### Scenario: a file read returns a stored value
 
@@ -521,8 +537,12 @@ the same user can read the file while the session lives.
 ### Requirement: A session end scrubs captured values from the transcript
 
 The engine writes a submitted prompt raw into the transcript before any hook runs, so the session
-end SHALL replace every captured value still in the transcript with its `{{secret:<id>}}`
-placeholder, by rewriting the file atomically in a detached process, and SHALL print no value. The
+end SHALL replace every stored value of every namespace still in the transcript, and in the
+transcripts of the subagents the session ran, with its placeholder, by rewriting each file atomically
+in a detached process, and SHALL print no value: the engine stores a submitted prompt, a tool
+result's structured record and an attachment's payload as made, whatever the mask hook rewrote, so
+a value named by no placeholder in the file is swapped too. A value of fewer than six characters is
+not swapped. The
 scrub SHALL start before the session directory is removed, so a failed removal cannot skip it, and
 the removal SHALL run even when the scrub fails: each step runs and reports on its own, and the
 session ends either way.
@@ -531,6 +551,12 @@ session ends either way.
 
 - **WHEN** a session ends after a secret was pasted and captured
 - **THEN** the transcript file holds the placeholder and not the value
+
+#### Scenario: a value stored in a payload the mask cannot reach is swapped
+
+- **WHEN** a session ends and its transcript, or a subagent's, holds a stored value in an
+  attachment's payload and no placeholder anywhere
+- **THEN** the file holds the placeholder and not the value
 
 #### Scenario: a failed scrub still removes the rendered files
 

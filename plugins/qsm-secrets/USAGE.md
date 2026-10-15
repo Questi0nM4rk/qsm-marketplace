@@ -17,8 +17,8 @@ qsm-secrets askpass enable [--sudo] [--ssh] [--git] [--decide]
 `capture` reads text on stdin and prints it with each secret replaced by its id (`--json` answers
 `{ text, captured: [{ id, suffix }], taken: [name] }`; a `name=value` becomes `{{secret:qsm/<name>}}`
 and its id is `qsm/<name>`, and a name already stored is listed in `taken` and its value gets a
-`cap_<hex>`); `scrub <transcript|session>` replaces captured values left
-in a transcript. Neither prints a value.
+`cap_<hex>`); `scrub <transcript|session>` replaces every stored value left
+in a transcript and its subagents' transcripts. Neither prints a value.
 
 `guard` reads a Bash command on stdin and answers `ok`, or `blocked` (exit 5) with a code and the
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,

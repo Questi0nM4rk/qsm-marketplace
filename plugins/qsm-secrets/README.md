@@ -79,7 +79,8 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   recalled. A failed capture stops the prompt (it is dropped with the cause and the fix, and you
   send it again). A hex-only secret is caught only after a credential name (`token=`, `secret:`).
 - Masking: every row is masked against every stored value of six or more characters, one process
-  per row; a value printed re-encoded (base64, escaped) is not masked, and a row the mask cannot
+  per row. Not masked: a value printed re-encoded (base64, escaped), inside an image or PDF, or on the
+  screen just before its row is rewritten; the session end swaps what the engine stores as made. A row the mask cannot
   read is withheld, with a toast. Without a chosen backend every row is withheld.
 - `prune` trusts the transcripts: run it after your sessions end, since a capture made in a live
   session is named in its transcript only once the prompt is rewritten.
