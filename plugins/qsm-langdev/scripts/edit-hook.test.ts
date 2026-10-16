@@ -50,8 +50,8 @@ function editMarkdown(content: string) {
 
 /** The environment of a spawned binary: semgrep makes its own semgrep-mcp directory in the temp
  * root, so the binary gets a sandbox as its root. */
-function tmpEnv(extra: Record<string, string> = {}): Record<string, string | undefined> {
-  return { ...process.env, ...extra, TMPDIR: sandboxDir("qsm-langdev-edit-hook-tmp-") };
+function tmpEnv(): Record<string, string | undefined> {
+  return { ...process.env, TMPDIR: sandboxDir("qsm-langdev-edit-hook-tmp-") };
 }
 
 /** The verb's exit and its envelope's findings text (null when it had nothing to say). */
@@ -59,7 +59,7 @@ function runEdited(file: string, stateDir = sandboxDir("qsm-langdev-edit-hook-st
   const argv = ["edited", file, "--session", "s1", "--agent", "a1", "--json"];
   const r = spawnSync("bun", [CLI, ...argv], {
     encoding: "utf8",
-    env: tmpEnv({ QSM_LANGDEV_STATE_DIR: stateDir }),
+    env: { ...tmpEnv(), QSM_LANGDEV_STATE_DIR: stateDir },
   });
   const data = defined(recordOf(recordOf(JSON.parse(r.stdout))?.data), "the verb's data");
   return { status: r.status, text: typeof data.text === "string" ? data.text : null };

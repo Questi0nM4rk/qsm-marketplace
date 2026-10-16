@@ -62,8 +62,8 @@ describe.each(Object.keys(OWN_RULES))("own %s rules", (language) => {
         const run = spawnSync(semgrepPath(), ["--test", "--json", "--config", rulesFile, fixture], {
           encoding: "utf8",
           timeout: SEMGREP_LIMIT_MS,
-          // semgrep makes its own semgrep-mcp directory in its temp root, so it gets a sandbox
-          env: { ...process.env, TMPDIR: sandboxDir("qsm-langdev-semgrep-tmp-") },
+          // semgrep makes its own semgrep-mcp directory in its temp root, so it gets a sandbox; the name is short because its python forkserver socket lives in it and a unix socket path stops at 107 characters
+          env: { ...process.env, TMPDIR: sandboxDir("sg-") },
         });
         expect(run.error?.message, run.stderr).toBeUndefined();
         const results = recordOf(recordOf(JSON.parse(run.stdout))?.results) ?? {};
