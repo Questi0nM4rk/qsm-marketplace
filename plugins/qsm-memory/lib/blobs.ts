@@ -2,8 +2,9 @@
 // sha256 so the same bytes are stored once and a stored blob never changes.
 
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { writeAtomic } from "../../../lib/fs.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 import { type Env, resolveDbPath } from "./store.ts";
 
@@ -38,11 +39,7 @@ export function putBlob(env: Env, file: string): PutResult {
     return { sha256, path, stored: false };
   }
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  // a rename in the same directory is atomic, so a reader never sees half a blob
-  const partial = `${path}.${process.pid}.partial`;
-  writeFileSync(partial, bytes, { mode: 0o600 });
-  chmodSync(partial, 0o600);
-  renameSync(partial, path);
+  writeAtomic(path, bytes, 0o600);
   return { sha256, path, stored: true };
 }
 
