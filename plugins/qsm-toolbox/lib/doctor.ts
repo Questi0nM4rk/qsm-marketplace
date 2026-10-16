@@ -53,7 +53,7 @@ function firstLine(text: string): string | null {
 
 /** The impure half: the real machine. Kept here so the CLI stays printing. */
 export const realProber: Prober = {
-  onPath: (bin) => onPath(bin),
+  onPath,
   version: (tool) => {
     const probe = spawnSync(tool.bin, [...tool.versionArgs], { encoding: "utf8" });
     return probe.status === 0 ? firstLine(probe.stdout ?? "") : null;
