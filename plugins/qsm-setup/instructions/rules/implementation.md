@@ -71,6 +71,28 @@ Before a non-trivial change, name in one place: the behaviour, the interface, th
 the failure behaviour, and the real run that proves it. Then code, in phases that each end in
 working code.
 
+## Shape: one job per piece, split only when it pays
+
+1. Reuse before you write. Search the codebase for the thing first; when something close exists,
+   change it slightly to serve both uses before you add a second one. The best code is the code
+   never written.
+2. Each module, class and function has one job, so it has one reason to change, and its name says
+   that job in one clear phrase. Keep the decisions (what to do) apart from the details (how it is
+   done).
+3. Open for extension, closed for modification: an extension adds code beside what it extends and
+   touches nothing it does not extend. When adding one forces edits elsewhere, the seam is wrong;
+   rewrite that seam first, then add the extension.
+4. Split only as far as the new piece does something for us. A new module, class or function earns
+   its place by one of four reasons, and the review asks which:
+   - it lets one piece be tested on its own, without running everything around it;
+   - it removes duplication: up to four small copies may stay where each is local and clear, and a
+     fifth means one shared owner, so a fix changes one place;
+   - it gives a name and one home to something that was missing or scattered, so the next reader
+     finds it without a search through every file;
+   - it adds behaviour we did not have.
+   With none of the four, the code stays where it is used: a split that does none of them is
+   overengineering.
+
 ## Tests prove real edge cases and the intended use
 
 A test earns its place by proving one of two things: that the full intended use works, or that a
