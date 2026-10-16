@@ -23,7 +23,7 @@ export interface RunResult {
   readonly result: InstallResult | null;
   readonly stderr: string;
 }
-export type Runner = (installer: string, dryRun: boolean) => RunResult;
+export type Runner = (installer: string, dryRun: boolean, force?: boolean) => RunResult;
 
 const FAILED = new Set(["error", "missing-prereq", "blocked", "failed"]);
 
@@ -37,8 +37,9 @@ function installResultOf(stdout: string): InstallResult | null {
   return envelope !== null && isInstallResult(envelope.data) ? envelope.data : null;
 }
 
-export const bunRunner: Runner = (installer, dryRun) => {
-  const r = spawnSync("bun", [installer, "--json", ...(dryRun ? ["--dry-run"] : [])], {
+export const bunRunner: Runner = (installer, dryRun, force = false) => {
+  const flags = [...(dryRun ? ["--dry-run"] : []), ...(force ? ["--force"] : [])];
+  const r = spawnSync("bun", [installer, "--json", ...flags], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -96,6 +97,7 @@ export function runInstallers(
   order: readonly string[],
   opts: {
     readonly dryRun: boolean;
+    readonly force?: boolean;
     readonly run: Runner;
     /** plugin -> the plugins that pulled it in, for one not named by the user */
     readonly requiredBy?: ReadonlyMap<string, readonly string[]>;
@@ -128,7 +130,7 @@ export function runInstallers(
       out.push(why(name, { plugin: name, status: "already", detail: NOTHING, steps: [] }));
       continue;
     }
-    const r = opts.run(node.installer, opts.dryRun);
+    const r = opts.run(node.installer, opts.dryRun, opts.force === true);
     const outcome = why(name, outcomeOf(name, r));
     if (isFailedOutcome(outcome) || (r.code !== 0 && !opts.dryRun)) {
       failed.add(name);

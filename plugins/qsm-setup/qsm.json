@@ -32,6 +32,11 @@
             "description": "report what each installer would do"
           },
           {
+            "name": "force",
+            "type": "boolean",
+            "description": "let each installer replace a bin link that is not its own"
+          },
+          {
             "name": "root",
             "type": "string",
             "description": "marketplace checkout"

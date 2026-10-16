@@ -122,6 +122,7 @@ const install: Handler = (call) =>
     const order = installOrder(nodes, selected);
     const outcomes = runInstallers(nodes, order, {
       dryRun,
+      force: flagArg(call, "force"),
       run: bunRunner,
       requiredBy: requiredBy(nodes, order, selected),
     });

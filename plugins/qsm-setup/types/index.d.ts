@@ -7,6 +7,7 @@ export type Setup = {
     all?: boolean;
     profile?: string;
     dryRun?: boolean;
+    force?: boolean;
     root?: string;
   }): Promise<unknown>;
   doctor(options: {

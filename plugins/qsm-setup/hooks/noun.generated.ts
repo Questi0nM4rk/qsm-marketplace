@@ -18,7 +18,7 @@ export interface VerbRow {
 }
 
 export const verbs: Readonly<Record<string, VerbRow>> = {
-  install: { words: ["qsm-setup","install"], args: [{ name: "plugins", flag: null }, { name: "all", flag: "--all", boolean: true }, { name: "profile", flag: "--profile" }, { name: "dryRun", flag: "--dry-run", boolean: true }, { name: "root", flag: "--root" }] },
+  install: { words: ["qsm-setup","install"], args: [{ name: "plugins", flag: null }, { name: "all", flag: "--all", boolean: true }, { name: "profile", flag: "--profile" }, { name: "dryRun", flag: "--dry-run", boolean: true }, { name: "force", flag: "--force", boolean: true }, { name: "root", flag: "--root" }] },
   doctor: { words: ["qsm-setup","doctor"], args: [{ name: "plugin", flag: null }, { name: "verbose", flag: "--verbose", boolean: true }, { name: "root", flag: "--root" }] },
   relink: { words: ["qsm-setup","relink"], args: [{ name: "check", flag: "--check", boolean: true }, { name: "auto", flag: "--auto", boolean: true }, { name: "root", flag: "--root" }] },
   buildBins: { words: ["qsm-setup","build-bins"], args: [{ name: "root", flag: "--root" }] },
