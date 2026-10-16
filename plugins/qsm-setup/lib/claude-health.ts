@@ -50,8 +50,9 @@ function layout(p: ClaudeProbes): Layout {
   const configDir = claudeDir(p.env);
   return {
     configDir,
-    claudeJson:
-      configDir === join(h, ".claude") ? join(h, ".claude.json") : join(configDir, ".claude.json"),
+    // Claude Code reads join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json"): any non-empty value,
+    // ~/.claude included, moves it
+    claudeJson: join((p.env.CLAUDE_CONFIG_DIR ?? "") === "" ? h : configDir, ".claude.json"),
     cwd: p.cwd,
     launcher: join(h, ".local", "bin", "claude"),
     nativeData: join(h, ".local", "share", "claude"),
