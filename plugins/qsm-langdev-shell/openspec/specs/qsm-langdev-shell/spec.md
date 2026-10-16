@@ -39,7 +39,7 @@ the job.
 qsm-langdev-shell SHALL declare each dependency in the `dependencies` array of its plugin.json,
 with one reason:
 
-- `qsm-langdev`: the language's checkers (shellcheck, shfmt, checkbashisms) and gate profile live
+- `qsm-langdev`: the language's checkers (shellcheck, shfmt) and gate profile live
   in qsm-langdev, so installing the language brings its gate.
 
 #### Scenario: The plugin is installed

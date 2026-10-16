@@ -5,7 +5,6 @@ import { availableParallelism } from "node:os";
 import { basename, join } from "node:path";
 import {
   countBanditJson,
-  countCheckbashisms,
   countClippy,
   countCsharpier,
   countDepcruise,
@@ -691,6 +690,8 @@ const SPECS: readonly CheckSpec[] = [
     measures: {
       counts: "shellcheck diagnostics, one per SC-coded finding",
       overlaps: ["bash-syntax"],
+      // a #!/bin/sh script gets the SC3xxx "In POSIX sh, X is undefined" checks, so no
+      // separate bashism checker runs
     },
     language: "shell",
     runsAt: "pre-commit",
@@ -734,18 +735,6 @@ const SPECS: readonly CheckSpec[] = [
     fileSet: "changed",
     args: (files) => [...SHFMT_STYLE, "-l", ...files],
     count: countFileList,
-  },
-  {
-    name: "checkbashisms",
-    measures: { counts: "bashisms in a POSIX script, one per `possible bashism in` line" },
-    language: "shell",
-    runsAt: "pre-commit",
-    extensions: [".sh"],
-    binary: "checkbashisms",
-    install: systemPackage("checkbashisms (Debian: devscripts)"),
-    fileSet: "changed",
-    args: (files) => ["-p", ...files],
-    count: countCheckbashisms,
   },
   {
     name: "semgrep-bash",

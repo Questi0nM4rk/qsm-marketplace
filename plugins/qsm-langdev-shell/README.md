@@ -24,8 +24,8 @@ would write ourselves, the plugin has no reason to exist.
 claude plugin install qsm-langdev-shell@qsm-marketplace
 ```
 
-Installs the skill only. Brings `qsm-langdev` with it: the checkers (shellcheck, shfmt,
-checkbashisms) and the gate profile live there, so installing the language brings its gate.
+Installs the skill only. Brings `qsm-langdev` with it: the checkers (shellcheck, shfmt) and the gate
+profile live there, so installing the language brings its gate.
 
 ## Use
 

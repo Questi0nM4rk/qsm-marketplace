@@ -256,17 +256,6 @@ export function countRuffFormat(stdout: string, stderr: string, exitCode: number
   return tallyOf(findings);
 }
 
-/** checkbashisms: `possible bashism in FILE line N (text):` per finding. Exit
- * 4 is "some scripts are bash, skipped" — a clean outcome for a POSIX check. */
-export function countCheckbashisms(stdout: string, stderr: string, exitCode: number): Tally | null {
-  return tallyLines(
-    `${stdout}\n${stderr}`,
-    /^possible bashism in (.+?) line (\d+)()\s*(.*?):?\s*$/,
-    exitCode,
-    [0, 1, 4],
-  );
-}
-
 /** csharpier check: `Error <path> - Was not formatted.` per drifted file. */
 export function countCsharpier(stdout: string, stderr: string, exitCode: number): Tally | null {
   const findings = `${stdout}\n${stderr}`
