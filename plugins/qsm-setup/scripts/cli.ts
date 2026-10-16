@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // qsm-setup: the marketplace's own installer.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   type Call,
   flagArg,
@@ -12,7 +12,7 @@ import {
   runCli,
   stringList,
 } from "../../../lib/cli-base.ts";
-import { exitOf, fail, isRecord, OUTCOME_CODES, type Outcome, ok } from "../../../lib/outcome.ts";
+import { exitOf, fail, OUTCOME_CODES, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   binDir,
   buildRecordPath,
@@ -22,87 +22,20 @@ import {
 } from "../../../lib/paths.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { buildBins } from "../lib/build-bins.ts";
-import { type ClaudeProbes, claudeChecks, type Lookup } from "../lib/claude-health.ts";
 import { readConfig, resolveProfile } from "../lib/config.ts";
-import { discoverPlugins, type PluginNode } from "../lib/discover.ts";
-import { doctor, type Probe, qsmBinsIn, readInstalled } from "../lib/doctor.ts";
+import type { PluginNode } from "../lib/discover.ts";
+import { readInstalled } from "../lib/doctor.ts";
 import { declaredBins, type FarmReport, relink, removeUndeclaredBins } from "../lib/farm.ts";
 import { installOrder, requiredBy } from "../lib/graph.ts";
 import { parseEnvelope } from "../lib/json.ts";
-import { type PurgeReport, purge } from "../lib/purge.ts";
-import {
-  bunActivationReader,
-  bunRunner,
-  isFailedOutcome,
-  runInstallers,
-} from "../lib/run-installers.ts";
-import { compareTools, describeTools, type ToolsProbes } from "../lib/tools.ts";
+import { bunRunner, isFailedOutcome, runInstallers } from "../lib/run-installers.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
+import { handlers as healthHandlers } from "./cli-health.ts";
+import { describePurge, purgeMachine, withRoot } from "./root.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-setup/qsm.json");
 
 const env: Env = process.env;
-
-/** The checkout every verb works on, or why there is none. A root that holds no plugin is a wrong
- * root, except for `relink`, which prunes the bins of plugins that are gone. */
-function withRoot<T extends Outcome | Promise<Outcome>>(
-  call: Call,
-  verb: (nodes: readonly PluginNode[], root: string) => T,
-  allowEmpty = false,
-): T | Outcome {
-  const root =
-    optionalString(call, "root") ?? env.QSM_MARKETPLACE ?? readConfig(env).marketplaceRoot;
-  if (root === undefined) {
-    return fail(
-      "missing",
-      "no marketplace root: pass --root, set QSM_MARKETPLACE, or write marketplaceRoot into setup.json",
-    );
-  }
-  const nodes = discoverPlugins(root);
-  return nodes.length === 0 && !allowEmpty
-    ? fail("missing", `${root} holds no plugins`)
-    : verb(nodes, root);
-}
-
-/** The probe sees the bin directory install writes to, whether or not the
- * user's PATH has it yet. */
-const shellProbe: Probe = (shell) => {
-  const r = spawnSync("sh", ["-c", shell], {
-    encoding: "utf8",
-    env: { ...env, PATH: `${binDir(env)}:${env.PATH ?? ""}` },
-  });
-  return { code: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
-};
-
-const RELEASES = "https://downloads.claude.ai/claude-code-releases";
-
-/** One GET, five seconds, no retry: the body is the version as plain text. */
-const lookupLatest: ClaudeProbes["latest"] = (channel) =>
-  fetch(`${RELEASES}/${channel}`, { signal: AbortSignal.timeout(5000) })
-    .then(async (res): Promise<Lookup> =>
-      res.ok
-        ? { ok: true, version: (await res.text()).trim() }
-        : { ok: false, reason: `HTTP ${res.status}` },
-    )
-    .catch((e: unknown): Lookup => ({ ok: false, reason: String(e) }));
-
-function whichClaude(): string[] {
-  const r = spawnSync("which", ["-a", "claude"], { encoding: "utf8" });
-  return (r.stdout ?? "").split("\n").filter((l) => l.length > 0);
-}
-
-function claudeVersion(): string | null {
-  const r = spawnSync("claude", ["--version"], { encoding: "utf8", timeout: 10_000 });
-  return r.status === 0 ? r.stdout : null;
-}
-
-const claudeProbes: ClaudeProbes = {
-  env,
-  cwd: process.cwd(),
-  whichAll: whichClaude,
-  version: claudeVersion,
-  latest: lookupLatest,
-};
 
 function selectPlugins(call: Call, nodes: readonly PluginNode[]): string[] | undefined | Outcome {
   const names = stringList(call, "plugins");
@@ -161,33 +94,6 @@ function collected<T>(
     return ok(outcomes, lines);
   }
   return fail(failed === outcomes.length ? "failed" : "partial", lines, outcomes);
-}
-
-function marketplaceName(path: string): string {
-  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
-  if (!isRecord(parsed) || typeof parsed.name !== "string") {
-    throw new Error(`${path} has no name`);
-  }
-  return parsed.name;
-}
-
-/** What an older qsm left on this machine, as `purge` finds it; `check` only reports. */
-function purgeMachine(nodes: readonly PluginNode[], dir: string, check: boolean): PurgeReport {
-  const root = resolve(dir);
-  const marketplace = join(root, ".claude-plugin", "marketplace.json");
-  const name = existsSync(marketplace) ? marketplaceName(marketplace) : "qsm-marketplace";
-  return purge({
-    env,
-    root,
-    marketplace: name,
-    plugins: new Set(nodes.map((n) => n.name)),
-    check,
-  });
-}
-
-function describePurge(r: PurgeReport, check: boolean): string[] {
-  const verb = check ? "would remove" : "removed";
-  return [...r.found.map((f) => `${verb} ${f}`), ...r.blocked.map((b) => `blocked: ${b}`)];
 }
 
 const install: Handler = (call) =>
@@ -276,42 +182,6 @@ const activateVerb: Handler = (call) =>
     );
   });
 
-const doctorVerb: Handler = (call) =>
-  withRoot(call, async (nodes, root) => {
-    const only = optionalString(call, "plugin") ?? null;
-    const claude = only === null ? await claudeChecks(claudeProbes) : [];
-    const verbose = flagArg(call, "verbose");
-    const report = doctor(nodes, {
-      installedPath: join(stateDir(env), "installed.json"),
-      recordPath: buildRecordPath(env),
-      binDir: binDir(env),
-      path: env.PATH ?? "",
-      only,
-      probe: shellProbe,
-      run: bunRunner,
-      activation: bunActivationReader,
-      legacy: purgeMachine(nodes, root, true),
-      claude,
-    });
-    const lines = report.checks.flatMap((c) => {
-      const head = `${c.status} ${c.name}: ${c.detail}`;
-      const show = c.output.length > 0 && (c.status === "FAIL" || verbose);
-      return show
-        ? [
-            head,
-            ...c.output
-              .trimEnd()
-              .split("\n")
-              .map((l) => `  ${l}`),
-          ]
-        : [head];
-    });
-    if (only === null) {
-      lines.push(`${report.pass} pass, ${report.fail} fail, ${report.skip} skip`);
-    }
-    return report.ok ? ok(report, lines.join("\n")) : fail("failed", lines.join("\n"), report);
-  });
-
 function describeFarm(r: FarmReport): string[] {
   const lines: string[] = [];
   if (r.missingBins.length > 0) {
@@ -382,50 +252,14 @@ const buildBinsVerb: Handler = (call) =>
     return collected(outcomes, lines, failed);
   });
 
-/** Every qsm-* executable in a PATH directory or the qsm bin directory. */
-function installedQsmBins(): Set<string> {
-  return new Set(qsmBinsIn([...(env.PATH ?? "").split(":"), binDir(env)]).keys());
-}
-
-function toolsProbes(root: string): ToolsProbes {
-  return {
-    git: (args) => {
-      const r = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
-      return { code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-    },
-    installed: installedQsmBins,
-    mtime: (path) => {
-      try {
-        return statSync(path).mtime;
-      } catch {
-        return null;
-      }
-    },
-  };
-}
-
-const toolsVerb: Handler = (call) =>
-  withRoot(call, (nodes, root) => {
-    const r = compareTools(nodes, toolsProbes(root), flagArg(call, "fetch"));
-    if (r.kind !== "ok") {
-      return fail(r.kind, r.message);
-    }
-    const out = ok(r.report, describeTools(r.report).join("\n"));
-    const onMain = r.report.binaries.some((b) => !b.goneFromMain);
-    return onMain
-      ? out
-      : { ...out, warnings: ["origin/main declares no qsm binaries under plugins/*/qsm.json"] };
-  });
-
 if (import.meta.main) {
   process.exit(
     await runCli(manifest, "qsm-setup", {
       install,
       activate: activateVerb,
-      doctor: doctorVerb,
       relink: relinkVerb,
       "build-bins": buildBinsVerb,
-      tools: toolsVerb,
+      ...healthHandlers,
     }),
   );
 }
