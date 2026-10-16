@@ -147,8 +147,7 @@ describe("qsm-langdev pre-commit hook: markdown line length", () => {
 });
 
 describe("qsm-langdev pre-commit hook: static fixers", () => {
-  // git() trims, so the blob's final newline is put back for the exact comparisons
-  const staged = (root: string, path: string) => `${git(root, "show", `:${path}`)}\n`;
+  const staged = (root: string, path: string) => git(root, "show", `:${path}`);
   const preCommit = (root: string) =>
     runBin(CLI, ["hook", "pre-commit"], { cwd: root, env: tmpEnv() });
   const initRepo = () => {
@@ -166,7 +165,9 @@ describe("qsm-langdev pre-commit hook: static fixers", () => {
     const hook = preCommit(root);
 
     expect(hook.exit).toBe(0);
-    expect(staged(root, "a.ts")).toBe("export const a = 1;\n");
+    expect(staged(root, "a.ts")).toBe("export const a = 1;");
+    // git() trims its output, so the blob's byte size proves the final newline survived
+    expect(git(root, "cat-file", "-s", ":a.ts")).toBe(String("export const a = 1;\n".length));
     expect(staged(root, "a.md")).toContain("* one\n");
   }, 60_000);
 
