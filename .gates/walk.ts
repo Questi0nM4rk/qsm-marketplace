@@ -17,6 +17,11 @@ export function readJson(path: string): unknown {
   return parsed;
 }
 
+/** A parsed JSON object: not null, not an array. The gates' narrowing of what readJson returns. */
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 /** Every file under dir, recursively, skipping node_modules and dist. */
 export function* walk(dir: string): Generator<string> {
   if (!existsSync(dir)) {

@@ -1,7 +1,6 @@
 // qsm.json, the one source of truth for a plugin's binaries and their verbs.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { isRecord } from "./outcome.ts";
 
 export interface CommandArg {
   /** camelCase; a flag is `--kebab-case` on the command line */
@@ -57,6 +56,11 @@ const at = (parent: At, key: string | number): At => ({
 
 function fail(where: At, expected: string): never {
   throw new ManifestError(`${where.file}: ${where.field || "(root)"}: expected ${expected}`);
+}
+
+/** A JSON object: not null, not an array. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function readRecord(v: unknown, where: At): Record<string, unknown> {

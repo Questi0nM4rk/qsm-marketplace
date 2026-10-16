@@ -5,9 +5,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { checkNoun } from "../lib/generate-noun.ts";
-import { isRecord } from "../lib/outcome.ts";
 import { ManifestError, parseManifest, type QsmManifest, toCamel } from "../lib/qsm-manifest.ts";
-import { pluginDirs, readJson, rel, report, root } from "./walk.ts";
+import { isRecord, pluginDirs, readJson, rel, report, root } from "./walk.ts";
 
 export interface PluginFiles {
   readonly manifest: QsmManifest;

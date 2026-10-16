@@ -21,7 +21,6 @@ import {
   type InstallStatus,
   type Step,
 } from "./install-contract.ts";
-import { isRecord } from "./outcome.ts";
 import { binDir, buildRecordPath, type Env, fishCompletionDir } from "./paths.ts";
 import { loadManifest, type QsmManifest } from "./qsm-manifest.ts";
 
@@ -88,6 +87,11 @@ export function sha256(path: string): string {
 /** What the bin farm last compiled, read by `qsm-setup doctor` and `relink`. */
 export interface BuildRecord {
   readonly bins: Readonly<Record<string, { readonly plugin: string; readonly sha256: string }>>;
+}
+
+/** A JSON object: not null, not an array. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function isBuildRecord(v: unknown): v is BuildRecord {

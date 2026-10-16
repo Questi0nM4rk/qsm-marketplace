@@ -11,8 +11,7 @@ import {
   statSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { isRecord } from "../lib/outcome.ts";
-import { pluginDirs, rel, root } from "./walk.ts";
+import { isRecord, pluginDirs, rel, root } from "./walk.ts";
 
 const engineGlob = `/tmp/claude-${process.getuid?.()}/bundled-skills/*/*/plugin-authoring/types/claude-code.d.ts`;
 const [engine] = globSync(engineGlob).toSorted((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);

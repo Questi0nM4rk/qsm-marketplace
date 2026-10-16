@@ -26,8 +26,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { YAML } from "bun";
-import { isRecord } from "../lib/outcome.ts";
-import { root, walk } from "./walk.ts";
+import { isRecord, root, walk } from "./walk.ts";
 
 const [name, ...args] = process.argv.slice(2);
 if (name === undefined) {
