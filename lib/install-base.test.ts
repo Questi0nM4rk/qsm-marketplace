@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { MARKER } from "./completions.ts";
+import { isolatedEnv, runBin } from "./fixtures/cli.ts";
 import { sandboxDir } from "./fixtures/sandbox.ts";
 import { installBase, installScript } from "./install-base.ts";
 import type { InstallContext, InstallResult } from "./install-contract.ts";
@@ -186,7 +187,7 @@ describe("install-base plugin dependencies", () => {
     writeFileSync(join(root, "package.json"), manifest('"dep":"file:./dep"'));
     spawnSync("bun", ["install"], {
       cwd: root,
-      env: { ...process.env, TMPDIR: sandboxDir("qsm-bun-install-") },
+      env: isolatedEnv(sandboxDir("qsm-bun-install-")),
     });
     if (stale) {
       writeFileSync(
@@ -228,15 +229,10 @@ describe("install-base run twice, each run its own process", () => {
   // process, which is how every real install runs.
   test("the second install compiles nothing again", () => {
     const home = sandboxDir("qsm-install-twice-");
-    const env = {
-      PATH: process.env.PATH ?? "",
-      HOME: home,
-      QSM_BIN_DIR: join(home, "bin"),
-      XDG_CONFIG_HOME: join(home, "config"),
-    };
+    const env = isolatedEnv(home, { QSM_BIN_DIR: join(home, "bin") });
     const installer = join(FIXTURE, "scripts/install.ts");
     const compiles = (): { name: string; status: string }[] => {
-      const r = spawnSync("bun", [installer, "--json"], { encoding: "utf8", env });
+      const r = runBin(installer, ["--json"], { env });
       return stepsOf(r.stdout).filter(
         (s) => s.name.startsWith("bin ") || s.name.startsWith("hook "),
       );
@@ -373,8 +369,8 @@ const install = (ctx) => {
 process.exit(await cliMain(install));
 `,
     );
-    const r = spawnSync("bun", [script, "--json"], { encoding: "utf8" });
-    expect(r.status).toBe(0);
+    const r = runBin(script, ["--json"]);
+    expect(r.exit).toBe(0);
     expect(JSON.parse(r.stdout)).toMatchObject({ code: "ok", data: { tool: "noisy" } });
     expect(r.stderr).toContain("noise on stdout");
   });
@@ -398,9 +394,9 @@ process.exit(await activationMain(activation));
     return script;
   }
   const envelope = (args: string[]) => {
-    const r = spawnSync("bun", [activation(), "--json", ...args], { encoding: "utf8" });
+    const r = runBin(activation(), ["--json", ...args]);
     const body: unknown = JSON.parse(r.stdout);
-    return { exit: r.status, body };
+    return { exit: r.exit, body };
   };
 
   test("Activation with an unanswered choice and no terminal", () => {

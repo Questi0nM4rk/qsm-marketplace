@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { runBin } from "./fixtures/cli.ts";
+import { sandboxDir, writeIn } from "./fixtures/sandbox.ts";
 
 const KIT = join(import.meta.dir, "hooks-kit.ts");
 
 /** Runs a script that imports the kit, as a compiled hook would run, with `stdin` piped in. */
 function hook(script: string, stdin: string): { code: number; stdout: string; stderr: string } {
   const code = `import { readHookEvent, runMain } from ${JSON.stringify(KIT)};\n${script}`;
-  const r = spawnSync("bun", ["-e", code], { input: stdin, encoding: "utf8" });
-  return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+  const dir = sandboxDir("qsm-hook-");
+  writeIn(dir, "hook.ts", code);
+  const r = runBin(join(dir, "hook.ts"), [], { input: stdin });
+  return { code: r.exit, stdout: r.stdout, stderr: r.stderr };
 }
 
 describe("readHookEvent", () => {

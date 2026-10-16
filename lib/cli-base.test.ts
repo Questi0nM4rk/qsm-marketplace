@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import {
   type Call,
@@ -15,14 +14,14 @@ import {
   stringList,
 } from "./cli-base.ts";
 import { grouped, manifest } from "./fixtures/cli-fixture.ts";
+import { runBin } from "./fixtures/cli.ts";
 import { isRecord, ok } from "./outcome.ts";
 import { parseManifest } from "./qsm-manifest.ts";
 
 const FIXTURE = resolve(import.meta.dir, "fixtures/cli-fixture.ts");
 
 function run(...argv: string[]) {
-  const r = spawnSync("bun", [FIXTURE, ...argv], { encoding: "utf8" });
-  return { exit: r.status, stdout: r.stdout, stderr: r.stderr };
+  return runBin(FIXTURE, argv);
 }
 
 describe("parseCall", () => {

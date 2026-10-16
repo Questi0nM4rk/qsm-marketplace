@@ -5,9 +5,9 @@
 // each plugin's real unwrap, feed it the real stdout of its own binary
 // called with an unknown verb, and check it reads the envelope loud.
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, resolve } from "node:path";
+import { isolatedEnv, runBin } from "./fixtures/cli.ts";
 import { sandboxDir } from "./fixtures/sandbox.ts";
 import { parseManifest } from "./qsm-manifest.ts";
 
@@ -59,26 +59,15 @@ function candidates(): Candidate[] {
   return found;
 }
 
-/** HOME and every XDG var point into a fresh sandbox: never the real home config. */
-function sandboxEnv(home: string): Record<string, string> {
-  return {
-    PATH: process.env.PATH ?? "",
-    HOME: home,
-    XDG_CONFIG_HOME: join(home, "c"),
-    XDG_DATA_HOME: join(home, "d"),
-  };
-}
-
 /** Calls a plugin's own binary script with an unknown verb under --json and
  * returns its real stdout: the outcome envelope the binary actually prints,
  * not a fixture standing in for one. */
 function unknownVerbStdout(candidate: Candidate): string {
   const home = sandboxDir("qsm-noun-contract-");
-  const r = spawnSync("bun", [resolve(candidate.dir, candidate.script), "no-such-verb", "--json"], {
-    encoding: "utf8",
-    env: sandboxEnv(home),
+  const r = runBin(resolve(candidate.dir, candidate.script), ["no-such-verb", "--json"], {
+    env: isolatedEnv(home),
   });
-  return r.stdout ?? "";
+  return r.stdout;
 }
 
 describe.each(candidates())("$plugin noun contract", (candidate) => {
