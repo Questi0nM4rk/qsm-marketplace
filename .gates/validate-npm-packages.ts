@@ -107,5 +107,5 @@ export function importFindings(dir: string): string[] {
 }
 
 if (import.meta.main) {
-  report("deps", [...pinFindings(root), ...importFindings(root)]);
+  report("npm-packages", [...pinFindings(root), ...importFindings(root)]);
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { sandboxDir, writeIn } from "../lib/fixtures/sandbox.ts";
-import { importFindings, pinFindings } from "./validate-deps.ts";
+import { importFindings, pinFindings } from "./validate-npm-packages.ts";
 
 const pkg = (deps: Record<string, string>): string => JSON.stringify({ dependencies: deps });
 
