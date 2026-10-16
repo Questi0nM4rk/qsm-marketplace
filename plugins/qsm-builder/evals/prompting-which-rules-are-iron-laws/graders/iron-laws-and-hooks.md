@@ -1,5 +1,6 @@
 ---
 type: llm
+focus: last_message
 ---
 
 PASS when it separates rules that must hold every time (no deploy on Friday, no prod database

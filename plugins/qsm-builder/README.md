@@ -12,18 +12,22 @@ rules are written. If the repository ever stops changing, it has nothing left to
 
 ## What it ships
 
-The one path for extending this marketplace: search first, decide the unit, why it exists, spec,
-build, validate, eval. Plus two hooks: one refuses a broken `plugin.json`, one tells the agent
-a plugin's open lens edits and feedback. And one slash command, `/lens [plugin]`, that
-opens a read-only pane of the marketplace, or of one plugin: why it exists, skills and agents,
-dependencies, open tasks.
+One builder skill per kind of addition, each with its steps, hard rules that name the gate or the
+review that checks them, and a done that ends in the gates, the evals and a strict review. Plus two
+hooks: one refuses a broken `plugin.json`, one tells the agent a plugin's open lens edits and
+feedback. And one slash command, `/lens [plugin]`, that opens a read-only pane of the marketplace,
+or of one plugin: why it exists, skills and agents, dependencies, open tasks.
 
 | Surface | Owns |
 | --- | --- |
-| `add-plugin` skill | the order and the file contract for adding a plugin, skill, hook, command, or verb |
+| `add-plugin` skill | a new plugin, or where an addition goes: the search, Why it exists, spec, `plugin.json`, install script, npm pins, dependencies |
+| `add-tool` skill | a CLI bin or verb: `qsm.json`, the `runCli` handler, `fail` and `QsmError`, the generated noun, a test through `runBin` and `isolatedEnv` |
+| `add-hook` skill | a hook as wiring: one `$.<noun>.<verb>()` call, `failure()` in every `.catch`, the events the engine skips, classic hooks |
+| `add-skill` skill | a skill, agent or command: where it goes, its frontmatter and size, its fire, scenario and negative evals |
+| `add-lib` skill | root `lib/` and `lib/fixtures/`: an export only when it deletes two plugin copies, registered with the private-helper gate |
 | `skill-standards` skill | the quality bar for a skill, agent, or command prompt: its purpose first, reasons with rules, evals decide |
 | `prompting` skill | the per-model tables (Claude 5.x, GPT-6) and the sources, loaded when writing or tightening a prompt |
-| manifest check | on `Write` and `Edit` of a `plugin.json`: kebab-case `name`, numeric `version`, non-empty `description`, `author`, string-array `keywords`, `hooks` as a `.json` path (never `null`) |
+| manifest check | on `Write` and `Edit` of a `plugin.json`: kebab-case `name`, a `version`, when present, numeric, non-empty `description`, `author`, string-array `keywords`, `hooks` as a `.json` path (never `null`) |
 | `qsm-builder` binary | the lens: one page of every plugin, why it exists, its dependencies, skills, agents and evals, served live or exported; edits become tasks, never file writes |
 
 ## Install
@@ -50,7 +54,7 @@ edits a file of it.
 ## Caveats
 
 - The skills are guidance; only the manifest check enforces anything.
-- `evals/` holds the trigger and negative cases for these skills; run them with `bun run eval
+- `evals/` holds the fire, scenario and negative cases for these skills; run them with `bun run eval
   qsm-builder`, which evals a copy without `dependencies` because the eval sandbox cannot resolve
   them.
 - The check runs on `Write` and `Edit` only, not on shell or patch edits, and needs function hooks

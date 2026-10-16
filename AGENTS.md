@@ -4,22 +4,11 @@ A minimal, specialist Claude Code marketplace for one senior programmer and the 
 them: straightforward instructions, hooks, and tools that let the agent see the world, verify its
 output, and evaluate its work, so both meet the same expectations. The README's "Why it exists"
 holds the whole of it. The repository root is the marketplace, and every capability is one plugin
-under `plugins/<name>/` that carries its code, its CLI, its skills, its hooks, and its docs. Simple
-and straightforward: we value each other's time and do not overcomplicate. Single maintainer.
+under `plugins/<name>/` that carries its code, its CLI, its skills, its hooks, and its docs. Single
+maintainer: we value each other's time and do not overcomplicate.
 
-## Layout
-
-```text
-.claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-error.ts, qsm-manifest.ts, completions.ts, paths.ts, fs.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/ (sandbox, cli-fixture, cli, git, bin: tests only), nothing else
-plugins/<name>/                   # layer 1: one plugin
-  .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
-  qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
-  package.json + bun.lock         # the plugin's own npm dependencies, only when it has any; the install base runs `bun install --frozen-lockfile` before it compiles
-  lib/ scripts/ skills/ agents/ commands/ hooks/ openspec/
-  README.md                       # always, opens with `## Why it exists`; INSTALL.md + USAGE.md only with a bin
-.gates/                           # bun run validate
-```
+This file holds the ideas and the map. The detailed rules for building each kind of thing live in
+the builder skills of `qsm-builder`, and the gates in `.gates/` check what a machine can check.
 
 ## Architecture: a microkernel with ports
 
@@ -37,135 +26,118 @@ touching its users (Cockburn, ports and adapters).
 | registry | `.claude-plugin/marketplace.json`, installed by qsm-setup |
 | contract | a plugin's CLI verbs in `qsm.json` and the noun generated from them (`$.<noun>`) |
 
-1. The core works alone. A plug-in that replaces a default says in its README's "Why it exists"
-   which default and why it is better.
-2. A plug-in is independent of every other plug-in. A dependency is the exception, and it is
-   written twice: the name in `dependencies` of `.claude-plugin/plugin.json`, which Claude Code
-   installs, and a `Dependencies` requirement in the plugin's spec with one reason per name and a
-   scenario for what fails without it. A dependency has no fallback: without it the plugin fails
-   with `missing` and names what to install.
-3. A plug-in reaches another only through its contract, a CLI verb or the noun, never through its
-   files (Iron Law 2 for code, Iron Law 9 for paths).
+1. The core works alone.
+2. A plug-in is independent of every other plug-in. A dependency is the exception, written in
+   `plugin.json` and in the spec with its reason, and it has no fallback.
+3. A plug-in reaches another only through its contract, a CLI verb or the noun, never its files.
 
-## Iron Laws (proposed in the rewrite, the user reviews here)
+## What we believe
 
-1. **A plugin owns its content.** Skill bodies, agent bodies, code, and docs live under the plugin.
-2. **A plugin imports from root `lib/` and from itself only, never from another plugin.** Shared
-   code that two plugins need goes to `lib/`. Enforced by `validate-no-cross-plugin-import`.
-3. **Docs: `README.md` always, `INSTALL.md` + `USAGE.md` only with a bin, `openspec/` always,
-   nothing else prose-shaped.** Two questions, two files, no overlap: the spec says what the
-   plugin does, README holds everything a consumer on GitHub needs in one self-contained page:
-   why it exists, what it is, install, use, caveats. README may repeat the spec and USAGE; a
-   consumer never opens those. Our surface only: our verbs, our
-   wiring, our caveats. Upstream behaviour gets a link, never a transcription.
-   - **`## Why it exists` is the first `##` section of every README (the root's too), and it is at
-     most five sentences.** Abstract and holistic: the gap in the world without it, the stance it
-     takes, what it refuses to be, and the sentence that says when it would have no reason to
-     exist. No features, no verbs, no install, no file names. It changes only when the reason
-     changes, and then it is rewritten whole. Enforced by `validate-why-it-exists`. "Intent" means
-     only the intent of a piece of work, in its tracker epic.
-   - Which question each document answers, task tool and memory included, is the table in
-     `plugins/qsm-setup/instructions/CLAUDE.md` under "Where things live".
-4. **`SKILL.md` and agent files cap at 12 KB, aim for 8, and there is no `references/`.** Over
-   the cap means two subjects: split into two skills. Expert depth that would be a reference is
-   its own skill or nothing. Enforced by `validate-file-size`.
-5. **One canonical owner per concept.** Search before adding; edit in place; never `v2` copies.
-6. **No versioning, no history in the tree.** When a decision changes, the old form is deleted
-   everywhere it appears: no deprecated markers, no renamed-from notes, no dates, no changelogs,
-   no "previously". Git is the only history. A `plugin.json` carries no `version`: Claude Code
-   then names the plugin's cache after the commit, so `claude plugin update` picks up each new
-   commit; a pinned version keeps the old copy forever. Enforced by `validate-plugin-contracts`.
-7. **The plugin is the install unit.** `scripts/install.ts` MUST be one `installScript` call, a
-   link into the user's bin directory MUST go through `linkBin`, and `cliMain` and
-   `activationMain` MUST parse argv against their built-in manifest, so nothing else in an
-   installer reads `process.argv` (review only); a plugin that needs another names it in the
-   `dependencies` array of its `.claude-plugin/plugin.json`, with its reason in the spec
-   (Architecture, rule 2), and never shells out to a sibling installer. That field is Claude
-   Code's own: `claude plugin install` resolves it and reports `+ 1 dependency: <name>`.
-8. **One plugin, one binary, named after the plugin; its descriptions live in `qsm.json` under
-   `qsm.commands`.** A verb may be several words (`qsm-usage toon encode`), and the generated
-   noun joins them into one method (`$.usage.toonEncode`). Help, completions, and the noun read
-   one source.
-9. **A CLI is a compiled binary on the user's PATH, and reads arguments, `QSM_*` and the
-   harness's `CLAUDE_*` environment variables only; plugin code MUST read HOME, `XDG_*` and
-   `CLAUDE_CONFIG_DIR` only through `lib/paths.ts`, never by name.** Nothing is invoked through a
-   path into this repository, not by a hook, not by a skill, not by an agent; install compiles
-   every bin and hook and links the bins into the user's bin directory, and everything a binary
-   needs at run time is inside it. That is what makes a tool runnable from a test or a shell with
-   no harness and no checkout in the room. Enforced by `validate-no-private-helpers` (the paths).
-10. **No work- or machine-specific content.** Employer names, tenant identifiers, machine paths stay
-    in the machine-local marketplace. This repository is public.
-
-## Where does X go?
-
-1. Every agent needs it on every task: this file, one or two lines per entry.
-2. It is behaviour of one plugin: that plugin, with its spec in `openspec/specs/<name>/spec.md`.
-3. Two plugins need the same code: root `lib/`, and a new root export MUST land in the change that
-   deletes at least two plugin copies of it (review only). A plugin MUST never define its own copy
-   of a helper root `lib/` exports (`isRecord`, `messageOf`, `onPath`, `binPath`, `readStdin`,
-   `claudeDir`, `writeAtomic`); only a hooks-sandbox file may copy one, with root's body and a
-   `// differs: hooks sandbox` marker. Enforced by `validate-no-private-helpers`.
-
-## Operational notes
-
-- **One agent, one tree.** An implementer works in its own temporary worktree; the orchestrator
-  reviews, merges it into its own branch, and deletes it. Two agents never edit one tree: the stop
-  gate scores a tree, and a shared tree blocks the wrong agent.
-- **One logic, two doors; a hook is wiring.** A plugin's behaviour lives in its `lib/`, tested
-  there, and is reached through its CLI verbs (`qsm.json`), which the generated noun also exposes
-  to hooks as `$.<noun>.<verb>()`: `qsm-index reindex <path>` in a shell is
-  `$.index.reindex({ path })` in a hook. A hook is a function hook in `hooks/register.tsx` that
-  calls its own noun and holds no logic, because a hooks module runs in the engine's sandbox (no
-  Node, no `node:fs`, no sqlite) and imports nothing outside its plugin's folder, root `lib/`
-  included. It never listens on `classic.*`, `prompt.section`, `prompt.context` or
-  `prompt.compose`: under managed settings (a Team org's remote settings count) the engine's
-  `cc-plugin-sec-default` skips a user-tier plugin there. Hidden context for the model goes on
-  `prompt.submit` as `context`; the calling agent's cwd is `$.session.cwd()`.
-  Work that outlasts the hook (the engine cuts the session-end chain at 1.5 s) is a verb that starts
-  its own detached child and returns at once, as `qsm-index reindex` does; a hook never runs `sh`.
-  A classic command hook (`hooks/hooks.json` under `hooks`, a binary in `dist/`) exists only for an
-  event with no function form, and its source opens with `// classic: <event> has no function
-  event`; `bun run validate` lists them and fails on one without it. Four exist: langdev's
-  SubagentStop gate and worktrunk's worktree create, worktree remove and notification marker. A
-  `WorktreeCreate` hook prints the bare path. Raw bash is bootstrap glue only.
+- **The best code is the code not written.** Every new file, function or plugin claims something
+  is missing; say the claim, or do not add it.
+- **One shared thing, never a copy.** Search before adding and edit the owner in place, because
+  two copies drift and a fix then lands in one of them.
 - **Loud or working, never silent.** A state that cannot be used is `missing`, `failed`, `worse`
-  or `blocked` with the cause named; a warning is only for a half-state that still works. Spec:
-  the outcome system requirement. A CLI failure MUST be `fail(code, ...)` or a thrown root
-  `QsmError` (`UsageError` for a wrong call), and a plugin never defines an error class that
-  carries an outcome code (review only).
+  or `blocked` with the cause named; a warning is only for a half-state that still works.
+- **One logic, two doors; a hook is wiring.** Behaviour lives in a plugin's `lib/` behind a CLI
+  verb. A person reaches it from a shell, a hook reaches the same verb as `$.<noun>.<verb>()`:
+  `qsm-index reindex <path>` is `$.index.reindex({ path })`.
 - **Evals over unit tests.** A change is proved by the least work that runs the real path end to
-  end; a unit test only for logic an eval cannot reach. A skill's or agent's eval is
-  `bun run eval <plugin>` (`evals/` in the plugin). Single user, personal tools: no test count goal.
-  A test MUST spawn a CLI with `runBin` and `isolatedEnv`, write a fake binary with `fakeBin`, and
-  build a git repo with `lib/fixtures/git.ts`, and never spreads `process.env` into a child
-  (the spread enforced by `validate-no-private-helpers`, the rest review only).
-- **A test leaves no temp behind.** The `bun test` preload `lib/fixtures/sandbox.ts` points TMPDIR
-  at one dir per run, removes each `sandboxDir` after its test, and fails the run naming every
-  leftover; `validate-test-temp` fails on `mkdtemp`, `mkdtempSync` or `tmpdir()` in
-  any test file or test-only helper, so a test's temp dir is `sandboxDir`.
-- **Every seam proves itself, or the gate fails loud** (spec: hooks prove seams and behaviour, fail
-  loud). One reader per seam in `hooks/`: `bun test` feeds binary output, `claude plugin test` feeds
-  shapes; a stub alone is never proof. Every `.catch` in a hooks module with a noun MUST call the
-  generated `failure()`, which toasts `<plugin> ERROR: <event>: <reason>` and logs, before it
-  applies its own open/closed policy (review only). A classic command hook's `bun test` spawns it
-  on stdin.
-- **Types are shipped, never guessed.** `bun run plugin-types` regenerates `.claude/types/`
-  (gitignored); every hooks module typechecks against it through its `hooks/tsconfig.json`, which
-  MUST extend the root `tsconfig.hooks.json` and list only includes that exist, run by
-  `bun run typecheck`. An IDE showing `Cannot find module 'claude-code'` on `hooks/register.tsx` is
-  using the wrong project; the gate is the verdict. A plugin that adds a noun commits its contract,
-  `types/index.d.ts`, generated by `lib/generate-noun.ts` and named in plugin.json as `types`. A
-  hooks module never shells out to a sibling's bin by path.
-- **One pin per package.** An npm package MUST be pinned to one exact version in the package.json
-  of every plugin that imports it, and root `lib/` imports none. Enforced by
-  `validate-npm-packages`. A Python tool MUST be installed with `uv tool install` (review only).
-- **A tool cleans before and after itself.** An installer purges every older version's artifact
-  (link, PATH block, data dir, backup) before it writes and names each removal; a second run
-  removes nothing. Anything that creates a temp directory writes the full cleanup; a `finally` is
-  not it. Spec: `qsm-setup`, install purge.
-- `bun run validate`, `bun run lint`, `bun run typecheck`, `bun test ./ ./.gates` before a commit
-  (bun skips a dot directory unless it is named). `bun test` skips `plugins/*/hooks/*.test.ts` (they
-  import `claude-code/testing`); `bun run test:hooks` runs those and `claude plugin validate` over
-  every plugin, and skips visibly without `claude` on PATH.
+  end; a unit test only for logic the real run cannot reach. No test count goal.
+- **Clean before and after.** A tool leaves the machine as it found it, plus what it was asked
+  to add: an installer removes what older versions left, and a test leaves no temp dir.
+- **No history in the tree.** When a decision changes, the old form is deleted everywhere. Git is
+  the only history.
+- **Public, so nothing machine-specific.** No employer names, tenant identifiers or machine paths.
+
+## Iron Laws
+
+Each law is the short form; the skill named after it holds the detail.
+
+1. **A plugin owns its content**: skills, agents, code and docs live under the plugin (add-plugin).
+2. **A plugin imports root `lib/` and itself only**; code two plugins need goes to `lib/` (add-lib).
+3. **Docs: `README.md` always, opening with `## Why it exists` in at most five sentences;
+   `INSTALL.md` and `USAGE.md` only with a bin; `openspec/` always; nothing else prose-shaped.**
+   README is everything a consumer on GitHub needs, the spec says what the plugin does, and
+   upstream behaviour gets a link (add-plugin). Which question each document answers is the table
+   in `plugins/qsm-setup/instructions/CLAUDE.md` under "Where things live".
+4. **A `SKILL.md` or agent file caps at 12 KB, aims for 8, and has no `references/`**; over the
+   cap is two skills (add-skill).
+5. **One canonical owner per concept**: search, edit in place, never a `v2` copy.
+6. **No versioning, no history in the tree**: no deprecated markers, renamed-from notes, dates or
+   changelogs, and no `version` in `plugin.json` (add-plugin).
+7. **The plugin is the install unit**: `scripts/install.ts` is built on `lib/install-base.ts`,
+   and a plugin that needs another names it in `dependencies` (add-plugin).
+8. **One plugin, one binary, named after the plugin**, its verbs described in `qsm.json`; help,
+   completions and the noun read that one source (add-tool).
+9. **A CLI is a compiled binary on the user's PATH** that reads arguments and `QSM_*` and
+   `CLAUDE_*` variables only; nothing runs through a path into this repository (add-tool).
+10. **No work- or machine-specific content**, because this repository is public.
+
+## Where things live
+
+```text
+.claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
+lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-error.ts, qsm-manifest.ts, completions.ts, paths.ts, fs.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/ (sandbox, cli-fixture, cli, git, bin, plugin-fixture: tests only), nothing else
+plugins/<name>/                   # layer 1: one plugin
+  .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
+  qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
+  package.json + bun.lock         # the plugin's own npm dependencies, only when it has any
+  lib/ scripts/ skills/ agents/ commands/ hooks/ evals/ openspec/
+  README.md                       # always; INSTALL.md + USAGE.md only with a bin
+.gates/                           # the checks behind bun run validate, typecheck, test:hooks, eval
+```
+
+- Every agent needs it on every task: this file, one or two lines per entry.
+- It is behaviour of one plugin: that plugin, with its spec in `openspec/specs/<name>/spec.md`.
+- Two plugins need the same code: root `lib/`, only once the second copy exists.
+
+## Which builder skill
+
+Each skill of `qsm-builder` gives the steps, the hard rules with the gate that checks each one, and
+what done means, ending in a `strict-reviewer` review.
+
+| You are adding | Skill |
+| --- | --- |
+| a new plugin, or deciding where something goes | add-plugin |
+| a CLI bin or a verb, its errors and its test | add-tool |
+| a hook | add-hook |
+| a skill, an agent or a command, and its evals | add-skill |
+| code or a test fixture in root `lib/` | add-lib |
+| the quality bar of any prompt | skill-standards |
+
+## What the gates check
+
+| Gate | Checks |
+| --- | --- |
+| `validate-plugin-contracts` | manifests, marketplace entries, skill, agent and command frontmatter, hooks.json, classic hook markers |
+| `validate-file-size` | a skill or agent file under 12 KB, no `references/` |
+| `validate-no-cross-plugin-import` | a plugin imports root `lib/` and itself only; `lib/` imports `lib/` only |
+| `validate-generated` | the noun and types derived from `qsm.json`, the root README's generated block |
+| `validate-why-it-exists` | every README opens with `## Why it exists`, five sentences at most |
+| `validate-dependencies` | `plugin.json` dependencies match the spec's Dependencies requirement |
+| `validate-npm-packages` | one exact pin per npm package, declared where imported, none in `lib/` |
+| `validate-no-private-helpers` | no private copy of a root helper, HOME and XDG read only in `lib/paths.ts`, no `process.env` spread in a test |
+| `validate-test-temp` | test code makes temp dirs through `sandboxDir` only |
+| `typecheck-hooks` | every hooks module typechecks against the engine types |
+| `test-hooks` | `claude plugin validate` and the hooks tests of every plugin |
+| `plugin-eval` | `bun run eval <plugin>`: the skill and agent evals |
+
+## Before a commit
+
+```text
+mise exec -- bun run validate
+mise exec -- bun run lint
+mise exec -- bun run typecheck
+mise exec -- bun test ./ ./.gates
+mise exec -- bun run test:hooks
+```
+
+- `bun test` skips a dot directory unless it is named, and skips `plugins/*/hooks/*.test.ts`;
+  `test:hooks` runs those and skips visibly without `claude` on PATH.
+- `bun run plugin-types` regenerates the engine types the hooks typecheck against.
+- `bun run eval <plugin>` after a change to a skill or agent.
+- One agent, one tree: an implementer works in its own worktree, and the orchestrator reviews,
+  merges and deletes it, because the stop gate scores a whole tree.
 - The langdev guard blocks `--no-verify`; a person lets a measured regression pass once with
   `QSM_LANGDEV_ALLOW="<why>"` before the command, which always asks.

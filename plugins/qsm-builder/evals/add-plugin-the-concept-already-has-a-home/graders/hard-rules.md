@@ -1,5 +1,6 @@
 ---
 type: llm
+focus: last_message
 ---
 
 Intent of this eval: the person asks for something an existing plugin already owns; they trust the

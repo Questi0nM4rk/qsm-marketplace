@@ -8,24 +8,21 @@ qsm-builder helps a developer extend this marketplace.
 
 ### Requirement: Plugin scaffolding and content placement
 
-The plugin SHALL offer a skill, add-plugin, that is the checklist for adding anything to this
-marketplace: a new plugin for one capability, or a skill, agent, command, hook, CLI verb or document
-inside a plugin that already exists. Its order SHALL be search for an existing home, why it exists,
-spec, build, proof, and its opening SHALL say that purpose in plain words. For any addition, the
-skill SHALL search the marketplace for the same concept before writing anything, and SHALL edit an
-existing canonical home in place rather than duplicate it. For a new plugin, the skill SHALL
-scaffold its manifest, its command metadata, a README opening with its why-it-exists section written
-before the specification, and a specification written before the build. For every addition it SHALL
-require a passing validation run plus an empirical check that the new surface appears in a fresh
-session before the task is done.
+The plugin SHALL offer a skill, add-plugin, for adding a whole new plugin or deciding whether a
+request is a new plugin or content in one that exists. For any addition it SHALL search the
+marketplace for the same concept before writing anything, and SHALL edit an existing owner in
+place rather than duplicate it. For a new plugin it SHALL require a README opening with its
+why-it-exists section written before the specification, a specification written before the build,
+a `plugin.json` without `version`, an install script built on the shared install base, and each
+dependency written in the manifest and in the spec. It SHALL hand each part to its own builder
+skill (add-tool, add-hook, add-skill, add-lib), carry hard rules each naming its gate or review,
+and define done as the repository gates, the kind's own proof and a strict-reviewer review.
 
 #### Scenario: Developer asks for a new capability
 
 - **WHEN** a developer asks to add a capability that has no plugin yet
-- **THEN** the skill SHALL scaffold one plugin directory carrying its manifest, command metadata,
-  README opening with its why-it-exists section, specification, and code, and SHALL require the
-  developer to run validation and confirm the new surface appears in a fresh session before the task
-  is done
+- **THEN** the skill SHALL search first, write why it exists and the spec before the build, and
+  SHALL NOT call the work done until the gates and the review pass
 
 #### Scenario: The concept already has a home
 
@@ -34,12 +31,75 @@ session before the task is done.
 - **THEN** the skill SHALL edit the existing document in place instead of
   creating a new one
 
-#### Scenario: A hook added to an existing plugin
+#### Scenario: A part of an existing plugin
 
-- **WHEN** a developer asks to add a hook, a skill or a CLI verb to a plugin
-  that exists
-- **THEN** the skill SHALL run the same search, why it exists, spec, build and proof
-  order and SHALL require the fresh-session check before the task is done
+- **WHEN** a developer asks to add a hook, a skill or a CLI verb to a plugin that exists
+- **THEN** the skill SHALL name the builder skill that owns that part
+
+### Requirement: Building a CLI verb
+
+The plugin SHALL offer a skill, add-tool, for adding a CLI bin or a verb. It SHALL require the verb
+declared in `qsm.json` and handled through `runCli`, its failures as `fail` or a thrown `QsmError`,
+its environment read through `lib/paths.ts`, the generated noun refreshed with the manifest, and a
+test that drives the real binary through `runBin` and `isolatedEnv` with temp dirs from
+`sandboxDir`. It SHALL carry hard rules each naming its gate or review, and define done as the
+repository gates, one real run of the verb and a strict-reviewer review.
+
+#### Scenario: A test spreads the whole environment
+
+- **WHEN** a developer offers a CLI test that spreads `process.env` into the child or makes its own
+  temp dir
+- **THEN** the skill SHALL refuse it and name `isolatedEnv` and `sandboxDir` as the replacement
+
+### Requirement: Building a hook
+
+The plugin SHALL offer a skill, add-hook, for adding a hook. It SHALL require the logic in a verb
+of the hook's own plugin and the hook as one call of its noun, every `.catch` calling the
+generated `failure()` before its policy, no listener on the events the engine skips under managed
+settings, a classic command hook only for an event with no function form, and a hooks test run
+through `claude plugin test`. It SHALL define done as the repository gates, `bun run test:hooks`,
+a real run of the verb and a strict-reviewer review.
+
+#### Scenario: Logic sits in a hook
+
+- **WHEN** a developer asks to add a hook whose rule is written inside the hooks module
+- **THEN** the skill SHALL move the rule into a verb of the plugin, have the hook call it, and
+  require `failure()` in its `.catch` and the hooks test before done
+
+### Requirement: Building a skill, agent or command
+
+The plugin SHALL offer a skill, add-skill, for adding a skill, an agent or a command to a plugin
+that exists. It SHALL search for an existing owner before writing, choose the file kind, require the
+eval cases (fire, behaviour, negative) before the body, and carry numbered hard rules each with its
+reason and its enforcing gate or "review". It SHALL define done as the repository gates, the
+plugin's eval and a strict-reviewer review of the diff with those rules as the checklist, and it
+SHALL point to the skill-standards skill for the quality bar instead of repeating it.
+
+#### Scenario: A developer asks for a new skill
+
+- **WHEN** a developer asks to add a skill to a plugin
+- **THEN** the skill SHALL plan the eval cases with the skill, and SHALL NOT call the work done
+  until the gates, `bun run eval <plugin>` and the review pass
+
+### Requirement: Adding to the shared kit
+
+The plugin SHALL offer a skill, add-lib, for code that is about to go into root `lib/` or
+`lib/fixtures/`. It SHALL accept a new export only in the change that deletes at least two plugin
+copies of it, SHALL require a helper a plugin could copy to be registered with the private-helper
+gate and in the AGENTS.md layout, and SHALL keep `lib/` free of plugin names, plugin imports and
+npm packages. It SHALL define done as the repository gates, a shortstat whose deletions exceed its
+additions and a strict-reviewer review.
+
+#### Scenario: A helper with one consumer
+
+- **WHEN** a developer asks to move a helper that one plugin uses into `lib/` for later
+- **THEN** the skill SHALL refuse it and say the export lands with the deletion of two copies
+
+#### Scenario: Two plugins share a helper
+
+- **WHEN** two plugins each define the same helper
+- **THEN** the skill SHALL move it to `lib/`, delete both copies, register it with the
+  private-helper gate and the layout, and show the shortstat
 
 ### Requirement: Skill authoring standards
 

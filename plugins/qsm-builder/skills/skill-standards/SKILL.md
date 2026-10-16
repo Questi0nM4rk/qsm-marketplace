@@ -1,15 +1,15 @@
 ---
 name: skill-standards
-description: "Use when writing, reviewing, refactoring, or cutting a skill, agent, or command prompt in this marketplace: how it opens, what its description must do, what the body holds, and the eval that decides whether it is kept. Triggers: write a skill, review this skill, improve this skill, is this skill any good, skill description, should this be a skill, write an agent prompt, napis skill, zkontroluj skill. The prompting guide is the prompting skill; the file contract of a plugin is the add-plugin skill."
+description: "Use when writing, reviewing, refactoring, or cutting a skill, agent, or command prompt in this marketplace: how it opens, what its description must do, what the body holds, and the eval that decides whether it is kept. Triggers: write a skill, review this skill, improve this skill, is this skill any good, skill description, should this be a skill, write an agent prompt, napis skill, zkontroluj skill. The prompting guide is the prompting skill; building one into a plugin is add-skill; the file contract of a plugin is the add-plugin skill."
 ---
 
 # Skill Standards
 
 The agent that reads a skill has none of our context. Give it why the skill exists and what done
-looks like, and it decides well in the case the skill never named. This is the bar for a skill,
-an agent or a command prompt. The prompting guide is the prompting skill, file placement is
-add-plugin. The scope is always smaller than the agent thinks: the simplest version that does the
-job is the right one.
+looks like, and it decides well in the case the skill never named. This is the bar for a skill, an
+agent or a command prompt. The prompting guide is the prompting skill, building one into a plugin is
+add-skill. The scope is always smaller than the agent thinks: the simplest version that does the job
+is the right one.
 
 ## Shape
 

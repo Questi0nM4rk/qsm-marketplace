@@ -1,5 +1,6 @@
 ---
 type: llm
+focus: last_message
 ---
 
 PASS when it does not hand out model-specific phrasing as fact, and says what differs between models
