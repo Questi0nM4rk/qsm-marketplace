@@ -3,24 +3,20 @@
 // the frame. Both are asserted here, on the composition itself.
 
 import { describe, expect, test } from "bun:test";
-import { chmodSync, writeFileSync } from "node:fs";
+import { chmodSync } from "node:fs";
 import { join } from "node:path";
 import { writeCache } from "./cache.ts";
 import type { GitState } from "./git.ts";
 import { abandonRefresh, claimRefresh, gitCacheName, resolveGit, storeGit } from "./gitcache.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
-/** Runs `use` with a cache directory under a parent nobody may write into: a
- * full disk, a read-only temporary directory, or one another account owns. The
- * parent is unsealed afterwards, or the sandbox cleanup is denied too. */
-function withUnwritableCacheDir<T>(use: (dir: string) => T): T {
+/** A cache directory under a parent nobody may write into: a full disk, a
+ * read-only temporary directory, or one another account owns. The parent stays
+ * empty, so removing it needs no unsealing. */
+function unwritableCacheDir(): string {
   const parent = sandboxDir("qsm-statusline-gitcache-");
   chmodSync(parent, 0o500);
-  try {
-    return use(join(parent, "cache"));
-  } finally {
-    chmodSync(parent, 0o700);
-  }
+  return join(parent, "cache");
 }
 
 const NOW = 1_800_000_000_000;
@@ -69,7 +65,7 @@ describe("resolveGit", () => {
   });
 
   test("a cache directory that cannot be read leaves the segment empty", () => {
-    expect(withUnwritableCacheDir((dir) => resolveGit(dir, CWD, NOW, MAX_AGE_MS))).toEqual({
+    expect(resolveGit(unwritableCacheDir(), CWD, NOW, MAX_AGE_MS)).toEqual({
       state: null,
       stale: true,
     });
@@ -91,12 +87,11 @@ describe("claimRefresh", () => {
   });
 
   test("a cache directory that cannot be written claims nothing and throws nothing", () => {
-    withUnwritableCacheDir((dir) => {
-      expect(claimRefresh(dir, CWD, NOW)).toBe(false);
-      expect(() => {
-        abandonRefresh(dir, CWD);
-      }).not.toThrow();
-    });
+    const dir = unwritableCacheDir();
+    expect(claimRefresh(dir, CWD, NOW)).toBe(false);
+    expect(() => {
+      abandonRefresh(dir, CWD);
+    }).not.toThrow();
   });
 });
 
@@ -109,17 +104,12 @@ describe("storeGit", () => {
   });
 
   test("a cache directory that cannot be written reports false, and the refresher lives", () => {
-    expect(withUnwritableCacheDir((dir) => storeGit(dir, CWD, STATE, NOW))).toBe(false);
+    expect(storeGit(unwritableCacheDir(), CWD, STATE, NOW)).toBe(false);
   });
 
   test("a directory that exists but is sealed is the same answer", () => {
     const dir = sandboxDir("qsm-statusline-gitcache-");
-    writeFileSync(join(dir, "marker"), "");
     chmodSync(dir, 0o500);
-    try {
-      expect(storeGit(dir, CWD, STATE, NOW)).toBe(false);
-    } finally {
-      chmodSync(dir, 0o700);
-    }
+    expect(storeGit(dir, CWD, STATE, NOW)).toBe(false);
   });
 });
