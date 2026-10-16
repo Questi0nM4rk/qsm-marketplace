@@ -122,21 +122,27 @@ function isBreakdown(value: unknown): boolean {
   );
 }
 
+const isBreakdownOrNull = (value: unknown): boolean => value === null || isBreakdown(value);
+
+function isTurnUsage(usage: unknown): boolean {
+  return (
+    isPlainObject(usage) &&
+    isStr(usage.model) &&
+    isNum(usage.input_tokens) &&
+    isNum(usage.output_tokens) &&
+    isNum(usage.cache_read_input_tokens) &&
+    isNum(usage.cache_creation_input_tokens)
+  );
+}
+
 function isTurn(turn: Record<string, unknown>): boolean {
-  const { usage } = turn;
   return (
     isNum(turn.at) &&
     isNum(turn.durationMs) &&
     isStr(turn.reason) &&
     isStrOrNull(turn.agentId) &&
     isNumOrNull(turn.costUsd) &&
-    (usage === null ||
-      (isPlainObject(usage) &&
-        isStr(usage.model) &&
-        isNum(usage.input_tokens) &&
-        isNum(usage.output_tokens) &&
-        isNum(usage.cache_read_input_tokens) &&
-        isNum(usage.cache_creation_input_tokens)))
+    (turn.usage === null || isTurnUsage(turn.usage))
   );
 }
 
@@ -157,21 +163,28 @@ function isSaving(row: Record<string, unknown>): boolean {
   return isStr(row.pattern) && isNum(row.count) && isNum(row.fromTokens) && isNum(row.toTokens);
 }
 
+/** The use counts, one count map per kind. */
+function isUses(uses: unknown): boolean {
+  return (
+    isPlainObject(uses) &&
+    isCounts(uses.skills) &&
+    isCounts(uses.commands) &&
+    isCounts(uses.agents) &&
+    isCounts(uses.tools)
+  );
+}
+
 /** Checks every field the ledger reads from a stored record, down to the rows. */
 function isSessionRecord(value: unknown): value is SessionRecord {
   return (
     isPlainObject(value) &&
     isStr(value.id) &&
     isNum(value.startedAt) &&
-    (value.start === null || isBreakdown(value.start)) &&
+    isBreakdownOrNull(value.start) &&
     everyRow(value.turns, isTurn) &&
     isNumOrNull(value.costUsd) &&
     everyRow(value.injected, isInjection) &&
-    isPlainObject(value.uses) &&
-    isCounts(value.uses.skills) &&
-    isCounts(value.uses.commands) &&
-    isCounts(value.uses.agents) &&
-    isCounts(value.uses.tools) &&
+    isUses(value.uses) &&
     everyRow(value.toon, isSaving) &&
     isNum(value.toolMessagesSeen)
   );
