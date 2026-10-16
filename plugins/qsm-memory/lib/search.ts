@@ -3,7 +3,7 @@
 
 import type { Database } from "bun:sqlite";
 import { basename } from "node:path";
-import { fail } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { projectOf } from "./project.ts";
 
 export interface SearchOptions {
@@ -67,7 +67,9 @@ export function sinceCutoff(since: string, now: number): string {
   }
   const parsed = Date.parse(since);
   if (Number.isNaN(parsed)) {
-    fail("usage", `--since takes Nd or a date (got '${since}')`, "e.g. --since 7d or 2026-09-30");
+    throw new QsmError("usage", `--since takes Nd or a date (got '${since}')`, {
+      next: "e.g. --since 7d or 2026-09-30",
+    });
   }
   return new Date(parsed).toISOString();
 }

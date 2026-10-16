@@ -10,11 +10,11 @@ in, as text, searchable; the transcript file on disk is the full context.
 ### Requirement: The archive is one database per machine
 
 `qsm-memory` SHALL keep everything in one SQLite file, `$XDG_DATA_HOME/qsm-memory/memory.db`
-(default `~/.local/share/qsm-memory/memory.db`); `QSM_MEMORY_DB` SHALL override the path. The
-first write SHALL create the directory and the file with owner-only permissions (0600) and WAL
-journaling, so two sessions ending together both write; processes that open a missing database at
-once SHALL all succeed, one creating it and the rest opening it. The archive is machine data: nothing in it
-is shared, synced, or committed, and no verb SHALL delete a saved session or turn.
+(default `~/.local/share/qsm-memory/memory.db`); `QSM_MEMORY_DB` SHALL override the path. The first
+write SHALL create the directory and the file with owner-only permissions (0600) and WAL journaling,
+so two sessions ending together both write; processes that open a missing database at once SHALL all
+succeed, one creating it and the rest opening it. The archive is machine data: nothing in it is
+shared, synced, or committed, and no verb SHALL delete a saved session or turn.
 
 #### Scenario: the first save creates the database with owner-only permissions
 
@@ -48,10 +48,10 @@ are stripped from a typed one. A transcript with no human turn, and any transcri
 `<session-id>/subagents/`, SHALL be skipped with the reason named, and a skipped transcript SHALL be
 recorded with its mtime so `list --unsaved` and `doctor` do not count it again until the file
 changes; saving the session once it has a human turn SHALL delete that record, and opening an
-archive SHALL delete a record whose session is already saved. The title SHALL be the last `ai-title` record's `aiTitle`, else the first human turn cut to
-80 characters. The project SHALL be the main checkout root of `cwd` (the parent of
-`git rev-parse --git-common-dir`, run with `LC_ALL=C` so the refusals it reads are English in any
-locale), or `cwd` itself outside git.
+archive SHALL delete a record whose session is already saved. The title SHALL be the last `ai-title`
+record's `aiTitle`, else the first human turn cut to 80 characters. The project SHALL be the main
+checkout root of `cwd` (the parent of `git rev-parse --git-common-dir`, run with `LC_ALL=C` so the
+refusals it reads are English in any locale), or `cwd` itself outside git.
 
 #### Scenario: a transcript saves as text and nothing else
 
@@ -182,8 +182,8 @@ When nothing matches the output SHALL be `no session matches` and nothing else.
 
 - **WHEN** `list --since "last week"` or `search x --since 7days` runs
 - **THEN** it exits `usage` naming the value and the accepted forms, and prints no session; the
-  message appears once, with no code written into it, and the next step follows on its own
-  `  next:` line, never as a warning
+  message appears once, after the shared `usage:` prefix, and the next step follows on its own
+  `next:` line, never as a warning
 
 #### Scenario: --since narrows to sessions that ended after the date
 
@@ -194,15 +194,15 @@ When nothing matches the output SHALL be `no session matches` and nothing else.
 
 `qsm-memory show <session-id>` SHALL print the session's saved text turns in order, each prefixed
 `#<seq> <role>`. `show <session-id> --full` SHALL instead read the transcript file at the path
-stored with the session and print every conversation turn in it, tool calls as `#<n> tool <name>
-<input>` and tool results as `#<n> result: <text>`, numbered by position in the file. When that
-file is gone, `--full` SHALL fail as `missing`, name the path, and say the saved text is all that
-is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at most 20 000
-characters of turns, so a whole session never lands in the reader's context, and ends with
-`next: --lines <b+1>-<last>` when more remain, `b` the last turn printed and `last` the last turn
-asked for. A first turn longer than the budget alone is cut there and says
-`[turn cut at 20000 of <n> characters]`; the rest of that turn is not readable through show. A session id prefix that
-matches one session SHALL be accepted.
+stored with the session and print every conversation turn in it, tool calls as
+`#<n> tool <name> <input>` and tool results as `#<n> result: <text>`, numbered by position in the
+file. When that file is gone, `--full` SHALL fail as `missing`, name the path, and say the saved
+text is all that is left. `--lines a-b` SHALL print only turns `a` through `b`. One call prints at
+most 20 000 characters of turns, so a whole session never lands in the reader's context, and ends
+with `next: --lines <b+1>-<last>` when more remain, `b` the last turn printed and `last` the last
+turn asked for. A first turn longer than the budget alone is cut there and says
+`[turn cut at 20000 of <n> characters]`; the rest of that turn is not readable through show. A
+session id prefix that matches one session SHALL be accepted.
 
 #### Scenario: show prints the conversation text
 
@@ -272,11 +272,11 @@ of a blob (an OCR transcription) is derived and never replaces the blob.
 
 ### Requirement: Notes are the one thing an agent writes
 
-`qsm-memory note <text>` SHALL write a short-term note for the working directory's project (the
-main checkout root, or the directory outside git), with a from-date and an expiry of 14 days;
-`--expires <N>` sets another, N a number of days, `--keep` sets none, `--global` writes it for every project. Text
-matching a secret shape SHALL be refused with `secret`. `qsm-memory notes` SHALL print the
-project's current notes and the global ones, newest first, each as `<id> from <date> until
+`qsm-memory note <text>` SHALL write a short-term note for the working directory's project (the main
+checkout root, or the directory outside git), with a from-date and an expiry of 14 days;
+`--expires <N>` sets another, N a number of days, `--keep` sets none, `--global` writes it for every
+project. Text matching a secret shape SHALL be refused with `secret`. `qsm-memory notes` SHALL print
+the project's current notes and the global ones, newest first, each as `<id> from <date> until
 <date|kept>: <text>`; `--all` prints every project's. `note --drop <id>` SHALL remove one.
 Expired notes SHALL be purged on every read. A handoff is a note whose text begins with the task
 id; there is no other verb for it.
@@ -306,22 +306,22 @@ id; there is no other verb for it.
 `qsm-memory orient [--cwd <dir>]` SHALL print one block of at most 1500 characters, built with no
 model call, from the project of `cwd`: the last three saved sessions, each with its date, title,
 count of user turns and what it left behind, then the in-progress tasks of the repository and the
-epic each belongs to, the project's current notes, and one line on how to search (`qsm-memory
-search <words>`, then `qsm-memory show <id>`). What a session left behind is read, not guessed:
-the commits on the branch checked out at `cwd` whose committer date falls between the session's
-start and end (their count and the newest subject), from `git log`, and the tasks the task tool
-reports closed in the same window (their ids); a session with neither shows no outcome. A title
-alone says what a session was about, never what it changed, so the next session would have to
-search to learn it. Outside a git repository the commits SHALL be left out silently; a `git` that
-fails inside one SHALL fail the verb. The project key of `cwd` follows the same rule: only "not a git repository" or a
-directory that is gone means `cwd` itself; a `git` that is missing or refuses fails the verb.
-The tasks come from the task tool (qsm-tasks), run by the binary for each of the first three
-tasks and its parent. When the project has no task tracker the task lines SHALL be
-left out; a project with a tracker and no task tool on `PATH` SHALL fail the verb as `missing`,
-naming qsm-tasks as the plug-in that installs it, and a task tool that fails SHALL fail it as
-`failed` with the reason. Notes SHALL take the room the other lines leave, newest first, then a
-count of the older ones; under 100 characters of room they SHALL be a count only. The block SHALL
-never exceed 1500 characters. With `--json` the block is `data.text`.
+epic each belongs to, the project's current notes, and one line on how to search
+(`qsm-memory search <words>`, then `qsm-memory show <id>`). What a session left behind is read, not
+guessed: the commits on the branch checked out at `cwd` whose committer date falls between the
+session's start and end (their count and the newest subject), from `git log`, and the tasks the task
+tool reports closed in the same window (their ids); a session with neither shows no outcome. A title
+alone says what a session was about, never what it changed, so the next session would have to search
+to learn it. Outside a git repository the commits SHALL be left out silently; a `git` that fails
+inside one SHALL fail the verb. The project key of `cwd` follows the same rule: only "not a git
+repository" or a directory that is gone means `cwd` itself; a `git` that is missing or refuses fails
+the verb. The tasks come from the task tool (qsm-tasks), run by the binary for each of the first
+three tasks and its parent. When the project has no task tracker the task lines SHALL be left out; a
+project with a tracker and no task tool on `PATH` SHALL fail the verb as `missing`, naming qsm-tasks
+as the plug-in that installs it, and a task tool that fails SHALL fail it as `failed` with the
+reason. Notes SHALL take the room the other lines leave, newest first, then a count of the older
+ones; under 100 characters of room they SHALL be a count only. The block SHALL never exceed 1500
+characters. With `--json` the block is `data.text`.
 
 #### Scenario: the block names sessions, the task and its epic, notes and how to search
 
@@ -372,16 +372,17 @@ never exceed 1500 characters. With `--json` the block is `data.text`.
 
 ### Requirement: Hooks save at the end and brief at the start
 
-The plugin SHALL ship one hooks module, `hooks/register.tsx`, with function hooks that call its
-own `$.memory` noun and hold no rule of their own. `session.end` and `session.start` SHALL run
+The plugin SHALL ship one hooks module, `hooks/register.tsx`, with function hooks that call its own
+`$.memory` noun and hold no rule of their own. `session.end` and `session.start` SHALL run
 `save --catch-up --detach`, which saves the ending session too. The first `prompt.submit` of a
-session, and the first after a `/clear` or a `session.compact`, SHALL run `orient --cwd <cwd>`
-and attach its text as hidden `context` on `prompt.submit`, never on a `classic.*` event,
+session, and the first after a `/clear` or a `session.compact`, SHALL run `orient --cwd <cwd>` and
+attach its text as hidden `context` on `prompt.submit`, never on a `classic.*` event,
 `prompt.section` or `prompt.compose`. `save --detach` SHALL start the same save in a detached
 `qsm-memory` process and return at once, the child's outcome appended to `save.log` beside the
-archive, every line led by an ISO timestamp (`save --log`, which stamps no other verb), so the 1.5 s the engine gives the session-end chain covers only the start. No hook SHALL
-block the event: any failure SHALL be toasted as `qsm-memory ERROR: <event>: <reason>` and the
-event goes on; a failed save leaves the transcript for the next start.
+archive, every line led by an ISO timestamp (`save --log`, which stamps no other verb), so the 1.5 s
+the engine gives the session-end chain covers only the start. No hook SHALL block the event: any
+failure SHALL be toasted as `qsm-memory ERROR: <event>: <reason>` and the event goes on; a failed
+save leaves the transcript for the next start.
 
 #### Scenario: session end saves the transcript
 
@@ -537,8 +538,8 @@ it saves more than it costs.
 | Secret shapes | ~10 regexes, ours | Only `note` refuses; the archive holds only the text a person and the model wrote. |
 | Tests | `bun test`, `:memory:` database, `mkdtempSync`, a transcript builder, a stub task tool | Nothing touches the real archive or the real transcript directory. |
 
-Two dependencies, the MCP SDK with `zod`, in the plugin's own `package.json`. Everything else is stdlib or
-ours. A `bun build --compile` binary is about 90 MB because it embeds the runtime.
+Two dependencies, the MCP SDK with `zod`, in the plugin's own `package.json`. Everything else is
+stdlib or ours. A `bun build --compile` binary is about 90 MB because it embeds the runtime.
 
 ## Extension points
 

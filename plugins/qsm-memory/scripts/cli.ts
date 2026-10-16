@@ -13,11 +13,10 @@ import {
   runCli,
 } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
-import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { blobPath, putBlob } from "../lib/blobs.ts";
 import { startDetached } from "../lib/detach.ts";
-import { type ErrorCode, MemError, messageOf } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
@@ -29,43 +28,6 @@ import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as noteHandlers } from "./cli-notes.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-memory/qsm.json");
-
-const OUTCOME_OF: Readonly<Record<ErrorCode, Exclude<OutcomeCode, "ok">>> = {
-  "not-found": "missing",
-  ambiguous: "usage",
-  usage: "usage",
-  secret: "blocked",
-};
-
-/** The message once; in text mode the next step follows on its own `  next:` line, as the MCP tools
- * and qsm-secrets print it, and under --json it is only in `data.next`. */
-function memOutcome(error: MemError, json: boolean): Outcome {
-  const message = json ? error.message : `${error.message}\n  next: ${error.next}`;
-  return fail(OUTCOME_OF[error.code], message, {
-    code: error.code,
-    next: error.next,
-  });
-}
-
-/** Every verb's handler wrapped once: a MemError comes back as its own
- * outcome instead of a stack trace. */
-function guarded(handlers: Readonly<Record<string, Handler>>): Record<string, Handler> {
-  return Object.fromEntries(
-    Object.entries(handlers).map(([verb, handler]) => [
-      verb,
-      async (call) => {
-        try {
-          return await handler(call);
-        } catch (error) {
-          if (error instanceof MemError) {
-            return memOutcome(error, call.json);
-          }
-          throw error;
-        }
-      },
-    ]),
-  );
-}
 
 const env = () => process.env;
 
@@ -233,7 +195,7 @@ if (import.meta.main) {
     await runCli(
       manifest,
       "qsm-memory",
-      guarded({
+      {
         save: runSave,
         search: runSearch,
         show: runShow,
@@ -243,7 +205,7 @@ if (import.meta.main) {
         ...noteHandlers,
         doctor: runDoctor,
         mcp: runMcp,
-      }),
+      },
       process.argv[2] === "save" && process.argv.includes("--log") ? { io: stamped() } : {},
     ),
   );

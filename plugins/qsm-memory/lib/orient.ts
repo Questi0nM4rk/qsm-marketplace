@@ -2,9 +2,8 @@
 // model call. Spec: "A session starts with one short briefing".
 
 import type { Database } from "bun:sqlite";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
 import { type Bead, type Closed, inProgress, recentlyClosed, TrackerMissing } from "./beads.ts";
-import { messageOf } from "./errors.ts";
 import { type Commit, commitsSince } from "./commits.ts";
 import { currentNotes, fitNotes, type NoteRow } from "./notes.ts";
 import { projectOf } from "./project.ts";

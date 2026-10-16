@@ -2,8 +2,7 @@
 // The installer places the binary and the two hooks and applies nothing.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type Activation,
   type ActivationContext,
@@ -11,6 +10,7 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
+import { claudeDir } from "../../../lib/paths.ts";
 
 const NAME = "harness-memory";
 const CLEANUP_DAYS = 7;
@@ -19,8 +19,7 @@ const MEMORY_CHOICES = ["qsm", "skip"] as const;
 export type MemoryChoice = (typeof MEMORY_CHOICES)[number];
 
 function settingsPath(env: ActivationContext["env"]): string {
-  const home = env.CLAUDE_CONFIG_DIR ?? resolve(env.HOME ?? homedir(), ".claude");
-  return resolve(home, "settings.json");
+  return join(claudeDir(env), "settings.json");
 }
 
 /** The settings object in `text`; JSON that is not an object is as unusable as JSON that does not
