@@ -19,9 +19,6 @@ import { blobPath, putBlob } from "../lib/blobs.ts";
 import { startDetached } from "../lib/detach.ts";
 import { type ErrorCode, MemError, messageOf } from "../lib/errors.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
-import { addNote, currentNotes, dropNote, formatNotes, NOTE_DEFAULT_DAYS } from "../lib/notes.ts";
-import { orientOutcome } from "../lib/orient.ts";
-import { projectOf } from "../lib/project.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
 import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
@@ -29,6 +26,7 @@ import { openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
+import { handlers as noteHandlers } from "./cli-notes.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-memory/qsm.json");
 
@@ -88,6 +86,16 @@ function saveDetached(transcript: string | undefined, catchUpAll: boolean, cwd?:
     : fail("missing", started.reason);
 }
 
+/** A catch-up's counts; partial when a transcript failed to save. */
+function catchUpOutcome(r: ReturnType<typeof catchUp>): Outcome {
+  const skipped = r.skipped === 0 ? "" : `, ${r.skipped} skipped`;
+  const failed = r.failed.length === 0 ? "" : `, ${r.failed.length} failed`;
+  const message = `saved ${r.saved}${skipped}${failed}, ${r.remain} remain`;
+  return r.failed.length === 0
+    ? ok(r, message)
+    : { code: "partial", message, data: r, warnings: r.failed };
+}
+
 const runSave: Handler = (call) => {
   const transcript = optionalString(call, "transcript");
   const catchUpAll = flagArg(call, "catchUp");
@@ -100,13 +108,7 @@ const runSave: Handler = (call) => {
   }
   const db = openArchive(env());
   if (catchUpAll) {
-    const r = catchUp(db, projectsDir(env()));
-    const skipped = r.skipped === 0 ? "" : `, ${r.skipped} skipped`;
-    const failed = r.failed.length === 0 ? "" : `, ${r.failed.length} failed`;
-    const message = `saved ${r.saved}${skipped}${failed}, ${r.remain} remain`;
-    return r.failed.length === 0
-      ? ok(r, message)
-      : { code: "partial", message, data: r, warnings: r.failed };
+    return catchUpOutcome(catchUp(db, projectsDir(env())));
   }
   if (transcript === undefined) {
     return fail("usage", "save needs a transcript path or --catch-up");
@@ -181,35 +183,6 @@ const runBlobPath: Handler = (call) => {
   return ok({ path }, path);
 };
 
-const runNote: Handler = (call) => {
-  const db = openArchive(env());
-  const drop = optionalString(call, "drop");
-  if (drop !== undefined) {
-    dropNote(db, drop);
-    return ok({ dropped: drop }, `dropped ${drop}`);
-  }
-  const expires = optionalNumber(call, "expires");
-  if (expires !== undefined && expires <= 0) {
-    return fail("usage", `--expires must be a positive number of days (got '${expires}')`);
-  }
-  const row = addNote(db, {
-    text: optionalString(call, "text") ?? "",
-    project: flagArg(call, "global") ? null : projectOf(process.cwd()),
-    expiresDays: flagArg(call, "keep") ? null : (expires ?? NOTE_DEFAULT_DAYS),
-  });
-  return ok(row, `noted ${row.id}`);
-};
-
-const runNotes: Handler = (call) => {
-  const all = flagArg(call, "all");
-  const rows = currentNotes(openArchive(env()), projectOf(process.cwd()), { all });
-  return ok(rows, formatNotes(rows, all));
-};
-
-/** The session-start block; the hook shows its text to the model. */
-const runOrient: Handler = (call) =>
-  orientOutcome(openArchive(env()), optionalString(call, "cwd") ?? process.cwd(), { env: env() });
-
 const count = (db: Database, table: string) =>
   db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n ?? 0;
 
@@ -267,9 +240,7 @@ if (import.meta.main) {
         list: runList,
         "blob put": runBlobPut,
         "blob path": runBlobPath,
-        note: runNote,
-        notes: runNotes,
-        orient: runOrient,
+        ...noteHandlers,
         doctor: runDoctor,
         mcp: runMcp,
       }),
