@@ -1,110 +1,97 @@
 ---
 name: add-plugin
-description: "Use when adding anything to this marketplace (the checklist: search for an existing home, why it exists, spec, build, proof in a fresh session): a new plugin for a capability that has none, or content placed inside a plugin that already exists (a skill, an agent, a command, a hook, a CLI verb, a document). Triggers: add a plugin, new plugin, scaffold a plugin, add a skill, add a hook, add a command, where does this go, kam to patri, extend the marketplace, pridej plugin. Owns the order and the file contract; the quality bar for a prompt is the skill-standards skill."
+description: "Use when adding a whole new plugin to this marketplace, or deciding whether a request is a new plugin or content in one that exists: the search for an existing home, README Why it exists, spec, plugin.json, layout, install script, npm pins, dependencies. Triggers: add a plugin, new plugin, scaffold a plugin, where does this go, kam to patri, extend the marketplace, pridej plugin, udelej novy plugin. A verb or bin is add-tool, a hook is add-hook, a skill or agent is add-skill, shared code is add-lib; the quality bar of a prompt is skill-standards."
 ---
 
 # Add Plugin
 
-This is the checklist for adding anything to this marketplace, a whole plugin or one skill, agent,
-command, hook or CLI verb inside one. It makes you search for an existing home first, decide whether
-it is a new plugin or content in an old one, write why it exists, then the spec, then build, and
-finally prove in a fresh session that the harness really shows it. The marketplace grows only when a
-capability is missing, and every addition says why it exists before it exists as files. It does not
-repeat the layout and the rules in AGENTS.md, which the agent has already read, and it writes no
-code for you.
+Use this when a capability may deserve its own plugin, the install unit of this marketplace. Most
+additions are content in a plugin that exists, so the first job is to search and say which. A new
+plugin claims that someone would want this and not the rest; the parts inside it (verbs, hooks,
+skills) are built by their own builder skills, and this one owns only the plugin around them.
 
-## Start from the person's task, when there is one
+## Steps
 
-The lens has a new-item page. It saves what the person wants as one task of kind new: its title
-reads `<plugin>: new skill <name>` (or `marketplace: new plugin <name>`), and its description holds
-the file the item would start in, the use case, the trigger words, the links and one eval case.
-`qsm-builder lens tasks <plugin>` lists such tasks, and the hook shows them when you first touch the
-plugin. Read the task as the intent of the work, not as a decision about where it goes: the person
-named a plugin without searching, so step 1 runs in full, and an existing owner wins over the
-plugin the task names. Show the person what you found, the unit you would build and the files, then
-build after their yes. A task whose file already exists is stale: say so and ask. Close the task
-with what was created and the eval that ran.
+1. Search for the concept, not the phrasing: plugin and skill descriptions, spec requirement
+   titles, the READMEs' Why it exists, `qsm-memory search <concept>`. An owner found: edit it in
+   place and stop here; the part you add goes to add-tool, add-hook or add-skill.
+2. A `qsm-builder lens tasks <plugin>` task of kind new is the person's intent, not a decision
+   about where it goes: run step 1 in full, show what you found and the files, build after their
+   yes, close the task with what was created and the eval that ran.
+3. Write the README's `## Why it exists` first: the gap, the stance, what it refuses to be, when
+   it has no reason to exist, in five sentences. If they will not come, stop and ask.
+4. Write the spec, `openspec/specs/<name>/spec.md`, through `qsm-openspec` `spec-propose`.
+5. Create `.claude-plugin/plugin.json` (name equal to the directory, `author` `{"name": "qsm"}`,
+   description, keywords) and list the plugin in `.claude-plugin/marketplace.json`.
+6. Add `scripts/install.ts` when the plugin ships a bin or anything compiled: one line,
+   `export const install = installScript(import.meta);`, with `upstream` or `extra` only for what
+   the plugin must fetch.
+7. Add `package.json` and `bun.lock` only if the plugin imports an npm package; pin it exactly.
+8. Name another plugin in `dependencies` only when it cannot work without it, and give the reason
+   in the spec.
+9. Build the parts through their skills: a CLI verb or `qsm.json` is add-tool, a hook is add-hook,
+   a skill or agent with its eval is add-skill, code a second plugin needs is add-lib.
+10. Run DONE MEANS, then hand the diff to review.
 
-## 1. Search before anything is written
+## HARD RULES
 
-The concept may already have a home under another name. Search the tree for the concept, not the
-phrasing: plugin descriptions, skill descriptions, spec requirement titles, the README sections Why
-it exists, and `qsm-memory search <concept>` for what was decided before.
+- MUST search for an existing owner before any file exists, because a second copy of a concept
+  drifts from the first (AGENTS.md Iron Law 5); gate: review.
+- MUST make a plugin only when it would be installed alone; one that always installs with X is
+  content in X, and a new file, class or function earns its place by one of the four reasons
+  (testable alone, removes duplication, gives a missing thing one home, adds behaviour) or stays
+  where it is used; gate: review.
+- MUST open the README with `## Why it exists` as its first `##`, at most five sentences, because
+  it is the decision and the directory only its consequence; gate: `validate-why-it-exists`.
+- MUST write the spec before the build, because a requirement written after the code describes
+  the code; gate: review.
+- MUST name `plugin.json` after its directory, with author `{"name": "qsm"}`, no `version` key
+  (a version pins the cache and `claude plugin update` stops seeing commits), and a
+  `marketplace.json` entry with source `./plugins/<name>`; gate: `validate-plugin-contracts`.
+- MUST keep `qsm.json`, `INSTALL.md` and `USAGE.md` out unless the plugin ships a bin, and give a
+  bin the plugin's own name, because one plugin has one binary; gate: `validate-generated`
+  (`qsm.json` implies the generated types), otherwise review.
+- MUST make `scripts/install.ts` one `installScript(import.meta)` call from
+  `lib/install-base.ts`, never a hand-written installer or a call to a sibling's, because the base
+  purges old artifacts and links through `linkBin`; gate: review.
+- MUST import only root `lib/` and the plugin itself, never another plugin's files, because a
+  plugin reaches another through its verb or noun; gate: `validate-no-cross-plugin-import`.
+- MUST NOT add a root `lib/` export unless the same change deletes at least two plugin copies of
+  it, because shared code with one consumer is a guess; gate: review.
+- MUST NOT define a helper root `lib/` exports (`isRecord`, `messageOf`, `onPath`, `binPath`,
+  `readStdin`, `claudeDir`, `writeAtomic`), because it is the copy that diverges; gate:
+  `validate-no-private-helpers`.
+- MUST pin every npm package to one exact version, equal in every `package.json` that names it,
+  and import only what the plugin's own `package.json` declares, because ranges make two
+  machines differ; gate: `validate-npm-packages`.
+- MUST write each dependency twice, in `plugin.json` `dependencies` and as a
+  ``- `<name>`: <reason>`` bullet under `### Requirement: Dependencies` in the spec, because the
+  reason is what lets it be removed later; gate: `validate-dependencies`.
+- MUST NOT carry history in the tree (no deprecated marker, renamed-from note, `v2` copy, date),
+  because git holds it; gate: review.
+- MUST keep employer names, tenant ids and machine paths out, because this repository is public
+  (Iron Law 10); gate: review.
 
-| The search finds | Do |
-| --- | --- |
-| a plugin or document that owns the concept | edit it in place, even if its name is worse than yours, because a rename is one commit and a second copy is drift |
-| a near neighbour with a different purpose | say which of the two owns it before writing |
-| nothing | go on |
+## DONE MEANS
 
-## 2. New plugin, or content in one that exists
+All of these exit 0, and the output is read, not assumed:
 
-| Signal | Unit |
-| --- | --- |
-| one capability nothing else covers, with its own reason to exist | a new plugin |
-| behaviour or a verb of a capability that exists | content in that plugin |
-| a rule every agent needs on every task | the always-loaded instructions, one or two lines |
-| code two plugins would import | root `lib/`, once the second consumer exists |
+```text
+mise exec -- bun run validate
+mise exec -- bun run lint
+mise exec -- bun run typecheck
+mise exec -- bun test ./ ./.gates
+```
 
-A plugin is the install unit, so a new plugin claims that someone would want this and not the rest.
-If it would always be installed with X, it is content in X.
+`bun test` ends with the run guard (`lib/fixtures/sandbox.ts`) reporting nothing left in the temp
+directory. Then the kind's own proof: `bun run eval <plugin>` when it ships a skill or agent,
+`bun run test:hooks` when it has hooks, and one real run of each new verb. A fresh session shows
+the surface the harness really loads.
 
-## 3. Why it exists first, then spec, then build
-
-Write the README's `## Why it exists` before any directory holds more than a name. If its five
-sentences will not come (the gap, the stance, what it refuses to be, when it has no reason to
-exist), the capability is not understood and the build would be a guess. Then the spec,
-`openspec/specs/<name>/spec.md`, through the spec flow of `qsm-openspec` (`spec-propose`, and if it
-is not installed the step stops with `missing` naming it): a scenario that describes code is a test,
-one that describes agent behaviour is skill text. Then the build. A skill or an agent starts from
-its reason too: its opening says why it exists, for whom, and what is out of scope, as the
-skill-standards skill lays out.
-
-## 4. What a plugin ships
-
-| File | When | Holds |
-| --- | --- | --- |
-| `.claude-plugin/plugin.json` | always | name equal to the directory, version, description, author, keywords, `dependencies` |
-| `README.md`, `openspec/specs/<name>/spec.md` | always | the consumer page, opening with `## Why it exists` (at most five sentences), and what it does |
-| `qsm.json` | with a bin | `bin`, `noun`, a description and typed args per command |
-| `INSTALL.md`, `USAGE.md` | with a bin | our verbs, flags and caveats |
-| `scripts/install.ts` | when it installs anything | `installBase(...)`, never edits a file the user owns |
-| `scripts/activate.ts` | when it changes a file the user owns | an `Activation`, run only by `qsm-setup activate` |
-| `scripts/cli.ts`, `lib/*.ts` | with a bin | the CLI and its logic |
-| `skills/<name>/SKILL.md`, `agents/<name>.md` | as needed | one subject each |
-| `evals/<case>/prompt.md` and `graders/` | any plugin with a skill or an agent | a `fire` and a `scenario` case per skill and agent, one `negative` per plugin (skill-standards) |
-| `hooks/` | as needed | `hooks.json`, `register.tsx`, `tsconfig.json` |
-| `types/index.d.ts` | with a noun | generated from `qsm.json`, never hand-edited |
-
-A manifest never carries `"hooks": null`; the key names a hooks file or is absent, and this
-plugin's manifest check refuses the write either way.
-
-## 5. Done means gates green and the surface seen
-
-| Proof | Answers |
-| --- | --- |
-| `bun run validate`, lint, typecheck, `bun test`, exit 0 | the files are shaped as the marketplace requires |
-| `bun run eval <plugin>` passing | the harness surfaces it: the fire case loads the skill, the scenario case changes the work, the negative case stays quiet |
-
-The eval is the proof a gate cannot give: a malformed frontmatter line drops a skill without an
-error, and a skill that never triggers is not shipped, whatever the gates say. When the eval fails,
-fix the description first, since that is what the harness matches.
-
-## Red flags
-
-- When you notice a directory growing before its README's Why it exists exists, stop and write the
-  five sentences, because they are the decision and the directory is its consequence.
-- When a second document is about to cover a concept that has one, edit the first, because two
-  owners drift apart unseen.
-- When the new plugin would never be installed without another, make it content in the other,
-  because the install unit is what a person chooses alone.
-- When the only proof is a green gate, run the eval, because the gate reads files and only a
-  session shows what the harness loads.
-- When a README starts transcribing an upstream manual, link it instead, because our surface is
-  the only part we can keep true.
+Last, hand the diff to the `qsm-review` `strict-reviewer` agent with the HARD RULES above as the
+checklist. The build is not done until every command passes and the review returns no blocker.
 
 ## Say it in the reply
 
-One line naming the unit and the route: a new plugin and why nothing existing owns it, or the
-plugin and file the content goes into. Then the two proofs with what each printed: the gates that
-ran, and the eval cases with pass or fail.
+One line naming the unit and why: a new plugin and what nothing existing owns, or the plugin and
+file the content went into. Then each DONE MEANS command with pass or fail, and the review verdict.

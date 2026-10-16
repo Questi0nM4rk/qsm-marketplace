@@ -6,5 +6,5 @@ max_turns: 6
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-I want to add a hook to this marketplace that warns when a commit message is longer than 72
-characters. Where does it go, and what do I need to create?
+I want a new plugin in this marketplace that keeps a list of the bookmarks I save while working.
+Where does it go, and what do I need to create?
