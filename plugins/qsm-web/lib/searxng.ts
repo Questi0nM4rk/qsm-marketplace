@@ -206,12 +206,15 @@ export interface SearchOutcome {
   readonly warnings: readonly string[];
 }
 
+/** A text field of a raw result: sent as null or left out, it reads as empty. */
+const text = (value: string | null | undefined): string => value ?? "";
+
 function toResult(r: RawResult): SearchResult {
   return {
-    url: r.url ?? "",
-    title: r.title ?? "",
-    content: r.content ?? "",
-    engine: r.engine ?? "",
+    url: text(r.url),
+    title: text(r.title),
+    content: text(r.content),
+    engine: text(r.engine),
     engines: engineList(r),
     score: r.score ?? 0,
     category: r.category ?? "general",
