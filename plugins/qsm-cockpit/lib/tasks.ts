@@ -11,10 +11,14 @@ export function inProgress(): Task[] {
     encoding: "utf8",
     timeout: 5000,
   });
-  if (run.error !== undefined) {
+  // only a br that is not there is missing; a br that hangs past the timeout failed
+  if (run.error !== undefined && "code" in run.error && run.error.code === "ENOENT") {
     throw new QsmError("missing", `br did not run: ${run.error.message}`, {
       next: "install qsm-tasks",
     });
+  }
+  if (run.error !== undefined) {
+    throw new QsmError("failed", `br list did not finish: ${run.error.message}`);
   }
   if (run.status !== 0) {
     throw new QsmError(
