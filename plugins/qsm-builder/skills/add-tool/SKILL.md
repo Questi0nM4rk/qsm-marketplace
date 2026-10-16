@@ -63,11 +63,11 @@ plugin (add-plugin does).
 
 From the repository root, each exits 0:
 
-```bash
-bun run validate
-bun run lint
-bun run typecheck
-bun test ./ ./.gates
+```text
+mise exec -- bun run validate
+mise exec -- bun run lint
+mise exec -- bun run typecheck
+mise exec -- bun test ./ ./.gates
 ```
 
 Run the new verb for real with `--json` and read what it printed. Then hand the diff to the

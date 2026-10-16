@@ -66,8 +66,8 @@ Each law is the short form; the skill named after it holds the detail.
 5. **One canonical owner per concept**: search, edit in place, never a `v2` copy.
 6. **No versioning, no history in the tree**: no deprecated markers, renamed-from notes, dates or
    changelogs, and no `version` in `plugin.json` (add-plugin).
-7. **The plugin is the install unit**: `scripts/install.ts` is built on `lib/install-base.ts`,
-   and a plugin that needs another names it in `dependencies` (add-plugin).
+7. **The plugin is the install unit**: `scripts/install.ts` is built on `lib/install-base.ts`
+   (add-plugin).
 8. **One plugin, one binary, named after the plugin**, its verbs described in `qsm.json`; help,
    completions and the noun read that one source (add-tool).
 9. **A CLI is a compiled binary on the user's PATH** that reads arguments and `QSM_*` and
