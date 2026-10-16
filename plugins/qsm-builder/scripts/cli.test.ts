@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { which } from "bun";
+import { runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir, writeIn as write } from "../../../lib/fixtures/sandbox.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { listOf } from "../lib/guards.ts";
@@ -81,8 +82,8 @@ function marketplace(): string {
 }
 
 function run(argv: readonly string[]) {
-  const r = spawnSync("bun", [CLI, ...argv], { encoding: "utf8" });
-  return { exit: r.status, text: r.stdout + r.stderr };
+  const r = runBin(CLI, argv);
+  return { exit: r.exit, text: r.stdout + r.stderr };
 }
 
 describe("qsm-builder lens export", () => {

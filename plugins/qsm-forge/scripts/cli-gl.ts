@@ -3,12 +3,16 @@
 // The GitLab half of qsm-forge: a merge request's review threads as one call each ("qsm-forge gl
 // <verb>").
 
-import { type Call, type Handler, optionalString, requiredNumber } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  type Handler,
+  optionalString,
+  readStdin,
+  requiredNumber,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { UsageError } from "../lib/errors.ts";
 import { runCommand } from "../lib/exec.ts";
 import { type GitlabForge, gitlabForge, replyToThread, resolveThread } from "../lib/gitlab.ts";
-import { MissingError } from "../lib/missing-error.ts";
 import { type GitlabProject, resolveGitlabProject } from "../lib/remote.ts";
 import { oneLine, place, table } from "../lib/render.ts";
 import { parseReviewPayload, readPayloadFile } from "../lib/review-payload.ts";
@@ -28,17 +32,6 @@ function said(value: unknown, lines: readonly string[]): Outcome {
 
 function mr(call: Call): number {
   return requiredNumber(call, "mr");
-}
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    return "";
-  }
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-  }
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 async function status({ forge, at, call }: At): Promise<Outcome> {
@@ -130,22 +123,12 @@ type Verb = (at: At) => Promise<Outcome>;
 
 function handler(verb: Verb): Handler {
   return async (call) => {
-    try {
-      const project: GitlabProject = await resolveGitlabProject(
-        runCommand,
-        optionalString(call, "project") ?? null,
-      );
-      const at = `${project.path}!${String(mr(call))}`;
-      return await verb({ forge: gitlabForge(runCommand, project), at, call });
-    } catch (error) {
-      if (error instanceof MissingError) {
-        return fail("missing", error.message);
-      }
-      if (error instanceof UsageError) {
-        return fail("usage", error.message);
-      }
-      throw error;
-    }
+    const project: GitlabProject = await resolveGitlabProject(
+      runCommand,
+      optionalString(call, "project") ?? null,
+    );
+    const at = `${project.path}!${String(mr(call))}`;
+    return verb({ forge: gitlabForge(runCommand, project), at, call });
   };
 }
 

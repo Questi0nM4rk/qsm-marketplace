@@ -4,11 +4,11 @@
 // ever invoked.
 
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import { analyzeText } from "../lib/structure.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -19,8 +19,8 @@ interface Run {
 }
 
 function run(args: readonly string[]): Run {
-  const done = spawnSync("bun", [CLI, ...args], { encoding: "utf8" });
-  return { status: done.status ?? 1, stdout: done.stdout ?? "", stderr: done.stderr ?? "" };
+  const done = runBin(CLI, args);
+  return { status: done.exit, stdout: done.stdout, stderr: done.stderr };
 }
 
 /** The one JSON value the shared base prints on stdout under --json. */
@@ -265,11 +265,11 @@ describe("a stage that resolves some of its inputs", () => {
 
 describe("doctor", () => {
   test("doctor with no converter on PATH is ok and warns once per converter", () => {
-    const done = spawnSync(process.execPath, [CLI, "doctor", "--json"], {
-      encoding: "utf8",
-      env: { ...process.env, PATH: sandboxDir("qsm-book-to-skill-cli-") },
+    const home = sandboxDir("qsm-book-to-skill-cli-");
+    const done = runBin(CLI, ["doctor", "--json"], {
+      env: { ...isolatedEnv(home), PATH: home },
     });
-    expect(done.status).toBe(0);
+    expect(done.exit).toBe(0);
     const said = z
       .object({ code: z.string(), warnings: z.array(z.string()) })
       .parse(JSON.parse(done.stdout));

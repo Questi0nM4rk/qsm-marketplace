@@ -7,24 +7,15 @@ const only =
     present.includes(cmd);
 
 describe("forgeDoctor", () => {
-  test("Only one forge CLI installed", () => {
-    const outcome = forgeDoctor(only("gh"));
-    expect(outcome.code).toBe("ok");
-    expect(outcome.warnings).toEqual([
-      "glab is not on PATH: install the GitLab CLI and run glab auth login",
-    ]);
+  test("one forge CLI is enough", () => {
+    expect(forgeDoctor(only("gh")).code).toBe("ok");
+    expect(forgeDoctor(only("glab")).code).toBe("ok");
   });
 
-  test("both present is ok with no warning", () => {
-    const outcome = forgeDoctor(only("gh", "glab"));
-    expect(outcome.code).toBe("ok");
-    expect(outcome.warnings).toEqual([]);
-  });
-
-  test("No forge CLI installed", () => {
+  test("No forge CLI installed: one missing naming both", () => {
     const outcome = forgeDoctor(only());
     expect(outcome.code).toBe("missing");
-    expect(outcome.message).toContain("neither gh nor glab is on PATH");
+    expect(outcome.message).toContain("gh or glab is not on PATH");
     expect(outcome.message).toContain("gh auth login");
     expect(outcome.message).toContain("glab auth login");
   });

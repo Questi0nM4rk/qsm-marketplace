@@ -2,12 +2,13 @@
 // test writes into a sandbox and puts first on PATH, with every call
 // prefixed "gl" for the merged binary.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseJson } from "../lib/exec.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -48,18 +49,15 @@ beforeEach(() => {
   cwd = sandboxDir("qsm-forge-gl-cwd-");
   writeFileSync(join(sandbox, "mr.json"), JSON.stringify(MERGE_REQUEST));
   writeFileSync(join(sandbox, "discussions.json"), JSON.stringify(DISCUSSIONS));
-  const fake = join(sandbox, "glab");
-  writeFileSync(
-    fake,
-    `#!/bin/sh
-if [ -n "$GLAB_FAKE_FAILS" ]; then echo 'glab: 404 Not Found' >&2; exit 1; fi
+  fakeBin(
+    sandbox,
+    "glab",
+    `if [ -n "$GLAB_FAKE_FAILS" ]; then echo 'glab: 404 Not Found' >&2; exit 1; fi
 case "$*" in
   *discussions*) cat '${join(sandbox, "discussions.json")}' ;;
   *) cat '${join(sandbox, "mr.json")}' ;;
-esac
-`,
+esac`,
   );
-  chmodSync(fake, 0o755);
 });
 
 interface Run {
@@ -69,12 +67,11 @@ interface Run {
 }
 
 function cli(args: readonly string[], env: Record<string, string> = {}): Run {
-  const r = spawnSync("bun", [CLI, ...args], {
-    encoding: "utf8",
+  const r = runBin(CLI, args, {
     cwd,
-    env: { PATH: `${sandbox}:${process.env.PATH ?? ""}`, HOME: sandbox, ...env },
+    env: isolatedEnv(sandbox, { PATH: `${sandbox}:${process.env.PATH ?? ""}`, ...env }),
   });
-  return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+  return { code: r.exit, stdout: r.stdout, stderr: r.stderr };
 }
 
 interface Envelope {

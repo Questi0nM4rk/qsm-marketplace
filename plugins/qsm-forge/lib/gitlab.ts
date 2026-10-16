@@ -1,7 +1,7 @@
 // GitLab, in the same three pieces as GitHub: the paths and args a call takes, what an answer
 // means, and the forge that runs one and maps the other.
 
-import { UsageError } from "./errors.ts";
+import { UsageError } from "../../../lib/outcome.ts";
 import { parseAs, parseJson, type Run } from "./exec.ts";
 import {
   arrayOf,

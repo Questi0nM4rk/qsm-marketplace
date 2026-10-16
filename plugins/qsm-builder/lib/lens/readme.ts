@@ -1,8 +1,9 @@
 // The root README's generated block and the two banners, written from the model the lens page
 // reads. Pure: text in, text out. `lens readme` in cli.ts reads and writes the files.
 
+import { QsmError } from "../../../../lib/qsm-error.ts";
 import { esc } from "./graph.ts";
-import { firstSentence, type Marketplace, ModelError, type Plugin } from "./model.ts";
+import { firstSentence, type Marketplace, type Plugin } from "./model.ts";
 
 const START = "<!-- lens:start -->";
 const END = "<!-- lens:end -->";
@@ -178,7 +179,7 @@ function spliceReadme(current: string, block: string): string {
   const start = current.indexOf(START);
   const end = current.indexOf(END);
   if (start < 0 || end < start) {
-    throw new ModelError("missing", `README.md needs ${START} and ${END}, in that order`);
+    throw new QsmError("missing", `README.md needs ${START} and ${END}, in that order`);
   }
   return current.slice(0, start) + block + current.slice(end + END.length);
 }

@@ -3,6 +3,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { QsmError } from "../../../../lib/qsm-error.ts";
 import { pluginOfPath } from "../brief-path.ts";
 import { readTasks, type Task, tasksOf } from "./tasks.ts";
 
@@ -13,9 +14,6 @@ export interface Brief {
   /** null when the file is in no plugin of a marketplace, or the plugin has no open edit or feedback */
   readonly text: string | null;
 }
-
-/** Why the tasks could not be read, when they could not. */
-export class BriefError extends Error {}
 
 function line(t: Task): string {
   const was =
@@ -36,7 +34,7 @@ export function briefOf(file: string): Brief | null {
   const read = readTasks(root);
   const tasks = tasksOf(plugin, read.open);
   if (tasks === null) {
-    throw new BriefError(read.note);
+    throw new QsmError("missing", `${read.note} The tasks of the plugin were not read.`);
   }
   const open = tasks.filter((t) => !t.epic && t.kind !== "task");
   if (open.length === 0) {

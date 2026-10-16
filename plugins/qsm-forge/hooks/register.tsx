@@ -5,7 +5,7 @@
 
 import type { On } from "claude-code";
 import { reviewGuard } from "../lib/forge-guard.ts";
-import { registerNoun } from "./noun.generated.ts";
+import { failure, registerNoun } from "./noun.generated.ts";
 
 export function register(on: On): void {
   registerNoun(on);
@@ -18,9 +18,7 @@ export function register(on: On): void {
     $.ui.log(`refused a raw review call (${e.command.slice(0, 120)})`);
     return { deny: refusal };
   }).catch(($, _e, next) => {
-    const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
-    $.ui.toast(`qsm-forge ERROR: tool.call: ${reason}`);
-    $.ui.log(`the review guard failed (${next.error.kind}); the call was denied`);
+    const reason = failure($, "tool.call", next.error);
     return { deny: `qsm-forge: the review guard failed (${reason}); the call was not run` };
   });
 }

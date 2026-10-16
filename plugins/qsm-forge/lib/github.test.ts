@@ -2,7 +2,7 @@
 // for the call above it, trimmed to the fields the mappers read.
 
 import { describe, expect, test } from "bun:test";
-import { UsageError } from "./errors.ts";
+import { UsageError } from "../../../lib/outcome.ts";
 import { expectRejection } from "./rejection.ts";
 import type { Run } from "./exec.ts";
 import {

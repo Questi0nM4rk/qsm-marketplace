@@ -1,9 +1,8 @@
 // One review payload, the same on both forges.
 
 import { readFileSync } from "node:fs";
-import { isRecord } from "../../../lib/outcome.ts";
-import { UsageError } from "./errors.ts";
-import { MissingError } from "./missing-error.ts";
+import { isRecord, UsageError } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 /** The decision in the words the spec uses. The forge-specific spelling
  * (GitHub's APPROVE, GitLab's approve call) is built where it is sent. */
@@ -95,6 +94,6 @@ export function readPayloadFile(path: string): string {
   try {
     return readFileSync(path, "utf8");
   } catch (cause) {
-    throw new MissingError(`--file ${path}: cannot be read; nothing was posted`, { cause });
+    throw new QsmError("missing", `--file ${path}: cannot be read; nothing was posted`, { cause });
   }
 }

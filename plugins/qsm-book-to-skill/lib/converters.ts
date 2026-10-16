@@ -1,8 +1,6 @@
 // The optional external converters.
 
-import { accessSync, constants, statSync } from "node:fs";
-import { join } from "node:path";
-import type { RequiredTool } from "../../../lib/outcome.ts";
+import { onPath, type RequiredTool } from "../../../lib/outcome.ts";
 import type { Reader } from "./sources.ts";
 
 export interface Converter {
@@ -33,33 +31,10 @@ export function converterFor(reader: Reader): Converter | null {
   return CONVERTERS.find((c) => c.command === reader) ?? null;
 }
 
-function isExecutableFile(path: string): boolean {
-  try {
-    if (!statSync(path).isFile()) {
-      return false;
-    }
-    accessSync(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * `command -v` without a shell: every PATH entry, in order, checked for an executable file of that
- * name.
- */
-export function onPath(command: string, pathValue: string): boolean {
-  return pathValue
-    .split(":")
-    .filter((dir) => dir.length > 0)
-    .some((dir) => isExecutableFile(join(dir, command)));
-}
-
 /** The reason line for a source whose converter is missing, or null when it is installed. */
 export function missingConverter(reader: Reader, pathValue: string): string | null {
   const converter = converterFor(reader);
-  if (converter === null || onPath(converter.command, pathValue)) {
+  if (converter === null || onPath(converter.command, { PATH: pathValue })) {
     return null;
   }
   return `${converter.command} is not on PATH; install ${converter.install}`;

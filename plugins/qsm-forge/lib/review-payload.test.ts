@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { UsageError } from "./errors.ts";
-import { MissingError } from "./missing-error.ts";
+import { UsageError } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parseReviewPayload, readPayloadFile } from "./review-payload.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
@@ -87,7 +87,7 @@ describe("the payload named by --file", () => {
 
   test("a path that is not there is an absent prerequisite, not a wrong argument", () => {
     const dir = sandboxDir("qsm-forge-payload-");
-    expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(MissingError);
+    expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(QsmError);
     expect(() => readPayloadFile(join(dir, "absent.json"))).not.toThrow(UsageError);
     expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(/nothing was posted/);
   });

@@ -16,8 +16,8 @@ import {
 } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
-import { BriefError, briefOf } from "../lib/lens/brief.ts";
-import { ModelError, readMarketplace } from "../lib/lens/model.ts";
+import { briefOf } from "../lib/lens/brief.ts";
+import { readMarketplace } from "../lib/lens/model.ts";
 import { renderDocument } from "../lib/lens/page.ts";
 import { artifactRows, pullEdits } from "../lib/lens/pull.ts";
 import { generatedFiles } from "../lib/lens/readme.ts";
@@ -30,21 +30,7 @@ import manifestJson from "../qsm.json" with { type: "json" };
 
 const manifest = parseManifest(manifestJson, "qsm-builder/qsm.json");
 
-// A marketplace that cannot be read is the outcome its ModelError names; anything else still throws.
-const modelFailure =
-  (handler: Handler): Handler =>
-  async (call) => {
-    try {
-      return await handler(call);
-    } catch (error) {
-      if (error instanceof ModelError) {
-        return fail(error.code, error.message);
-      }
-      throw error;
-    }
-  };
-
-const lensExport: Handler = modelFailure((call) => {
+const lensExport: Handler = (call) => {
   const root = resolve(optionalString(call, "dir") ?? process.cwd());
   // Regenerated on each run into the marketplace's own gitignored .qsm directory.
   const target = optionalString(call, "out") ?? join(root, ".qsm", "lens.html");
@@ -61,9 +47,9 @@ const lensExport: Handler = modelFailure((call) => {
     { file, bytes: Buffer.byteLength(html), plugins: marketplace.plugins.length },
     `wrote ${file}: ${marketplace.plugins.length} plugins, ${Buffer.byteLength(html)} bytes`,
   );
-});
+};
 
-const lensReadme: Handler = modelFailure((call) => {
+const lensReadme: Handler = (call) => {
   const root = resolve(optionalString(call, "dir") ?? process.cwd());
   const readmeFile = join(root, "README.md");
   const readme = existsSync(readmeFile) ? readFileSync(readmeFile, "utf8") : "";
@@ -90,9 +76,9 @@ const lensReadme: Handler = modelFailure((call) => {
     { files: names },
     names.length === 0 ? "nothing to write" : `wrote ${names.join(", ")}`,
   );
-});
+};
 
-const lensTasks: Handler = modelFailure((call) => {
+const lensTasks: Handler = (call) => {
   const plugin = optionalString(call, "plugin");
   const root = process.cwd();
   const market = readMarketplace(root);
@@ -117,9 +103,9 @@ const lensTasks: Handler = modelFailure((call) => {
     )
     .join("\n");
   return ok(lines, text === "" ? "no open tasks" : text);
-});
+};
 
-const lensPlugin: Handler = modelFailure((call) => {
+const lensPlugin: Handler = (call) => {
   const plugin = optionalString(call, "plugin");
   if (plugin === undefined || plugin === "") {
     return fail("usage", "plugin needs a name: qsm-builder lens plugin <name> [--dir <root>]");
@@ -132,31 +118,24 @@ const lensPlugin: Handler = modelFailure((call) => {
         view,
         `${view.plugin}: ${view.items.length} skills and agents, ${view.tasks?.length ?? "?"} open tasks`,
       );
-});
+};
 
-const lensMarketplace: Handler = modelFailure((call) => {
+const lensMarketplace: Handler = (call) => {
   const root = resolve(optionalString(call, "dir") ?? process.cwd());
   const view = marketplaceView(readMarketplace(root));
   return ok(view, `${view.name}: ${view.plugins.length} plugins`);
-});
+};
 
 const lensBrief: Handler = (call) => {
   const file = optionalString(call, "file");
   if (file === undefined || !file.startsWith("/")) {
     return fail("usage", "brief needs an absolute file path: qsm-builder lens brief <file>");
   }
-  try {
-    const brief = briefOf(file);
-    return ok(brief, brief?.text ?? "no open edits or feedback to tell");
-  } catch (error) {
-    if (error instanceof BriefError) {
-      return fail("missing", `${error.message} The tasks of the plugin were not read.`);
-    }
-    throw error;
-  }
+  const brief = briefOf(file);
+  return ok(brief, brief?.text ?? "no open edits or feedback to tell");
 };
 
-const lensPull: Handler = modelFailure(async (call) => {
+const lensPull: Handler = async (call) => {
   const url = optionalString(call, "url");
   if (url === undefined || url === "") {
     return fail("usage", "pull needs the artifact URL: qsm-builder lens pull <artifact-url>");
@@ -177,11 +156,11 @@ const lensPull: Handler = modelFailure(async (call) => {
         pulled,
       )
     : ok(pulled, summary);
-});
+};
 
 const DEFAULT_PORT = 4747;
 
-const lensServe: Handler = modelFailure(async (call) => {
+const lensServe: Handler = async (call) => {
   const root = resolve(optionalString(call, "dir") ?? process.cwd());
   readMarketplace(root);
   const served = serveLens(root, optionalNumber(call, "port") ?? DEFAULT_PORT);
@@ -193,7 +172,7 @@ const lensServe: Handler = modelFailure(async (call) => {
   });
   await served.stop();
   return ok({ url: served.url }, `stopped ${served.url}`);
-});
+};
 
 const doctor: Handler = () =>
   which("br") === null

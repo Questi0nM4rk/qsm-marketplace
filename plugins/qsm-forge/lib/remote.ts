@@ -1,9 +1,9 @@
 // Repository resolution: an explicit option when the caller gave one, the working tree's own origin
 // remote otherwise.
 
-import { UsageError } from "./errors.ts";
+import { UsageError } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import type { Run } from "./exec.ts";
-import { MissingError } from "./missing-error.ts";
 
 export interface GithubRepo {
   readonly owner: string;
@@ -91,7 +91,8 @@ export async function resolveGithubRepo(run: Run, spec: string | null): Promise<
   const detected = await detectPath(run);
   const found = detected === null ? null : githubRepo(detected);
   if (found === null) {
-    throw new MissingError(
+    throw new QsmError(
+      "missing",
       "no repository: run inside a git checkout whose origin is a GitHub repository, or name one with --repo owner/name",
     );
   }
@@ -111,7 +112,8 @@ export async function resolveGitlabProject(run: Run, spec: string | null): Promi
   const detected = await detectPath(run);
   const found = detected === null ? null : gitlabProject(detected);
   if (found === null) {
-    throw new MissingError(
+    throw new QsmError(
+      "missing",
       "no project: run inside a git checkout whose origin is a GitLab project, or name one with --project namespace/project",
     );
   }
