@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { errorMessage } from "./errors.ts";
+import { messageOf } from "../../../lib/outcome.ts";
 import { OWN_RULES } from "./rules-data.ts";
 
 /** The scratch directory a run fetches its packs into is named with this,
@@ -82,7 +82,7 @@ export async function resolvePacks(
         writeFileSync(path, text);
         return [pack, { path, hash: createHash("sha256").update(text).digest("hex") }];
       } catch (error) {
-        return [pack, { reason: `${pack} could not be fetched: ${errorMessage(error)}` }];
+        return [pack, { reason: `${pack} could not be fetched: ${messageOf(error)}` }];
       }
     }),
   );

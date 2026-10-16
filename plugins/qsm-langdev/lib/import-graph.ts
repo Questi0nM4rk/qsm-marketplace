@@ -4,7 +4,9 @@
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { extname, join, posix } from "node:path";
-import { cacheDir, writeAtomic } from "./cache-dir.ts";
+import { writeAtomic } from "../../../lib/fs.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { cacheDir } from "./cache-dir.ts";
 import type { Extractor } from "./extractor.ts";
 import { pyExtractor } from "./imports-py.ts";
 import { tsExtractor } from "./imports-ts.ts";
@@ -103,7 +105,7 @@ export async function buildGraph(
         .filter((t) => t !== null);
       edges.set(file, [...new Set(targets)]);
     } catch (error) {
-      failed.push({ file, reason: error instanceof Error ? error.message : String(error) });
+      failed.push({ file, reason: messageOf(error) });
     }
   }
   return { edges, noExtractor: [...noExtractor], failed, parsed };

@@ -1,12 +1,9 @@
-#!/usr/bin/env bun
 // Builds the qsm-patched sentrux from upstream at one pinned commit and the two things this plugin
-// adds to it.
+// adds to it; the installer calls installPatched in process.
 
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { errorMessage } from "../lib/errors.ts";
 
 export const UPSTREAM_REPO = "https://github.com/sentrux/sentrux";
 // pragma: allowlist nextline secret
@@ -20,7 +17,7 @@ const OWNED_DEST = join("sentrux-core", "src", "metrics");
 const OWNED_DIR = resolve(import.meta.dir, "..", "sentrux", "src");
 
 function step(cwd: string, cmd: string, args: string[]): void {
-  const result = spawnSync(cmd, args, { cwd, stdio: ["ignore", "inherit", "inherit"] });
+  const result = spawnSync(cmd, args, { cwd, stdio: ["ignore", 2, 2] });
   if (result.status !== 0) {
     throw new Error(
       `\`${cmd} ${args.join(" ")}\` exited ${result.status ?? "by signal"} in ${cwd}`,
@@ -68,27 +65,18 @@ export function preparePatchedSource(dir: string): void {
 }
 
 /**
- * Scratch space for the clone and the build, not the system temp directory: /tmp is tmpfs on some
- * machines, and a release build is about 4 GB.
- */
-function cacheDir(): string {
-  const dir = process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache");
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
-/**
  * One fixed path rather than a fresh mkdtemp: a run killed mid-build runs no finally, and the next
- * run needs to know where to find what to clean up.
+ * run needs to know where to find what to clean up. Under `cacheRoot`, not the system temp
+ * directory: /tmp is tmpfs on some machines, and a release build is about 4 GB.
  */
-export function installDir(): string {
-  return join(cacheDir(), "qsm-sentrux-build");
+export function installDir(cacheRoot: string): string {
+  return join(cacheRoot, "qsm-sentrux-build");
 }
 
-/** Patched source built in `installDir()` and installed with cargo.
+/** Patched source built in `installDir(cacheRoot)` and installed with cargo.
  * Whatever an earlier run left there is removed first and after. */
-export function installPatched(): void {
-  const dir = installDir();
+export function installPatched(cacheRoot: string): void {
+  const dir = installDir(cacheRoot);
   rmSync(dir, { recursive: true, force: true });
   try {
     preparePatchedSource(dir);
@@ -103,28 +91,5 @@ export function installPatched(): void {
     ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-/** Patched source in `dir`, built in place; returns the binary path. */
-export function buildPatched(dir: string): string {
-  preparePatchedSource(dir);
-  step(dir, "cargo", ["build", "--release", "--locked"]);
-  return join(dir, "target", "release", "sentrux");
-}
-
-if (import.meta.main) {
-  const [, , target] = process.argv;
-  try {
-    if (target === "install") {
-      installPatched();
-    } else if (target !== undefined && target !== "") {
-      console.log(buildPatched(resolve(target)));
-    } else {
-      throw new Error("usage: build-sentrux.ts install | build-sentrux.ts <empty dir>");
-    }
-  } catch (e) {
-    console.error(`qsm-langdev build-sentrux: ${errorMessage(e)}`);
-    process.exit(1);
   }
 }

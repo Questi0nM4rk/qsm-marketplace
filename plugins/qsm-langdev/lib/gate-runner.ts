@@ -189,7 +189,7 @@ function entropyGate(root: string): GateOutcome {
   const result = runOrMissing("detect-secrets-hook", ["--baseline", config, ...staged], root);
   if ("missing" in result) {
     return fail("entropy", "detect-secrets-hook is not installed", [
-      "uv tool install detect-secrets, or pipx install detect-secrets",
+      "uv tool install detect-secrets",
     ]);
   }
   if (result.status !== 0) {
