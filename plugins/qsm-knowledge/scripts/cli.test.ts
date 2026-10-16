@@ -1,11 +1,11 @@
 // qsm-knowledge through its real surface: argv, stdout, stderr, exit. The notes
 // live in a sandbox and the notebook binary is never reached.
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { isRecord } from "../../../lib/outcome.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 /** Only the runtime itself: the notebook binary is never on it. */
@@ -24,25 +24,15 @@ The old system keeps serving until the new one takes each route.
 See [[branch-by-abstraction]].
 `;
 
-const sandboxes: string[] = [];
-
 function note(body: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-knowledge-cli-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-knowledge-cli-");
   const path = join(dir, "note.md");
   writeFileSync(path, body);
   return path;
 }
 
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
-
 function run(argv: readonly string[], env: Record<string, string> = {}) {
-  const home = mkdtempSync(join(tmpdir(), "qsm-knowledge-home-"));
-  sandboxes.push(home);
+  const home = sandboxDir("qsm-knowledge-home-");
   const r = spawnSync("bun", [CLI, ...argv], {
     encoding: "utf8",
     env: { PATH: process.env.PATH ?? "", HOME: home, ...env },

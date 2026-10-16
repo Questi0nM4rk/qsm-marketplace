@@ -3,19 +3,14 @@
 // prerequisite. The whole installer runs here, in a sandbox home, because the
 // verdict is the worst of the base's upstream steps and the extra step.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { install } from "./install.ts";
 
-const sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-install-"));
-afterAll(() => {
-  rmSync(sandbox, { recursive: true, force: true });
-});
-
 function context(present: readonly string[], dryRun = false): InstallContext {
+  const sandbox = sandboxDir("qsm-forge-install-");
   return {
     dryRun,
     env: { HOME: sandbox, QSM_BIN_DIR: join(sandbox, "bin"), XDG_CONFIG_HOME: sandbox },

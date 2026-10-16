@@ -1,27 +1,10 @@
-import { afterAll, expect, test } from "bun:test";
-import { lstatSync, mkdtempSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
+import { lstatSync, readlinkSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import { skipKey, TOOLS, type Tool } from "./catalog.ts";
 import { installAll, installOne, worstStatus } from "./install.ts";
-
-/** Every directory any test here made, removed once at the end whatever each
- * test did or failed to do. */
-const sandboxes: string[] = [];
-
-afterAll(() => {
-  for (const dir of sandboxes) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-  sandboxes.length = 0;
-});
-
-function sandbox(name: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `qsm-toolbox-${name}-`));
-  sandboxes.push(dir);
-  return dir;
-}
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 function row(bin: string): Tool {
   const tool = TOOLS.find((candidate) => candidate.bin === bin);
@@ -33,7 +16,7 @@ function row(bin: string): Tool {
 
 /** A machine we describe entirely: what is on PATH, and what each run does.
  * Nothing here touches the real one; the rows that write to disk get sandbox
- * directories through `sandbox()` above. */
+ * directories through `sandboxDir`. */
 function fakeContext(options: {
   onPath?: readonly string[];
   env?: Record<string, string>;
@@ -119,8 +102,8 @@ function goContext(gobin: string, bin: string): InstallContext {
 }
 
 test("a go row is linked out of GOBIN into the bin directory", () => {
-  const gobin = sandbox("gobin");
-  const bin = sandbox("bin");
+  const gobin = sandboxDir("qsm-toolbox-gobin-");
+  const bin = sandboxDir("qsm-toolbox-bin-");
   writeFileSync(join(gobin, "yq"), "#!/bin/sh\nexit 0\n");
   const outcome = installOne(row("yq"), goContext(gobin, bin));
   expect(outcome.status).toBe("installed");
@@ -131,8 +114,8 @@ test("a go row is linked out of GOBIN into the bin directory", () => {
 });
 
 test("a file already sitting at the link target is replaced", () => {
-  const gobin = sandbox("gobin-replace");
-  const bin = sandbox("bin-replace");
+  const gobin = sandboxDir("qsm-toolbox-gobin-replace-");
+  const bin = sandboxDir("qsm-toolbox-bin-replace-");
   writeFileSync(join(gobin, "scc"), "#!/bin/sh\nexit 0\n");
   writeFileSync(join(bin, "scc"), "an older copy\n");
   const outcome = installOne(row("scc"), goContext(gobin, bin));
@@ -142,8 +125,8 @@ test("a file already sitting at the link target is replaced", () => {
 });
 
 test("go install that reported success and produced nothing is an error", () => {
-  const gobin = sandbox("gobin-empty");
-  const bin = sandbox("bin-empty");
+  const gobin = sandboxDir("qsm-toolbox-gobin-empty-");
+  const bin = sandboxDir("qsm-toolbox-bin-empty-");
   const outcome = installOne(row("mlr"), goContext(gobin, bin));
   expect(outcome.status).toBe("error");
   expect(outcome.detail).toContain(join(gobin, "mlr"));

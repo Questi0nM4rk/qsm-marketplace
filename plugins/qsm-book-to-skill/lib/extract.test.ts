@@ -1,22 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type ExtractDeps, extractSources, htmlToText, type RunResult } from "./extract.ts";
 import { type Source, scanInputs } from "./sources.ts";
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-extract-"));
-  sandboxes.push(dir);
-  return dir;
-}
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 /** A PATH holding fake converters, so extraction can be driven without any
  * of the real binaries being installed. */
 function fakePath(commands: readonly string[]): string {
-  const dir = sandbox();
+  const dir = sandboxDir("qsm-book-to-skill-extract-");
   for (const command of commands) {
     const path = join(dir, command);
     writeFileSync(path, "#!/bin/sh\nexit 0\n");
@@ -38,15 +30,6 @@ function sourcesIn(dir: string): readonly Source[] {
   return scanInputs([dir]).sources;
 }
 
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
-
 describe("htmlToText", () => {
   test("drops tags, script bodies and entities", () => {
     const html = "<html><style>p{}</style><body><p>One &amp; two</p><script>x()</script></body>";
@@ -56,7 +39,7 @@ describe("htmlToText", () => {
 
 describe("extractSources", () => {
   test("a text source becomes consolidated text with its own metadata", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "book.md"), "# One\nalpha beta\n# Two\ngamma");
     const result = extractSources(sourcesIn(dir), deps({ readFile: () => "# One\nalpha beta" }));
     expect(result.failed).toEqual([]);
@@ -68,7 +51,7 @@ describe("extractSources", () => {
   });
 
   test("a PDF reports pages from the converter's page breaks", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "book.pdf"), "binary");
     const result = extractSources(
       sourcesIn(dir),
@@ -83,7 +66,7 @@ describe("extractSources", () => {
 
 describe("extractSources when a source fails", () => {
   test("a source whose converter is missing fails naming the converter", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "book.mobi"), "binary");
     const result = extractSources(sourcesIn(dir), deps({ pathValue: fakePath([]) }));
     expect(result.sources).toEqual([]);
@@ -91,7 +74,7 @@ describe("extractSources when a source fails", () => {
   });
 
   test("the other sources are unaffected by one that fails", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "good.md"), "alpha");
     writeFileSync(join(dir, "bad.mobi"), "binary");
     const result = extractSources(
@@ -104,7 +87,7 @@ describe("extractSources when a source fails", () => {
   });
 
   test("a converter that exits non-zero reports its own message", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "book.pdf"), "binary");
     const result = extractSources(
       sourcesIn(dir),
@@ -118,7 +101,7 @@ describe("extractSources when a source fails", () => {
   });
 
   test("no source at all leaves empty text and every failure named", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-extract-");
     writeFileSync(join(dir, "a.mobi"), "x");
     writeFileSync(join(dir, "b.mobi"), "y");
     const result = extractSources(sourcesIn(dir), deps({ pathValue: fakePath([]) }));

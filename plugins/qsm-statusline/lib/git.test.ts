@@ -1,26 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitState, isClean, parsePorcelain } from "./git.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 // Every sandbox this file makes is removed after the test that made it,
 // passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-statusline-git-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 function git(cwd: string, ...args: string[]): void {
   spawnSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
 }
@@ -28,7 +14,7 @@ function git(cwd: string, ...args: string[]): void {
 /** A repository with its own identity and no global configuration in play,
  * so the branch name and the commit do not depend on whose machine runs it. */
 function repository(): string {
-  const dir = sandbox();
+  const dir = sandboxDir("qsm-statusline-git-");
   git(dir, "init", "-b", "main");
   git(dir, "config", "user.email", "test@example.invalid");
   git(dir, "config", "user.name", "test");
@@ -94,6 +80,6 @@ describe("gitState", () => {
   });
 
   test("a directory that is not a repository has no git state to show", () => {
-    expect(gitState(sandbox())).toBeNull();
+    expect(gitState(sandboxDir("qsm-statusline-git-"))).toBeNull();
   });
 });

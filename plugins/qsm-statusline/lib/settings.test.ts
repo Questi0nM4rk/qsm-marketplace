@@ -1,28 +1,17 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readStatusLine, STATUS_LINE_COMMAND, describe as say, settingsPath } from "./settings.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 // Every sandbox this file makes is removed after the test that made it,
 // passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
 function settingsFile(contents: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-statusline-settings-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-statusline-settings-");
   const path = join(dir, "settings.json");
   writeFileSync(path, contents);
   return path;
 }
-
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    // A sealed file is unsealed first, or its own removal is denied too.
-    chmodSync(join(dir, "settings.json"), 0o600);
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 describe("readStatusLine", () => {
   test("recognises the entry this plugin wires", () => {
@@ -33,7 +22,7 @@ describe("readStatusLine", () => {
   });
 
   test("a missing file is a fresh machine, which invites a write", () => {
-    expect(readStatusLine(join(tmpdir(), "qsm-statusline-absent", "settings.json"))).toEqual({
+    expect(readStatusLine(join(sandboxDir("qsm-statusline-settings-"), "settings.json"))).toEqual({
       kind: "absent",
     });
   });

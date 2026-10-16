@@ -1,34 +1,17 @@
 // The one step the shared base cannot do: reaching the notebook binary the
 // Go toolchain built into a directory PATH usually cannot see.
-import { afterEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { existsSync, lstatSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { InstallContext } from "../../../lib/install-contract.ts";
 import { NOTEBOOK_BIN, NOTEBOOK_INSTALL_COMMAND } from "../lib/notebook.ts";
 import { install, notebook } from "./install.ts";
-
-const sandboxes: string[] = [];
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 function sandbox(): { home: string; bin: string; gobin: string } {
-  const home = mkdtempSync(join(tmpdir(), "qsm-knowledge-install-"));
-  sandboxes.push(home);
+  const home = sandboxDir("qsm-knowledge-install-");
   return { home, bin: join(home, "bin"), gobin: join(home, "go", "bin") };
 }
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 function context(
   where: { home: string; bin: string; gobin: string },

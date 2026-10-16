@@ -3,23 +3,15 @@
 // a stage from artifacts it wrote itself, with none of the earlier stages
 // ever invoked.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import { analyzeText } from "../lib/structure.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-cli-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
 interface Run {
   readonly status: number;
   readonly stdout: string;
@@ -51,7 +43,7 @@ const FIXTURE = ["# One", "alpha beta", "", "# Two", "gamma delta"].join("\n");
 
 /** A run directory holding only what the analyze stage would have left. */
 function afterAnalyze(): string {
-  const work = sandbox();
+  const work = sandboxDir("qsm-book-to-skill-cli-");
   writeFileSync(join(work, "text.md"), FIXTURE);
   writeFileSync(join(work, "structure.json"), JSON.stringify(analyzeText(FIXTURE)));
   return work;
@@ -90,19 +82,10 @@ function assembleTwoChapters(work: string, out: string): Run {
 }
 
 function assembledAndScanned(work: string): { out: string; scanned: Run } {
-  const out = sandbox();
+  const out = sandboxDir("qsm-book-to-skill-cli-");
   assembleTwoChapters(work, out);
   return { out, scanned: run(["scan", "--work", work]) };
 }
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 describe("the call itself", () => {
   test("help lists every verb and exits 0", () => {
@@ -127,7 +110,7 @@ describe("the call itself", () => {
   });
 
   test("a stage whose input is not there names the file and reports missing", () => {
-    const missing = run(["analyze", "--work", sandbox()]);
+    const missing = run(["analyze", "--work", sandboxDir("qsm-book-to-skill-cli-")]);
     expect(missing.status).toBe(4);
     expect(missing.stderr).toContain("text.md");
   });
@@ -150,7 +133,7 @@ describe("a stage runs on its own", () => {
 
   test("assemble runs from a draft directory and a name passed in", () => {
     const work = drafted();
-    const out = sandbox();
+    const out = sandboxDir("qsm-book-to-skill-cli-");
     const assembled = assembleTwoChapters(work, out);
     expect(assembled.status).toBe(0);
     expect(assembled.stdout).toContain(join(out, "two-chapters"));
@@ -158,21 +141,29 @@ describe("a stage runs on its own", () => {
 
   test("assemble without a description is a usage error, because a generic one never triggers", () => {
     const work = drafted();
-    const assembled = run(["assemble", "--work", work, "--out", sandbox(), "--name", "x-book"]);
+    const assembled = run([
+      "assemble",
+      "--work",
+      work,
+      "--out",
+      sandboxDir("qsm-book-to-skill-cli-"),
+      "--name",
+      "x-book",
+    ]);
     expect(assembled.status).toBe(2);
     expect(assembled.stderr).toContain("description");
   });
 
   test("assemble derives the slug from the text's title when no name is given", () => {
     const work = drafted();
-    const out = sandbox();
+    const out = sandboxDir("qsm-book-to-skill-cli-");
     const assembled = run(["assemble", "--work", work, "--out", out, "--description", "Use when."]);
     expect(assembled.status).toBe(0);
     expect(assembled.stdout).toContain(join(out, "one"));
   });
 
   test("scan runs on a skill directory it is pointed at", () => {
-    const out = sandbox();
+    const out = sandboxDir("qsm-book-to-skill-cli-");
     const dir = join(out, "hand-made");
     mkdirSync(join(dir, "chapters"), { recursive: true });
     writeFileSync(join(dir, "chapters", "01-one.md"), "# One\n\nwritten\n");
@@ -183,8 +174,8 @@ describe("a stage runs on its own", () => {
 
 describe("a stage that resolves nothing fails", () => {
   test("validate exits 1 on a named file it cannot read, and says why", () => {
-    const work = sandbox();
-    const source = join(sandbox(), "notes.bin");
+    const work = sandboxDir("qsm-book-to-skill-cli-");
+    const source = join(sandboxDir("qsm-book-to-skill-cli-"), "notes.bin");
     writeFileSync(source, "not a book");
     const validated = run(["validate", source, "--work", work]);
     expect(validated.status).toBe(1);
@@ -192,8 +183,8 @@ describe("a stage that resolves nothing fails", () => {
   });
 
   test("extract exits 1 when no source extracted, and names each one that failed", () => {
-    const work = sandbox();
-    const gone = join(sandbox(), "gone.md");
+    const work = sandboxDir("qsm-book-to-skill-cli-");
+    const gone = join(sandboxDir("qsm-book-to-skill-cli-"), "gone.md");
     writeFileSync(
       join(work, "sources.json"),
       JSON.stringify({
@@ -227,8 +218,8 @@ describe("scan is the verdict", () => {
 
 describe("a stage that resolves some of its inputs", () => {
   test("a rejected input beside a readable one is partial: exit 0, a warning, the envelope says so", () => {
-    const work = sandbox();
-    const inputs = sandbox();
+    const work = sandboxDir("qsm-book-to-skill-cli-");
+    const inputs = sandboxDir("qsm-book-to-skill-cli-");
     writeFileSync(join(inputs, "book.md"), "# One\n\nalpha\n");
     writeFileSync(join(inputs, "notes.bin"), "not a book");
     const validated = run([
@@ -247,7 +238,7 @@ describe("a stage that resolves some of its inputs", () => {
       join(inputs, "book.md"),
       join(inputs, "notes.bin"),
       "--work",
-      sandbox(),
+      sandboxDir("qsm-book-to-skill-cli-"),
       "--json",
     ]);
     expect(asJson.status).toBe(0);
@@ -255,8 +246,8 @@ describe("a stage that resolves some of its inputs", () => {
   });
 
   test("several inputs are read as one repeatable positional", () => {
-    const work = sandbox();
-    const inputs = sandbox();
+    const work = sandboxDir("qsm-book-to-skill-cli-");
+    const inputs = sandboxDir("qsm-book-to-skill-cli-");
     writeFileSync(join(inputs, "a.md"), "# A\n");
     writeFileSync(join(inputs, "b.md"), "# B\n");
     const validated = run([
@@ -276,7 +267,7 @@ describe("doctor", () => {
   test("doctor with no converter on PATH is ok and warns once per converter", () => {
     const done = spawnSync(process.execPath, [CLI, "doctor", "--json"], {
       encoding: "utf8",
-      env: { ...process.env, PATH: sandbox() },
+      env: { ...process.env, PATH: sandboxDir("qsm-book-to-skill-cli-") },
     });
     expect(done.status).toBe(0);
     const said = z
