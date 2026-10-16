@@ -12,27 +12,16 @@ import { buildIndex } from "./build.ts";
 import { cacheFiles, type Env } from "./paths.ts";
 import { type RunResult, spawnRunner } from "./run.ts";
 import { liveHolder, readStatus } from "./state.ts";
-import {
-  commit,
-  fakeRunner,
-  git,
-  sandbox as makeSandbox,
-  removeSandboxes,
-  repoWithCache,
-  until,
-  world,
-} from "./test-repo.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { commit, fakeRunner, git, killBuilds, repoWithCache, until, world } from "./test-repo.ts";
 import { context, impact, reindex, search, status, structure } from "./tools.ts";
 
 // A detached build starts a bun process and a fake graphify that sleeps; the default 5 s test
 // limit is too tight for the slowest of them.
 setDefaultTimeout(20_000);
 
-function sandbox(): string {
-  return makeSandbox("qsm-index-tools-");
-}
-
-afterEach(removeSandboxes);
+// A build is killed through its lock file, which sandboxDir removes with the sandbox, and a
+// top-level hook runs after sandboxDir's: so each describe that starts builds kills its own.
 
 const HIT: RunResult = { ok: true, stdout: "hit\n", detail: "" };
 
@@ -57,7 +46,7 @@ const ABSENT: RunResult = { ok: false, stdout: "", detail: "semble is not availa
 
 describe("Query an indexed tree", () => {
   test("Query an indexed tree", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-index-tools-");
     const runner = recorder();
     expect(search({ path: dir, query: "where is the parser", top_k: 99 }, runner.run)).toEqual({
       ok: true,
@@ -71,7 +60,7 @@ describe("Query an indexed tree", () => {
       "Search results for: 'q'\n\n## 1. graphify-out/GRAPH_REPORT.md:1-9  [score=0.9]\n```\nx\n```\n\n## 2. src/a.ts:1-9  [score=0.5]\n```\ny\n```\n";
 
     const outcome = search(
-      { path: sandbox(), query: "q" },
+      { path: sandboxDir("qsm-index-tools-"), query: "q" },
       recorder({ ok: true, stdout, detail: "" }).run,
     );
 
@@ -82,7 +71,7 @@ describe("Query an indexed tree", () => {
 
   test("without a result count it asks for five", () => {
     const runner = recorder();
-    search({ path: sandbox(), query: "q" }, runner.run);
+    search({ path: sandboxDir("qsm-index-tools-"), query: "q" }, runner.run);
     expect(runner.calls[0]?.[3]).toBe("5");
   });
 });
@@ -94,12 +83,17 @@ describe("Path is not absolute or does not exist", () => {
     expect(search({ path: "/nope/missing", query: "q" }, runner.run).text).toContain(
       "does not exist",
     );
-    expect(search({ path: sandbox(), query: "  " }, runner.run).text).toBe("query is required");
+    expect(search({ path: sandboxDir("qsm-index-tools-"), query: "  " }, runner.run).text).toBe(
+      "query is required",
+    );
     expect(runner.calls).toEqual([]);
   });
 
   test("a missing semble answers an error result", () => {
-    const outcome = search({ path: sandbox(), query: "q" }, recorder(ABSENT).run);
+    const outcome = search(
+      { path: sandboxDir("qsm-index-tools-"), query: "q" },
+      recorder(ABSENT).run,
+    );
     expect(outcome.ok).toBe(false);
     expect(outcome.text).toContain("semble is not available");
   });
@@ -261,6 +255,8 @@ describe("context", () => {
 });
 
 describe("the staleness line", () => {
+  afterEach(killBuilds);
+
   test("a graph answer from a fresh index carries no staleness line", () => {
     const { repo, env } = built();
     const answer = structure({ repo, op: "explain", node: "a.ts" }, graphRunner().run, env);
@@ -295,6 +291,8 @@ describe("the staleness line", () => {
 });
 
 describe("a stale answer that starts nothing", () => {
+  afterEach(killBuilds);
+
   test("a stale answer in a declined repository says run reindex", () => {
     const { repo, env, files } = background(0);
     buildIndex(repo, { cwd: "/", run: fakeRunner().run, env });
@@ -328,6 +326,8 @@ describe("a stale answer that starts nothing", () => {
 });
 
 describe("a graph read with no index, and search", () => {
+  afterEach(killBuilds);
+
   test("No structural index built yet", () => {
     const { repo, env, files } = background(0);
     const runner = graphRunner();
@@ -364,6 +364,8 @@ function background(seconds: number) {
 }
 
 describe("reindex", () => {
+  afterEach(killBuilds);
+
   test("reindex returns before the build finishes", async () => {
     const { repo, env, files } = background(3);
 
@@ -396,6 +398,8 @@ describe("reindex", () => {
 });
 
 describe("the lock", () => {
+  afterEach(killBuilds);
+
   test("a lock left by a dead build is taken over", async () => {
     const { repo, env, files } = background(1);
     mkdirSync(files.dir, { recursive: true });

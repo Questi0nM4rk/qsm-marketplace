@@ -1,16 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   createWorkspace,
   createWorkspaceArgv,
@@ -38,25 +30,6 @@ async function rejection(promise: Promise<unknown>): Promise<Error | undefined> 
   }
   return undefined;
 }
-
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-worktrunk-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 const PORCELAIN = [
   "worktree /repo",
@@ -92,7 +65,7 @@ function fakeWt(switchHelp = "Options:\n  -c, --create\n  -b, --base <BASE>\n"):
   calls: () => string[];
   dir: string;
 } {
-  const dir = sandbox();
+  const dir = sandboxDir("qsm-worktrunk-");
   const log = join(dir, "calls.log");
   writeFileSync(
     join(dir, "wt"),
@@ -302,7 +275,7 @@ const REAL_WT = spawnSync("sh", ["-c", "command -v wt"], { encoding: "utf8" }).s
  * workspaces under <repo>/.wt, with HOME and XDG dirs inside the sandbox so
  * the real wt never touches this machine's state. */
 function throwawayRepo(): { repo: string; run: Runner; env: NodeJS.ProcessEnv } {
-  const home = sandbox();
+  const home = sandboxDir("qsm-worktrunk-");
   const repo = join(home, "repo");
   mkdirSync(join(home, "config", "worktrunk"), { recursive: true });
   writeFileSync(

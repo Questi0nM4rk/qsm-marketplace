@@ -17,11 +17,12 @@ import { GRAPH_DIR, GRAPH_FILE } from "./build.ts";
 import { buildServer } from "./mcp.ts";
 import type { Env } from "./paths.ts";
 import { type Runner, spawnRunner, timedRunner } from "./run.ts";
-import { removeSandboxes, repoWithCache, sandbox } from "./test-repo.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { killBuilds, repoWithCache } from "./test-repo.ts";
 
 setDefaultTimeout(20_000);
 
-afterEach(removeSandboxes);
+afterEach(killBuilds);
 
 async function connected(run: Runner = spawnRunner, env: Env = process.env): Promise<Client> {
   const client = new Client({ name: "test-client", version: "0" });
@@ -168,7 +169,7 @@ describe("The MCP server registers six tools that never block", () => {
 describe("A bad path answers an error result", () => {
   test("Path is not absolute or does not exist", async () => {
     // Its own PATH and cache: a structure call on an unindexed repository starts a build.
-    const root = sandbox("qsm-index-server-");
+    const root = sandboxDir("qsm-index-server-");
     const env = { PATH: fakePath(root, {}), QSM_INDEX_CACHE_DIR: join(root, "cache") };
     const client = await connected(timedRunner(10_000, env), env);
 
@@ -179,7 +180,7 @@ describe("A bad path answers an error result", () => {
     expect(bad.isError).toBe(true);
     expect(textOf(bad)).toContain("absolute");
 
-    const repo = sandbox("qsm-index-server-");
+    const repo = sandboxDir("qsm-index-server-");
     expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
     const after = await client.callTool({
       name: "structure",

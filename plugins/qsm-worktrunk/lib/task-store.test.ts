@@ -1,27 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { redirectPath, type StoreIo, storePath, writeRedirect } from "./task-store.ts";
-
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-worktrunk-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 /** The engine's file system, as a test reaches it: a write creates the
  * directories it needs, the same as `$.fs.write`. */
@@ -47,7 +28,7 @@ describe("storePath and redirectPath", () => {
 
 describe("writeRedirect", () => {
   test("A task is created inside a workspace", async () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-worktrunk-");
     const main = join(root, "main");
     const workspace = join(root, "feature");
     mkdirSync(join(main, ".beads"), { recursive: true });
@@ -58,7 +39,7 @@ describe("writeRedirect", () => {
   });
 
   test("the redirect's directory is created when the workspace has none", async () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-worktrunk-");
     const main = join(root, "main");
     const workspace = join(root, "feature");
     mkdirSync(join(main, ".beads"), { recursive: true });
@@ -68,7 +49,7 @@ describe("writeRedirect", () => {
   });
 
   test("a main checkout with no store is not redirected to", async () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-worktrunk-");
     const main = join(root, "main");
     const workspace = join(root, "feature");
     mkdirSync(main, { recursive: true });
@@ -79,7 +60,7 @@ describe("writeRedirect", () => {
   });
 
   test("writing twice leaves one line, not two", async () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-worktrunk-");
     const main = join(root, "main");
     const workspace = join(root, "feature");
     mkdirSync(join(main, ".beads"), { recursive: true });

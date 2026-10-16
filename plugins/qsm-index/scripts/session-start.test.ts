@@ -13,10 +13,10 @@ import { buildIndex } from "../lib/build.ts";
 import type { Env } from "../lib/paths.ts";
 import { spawnRunner } from "../lib/run.ts";
 import { readStatus } from "../lib/state.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   detachedBuildTests,
   fakeRunner,
-  sandbox,
   until,
   untilRefreshed,
   verb,
@@ -50,7 +50,7 @@ function moreFiles(repo: string, count: number): void {
 
 test("the session-start hook says nothing outside a git repository", () => {
   const { env } = sleepyWorld();
-  expect(hook(sandbox("qsm-index-hook-plain-"), env)).toEqual(silent);
+  expect(hook(sandboxDir("qsm-index-hook-plain-"), env)).toEqual(silent);
   expect(existsSync(String(env.QSM_INDEX_CACHE_DIR))).toBe(false);
 });
 
