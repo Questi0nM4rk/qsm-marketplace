@@ -139,12 +139,12 @@ class VerbParse {
 
   run(verb: string): ParseResult {
     while (this.at < this.argv.length) {
-      const token = this.argv[this.at];
-      if (token === undefined) {
+      const word = this.argv[this.at];
+      if (word === undefined) {
         break;
       }
       this.at += 1;
-      const err = this.take(token);
+      const err = this.take(word);
       if (err !== null) {
         return { ok: false, message: err, verb };
       }
