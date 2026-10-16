@@ -2,7 +2,7 @@
 // read the same commands and the same locations, so the fix doctor prints is the line install runs.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { type Env, home } from "../../../lib/paths.ts";
+import { claudeDir, type Env } from "../../../lib/paths.ts";
 
 /** The Tavily CLI; its installer drops the `tvly` binary. */
 export const TVLY_INSTALL_LINE = "curl -fsSL https://cli.tavily.com/install.sh | bash";
@@ -45,9 +45,7 @@ export const TAVILY_KEY_LINE = `qsm-secrets set ${TAVILY_KEY}, then run tvly as:
 
 /** The directory Claude Code reads user-level skills from. */
 export function claudeSkillsDir(env: Env): string {
-  const claude = env.CLAUDE_CONFIG_DIR;
-  const root = claude !== undefined && claude.length > 0 ? claude : join(home(env), ".claude");
-  return join(root, "skills");
+  return join(claudeDir(env), "skills");
 }
 
 function hasSkill(env: Env, name: string): boolean {

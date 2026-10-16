@@ -10,7 +10,7 @@ import {
   requiredString,
   runCli,
 } from "../../../lib/cli-base.ts";
-import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { checkTools, doctorVerdict, type Outcome, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { accessibilityTree, busFinding, renderTree } from "../lib/atspi.ts";
 import {
@@ -23,7 +23,6 @@ import {
   screenshot,
 } from "../lib/capture.ts";
 import { UPSTREAM } from "../lib/doctor.ts";
-import { CaptureError } from "../lib/errors.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
 const manifest = parseManifest(manifestJson, "qsm-uix/qsm.json");
@@ -41,22 +40,14 @@ function line<R extends object>(result: R, keys: readonly string[] | Say<R>): st
   return keys.map((key) => `${key}: ${JSON.stringify(said.get(key))}`).join("  ");
 }
 
-/** A CaptureError carries the outcome code its own thrower chose: a missing
- * tool, a call that does not hold, or the capture going wrong. */
+/** A QsmError thrown below reaches the CLI base, which turns it into its outcome code. */
 function captured<R extends object>(
   run: (call: Call) => R | Promise<R>,
   keys: readonly string[] | Say<R>,
 ): Handler {
   return async (call): Promise<Outcome> => {
-    try {
-      const result = await run(call);
-      return ok(result, line(result, keys));
-    } catch (error) {
-      if (error instanceof CaptureError) {
-        return fail(error.code, error.message);
-      }
-      throw error;
-    }
+    const result = await run(call);
+    return ok(result, line(result, keys));
   };
 }
 

@@ -1,6 +1,6 @@
 // The two coordinate shapes every verb takes from the command line.
 
-import { usageError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 export interface Rect {
   readonly x: number;
@@ -28,10 +28,10 @@ export function parseRect(raw: string, flag = "--rect"): Rect {
   const [x, y, w, h] = parts;
   const shaped = parts.length === RECT_FIELDS && parts.every((v) => Number.isInteger(v) && v >= 0);
   if (!shaped || x === undefined || y === undefined || w === undefined || h === undefined) {
-    throw usageError(`${flag} must be X,Y,W,H with non-negative integers, got: ${raw}`);
+    throw new QsmError("usage", `${flag} must be X,Y,W,H with non-negative integers, got: ${raw}`);
   }
   if (w === 0 || h === 0) {
-    throw usageError(`${flag} must have a width and a height above zero, got: ${raw}`);
+    throw new QsmError("usage", `${flag} must have a width and a height above zero, got: ${raw}`);
   }
   return { x, y, w, h };
 }
@@ -42,7 +42,7 @@ export function parsePoint(raw: string, flag: string): Point {
   const [x, y] = parts;
   const shaped = parts.length === POINT_FIELDS && parts.every((v) => Number.isInteger(v) && v >= 0);
   if (!shaped || x === undefined || y === undefined) {
-    throw usageError(`${flag} must be X,Y with non-negative integers, got: ${raw}`);
+    throw new QsmError("usage", `${flag} must be X,Y with non-negative integers, got: ${raw}`);
   }
   return { x, y };
 }
@@ -50,7 +50,10 @@ export function parsePoint(raw: string, flag: string): Point {
 /** A count flag: an integer at or above `min`. */
 export function requireCount(value: number | undefined, flag: string, min: number): number {
   if (value === undefined || !Number.isInteger(value) || value < min) {
-    throw usageError(`${flag} must be an integer of at least ${min}, got: ${value ?? "nothing"}`);
+    throw new QsmError(
+      "usage",
+      `${flag} must be an integer of at least ${min}, got: ${value ?? "nothing"}`,
+    );
   }
   return value;
 }
@@ -58,7 +61,10 @@ export function requireCount(value: number | undefined, flag: string, min: numbe
 /** A measurement flag that may be fractional: a zoom factor, a delay. */
 export function requireAmount(value: number | undefined, flag: string, min: number): number {
   if (value === undefined || !Number.isFinite(value) || value < min) {
-    throw usageError(`${flag} must be a number of at least ${min}, got: ${value ?? "nothing"}`);
+    throw new QsmError(
+      "usage",
+      `${flag} must be a number of at least ${min}, got: ${value ?? "nothing"}`,
+    );
   }
   return value;
 }

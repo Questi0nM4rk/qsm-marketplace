@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { CaptureError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parsePoint, parseRect, requireAmount, requireCount } from "./geometry.ts";
 
 /** The outcome code of what the call throws. */
@@ -8,7 +8,7 @@ function codeOf(call: () => unknown): unknown {
   try {
     call();
   } catch (error) {
-    return error instanceof CaptureError ? error.code : undefined;
+    return error instanceof QsmError ? error.code : undefined;
   }
   return undefined;
 }
