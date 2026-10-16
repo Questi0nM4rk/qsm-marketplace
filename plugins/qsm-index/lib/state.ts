@@ -107,39 +107,50 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
 }
 
-function isNullable<T>(value: unknown, guard: (item: unknown) => item is T): value is T | null {
-  return value === null || guard(value);
+/** A guard for a field that is either null or what `guard` accepts. */
+function nullable<T>(guard: (item: unknown) => item is T): (value: unknown) => value is T | null {
+  return (value): value is T | null => value === null || guard(value);
 }
 
 const isString = (value: unknown): value is string => typeof value === "string";
 const isNumber = (value: unknown): value is number => typeof value === "number";
+const isState = (value: unknown): value is "running" | "done" =>
+  value === "running" || value === "done";
 const isPhase = (value: unknown): value is "graph" | "semantic" =>
   value === "graph" || value === "semantic";
 const isResult = (value: unknown): value is BuildResult =>
   value === "ok" || value === "partial" || value === "failed";
 
+/** One guard per field of the status file, so no field a reader uses goes unchecked. */
+const STATUS_FIELDS: {
+  readonly [K in keyof BuildStatus]-?: (value: unknown) => value is BuildStatus[K];
+} = {
+  repo: isString,
+  state: isState,
+  phase: nullable(isPhase),
+  started_at: isString,
+  finished_at: nullable(isString),
+  duration_ms: nullable(isNumber),
+  result: nullable(isResult),
+  cause: nullable(isString),
+  built_at_commit: nullable(isString),
+  changed_at_build: isStringRecord,
+  warning: nullable(isString),
+};
+
+function hasStatusFields(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & BuildStatus {
+  return Object.entries(STATUS_FIELDS).every(([field, guard]) => guard(value[field]));
+}
+
 /** The status when every field a reader uses has its type; null for anything else. */
 function parseStatus(value: unknown): BuildStatus | null {
-  if (!isRecord(value)) {
+  if (!(isRecord(value) && hasStatusFields(value))) {
     return null;
   }
   const { repo, state, phase, started_at, finished_at, duration_ms, result, cause } = value;
   const { built_at_commit, changed_at_build, warning } = value;
-  if (
-    !isString(repo) ||
-    (state !== "running" && state !== "done") ||
-    !isNullable(phase, isPhase) ||
-    !isString(started_at) ||
-    !isNullable(finished_at, isString) ||
-    !isNullable(duration_ms, isNumber) ||
-    !isNullable(result, isResult) ||
-    !isNullable(cause, isString) ||
-    !isNullable(built_at_commit, isString) ||
-    !isStringRecord(changed_at_build) ||
-    !isNullable(warning, isString)
-  ) {
-    return null;
-  }
   return {
     repo,
     state,
