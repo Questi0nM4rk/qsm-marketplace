@@ -3,13 +3,16 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   renameSync,
   rmdirSync,
   rmSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -26,9 +29,13 @@ import {
 import { binDir, buildRecordPath, type Env, fishCompletionDir } from "./paths.ts";
 import { loadManifest, type QsmManifest } from "./qsm-manifest.ts";
 
-interface UpstreamTool {
-  /** what `command -v` must find */
-  readonly cmd: string;
+export interface UpstreamTool {
+  /** what `command -v` must find; a function reads it from the install env (a tool whose name
+   * the user's settings choose) */
+  readonly cmd: string | ((env: InstallContext["env"]) => string);
+  /** present when any of these is on PATH, instead of `cmd`, which then only names the step: a
+   * plugin that works with either of two tools */
+  readonly anyOf?: readonly string[];
   /** run when the tool is missing; omit only when no command can do it
    * unattended (a system package manager, sudo, a login) */
   readonly install?: readonly string[];
@@ -63,6 +70,58 @@ async function extraSteps(config: InstallBaseConfig, ctx: InstallContext): Promi
 // Array.isArray does not narrow a readonly array out of a union.
 function isStepList(extra: ExtraSteps): extra is readonly Step[] {
   return Array.isArray(extra);
+}
+
+/** Links `name` in the user's bin directory to `source`. A link there is replaced; anything else
+ * is the user's and stays, as an error. */
+export function linkBin(ctx: InstallContext, name: string, source: string): Step {
+  const step = `link ${name}`;
+  const target = join(binDir(ctx.env), name);
+  // lstat, not exists: a dangling link from an earlier install is still there
+  const at = lstatSync(target, { throwIfNoEntry: false });
+  if (at !== undefined && !at.isSymbolicLink()) {
+    return { name: step, status: "error", detail: `${target} exists and is not a link; remove it` };
+  }
+  if (at !== undefined && readlinkSync(target) === source) {
+    return { name: step, status: "already", detail: `${target} unchanged` };
+  }
+  if (ctx.dryRun) {
+    return { name: step, status: "skipped", detail: `would link ${target} to ${source}` };
+  }
+  mkdirSync(binDir(ctx.env), { recursive: true });
+  if (at !== undefined) {
+    unlinkSync(target);
+  }
+  symlinkSync(source, target);
+  return { name: step, status: "installed", detail: `linked ${target} to ${source}` };
+}
+
+/** Removes the links in the bin directory that start with `prefix`, point at `source`, and are no
+ * longer in `wanted`; each removal is a step, and a second run finds none. */
+export function removeOwnedLinks(
+  ctx: InstallContext,
+  prefix: string,
+  wanted: readonly string[],
+  source: string,
+): Step[] {
+  const dir = binDir(ctx.env);
+  const names = existsSync(dir) ? readdirSync(dir) : [];
+  return names
+    .filter((n) => n.startsWith(prefix) && !wanted.includes(n))
+    .filter(
+      (n) => lstatSync(join(dir, n)).isSymbolicLink() && readlinkSync(join(dir, n)) === source,
+    )
+    .map((n) => {
+      if (!ctx.dryRun) {
+        unlinkSync(join(dir, n));
+      }
+      const verb = ctx.dryRun ? "would remove" : "removed";
+      return {
+        name: `link ${n}`,
+        status: ctx.dryRun ? "skipped" : "installed",
+        detail: `${verb} the stale link ${join(dir, n)}`,
+      };
+    });
 }
 
 /** The one line for a plugin that installs nothing, dry run or real. */
@@ -265,11 +324,16 @@ function pruneSteps(pluginRoot: string): Step[] {
 
 type Missing = Pick<Step, "status" | "detail">;
 
+function cmdOf(tool: UpstreamTool, env: InstallContext["env"]): string {
+  return typeof tool.cmd === "string" ? tool.cmd : tool.cmd(env);
+}
+
 /** An upstream tool's step: already when probed on PATH, else what `whenMissing` says. */
 function upstreamStep(ctx: InstallContext, tool: UpstreamTool, whenMissing: () => Missing): Step {
-  const name = `upstream ${tool.cmd}`;
-  return ctx.probe(tool.cmd)
-    ? { name, status: "already", detail: `${tool.cmd} on PATH` }
+  const cmd = cmdOf(tool, ctx.env);
+  const name = `upstream ${cmd}`;
+  return (tool.anyOf ?? [cmd]).some((c) => ctx.probe(c))
+    ? { name, status: "already", detail: `${cmd} on PATH` }
     : { name, ...whenMissing() };
 }
 
@@ -280,7 +344,7 @@ function installUpstream(ctx: InstallContext, tool: UpstreamTool): Step {
     const optional = tool.optional === true;
     if (cmd === undefined) {
       const status = optional ? "suggested" : "missing-prereq";
-      return { status, detail: `${tool.cmd} is not on PATH: ${tool.hint}` };
+      return { status, detail: `${cmdOf(tool, ctx.env)} is not on PATH: ${tool.hint}` };
     }
     const exit = ctx.run(cmd, args);
     if (exit === 0) {
@@ -298,7 +362,7 @@ function planUpstream(ctx: InstallContext, tool: UpstreamTool): Step {
     status: tool.optional === true ? "suggested" : "missing-prereq",
     detail:
       tool.install === undefined
-        ? `would need ${tool.cmd}: ${tool.hint}`
+        ? `would need ${cmdOf(tool, ctx.env)}: ${tool.hint}`
         : `would run ${tool.install.join(" ")}`,
   }));
 }

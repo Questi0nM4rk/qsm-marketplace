@@ -4,8 +4,10 @@ import {
   accessSync,
   constants,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
+  symlinkSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -14,7 +16,7 @@ import { join, resolve } from "node:path";
 import { MARKER } from "./completions.ts";
 import { isolatedEnv, runBin } from "./fixtures/cli.ts";
 import { sandboxDir } from "./fixtures/sandbox.ts";
-import { installBase, installScript } from "./install-base.ts";
+import { installBase, installScript, linkBin, removeOwnedLinks } from "./install-base.ts";
 import type { InstallContext, InstallResult } from "./install-contract.ts";
 import { isRecord } from "./outcome.ts";
 
@@ -402,7 +404,7 @@ process.exit(await activationMain(activation));
   test("Activation with an unanswered choice and no terminal", () => {
     expect(envelope([])).toMatchObject({
       exit: 2,
-      body: { code: "usage", message: "activation needs --instructions <replace|overwrite|skip>" },
+      body: { code: "usage", message: "missing required flag --instructions" },
     });
   });
 
@@ -411,7 +413,7 @@ process.exit(await activationMain(activation));
       exit: 2,
       body: {
         code: "usage",
-        message: "--instructions takes replace, overwrite or skip, not merge",
+        message: "--instructions must be one of replace, overwrite, skip",
       },
     });
   });
@@ -433,5 +435,39 @@ describe("installScript", () => {
     })(dry.ctx);
     expect(viaScript).toEqual(await install(dry.ctx));
     expect(viaScript.steps.length).toBeGreaterThan(0);
+  });
+});
+
+describe("an installer refuses what it does not know", () => {
+  test("An unknown flag is usage, exit 2, and installs nothing", () => {
+    const r = spawnSync("bun", [join(FIXTURE, "scripts/install.ts"), "--bogus", "--json"], {
+      encoding: "utf8",
+    });
+    expect(r.status).toBe(2);
+    expect(JSON.parse(r.stdout)).toMatchObject({ code: "usage", message: "unknown flag --bogus" });
+  });
+});
+
+describe("links in the bin directory", () => {
+  test("A second run links nothing and removes nothing", () => {
+    const f = fake();
+    const bin = join(f.home, "bin");
+    mkdirSync(bin, { recursive: true });
+    symlinkSync("qsm-tool", join(bin, "qsm-old-a"));
+    const run = () => [
+      linkBin(f.ctx, "qsm-old-b", "qsm-tool"),
+      ...removeOwnedLinks(f.ctx, "qsm-old-", ["qsm-old-b"], "qsm-tool"),
+    ];
+    expect(run().map((s) => s.status)).toEqual(["installed", "installed"]);
+    expect(readdirSync(bin)).toEqual(["qsm-old-b"]);
+    expect(run().map((s) => s.status)).toEqual(["already"]);
+  });
+
+  test("A file that is not a link stays, and is an error", () => {
+    const f = fake();
+    mkdirSync(join(f.home, "bin"), { recursive: true });
+    writeFileSync(join(f.home, "bin", "qsm-mine"), "mine");
+    expect(linkBin(f.ctx, "qsm-mine", "qsm-tool").status).toBe("error");
+    expect(lstatSync(join(f.home, "bin", "qsm-mine")).isFile()).toBe(true);
   });
 });

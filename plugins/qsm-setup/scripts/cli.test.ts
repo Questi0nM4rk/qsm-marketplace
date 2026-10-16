@@ -145,7 +145,7 @@ describe("activate runs a plugin's activation only with every choice given", () 
     expect(r.exit).toBe(2);
     expect(JSON.parse(r.stdout)).toMatchObject({
       code: "usage",
-      message: "activation needs --instructions <replace|overwrite|skip>",
+      message: "missing required flag --instructions",
     });
     expect(readdirSync(claudeHome)).toEqual([]);
   });
