@@ -11,7 +11,7 @@ and straightforward: we value each other's time and do not overcomplicate. Singl
 
 ```text
 .claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0, imports no third-party package (a plugin's packages are in its own package.json, installed by its installer): install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
+lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-error.ts, qsm-manifest.ts, completions.ts, paths.ts, fs.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/ (sandbox, cli-fixture, cli, git, bin: tests only), nothing else
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
@@ -75,20 +75,24 @@ touching its users (Cockburn, ports and adapters).
    no "previously". Git is the only history. A `plugin.json` carries no `version`: Claude Code
    then names the plugin's cache after the commit, so `claude plugin update` picks up each new
    commit; a pinned version keeps the old copy forever. Enforced by `validate-plugin-contracts`.
-7. **The plugin is the install unit.** `scripts/install.ts` exports `install(ctx)` from
-   `lib/install-contract.ts`; a plugin that needs another names it in the `dependencies` array of
-   its `.claude-plugin/plugin.json`, with its reason in the spec (Architecture, rule 2), and never
-   shells out to a sibling installer. That field is Claude Code's own: `claude plugin install`
-   resolves it and reports `+ 1 dependency: <name>`.
+7. **The plugin is the install unit.** `scripts/install.ts` MUST be one `installScript` call, a
+   link into the user's bin directory MUST go through `linkBin`, and `cliMain` and
+   `activationMain` MUST parse argv against their built-in manifest, so nothing else in an
+   installer reads `process.argv` (review only); a plugin that needs another names it in the
+   `dependencies` array of its `.claude-plugin/plugin.json`, with its reason in the spec
+   (Architecture, rule 2), and never shells out to a sibling installer. That field is Claude
+   Code's own: `claude plugin install` resolves it and reports `+ 1 dependency: <name>`.
 8. **One plugin, one binary, named after the plugin; its descriptions live in `qsm.json` under
    `qsm.commands`.** A verb may be several words (`qsm-usage toon encode`), and the generated
    noun joins them into one method (`$.usage.toonEncode`). Help, completions, and the noun read
    one source.
-9. **A CLI is a compiled binary on the user's PATH, and reads arguments and `QSM_*` environment
-   variables only.** Nothing is invoked through a path into this repository, not by a hook, not
-   by a skill, not by an agent; install compiles every bin and hook and links the bins into the
-   user's bin directory, and everything a binary needs at run time is inside it. That is what
-   makes a tool runnable from a test or a shell with no harness and no checkout in the room.
+9. **A CLI is a compiled binary on the user's PATH, and reads arguments, `QSM_*` and the
+   harness's `CLAUDE_*` environment variables only; plugin code MUST read HOME, `XDG_*` and
+   `CLAUDE_CONFIG_DIR` only through `lib/paths.ts`, never by name.** Nothing is invoked through a
+   path into this repository, not by a hook, not by a skill, not by an agent; install compiles
+   every bin and hook and links the bins into the user's bin directory, and everything a binary
+   needs at run time is inside it. That is what makes a tool runnable from a test or a shell with
+   no harness and no checkout in the room. Enforced by `validate-no-private-helpers` (the paths).
 10. **No work- or machine-specific content.** Employer names, tenant identifiers, machine paths stay
     in the machine-local marketplace. This repository is public.
 
@@ -96,7 +100,11 @@ touching its users (Cockburn, ports and adapters).
 
 1. Every agent needs it on every task: this file, one or two lines per entry.
 2. It is behaviour of one plugin: that plugin, with its spec in `openspec/specs/<name>/spec.md`.
-3. Two plugins need the same code: root `lib/`, and only after the second consumer exists.
+3. Two plugins need the same code: root `lib/`, and a new root export MUST land in the change that
+   deletes at least two plugin copies of it (review only). A plugin MUST never define its own copy
+   of a helper root `lib/` exports (`isRecord`, `messageOf`, `onPath`, `binPath`, `readStdin`,
+   `claudeDir`, `writeAtomic`); only a hooks-sandbox file may copy one, with root's body and a
+   `// differs: hooks sandbox` marker. Enforced by `validate-no-private-helpers`.
 
 ## Operational notes
 
@@ -122,24 +130,35 @@ touching its users (Cockburn, ports and adapters).
   `WorktreeCreate` hook prints the bare path. Raw bash is bootstrap glue only.
 - **Loud or working, never silent.** A state that cannot be used is `missing`, `failed`, `worse`
   or `blocked` with the cause named; a warning is only for a half-state that still works. Spec:
-  the outcome system requirement.
+  the outcome system requirement. A CLI failure MUST be `fail(code, ...)` or a thrown root
+  `QsmError` (`UsageError` for a wrong call), and a plugin never defines an error class that
+  carries an outcome code (review only).
 - **Evals over unit tests.** A change is proved by the least work that runs the real path end to
   end; a unit test only for logic an eval cannot reach. A skill's or agent's eval is
   `bun run eval <plugin>` (`evals/` in the plugin). Single user, personal tools: no test count goal.
+  A test MUST spawn a CLI with `runBin` and `isolatedEnv`, write a fake binary with `fakeBin`, and
+  build a git repo with `lib/fixtures/git.ts`, and never spreads `process.env` into a child
+  (the spread enforced by `validate-no-private-helpers`, the rest review only).
 - **A test leaves no temp behind.** The `bun test` preload `lib/fixtures/sandbox.ts` points TMPDIR
   at one dir per run, removes each `sandboxDir` after its test, and fails the run naming every
   leftover; `validate-test-temp` fails on `mkdtemp`, `mkdtempSync` or `tmpdir()` in
   any test file or test-only helper, so a test's temp dir is `sandboxDir`.
 - **Every seam proves itself, or the gate fails loud** (spec: hooks prove seams and behaviour, fail
   loud). One reader per seam in `hooks/`: `bun test` feeds binary output, `claude plugin test` feeds
-  shapes; a stub alone is never proof. A `.catch` toasts `<plugin> ERROR: <event>: <reason>`, logs,
-  keeps its open/closed policy. A classic command hook's `bun test` spawns it on stdin.
+  shapes; a stub alone is never proof. Every `.catch` in a hooks module with a noun MUST call the
+  generated `failure()`, which toasts `<plugin> ERROR: <event>: <reason>` and logs, before it
+  applies its own open/closed policy (review only). A classic command hook's `bun test` spawns it
+  on stdin.
 - **Types are shipped, never guessed.** `bun run plugin-types` regenerates `.claude/types/`
-  (gitignored); every hooks module typechecks against it through its `hooks/tsconfig.json`, run by
+  (gitignored); every hooks module typechecks against it through its `hooks/tsconfig.json`, which
+  MUST extend the root `tsconfig.hooks.json` and list only includes that exist, run by
   `bun run typecheck`. An IDE showing `Cannot find module 'claude-code'` on `hooks/register.tsx` is
   using the wrong project; the gate is the verdict. A plugin that adds a noun commits its contract,
   `types/index.d.ts`, generated by `lib/generate-noun.ts` and named in plugin.json as `types`. A
   hooks module never shells out to a sibling's bin by path.
+- **One pin per package.** An npm package MUST be pinned to one exact version in the package.json
+  of every plugin that imports it, and root `lib/` imports none. Enforced by
+  `validate-npm-packages`. A Python tool MUST be installed with `uv tool install` (review only).
 - **A tool cleans before and after itself.** An installer purges every older version's artifact
   (link, PATH block, data dir, backup) before it writes and names each removal; a second run
   removes nothing. Anything that creates a temp directory writes the full cleanup; a `finally` is
