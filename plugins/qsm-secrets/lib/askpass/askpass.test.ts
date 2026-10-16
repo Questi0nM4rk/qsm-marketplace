@@ -1,13 +1,12 @@
 // The askpass path against a fake `qs`: request parse, provider mapping, the reply socket's
 // lifecycle, and the link a consumer's env variable points at, run as a compiled binary.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -15,9 +14,9 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { sleep, spawn } from "bun";
+import { sandboxDir } from "../../../../lib/fixtures/sandbox.ts";
 import { ask } from "./ask.ts";
 import { FAKE_QS } from "./fake-qs.ts";
 import { providerOf } from "./index.ts";
@@ -34,8 +33,8 @@ let bin = "";
 let runtime = "";
 let log = "";
 
-beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), "qsm-askpass-"));
+beforeEach(() => {
+  root = sandboxDir("qsm-askpass-");
   bin = join(root, "bin");
   runtime = join(root, "run");
   log = join(root, "qs.log");
@@ -43,10 +42,6 @@ beforeAll(() => {
   mkdirSync(runtime, { mode: 0o700 });
   writeFileSync(join(bin, "qs"), FAKE_QS);
   chmodSync(join(bin, "qs"), 0o755);
-});
-
-afterAll(() => {
-  rmSync(root, { recursive: true, force: true });
 });
 
 const env = (extra: Record<string, string> = {}): Record<string, string | undefined> => ({
