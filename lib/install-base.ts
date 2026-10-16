@@ -104,7 +104,7 @@ export function linkBin(ctx: InstallContext, name: string, source: string): Step
   }
   mkdirSync(binDir(ctx.env), { recursive: true });
   if (there !== undefined) {
-    rmSync(target);
+    unlinkSync(target);
   }
   symlinkSync(source, target);
   const forced = foreign ? ` (--force replaced ${what})` : "";
