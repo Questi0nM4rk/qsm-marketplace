@@ -86,7 +86,7 @@ describe("the notebook step", () => {
     const where = sandbox();
     goInstalled(where.gobin);
     mkdirSync(where.bin, { recursive: true });
-    symlinkSync(join(where.home, "gone"), join(where.bin, NOTEBOOK_BIN));
+    symlinkSync(join(where.gobin, "gone"), join(where.bin, NOTEBOOK_BIN));
     expect(notebook(context(where)).status).toBe("installed");
   });
 

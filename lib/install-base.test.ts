@@ -7,6 +7,7 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readlinkSync,
   symlinkSync,
   readFileSync,
   rmSync,
@@ -375,6 +376,50 @@ process.exit(await cliMain(install));
     expect(r.exit).toBe(0);
     expect(JSON.parse(r.stdout)).toMatchObject({ code: "ok", data: { tool: "noisy" } });
     expect(r.stderr).toContain("noise on stdout");
+  });
+});
+
+describe("an install refuses a link that is not ours unless told --force", () => {
+  function linking(): { script: string; env: Record<string, string>; link: string } {
+    const dir = sandboxDir("qsm-install-link-");
+    const script = join(dir, "install.ts");
+    const base = resolve(import.meta.dir, "install-base.ts");
+    const contract = resolve(import.meta.dir, "install-contract.ts");
+    writeFileSync(
+      script,
+      `import { linkBin } from ${JSON.stringify(base)};
+import { cliMain } from ${JSON.stringify(contract)};
+const install = (ctx) => {
+  const step = linkBin(ctx, "qsm-linked", ${JSON.stringify(join(dir, "dist", "qsm-linked"))});
+  return { tool: "linker", status: step.status, detail: step.detail, steps: [step] };
+};
+process.exit(await cliMain(install));
+`,
+    );
+    const env = { ...isolatedEnv(dir), QSM_BIN_DIR: join(dir, "bin") };
+    mkdirSync(join(dir, "bin"));
+    const link = join(dir, "bin", "qsm-linked");
+    symlinkSync("/usr/bin/env", link);
+    return { script, env, link };
+  }
+
+  test("Without --force the foreign link stays and the message says how", () => {
+    const f = linking();
+    const r = runBin(f.script, ["--json"], { env: f.env });
+    expect(r.exit).not.toBe(0);
+    const out: unknown = JSON.parse(r.stdout);
+    const message = isRecord(out) ? String(out["message"]) : "";
+    expect(message).toContain("a link to /usr/bin/env");
+    expect(message).toContain("--force");
+    expect(readlinkSync(f.link)).toBe("/usr/bin/env");
+  });
+
+  test("With --force it replaces the link and says so", () => {
+    const f = linking();
+    const r = runBin(f.script, ["--json", "--force"], { env: f.env });
+    expect(r.exit).toBe(0);
+    expect(r.stdout).toContain("--force replaced a link to /usr/bin/env");
+    expect(readlinkSync(f.link)).toContain("qsm-linked");
   });
 });
 
