@@ -40,6 +40,9 @@ export function* walk(dir: string): Generator<string> {
   }
 }
 
+/** A TypeScript source file, declaration files excluded. */
+export const isSource = (f: string): boolean => /\.tsx?$/.test(f) && !f.endsWith(".d.ts");
+
 /** plugins/<name> directories. */
 export function pluginDirs(): string[] {
   if (!existsSync(pluginsDir)) {

@@ -4,7 +4,7 @@
   "license": "GPL-3.0",
   "type": "module",
   "scripts": {
-    "validate": "bun .gates/validate-plugin-contracts.ts && bun .gates/validate-file-size.ts && bun .gates/validate-no-cross-plugin-import.ts && bun .gates/validate-generated.ts && bun .gates/validate-why-it-exists.ts && bun .gates/validate-dependencies.ts && bun .gates/validate-test-temp.ts",
+    "validate": "bun .gates/validate-plugin-contracts.ts && bun .gates/validate-file-size.ts && bun .gates/validate-no-cross-plugin-import.ts && bun .gates/validate-generated.ts && bun .gates/validate-why-it-exists.ts && bun .gates/validate-dependencies.ts && bun .gates/validate-deps.ts && bun .gates/validate-no-private-helpers.ts && bun .gates/validate-test-temp.ts",
     "lint": "oxlint --deny-warnings && oxfmt --check \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",
     "lint:fix": "oxlint --fix && oxfmt \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",
     "typecheck": "bun check && bun .gates/typecheck-hooks.ts",
@@ -13,7 +13,7 @@
     "eval": "bun .gates/plugin-eval.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.3",
+    "@types/bun": "1.4.3",
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
