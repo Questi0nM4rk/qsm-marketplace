@@ -10,7 +10,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -21,10 +20,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import { bareRuntimePath, fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
-import { FAKE_QS } from "../lib/askpass/fake-qs.ts";
+import { fakeQs } from "../lib/askpass/fake-qs.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const PANE = resolve(import.meta.dir, "../qml/askpass");
@@ -35,20 +36,6 @@ const WORK_VALUE = "work-value-1";
 const CAPTURED_VALUE = "hunter2-x";
 const VALUE_MARKERS = [VALUE, NPM_VALUE, WORK_VALUE, CAPTURED_VALUE, "s3cret-value", "other-value"];
 
-/** A directory holding only a link to the runtime, so the no-backend case runs against a PATH
- * that provably cannot resolve a backend, even where the runtime shares its directory with one. */
-let runtimeOnlyDir = "";
-
-function writeScript(path: string, body: string): void {
-  writeFileSync(path, body);
-  chmodSync(path, 0o755);
-}
-
-beforeEach(() => {
-  runtimeOnlyDir = sandboxDir("qsm-secrets-runtime-");
-  symlinkSync(process.execPath, join(runtimeOnlyDir, "bun"));
-});
-
 interface Run {
   readonly code: number;
   readonly stdout: string;
@@ -58,7 +45,7 @@ interface Run {
 /** With a backend: its directory first. Without one: the runtime alone, so no backend installed
  * on the machine running these tests can answer. */
 function pathWith(bin: string | null): string {
-  return bin === null ? runtimeOnlyDir : `${bin}:${process.env.PATH ?? ""}`;
+  return bin === null ? bareRuntimePath() : `${bin}:${process.env.PATH ?? ""}`;
 }
 
 /** EDITOR is pinned rather than inherited: the doctor's editor check reads
@@ -66,18 +53,20 @@ function pathWith(bin: string | null): string {
  * proof of anything. */
 const FIXED_ENV = { QSM_SECRETS_FOLDER: "qsm", EDITOR: "true" };
 
-/** One child with the pinned environment; `env` adds to it or overrides it. */
-function spawned(
-  command: string,
-  args: string[],
-  env: Record<string, string> = {},
-  input?: string,
-): Run {
-  const result = spawnSync(command, args, {
-    encoding: "utf8",
-    input,
-    env: { ...process.env, ...FIXED_ENV, ...env },
-  });
+/** The environment of every child: the pinned one, then `env`; its HOME, else a fresh one. */
+function childEnv(env: Record<string, string>): Record<string, string> {
+  return isolatedEnv(env.HOME ?? sandboxDir("qsm-secrets-home-"), { ...FIXED_ENV, ...env });
+}
+
+/** The CLI with the pinned environment; `env` adds to it or overrides it. */
+function cliRun(args: string[], env: Record<string, string> = {}, input?: string): Run {
+  const r = runBin(CLI, args, { env: childEnv(env), ...(input === undefined ? {} : { input }) });
+  return { code: r.exit, stdout: r.stdout, stderr: r.stderr };
+}
+
+/** Another program (a shell, `script`, `env`) under the same environment. */
+function spawned(command: string, args: string[], env: Record<string, string> = {}): Run {
+  const result = spawnSync(command, args, { encoding: "utf8", env: childEnv(env) });
   return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -151,8 +140,7 @@ const placeholderOf = (id: string): string => ["{{", "secret", ":", id, "}}"].jo
  * stands in for the prompt and takes FAKE_TYPED. FAKE_LOCKED names the one key whose value cannot
  * be read, as a locked vault answers. */
 function fakeSecretTool(store: string): string {
-  return `#!/bin/sh
-store='${store}'
+  return `store='${store}'
 verb="$1"; shift
 case "$verb" in
   search)
@@ -202,8 +190,7 @@ esac
  * not this wrapper. `add` takes the value from stdin, or from FAKE_TYPED where stdin is a terminal.
  * FAKE_LOCKED names the one entry `get` cannot read. */
 function fakeRbw(store: string): string {
-  return `#!/bin/sh
-store='${store}'
+  return `store='${store}'
 verb="$1"; shift
 folder=""; name=""; user=""
 while [ $# -gt 0 ]; do
@@ -270,7 +257,7 @@ function terminal(command: string, env: Record<string, string>): Run {
 }
 
 describe("the shared CLI base", () => {
-  const cli = (args: string[]): Run => spawned("bun", [CLI, ...args], { PATH: pathWith(null) });
+  const cli = (args: string[]): Run => cliRun(args, { PATH: pathWith(null) });
 
   test("--help lists every verb qsm.json declares", () => {
     const run = cli(["--help"]);
@@ -302,9 +289,8 @@ describe("the shared CLI base", () => {
   test("mask --all with no backend chosen returns every string unchanged", () => {
     const home = sandboxDir("qsm-secrets-nochoice-");
     const rows = ["tok=hunter2", "plain"];
-    const run = spawned(
-      "bun",
-      [CLI, "mask", "--all", "--json"],
+    const run = cliRun(
+      ["mask", "--all", "--json"],
       { PATH: pathWith(null), HOME: home, XDG_CONFIG_HOME: home },
       JSON.stringify(rows),
     );
@@ -313,7 +299,7 @@ describe("the shared CLI base", () => {
   });
 
   test("clean without a runtime directory is ok and removes nothing", () => {
-    const run = spawned("bun", [CLI, "clean", "--session", "s1", "--json"], {
+    const run = cliRun(["clean", "--session", "s1", "--json"], {
       PATH: pathWith(null),
       XDG_RUNTIME_DIR: "",
     });
@@ -344,9 +330,8 @@ for (const flavor of FLAVORS) {
       args: string[],
       options: { backend?: boolean; input?: string; env?: Record<string, string> } = {},
     ): Run =>
-      spawned(
-        "bun",
-        [CLI, ...args],
+      cliRun(
+        args,
         environment({
           ...(options.backend === false ? { PATH: pathWith(null) } : {}),
           ...options.env,
@@ -362,12 +347,12 @@ for (const flavor of FLAVORS) {
       home = sandboxDir("qsm-secrets-home-");
       runtime = sandboxDir("qsm-secrets-run-");
       if (flavor.name === "libsecret") {
-        writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
-        writeScript(join(bin, "secret-tool"), flavor.fake(store));
+        fakeBin(bin, "busctl", "exit 0");
+        fakeBin(bin, "secret-tool", flavor.fake(store));
       } else {
-        writeScript(join(bin, "rbw"), flavor.fake(store));
+        fakeBin(bin, "rbw", flavor.fake(store));
       }
-      writeScript(join(bin, "qs"), FAKE_QS);
+      fakeQs(bin);
       const project = join(home, ".claude", "projects", "p");
       mkdirSync(project, { recursive: true });
       writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
@@ -1077,7 +1062,7 @@ describe("rbw: an entry another tool stored", () => {
   beforeEach(() => {
     bin = sandboxDir("qsm-secrets-rbw-bin-");
     store = sandboxDir("qsm-secrets-rbw-store-");
-    writeScript(join(bin, "rbw"), fakeRbw(store));
+    fakeBin(bin, "rbw", fakeRbw(store));
     writeFileSync(join(store, "qsm__github-token"), VALUE);
     writeFileSync(join(store, "qsm__legacy-key"), "legacy-value");
     writeFileSync(join(store, "qsm__legacy-key.user"), "alice");
@@ -1085,8 +1070,8 @@ describe("rbw: an entry another tool stored", () => {
 
   test("is not listed as ours, and inspect shows it as stored by another", () => {
     const env = { QSM_SECRETS_BACKEND: "rbw", PATH: pathWith(bin) };
-    expect(spawned("bun", [CLI, "list"], env).stdout.trim()).toBe("github-token");
-    const inspected = spawned("bun", [CLI, "inspect"], env);
+    expect(cliRun(["list"], env).stdout.trim()).toBe("github-token");
+    const inspected = cliRun(["inspect"], env);
     expect(inspected.stdout).toContain("name: legacy-key");
     expect(inspected.stdout).toContain("stored-by: other");
     expect(leaked(inspected)).toBeNull();
@@ -1094,7 +1079,7 @@ describe("rbw: an entry another tool stored", () => {
 
   test("rename --legacy finds nothing: rbw entries always have a folder", () => {
     const env = { QSM_SECRETS_BACKEND: "rbw", PATH: pathWith(bin) };
-    expect(spawned("bun", [CLI, "rename", "legacy-key", "x", "--legacy"], env).code).toBe(4);
+    expect(cliRun(["rename", "legacy-key", "x", "--legacy"], env).code).toBe(4);
   });
 });
 
@@ -1108,20 +1093,15 @@ describe("libsecret: the shape of secret-tool's output", () => {
   beforeEach(() => {
     bin = sandboxDir("qsm-secrets-ls-bin-");
     store = sandboxDir("qsm-secrets-ls-store-");
-    writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
-    writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
+    fakeBin(bin, "busctl", "exit 0");
+    fakeBin(bin, "secret-tool", fakeSecretTool(store));
     writeFileSync(join(store, "capture__cap_x"), "hunter2");
     writeFileSync(join(store, "capture__cap_trap"), TRAP);
     writeFileSync(join(store, "qsm__npm-token"), "npm-value");
   });
 
   const run = (args: string[], input?: string): Run =>
-    spawned(
-      "bun",
-      [CLI, ...args],
-      { QSM_SECRETS_BACKEND: "libsecret", PATH: pathWith(bin) },
-      input,
-    );
+    cliRun(args, { QSM_SECRETS_BACKEND: "libsecret", PATH: pathWith(bin) }, input);
 
   test("a value holding attribute lines forges no entry and never prints", () => {
     expect(
@@ -1239,17 +1219,16 @@ describe("guard", () => {
 
   /** The verdict on a command: its refusal code, or null when it may run. */
   function verdict(command: string): string | null {
-    const result = spawnSync("bun", [CLI, "guard", "--json"], {
-      encoding: "utf8",
-      input: command,
-      env: {
-        ...process.env,
+    const result = cliRun(
+      ["guard", "--json"],
+      {
         HOME: "/home/guard",
         XDG_DATA_HOME: data,
         XDG_RUNTIME_DIR: runtime,
         PASSWORD_STORE_DIR: join(data, "pass"),
       },
-    });
+      command,
+    );
     const body = envelope(result);
     if (body.code === "blocked") {
       return isString(body.data.code) ? body.data.code : "?";
@@ -1409,8 +1388,8 @@ describe("guard", () => {
   });
 
   test("a refusal names the qsm-secrets verb to use instead", () => {
-    const result = spawnSync("bun", [CLI, "guard"], { encoding: "utf8", input: "rbw get x" });
-    expect(result.status).toBe(5);
+    const result = cliRun(["guard"], {}, "rbw get x");
+    expect(result.code).toBe(5);
     expect(result.stderr).toContain("qsm-secrets pipe");
     expect(result.stderr).toContain("vault-reader");
   });

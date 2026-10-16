@@ -2,7 +2,7 @@
 // qsm-web: the one binary for the whole web tier.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { home } from "../../../lib/paths.ts";
 import { resolve } from "node:path";
 import {
   type Call,
@@ -11,7 +11,8 @@ import {
   requiredString,
   runCli,
 } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { formatDoctor, runDoctor } from "../lib/doctor.ts";
 import { parsePackage } from "../lib/manifest.ts";
@@ -33,22 +34,10 @@ import { handlers as searxngHandlers } from "./searxng.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-web/qsm.json");
 
-/** A failure that already knows its outcome code. Thrown from the helpers
- * below so one guard turns it into the handler's outcome. */
-class FetchError extends Error {
-  readonly code: "failed" | "missing";
-  constructor(code: "failed" | "missing", message: string) {
-    super(message);
-    this.name = "FetchError";
-    this.code = code;
-  }
-}
-
 function doctor(): Outcome {
   const report = runDoctor(
     {
-      onPath: (bin) =>
-        spawnSync("command", ["-v", bin], { shell: true, stdio: "ignore" }).status === 0,
+      onPath,
       responds: (bin) => spawnSync(bin, ["--help"], { stdio: "ignore" }).status === 0,
     },
     () => spawnSync("shot-scraper", ["--version"], { stdio: "ignore" }).status === 0,
@@ -67,14 +56,14 @@ function runResolver(target: string, projectDir: string | undefined): string {
   args.push(target);
   const r = spawnSync("opensrc", args, { encoding: "utf8" });
   if (r.status === null) {
-    throw new FetchError("missing", "the resolver is not installed: bun add -g opensrc");
+    throw new QsmError("missing", "the resolver is not installed: bun add -g opensrc");
   }
   if (r.status !== 0) {
-    throw new FetchError("failed", `the resolver failed for "${target}" (exit ${r.status})`);
+    throw new QsmError("failed", `the resolver failed for "${target}" (exit ${r.status})`);
   }
   const cached = (r.stdout ?? "").trim().split(/\r?\n/).findLast(Boolean) ?? "";
   if (cached.length === 0 || !existsSync(cached)) {
-    throw new FetchError("failed", `the resolver returned no usable path for "${target}"`);
+    throw new QsmError("failed", `the resolver returned no usable path for "${target}"`);
   }
   return cached;
 }
@@ -82,14 +71,14 @@ function runResolver(target: string, projectDir: string | undefined): string {
 function pointAt(into: string, cached: string): void {
   const entry = lstatSync(into, { throwIfNoEntry: false });
   if (linkWouldNest(entry !== undefined, entry?.isSymbolicLink() ?? false)) {
-    throw new FetchError(
+    throw new QsmError(
       "failed",
       `${into} is a directory an earlier fetch by address left there; remove it with "rm -rf ${into}" and ask again`,
     );
   }
   const linked = spawnSync("ln", ["-sfn", cached, into], { stdio: "inherit" });
   if (linked.status !== 0) {
-    throw new FetchError("failed", `could not point ${into} at ${cached} (exit ${linked.status})`);
+    throw new QsmError("failed", `could not point ${into} at ${cached} (exit ${linked.status})`);
   }
 }
 
@@ -106,7 +95,7 @@ function acquireAddress(target: string, into: string, warnings: string[]): Fetch
   if (!existsSync(into)) {
     const c = spawnSync("git", ["clone", "--depth", "1", target, into], { stdio: "inherit" });
     if (c.status !== 0) {
-      throw new FetchError("failed", `git clone failed for ${target} (exit ${c.status})`);
+      throw new QsmError("failed", `git clone failed for ${target} (exit ${c.status})`);
     }
     return "clone";
   }
@@ -129,7 +118,7 @@ function get(call: Call): Outcome {
   const target = requiredString(call, "target");
   const project = optionalString(call, "project");
   const projectDir = project === undefined ? undefined : resolve(project);
-  const into = libDir(target, sourceRoot(process.env, homedir()));
+  const into = libDir(target, sourceRoot(process.env, home(process.env)));
   mkdirSync(resolve(into, ".."), { recursive: true });
 
   // Read once: the same declarations decide whether a bare name is
@@ -145,7 +134,7 @@ function get(call: Call): Outcome {
   } else {
     const scoped = ambiguousBareName(target, pkg);
     if (scoped !== null) {
-      throw new FetchError(
+      throw new QsmError(
         "failed",
         `"${target}" is declared as "${scoped}"; ask for the full name instead`,
       );
@@ -158,24 +147,9 @@ function get(call: Call): Outcome {
   return { ...ok(result, JSON.stringify(result)), warnings };
 }
 
-/** One place turns a FetchError into its outcome; anything else keeps
- * reaching the CLI base, which reports it as `failed`. */
-function guarded(handler: (call: Call) => Outcome): (call: Call) => Outcome {
-  return (call) => {
-    try {
-      return handler(call);
-    } catch (err: unknown) {
-      if (err instanceof FetchError) {
-        return fail(err.code, err.message);
-      }
-      throw err;
-    }
-  };
-}
-
 const handlers: Readonly<Record<string, Handler>> = {
-  "opensrc get": guarded(get),
-  doctor: guarded(doctor),
+  "opensrc get": get,
+  doctor,
   ...searxngHandlers,
   ...browserboxHandlers,
 };

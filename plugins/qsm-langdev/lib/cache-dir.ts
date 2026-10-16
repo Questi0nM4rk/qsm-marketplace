@@ -1,9 +1,9 @@
 // The caches a run keeps in the checkout it checks: each is a directory
 // under `.qsm-langdev/` that ignores itself, written one whole file at a time.
 
-import { randomUUID } from "node:crypto";
-import { mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { writeAtomic } from "../../../lib/fs.ts";
 
 /** `.qsm-langdev/<name>` under `root`, created with a `.gitignore` of `*`, so
  * a repository that never listed it in its own .gitignore still sees nothing
@@ -20,12 +20,4 @@ export function cacheDir(root: string, name: string): string {
     writeAtomic(ignore, "*\n");
   }
   return dir;
-}
-
-/** Writes `text` to `path` through a tmp file and a rename, so a reader
- * never sees half a file, even with two runs writing the same path. */
-export function writeAtomic(path: string, text: string): void {
-  const tmp = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  writeFileSync(tmp, text);
-  renameSync(tmp, path);
 }

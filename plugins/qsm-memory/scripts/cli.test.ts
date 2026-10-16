@@ -1,23 +1,17 @@
 // qsm-memory through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { which } from "bun";
+import { bareRuntimePath } from "../../../lib/fixtures/bin.ts";
+import { envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { z } from "zod";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-
-const envelopeSchema = z.object({ code: z.string(), message: z.string(), data: z.unknown() });
-
-const partialSchema = envelopeSchema.extend({ warnings: z.array(z.string()) });
-
-/** The `--json` envelope a verb printed. */
-const envelopeOf = (stdout: string) => envelopeSchema.parse(JSON.parse(stdout));
 
 // Every call starts a bun process (0.6 to 1 s idle); the catch-up and note tests make five, so
 // 5 s at rest and more under a loaded gate. 30 s leaves six times the measured worst case.
@@ -39,12 +33,10 @@ function sandbox(): Sandbox {
 }
 
 function env(box: Sandbox) {
-  return {
-    PATH: process.env.PATH ?? "",
-    HOME: box.home,
+  return isolatedEnv(box.home, {
     CLAUDE_CONFIG_DIR: join(box.home, "c"),
     XDG_DATA_HOME: join(box.home, "d"),
-  };
+  });
 }
 
 function run(
@@ -52,8 +44,8 @@ function run(
   argv: readonly string[],
   environment: Record<string, string> = env(box),
 ) {
-  const r = spawnSync("bun", [CLI, ...argv], { encoding: "utf8", cwd: box.work, env: environment });
-  return { exit: r.status, stdout: r.stdout, stderr: r.stderr, text: r.stdout + r.stderr };
+  const r = runBin(CLI, argv, { cwd: box.work, env: environment });
+  return { ...r, text: r.stdout + r.stderr };
 }
 
 function transcript(box: Sandbox, name: string, text: string): string {
@@ -179,10 +171,9 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     const text = run(box, ["search", "x", "--since", "7days"]);
     expect(text.exit).toBe(2);
     expect(text.stderr.split("\n").slice(0, 2)).toEqual([
-      "--since takes Nd or a date (got '7days')",
-      "  next: e.g. --since 7d or 2026-09-30",
+      "usage: --since takes Nd or a date (got '7days')",
+      "next: e.g. --since 7d or 2026-09-30",
     ]);
-    expect(text.stderr).not.toContain("usage: usage");
     expect(text.stderr).not.toContain("warning:");
   });
 
@@ -191,7 +182,7 @@ describe("qsm-memory cli, bounds and loud failures", () => {
     transcript(box, "ok1.jsonl", new TranscriptBuilder({ sessionId: "ok1" }).human("x").text());
     mkdirSync(join(box.projects, "bad.jsonl"));
     const r = run(box, ["save", "--catch-up", "--json"]);
-    const out = partialSchema.parse(JSON.parse(r.stdout));
+    const out = envelopeOf(r.stdout);
     expect(r.exit).toBe(0);
     expect(out.code).toBe("partial");
     expect(out.message).toBe("saved 1, 1 failed, 0 remain");
@@ -244,10 +235,11 @@ describe("qsm-memory cli, notes and errors", () => {
 describe("qsm-memory cli, contract", () => {
   test("Run with no harness", () => {
     const box = sandbox();
-    const r = run(box, ["search", "x"], {
-      PATH: process.env.PATH ?? "",
-      QSM_MEMORY_DB: join(box.home, "plain.db"),
-    });
+    const r = run(
+      box,
+      ["search", "x"],
+      isolatedEnv(box.home, { QSM_MEMORY_DB: join(box.home, "plain.db") }),
+    );
     expect(r.exit).toBe(0);
     expect(r.text).toContain("no session matches");
   });
@@ -277,10 +269,7 @@ describe("qsm-memory cli, contract", () => {
       throw new Error("git is not on PATH");
     }
     symlinkSync(git, join(bin, "git"));
-    const r = run(box, ["orient", "--json"], {
-      ...env(box),
-      PATH: `${dirname(process.execPath)}:${bin}`,
-    });
+    const r = run(box, ["orient", "--json"], { ...env(box), PATH: `${bareRuntimePath()}:${bin}` });
     expect(r.exit).toBe(4);
     expect(envelopeOf(r.stdout).message).toContain("qsm-tasks");
   });

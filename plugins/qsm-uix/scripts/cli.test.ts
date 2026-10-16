@@ -5,8 +5,9 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -21,16 +22,15 @@ interface Said {
  * tool reachable, which is how their absence is staged without uninstalling
  * anything. An empty PATH string is not the same thing: the loader falls
  * back to a system default when it sees one. */
-function callCli(args: string[], options: { path?: string } = {}): Said {
-  const env: Record<string, string | undefined> = {
-    ...process.env,
-    QSM_UIX_DIR: sandboxDir("qsm-uix-cli-"),
-  };
-  if (options.path !== undefined) {
-    env.PATH = options.path;
-  }
-  const done = spawnSync(process.execPath, ["run", CLI, ...args], { encoding: "utf8", env });
-  return { stdout: done.stdout ?? "", stderr: done.stderr ?? "", code: done.status ?? 1 };
+function callCli(
+  args: string[],
+  options: { path?: string; env?: Record<string, string> } = {},
+): Said {
+  const home = sandboxDir("qsm-uix-cli-");
+  const path = options.path === undefined ? {} : { PATH: options.path };
+  const env = isolatedEnv(home, { QSM_UIX_DIR: home, ...path, ...options.env });
+  const done = runBin(CLI, args, { env });
+  return { stdout: done.stdout, stderr: done.stderr, code: done.exit };
 }
 
 function envelope(said: Said): unknown {
@@ -152,16 +152,13 @@ describe("a verb that fails on the image itself", () => {
 function pathWith(...tools: string[]): string {
   const dir = sandboxDir("qsm-uix-cli-");
   for (const tool of tools) {
-    const stub = join(dir, tool);
-    writeFileSync(stub, tool === "gdbus" ? GDBUS_STUB : "#!/bin/sh\n");
-    chmodSync(stub, 0o755);
+    fakeBin(dir, tool, tool === "gdbus" ? GDBUS_STUB : "");
   }
   return dir;
 }
 
 /** Answers by the method it is asked: `GDBUS_STUB_DEAD=1` makes the registry call fail. */
-const GDBUS_STUB = `#!/bin/sh
-case "$*" in
+const GDBUS_STUB = `case "$*" in
   *GetAddress*) echo "('unix:path=/stub',)" ;;
   *ChildCount*) [ -n "$GDBUS_STUB_DEAD" ] && { echo "no socket" >&2; exit 1; }; echo "(<1>,)" ;;
   *GetChildren*)
@@ -206,9 +203,10 @@ describe("doctor", () => {
   });
 
   test("with an AT-SPI address that does not answer is missing, naming the service restart", () => {
-    process.env.GDBUS_STUB_DEAD = "1";
-    const said = callCli(["doctor"], { path: pathWith(...ALL) });
-    delete process.env.GDBUS_STUB_DEAD;
+    const said = callCli(["doctor"], {
+      path: pathWith(...ALL),
+      env: { GDBUS_STUB_DEAD: "1" },
+    });
     expect(said.code).toBe(4);
     expect(said.stderr).toContain("systemctl --user restart at-spi-dbus-bus.service");
   });
@@ -236,9 +234,7 @@ describe("a11y-tree", () => {
   });
 
   test("a dead AT-SPI socket is missing, exit 4", () => {
-    process.env.GDBUS_STUB_DEAD = "1";
-    const said = callCli(["a11y-tree"], { path: pathWith("gdbus") });
-    delete process.env.GDBUS_STUB_DEAD;
+    const said = callCli(["a11y-tree"], { path: pathWith("gdbus"), env: { GDBUS_STUB_DEAD: "1" } });
     expect(said.code).toBe(4);
   });
 });

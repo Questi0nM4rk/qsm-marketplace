@@ -19,6 +19,24 @@ export interface Root {
   readonly kind: "store" | "rendered" | "askpass";
 }
 
+/** The variables a path is resolved through; the same set `expand` substitutes and the guard watches. */
+export const PATH_VARIABLES: ReadonlySet<string> = new Set([
+  "HOME",
+  "XDG_DATA_HOME",
+  "XDG_RUNTIME_DIR",
+  "PASSWORD_STORE_DIR",
+]);
+
+/** The path variables of a process environment, as a `PathEnv`. */
+export function pathEnvOf(env: Readonly<Record<string, string | undefined>>): PathEnv {
+  return {
+    home: env.HOME,
+    dataHome: env.XDG_DATA_HOME,
+    runtimeDir: env.XDG_RUNTIME_DIR,
+    passwordStore: env.PASSWORD_STORE_DIR,
+  };
+}
+
 /** The keyring files, the rbw data directory, the pass store and the rendered config directory. */
 export function protectedRoots(env: PathEnv): Root[] {
   const roots: Root[] = [];

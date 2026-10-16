@@ -5,12 +5,13 @@
 // session sees.
 
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { which } from "bun";
+import { runBin, isolatedEnv } from "../../../lib/fixtures/cli.ts";
+import { git } from "../../../lib/fixtures/git.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import manifest from "../qsm.json" with { type: "json" };
 import { GRAPH_DIR, GRAPH_FILE } from "./build.ts";
@@ -24,7 +25,7 @@ setDefaultTimeout(20_000);
 
 afterEach(killBuilds);
 
-async function connected(run: Runner = spawnRunner, env: Env = process.env): Promise<Client> {
+async function connected(run: Runner = spawnRunner, env?: Env): Promise<Client> {
   const client = new Client({ name: "test-client", version: "0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([
@@ -109,11 +110,10 @@ describe("The CLI and the MCP server are two interfaces over one library", () =>
   });
 
   test("the CLI status verb and the MCP status tool give the same answer", async () => {
-    const { repo, cache } = repoWithCache("qsm-index-parity-");
-    const env = { ...process.env, QSM_INDEX_CACHE_DIR: cache };
-    const argv = [resolve(import.meta.dir, "../scripts/cli.ts"), "status", repo];
-    const cli = spawnSync("bun", argv, { encoding: "utf8", env });
-    expect(cli.status).toBe(0);
+    const { root, repo, cache } = repoWithCache("qsm-index-parity-");
+    const env = isolatedEnv(root, { QSM_INDEX_CACHE_DIR: cache });
+    const cli = runBin(resolve(import.meta.dir, "../scripts/cli.ts"), ["status", repo], { env });
+    expect(cli.exit).toBe(0);
     expect(cli.stdout).toContain(`index of ${repo}: absent`);
 
     const mcp = await (
@@ -181,7 +181,7 @@ describe("A bad path answers an error result", () => {
     expect(textOf(bad)).toContain("absolute");
 
     const repo = sandboxDir("qsm-index-server-");
-    expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
+    git(repo, "init", "-q");
     const after = await client.callTool({
       name: "structure",
       arguments: { repo, op: "explain", node: "a.ts" },

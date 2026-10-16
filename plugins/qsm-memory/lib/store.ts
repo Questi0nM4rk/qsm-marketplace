@@ -8,8 +8,7 @@ import { typedText } from "./transcript.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
-/** `QSM_MEMORY_DB`, else `$XDG_DATA_HOME/qsm-memory/memory.db`, else
- * `~/.local/share/qsm-memory/memory.db`. */
+/** `QSM_MEMORY_DB`, else `qsm-memory/memory.db` in the data home. */
 export function resolveDbPath(env: Env): string {
   const override = env.QSM_MEMORY_DB;
   if (override !== undefined && override.length > 0) {

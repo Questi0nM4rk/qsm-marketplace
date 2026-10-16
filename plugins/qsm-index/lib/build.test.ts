@@ -17,13 +17,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
-import { type BuildDeps, buildIndex, IndexPathError } from "./build.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
+import { type BuildDeps, buildIndex } from "./build.ts";
 import { cacheFiles } from "./paths.ts";
 import { changedSet } from "./repo.ts";
 import { spawnRunner } from "./run.ts";
 import { type BuildStatus, readStatus } from "./state.ts";
+import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { commit, fakeRunner, git, killBuilds, repoWithCache } from "./test-repo.ts";
+import { fakeRunner, killBuilds, repoWithCache } from "./test-repo.ts";
 
 afterEach(killBuilds);
 
@@ -87,15 +89,15 @@ describe("Index a local path", () => {
     const runner = fakeRunner();
     const missing = join(repo, "nope");
     expect(() => buildIndex(missing, deps(runner, cache))).toThrow(
-      new IndexPathError(`path does not exist: ${missing}`),
+      new QsmError("missing", `path does not exist: ${missing}`),
     );
     const file = join(repo, "src", "a.ts");
     expect(() => buildIndex(file, deps(runner, cache))).toThrow(
-      new IndexPathError(`path is not a directory: ${file}`),
+      new QsmError("missing", `path is not a directory: ${file}`),
     );
     const plain = join(root, "plain");
     mkdirSync(plain);
-    expect(() => buildIndex(plain, deps(runner, cache))).toThrow(IndexPathError);
+    expect(() => buildIndex(plain, deps(runner, cache))).toThrow(QsmError);
     expect(runner.calls).toEqual([]);
     expect(existsSync(cache)).toBe(false);
   });
@@ -218,7 +220,7 @@ describe("Indexing leaves nothing in the repository that would be committed", ()
     const plain = join(root, "plain");
     mkdirSync(plain);
 
-    expect(() => buildIndex(plain, deps(fakeRunner(), cache))).toThrow(IndexPathError);
+    expect(() => buildIndex(plain, deps(fakeRunner(), cache))).toThrow(QsmError);
     expect(existsSync(join(plain, "graphify-out"))).toBe(false);
   });
 });

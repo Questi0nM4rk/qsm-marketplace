@@ -11,7 +11,8 @@ import {
 } from "../../../lib/install-contract.ts";
 import { setupConfigPath } from "../../../lib/paths.ts";
 import { CHOICES, readSetup, setupBackend } from "../lib/backend.ts";
-import { fail, SecretError } from "../lib/errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
+import { fail } from "../lib/errors.ts";
 
 const QUESTION = "where qsm-secrets keeps secrets: bitwarden (rbw, online) or libsecret (local)";
 
@@ -20,7 +21,7 @@ export const activation: Activation = {
     try {
       return typeof setupBackend(readSetup(env)) === "string" ? "activated" : "absent";
     } catch (error) {
-      if (error instanceof SecretError) {
+      if (error instanceof QsmError) {
         return "absent";
       }
       throw error;
@@ -43,11 +44,11 @@ export const activation: Activation = {
     try {
       file = readSetup(ctx.env);
     } catch (error) {
-      if (error instanceof SecretError) {
+      if (error instanceof QsmError) {
         return {
           tool: "qsm-secrets",
           status: "error",
-          detail: `${error.message}; ${error.next}`,
+          detail: error.next === undefined ? error.message : `${error.message}; ${error.next}`,
           steps: [],
         };
       }

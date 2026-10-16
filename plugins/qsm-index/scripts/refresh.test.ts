@@ -10,7 +10,6 @@ import { expect, test } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildIndex } from "../lib/build.ts";
-import type { Env } from "../lib/paths.ts";
 import { readStatus } from "../lib/state.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { detachedBuildTests, fakeRunner, untilRefreshed, verb, world } from "../lib/test-repo.ts";
@@ -27,12 +26,12 @@ function indexedWorld(indexed = true) {
   return made;
 }
 
-function edited(env: Env, file: string, cwd?: string) {
+function edited(env: Record<string, string>, file: string, cwd?: string) {
   return verb(env, "edited", file, ...(cwd === undefined ? [] : ["--cwd", cwd]));
 }
 
 /** Whether every edit of `files` answered ok. */
-function editsAreOk(files: readonly string[], env: Env): boolean {
+function editsAreOk(files: readonly string[], env: Record<string, string>): boolean {
   return files.every((file) => edited(env, file).code === "ok");
 }
 

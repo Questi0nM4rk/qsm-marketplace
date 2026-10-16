@@ -1,8 +1,10 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { addNote } from "./notes.ts";
 import { BLOCK_MAX, orient } from "./orient.ts";
@@ -35,21 +37,18 @@ function tracker(): { cwd: string; bin: string; env: Record<string, string> } {
   const bin = join(root, "bin");
   mkdirSync(join(cwd, ".beads"), { recursive: true });
   mkdirSync(bin);
-  const br = join(bin, "br");
-  writeFileSync(
-    br,
-    `#!/bin/sh
-case "$1 $2 $3" in
+  fakeBin(
+    bin,
+    "br",
+    `case "$1 $2 $3" in
   "list -s in_progress") echo '{"issues":[{"id":"x-1.2","title":"Wire the hook"}]}' ;;
   "list -s closed") echo '{"issues":[{"id":"x-1.1","title":"Save","closed_at":"2026-10-06T10:30:00.123456789Z"}]}' ;;
   "show x-1.2 --json") echo '[{"id":"x-1.2","title":"Wire the hook","parent":"x-1"}]' ;;
   "show x-1 --json") echo '[{"id":"x-1","title":"Session briefing epic"}]' ;;
   *) echo "unexpected: $*" >&2; exit 3 ;;
-esac
-`,
+esac`,
   );
-  chmodSync(br, 0o755);
-  return { cwd, bin, env: { PATH: `${bin}:${process.env.PATH ?? ""}` } };
+  return { cwd, bin, env: isolatedEnv(root, { PATH: `${bin}:${process.env.PATH ?? ""}` }) };
 }
 
 describe("orient", () => {
@@ -84,7 +83,10 @@ describe("orient", () => {
 function commits(cwd: string, dated: readonly [string, string][]): void {
   const git = (args: string[], date?: string) => {
     const r = spawnSync("git", ["-C", cwd, ...args], {
-      env: { ...process.env, GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date },
+      env: isolatedEnv(
+        cwd,
+        date === undefined ? {} : { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date },
+      ),
     });
     if (r.status !== 0) {
       throw new Error(String(r.stderr));
@@ -130,16 +132,15 @@ describe("orient, limits", () => {
     const db = archive(cwd, ["one"]);
     const log = join(bin, "calls");
     const items = Array.from({ length: 8 }, (_, i) => `{"id":"x-${i}","title":"t${i}"}`).join(",");
-    writeFileSync(
-      join(bin, "br"),
-      `#!/bin/sh
-echo "$*" >> ${log}
+    fakeBin(
+      bin,
+      "br",
+      `echo "$*" >> ${log}
 case "$1 $2 $3" in
   "list -s in_progress") echo '{"issues":[${items}]}' ;;
   "list -s closed") echo '{"issues":[]}' ;;
   *) echo '[{"id":"x","title":"t"}]' ;;
-esac
-`,
+esac`,
     );
 
     const block = orient(db, cwd, { env });
@@ -185,8 +186,7 @@ esac
     const db = archive(cwd, ["one"]);
     const broken = sandboxDir("qsm-memory-orient-broken-");
     mkdirSync(join(broken, "bin"));
-    writeFileSync(join(broken, "bin", "br"), "#!/bin/sh\necho boom >&2\nexit 1\n");
-    chmodSync(join(broken, "bin", "br"), 0o755);
+    fakeBin(join(broken, "bin"), "br", "echo boom >&2\nexit 1");
     expect(() => orient(db, cwd, { env: { PATH: join(broken, "bin") } })).toThrow("boom");
   });
 });

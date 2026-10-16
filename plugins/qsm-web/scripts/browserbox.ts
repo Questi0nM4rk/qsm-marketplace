@@ -1,7 +1,7 @@
 // qsm-web browserbox: the last rung.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { home } from "../../../lib/paths.ts";
 import { join } from "node:path";
 import {
   type Call,
@@ -12,8 +12,8 @@ import {
   requiredNumber,
   requiredString,
 } from "../../../lib/cli-base.ts";
-import { fail, isRecord, type Outcome, ok } from "../../../lib/outcome.ts";
-import { BoxError } from "../lib/box-error.ts";
+import { fail, isRecord, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import {
   buildDefinition,
   chooseRuntime,
@@ -45,10 +45,6 @@ function pause(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function onPath(cmd: string): boolean {
-  return spawnSync("command", ["-v", cmd], { shell: true, stdio: "ignore" }).status === 0;
-}
-
 /** One call's container runtime and the commands it ran or would run. */
 class Box {
   readonly dryRun: boolean;
@@ -64,7 +60,7 @@ class Box {
   runtime(): Runtime {
     this.chosen ??= chooseRuntime(process.env, (cmd) => (this.dryRun ? true : onPath(cmd)));
     if (this.chosen === null) {
-      throw new BoxError(
+      throw new QsmError(
         "missing",
         "no container runtime reachable; install docker or podman, or set QSM_CONTAINER_RUNTIME",
       );
@@ -148,13 +144,13 @@ function ensureImage(box: Box): void {
   }
   const root = pluginRoot(process.env);
   if (root === undefined) {
-    throw new BoxError("missing", NO_ROOT);
+    throw new QsmError("missing", NO_ROOT);
   }
   const context = join(root, "docker");
   process.stderr.write(`qsm-web browserbox: building the image from ${context}\n`);
   const built = box.run(buildDefinition(context), false);
   if (built.status !== 0) {
-    throw new BoxError("failed", `the image build failed (exit ${built.status})`);
+    throw new QsmError("failed", `the image build failed (exit ${built.status})`);
   }
 }
 
@@ -176,21 +172,21 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
   ensureImage(box);
   const port = pickPort(instances(box).map((i) => i.port));
   if (port === null) {
-    throw new BoxError("failed", "every live-view port in the block is taken");
+    throw new QsmError("failed", "every live-view port in the block is taken");
   }
   const name = instanceName(port);
-  const where = out ?? outDir(process.env, homedir(), name);
+  const where = out ?? outDir(process.env, home(process.env), name);
   if (!box.dryRun) {
     mkdirSync(where, { recursive: true });
   }
   const liveView = liveViewUrl(port);
   const started = box.run(runDefinition({ name, port, outDir: where, liveView }));
   if (started.status !== 0) {
-    throw new BoxError("failed", `the instance would not start (exit ${started.status})`);
+    throw new QsmError("failed", `the instance would not start (exit ${started.status})`);
   }
   if (!ready(box, name)) {
     box.run(stopDefinition(name));
-    throw new BoxError(
+    throw new QsmError(
       "failed",
       `${name} started but its browser never answered; nothing was left running`,
     );
@@ -222,7 +218,7 @@ function stop(call: Call, box: Box): Outcome {
   }
   const { status } = box.run(stopDefinition(name));
   if (status !== 0) {
-    throw new BoxError("failed", `${name} could not be stopped (exit ${status})`);
+    throw new QsmError("failed", `${name} could not be stopped (exit ${status})`);
   }
   return ok({ stopped: name }, `stopped ${name}`);
 }
@@ -273,7 +269,7 @@ function fillSecrets(box: Box, script: Script): Script {
   }
   const cli = chooseVaultCli(process.env, onPath);
   if (cli === null) {
-    throw new BoxError("missing", "a fill-secret step needs the rbw or bw client on PATH");
+    throw new QsmError("missing", "a fill-secret step needs the rbw or bw client on PATH");
   }
   const values = new Map<number, string>();
   for (const { index, step } of needed) {
@@ -298,10 +294,10 @@ function readJob(box: Box, file: string | undefined, steps: string | undefined):
   } catch (err: unknown) {
     if (err instanceof ScriptError) {
       const where = err.index === null ? "" : `step ${err.index}: `;
-      throw BoxError.because(err, "failed", `${where}${err.message}`);
+      throw new QsmError("failed", `${where}${err.message}`, { cause: err });
     }
     if (err instanceof VaultError) {
-      throw BoxError.because(err, "failed", err.message);
+      throw new QsmError("failed", err.message, { cause: err });
     }
     throw err;
   }
@@ -374,21 +370,13 @@ function takeover(call: Call, box: Box): Outcome {
 type BoxHandler = (call: Call, box: Box) => Outcome;
 
 /**
- * Every verb gets its own Box, turns a BoxError into its outcome, and under --dry-run answers with
- * the commands it collected instead of the data it never produced.
+ * Every verb gets its own Box, and under --dry-run answers with the commands it collected instead
+ * of the data it never produced. A QsmError thrown below reaches the CLI base.
  */
 function handler(run: BoxHandler): Handler {
   return (call) => {
     const box = new Box(flagArg(call, "dryRun"));
-    let outcome: Outcome;
-    try {
-      outcome = run(call, box);
-    } catch (err: unknown) {
-      if (!(err instanceof BoxError)) {
-        throw err;
-      }
-      outcome = fail(err.code, err.message);
-    }
+    const outcome = run(call, box);
     if (!box.dryRun || outcome.code !== "ok") {
       return outcome;
     }

@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { which } from "bun";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { readOwnRules } from "../scripts/generate-rules-data.ts";
 import { recordOf } from "./json.ts";
@@ -63,7 +64,7 @@ describe.each(Object.keys(OWN_RULES))("own %s rules", (language) => {
           encoding: "utf8",
           timeout: SEMGREP_LIMIT_MS,
           // semgrep makes its own semgrep-mcp directory in its temp root, so it gets a sandbox; the name is short because its python forkserver socket lives in it and a unix socket path stops at 107 characters
-          env: { ...process.env, TMPDIR: sandboxDir("sg-") },
+          env: isolatedEnv(sandboxDir("sg-home-"), { TMPDIR: sandboxDir("sg-") }),
         });
         expect(run.error?.message, run.stderr).toBeUndefined();
         const results = recordOf(recordOf(JSON.parse(run.stdout))?.results) ?? {};

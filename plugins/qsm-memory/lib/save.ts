@@ -3,9 +3,10 @@
 
 import type { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import os from "node:os";
 import { basename, dirname, join } from "node:path";
-import { fail, messageOf } from "./errors.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { claudeDir } from "../../../lib/paths.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { projectOf } from "./project.ts";
 import { parseTranscript, sessionIdOf, type Turn } from "./transcript.ts";
 
@@ -65,7 +66,7 @@ export function saveTranscript(
   options: SaveOptions = {},
 ): SaveResult {
   if (!existsSync(transcriptPath)) {
-    fail("not-found", `no transcript at ${transcriptPath}`, "check the path");
+    throw new QsmError("missing", `no transcript at ${transcriptPath}`, { next: "check the path" });
   }
   if (basename(dirname(transcriptPath)) === "subagents") {
     return { status: "skipped", path: transcriptPath, reason: "subagent transcript" };
@@ -116,8 +117,7 @@ export function saveTranscript(
 
 /** Claude Code's transcript directory. */
 export function projectsDir(env: Readonly<Record<string, string | undefined>>): string {
-  const home = env.CLAUDE_CONFIG_DIR ?? join(env.HOME ?? os.homedir(), ".claude");
-  return join(home, "projects");
+  return join(claudeDir(env), "projects");
 }
 
 function listJsonl(dir: string): string[] {

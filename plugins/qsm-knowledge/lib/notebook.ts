@@ -8,7 +8,7 @@ export const NOTEBOOK_BIN = "nlm";
 export const NOTEBOOK_INSTALL_COMMAND = "go install github.com/tmc/nlm/cmd/nlm@latest";
 
 export interface NotebookProbe {
-  /** `command -v nlm` answered. */
+  /** `nlm` resolves on PATH. */
   readonly onPath: boolean;
   /** `nlm --help` exited zero. */
   readonly answersHelp: boolean;

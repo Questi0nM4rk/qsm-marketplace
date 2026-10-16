@@ -10,7 +10,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { CaptureError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { burst, contrast, crop, diff, IMAGE_TOOL, pixelSample, regionStats } from "./capture.ts";
 
 import { type Command, run } from "./run.ts";
@@ -35,14 +35,11 @@ async function verb<T>(fn: (input: T) => object | Promise<object>, input: T): Pr
 }
 
 /** What the verb throws; a verb that returns is a failed test. */
-async function failure<T>(
-  fn: (input: T) => object | Promise<object>,
-  input: T,
-): Promise<CaptureError> {
+async function failure<T>(fn: (input: T) => object | Promise<object>, input: T): Promise<QsmError> {
   try {
     await fn(input);
   } catch (error) {
-    if (error instanceof CaptureError) {
+    if (error instanceof QsmError) {
       return error;
     }
     throw error;

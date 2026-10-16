@@ -5,21 +5,10 @@
 // person's to edit and is never replaced.
 
 import { createHash } from "node:crypto";
-import {
-  cpSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  rmSync,
-  symlinkSync,
-  unlinkSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { linkBin, removeOwnedLinks } from "../../../../lib/install-base.ts";
 import type { InstallContext, Step } from "../../../../lib/install-contract.ts";
-import { binDir } from "../../../../lib/paths.ts";
 import { linkedKinds } from "./link.ts";
 import { colorsPath, installedPaneDir, LINK_PREFIX } from "./paths.ts";
 
@@ -80,54 +69,12 @@ function colorsStep(ctx: InstallContext, defaults: string): Step {
   };
 }
 
-/** Whether `path` is a link to our binary: the only thing this installer ever removes or replaces. */
-function isOurLink(path: string): boolean {
-  return lstatSync(path).isSymbolicLink() && readlinkSync(path) === BIN;
-}
-
 function linkSteps(ctx: InstallContext): Step[] {
-  const dir = binDir(ctx.env);
   const wanted = linkedKinds().map((kind) => `${LINK_PREFIX}${kind}`);
-  const steps: Step[] = [];
-  const present = existsSync(dir) ? readdirSync(dir).filter((n) => n.startsWith(LINK_PREFIX)) : [];
-  for (const name of present.filter((n) => !wanted.includes(n))) {
-    const path = join(dir, name);
-    if (!isOurLink(path)) {
-      continue;
-    }
-    if (!ctx.dryRun) {
-      unlinkSync(path);
-    }
-    steps.push({
-      name: `link ${name}`,
-      status: ctx.dryRun ? "skipped" : "installed",
-      detail: `${ctx.dryRun ? "would remove" : "removed"} the stale link ${path}`,
-    });
-  }
-  for (const name of wanted) {
-    const path = join(dir, name);
-    const here = lstatSync(path, { throwIfNoEntry: false }) !== undefined;
-    if (here && !isOurLink(path)) {
-      steps.push({
-        name: `link ${name}`,
-        status: "error",
-        detail: `${path} exists and is not our link; remove it`,
-      });
-    } else if (here) {
-      steps.push({ name: `link ${name}`, status: "already", detail: `${path} unchanged` });
-    } else if (ctx.dryRun) {
-      steps.push({
-        name: `link ${name}`,
-        status: "skipped",
-        detail: `would link ${path} to ${BIN}`,
-      });
-    } else {
-      mkdirSync(dir, { recursive: true });
-      symlinkSync(BIN, path);
-      steps.push({ name: `link ${name}`, status: "installed", detail: `linked ${path} to ${BIN}` });
-    }
-  }
-  return steps;
+  return [
+    ...removeOwnedLinks(ctx, LINK_PREFIX, wanted, BIN),
+    ...wanted.map((name) => linkBin(ctx, name, BIN)),
+  ];
 }
 
 export function askpassSteps(ctx: InstallContext, pluginRoot: string): Step[] {

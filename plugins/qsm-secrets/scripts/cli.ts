@@ -2,13 +2,14 @@
 
 // qsm-secrets: a credential reaches the command that needs it without its value reaching the agent.
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   type Call,
   flagArg,
   type Handler,
   optionalString,
+  readStdin,
   requiredString,
   runCli,
   stringList,
@@ -21,8 +22,8 @@ import { ask } from "../lib/askpass/ask.ts";
 import { argvFor, envLines, linkedKinds } from "../lib/askpass/link.ts";
 import { activeBackend } from "../lib/backend.ts";
 import { type Check, formatChecks } from "../lib/doctor.ts";
-import { SecretError } from "../lib/errors.ts";
 import { guardCommand } from "../lib/guard.ts";
+import { pathEnvOf } from "../lib/protected.ts";
 import { runClean, runRender } from "../lib/render.ts";
 import {
   type Delivery,
@@ -61,23 +62,6 @@ function key(call: Call): string {
   return requiredString(call, "key");
 }
 
-/** A SecretError carries its own outcome code and the next step; anything
- * else is a bug and keeps travelling. */
-function secretFailure(error: unknown): Outcome {
-  if (error instanceof SecretError) {
-    return fail(error.code, `${error.message}\n  next: ${error.next}`);
-  }
-  throw error;
-}
-
-function attempt(run: () => Outcome): Outcome {
-  try {
-    return run();
-  } catch (error) {
-    return secretFailure(error);
-  }
-}
-
 /** ok when the consumer succeeded; its own code is data either way,
  * because the process exit belongs to the outcome table now. */
 function delivered(d: Delivery): Outcome<Delivery> {
@@ -85,9 +69,7 @@ function delivered(d: Delivery): Outcome<Delivery> {
 }
 
 const pipe: Handler = (call) =>
-  call.json
-    ? fail("blocked", NO_JSON)
-    : attempt(() => delivered(runPipe(namespace(call), key(call), call.rest)));
+  call.json ? fail("blocked", NO_JSON) : delivered(runPipe(namespace(call), key(call), call.rest));
 
 const env: Handler = (call) => {
   if (call.json) {
@@ -97,7 +79,7 @@ const env: Handler = (call) => {
   if (pair === null) {
     return fail("usage", "env takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
-  return attempt(() => delivered(runEnv(namespace(call), pair.key, pair.variable, call.rest)));
+  return delivered(runEnv(namespace(call), pair.key, pair.variable, call.rest));
 };
 
 /** The probe runs like env but its output is discarded: only its exit code is the answer. */
@@ -106,175 +88,142 @@ const probe: Handler = (call) => {
   if (pair === null) {
     return fail("usage", "check takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
-  return attempt(() => {
-    const d = runCheck(namespace(call), pair.key, pair.variable, call.rest);
-    return d.exit === 0
-      ? ok(d, `ok: ${d.command}`)
-      : fail("failed", `failed: ${d.command} exited ${d.exit}`, d);
-  });
+  const d = runCheck(namespace(call), pair.key, pair.variable, call.rest);
+  return d.exit === 0
+    ? ok(d, `ok: ${d.command}`)
+    : fail("failed", `failed: ${d.command} exited ${d.exit}`, d);
 };
 
-const rename: Handler = (call) =>
-  attempt(() => {
-    const legacy = flagArg(call, "legacy");
-    if (legacy && optionalString(call, "folder") !== undefined) {
-      return fail("usage", "--legacy names the entry that has no folder; drop --folder");
-    }
-    const from = {
-      namespace: legacy ? LEGACY_NAMESPACE : namespace(call),
-      key: requiredString(call, "from"),
-    };
-    const to = {
-      namespace: optionalString(call, "toFolder") ?? (legacy ? namespace(call) : from.namespace),
-      key: requiredString(call, "to"),
-    };
-    const done = runRename(from, to);
-    return ok(done, `renamed ${done.from} to ${done.to}`);
-  });
-
-const prune: Handler = (call) =>
-  attempt(() => {
-    const done = runPrune(flagArg(call, "dryRun"));
-    return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
-  });
-
-/** attempt for a verb that waits on the person. */
-async function attemptAsync(run: () => Promise<Outcome>): Promise<Outcome> {
-  try {
-    return await run();
-  } catch (error) {
-    return secretFailure(error);
+const rename: Handler = (call) => {
+  const legacy = flagArg(call, "legacy");
+  if (legacy && optionalString(call, "folder") !== undefined) {
+    return fail("usage", "--legacy names the entry that has no folder; drop --folder");
   }
-}
+  const from = {
+    namespace: legacy ? LEGACY_NAMESPACE : namespace(call),
+    key: requiredString(call, "from"),
+  };
+  const to = {
+    namespace: optionalString(call, "toFolder") ?? (legacy ? namespace(call) : from.namespace),
+    key: requiredString(call, "to"),
+  };
+  const done = runRename(from, to);
+  return ok(done, `renamed ${done.from} to ${done.to}`);
+};
+
+const prune: Handler = (call) => {
+  const done = runPrune(flagArg(call, "dryRun"));
+  return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
+};
 
 /** The consumer's words follow `--`: for sudo, ssh and git the first is the prompt it wants shown. */
 const askpass: Handler = (call) =>
   call.json
     ? fail("blocked", NO_JSON)
-    : attemptAsync(() =>
-        ask(requiredString(call, "kind"), call.rest, {
-          env: process.env,
-          namespace: namespace(call),
-        }),
-      );
-
-/** Only the lines print; the file the person puts them in is theirs. */
-const askpassEnable: Handler = (call) =>
-  attempt(() => {
-    const picked = linkedKinds().filter((kind) => flagArg(call, kind));
-    if (picked.length === 0) {
-      return fail(
-        "usage",
-        `askpass enable takes at least one of: ${linkedKinds()
-          .map((k) => `--${k}`)
-          .join(" ")}`,
-      );
-    }
-    const lines = envLines(picked, binDir(process.env));
-    return ok({ lines }, lines.join("\n"));
-  });
-
-const get: Handler = (call) =>
-  call.json ? fail("blocked", NO_JSON) : attempt(() => ok(runGet(namespace(call), key(call))));
-
-const set: Handler = (call) =>
-  flagArg(call, "gui")
-    ? attemptAsync(() =>
-        ask("secret", [key(call)], { env: process.env, namespace: namespace(call) }),
-      )
-    : attempt(() => {
-        const stored = runSet(namespace(call), key(call));
-        return ok(stored, `stored ${stored.key}`);
+    : ask(requiredString(call, "kind"), call.rest, {
+        env: process.env,
+        namespace: namespace(call),
       });
 
-const has: Handler = (call) =>
-  attempt(() => {
-    const ns = namespace(call);
-    const name = key(call);
-    const stored = runHas(ns, name);
-    return stored
-      ? ok({ namespace: ns, key: name, stored })
-      : fail("missing", `not stored: ${name}`, { namespace: ns, key: name, stored });
-  });
+/** Only the lines print; the file the person puts them in is theirs. */
+const askpassEnable: Handler = (call) => {
+  const picked = linkedKinds().filter((kind) => flagArg(call, kind));
+  if (picked.length === 0) {
+    return fail(
+      "usage",
+      `askpass enable takes at least one of: ${linkedKinds()
+        .map((k) => `--${k}`)
+        .join(" ")}`,
+    );
+  }
+  const lines = envLines(picked, binDir(process.env));
+  return ok({ lines }, lines.join("\n"));
+};
 
-const list: Handler = (call) =>
-  attempt(() => {
-    const listed = runList(listScopeOf(optionalString(call, "folder"), process.env));
-    return ok(listed, listed.keys.length === 0 ? undefined : listed.keys.join("\n"));
-  });
+const get: Handler = (call) =>
+  call.json ? fail("blocked", NO_JSON) : ok(runGet(namespace(call), key(call)));
 
-const inspect: Handler = (call) =>
-  attempt(() => {
-    const { text, ...data } = runInspect(namespace(call));
-    return ok(data, text);
-  });
+const set: Handler = (call) => {
+  if (flagArg(call, "gui")) {
+    return ask("secret", [key(call)], { env: process.env, namespace: namespace(call) });
+  }
+  const stored = runSet(namespace(call), key(call));
+  return ok(stored, `stored ${stored.key}`);
+};
 
-const rm: Handler = (call) =>
-  attempt(() => {
-    const removed = runRemove(namespace(call), key(call));
-    return ok(removed, `removed ${removed.key}`);
-  });
+const has: Handler = (call) => {
+  const ns = namespace(call);
+  const name = key(call);
+  const stored = runHas(ns, name);
+  return stored
+    ? ok({ namespace: ns, key: name, stored })
+    : fail("missing", `not stored: ${name}`, { namespace: ns, key: name, stored });
+};
+
+const list: Handler = (call) => {
+  const listed = runList(listScopeOf(optionalString(call, "folder"), process.env));
+  return ok(listed, listed.keys.length === 0 ? undefined : listed.keys.join("\n"));
+};
+
+const inspect: Handler = (call) => {
+  const { text, ...data } = runInspect(namespace(call));
+  return ok(data, text);
+};
+
+const rm: Handler = (call) => {
+  const removed = runRemove(namespace(call), key(call));
+  return ok(removed, `removed ${removed.key}`);
+};
 
 /** The text on stdin with each secret swapped for its id; the values never leave the backend. */
-const capture: Handler = () =>
-  attempt(() => {
-    const done = runCapture();
-    return ok(done, done.text);
-  });
+const capture: Handler = async () => {
+  const done = await runCapture();
+  return ok(done, done.text);
+};
 
 /**
  * The text on stdin with each named id's value swapped for its placeholder; plain text out. With
  * --all, a JSON array of strings with every stored value of every namespace masked.
  */
-const mask: Handler = (call) =>
-  attempt(() => {
-    if (flagArg(call, "all")) {
-      const masked = runMaskAll();
-      return ok(masked, JSON.stringify(masked.texts));
-    }
-    const ids = stringList(call, "id");
-    if (ids.length === 0) {
-      return fail("usage", "mask takes at least one --id, or --all");
-    }
-    const masked = runMask(ids);
-    return ok(masked, masked.text);
-  });
+const mask: Handler = async (call) => {
+  if (flagArg(call, "all")) {
+    const masked = await runMaskAll();
+    return ok(masked, JSON.stringify(masked.texts));
+  }
+  const ids = stringList(call, "id");
+  if (ids.length === 0) {
+    return fail("usage", "mask takes at least one --id, or --all");
+  }
+  const masked = await runMask(ids);
+  return ok(masked, masked.text);
+};
 
 /** A transcript's captured values swapped for their placeholders; detached for a hook's 1.5 s. */
-const scrub: Handler = (call) =>
-  attempt(() => {
-    const target = requiredString(call, "transcript");
-    if (!flagArg(call, "detach")) {
-      const done = runScrub(target);
-      return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
-    }
-    const log = join(stateDir(process.env), "secrets-scrub.log");
-    mkdirSync(dirname(log), { recursive: true, mode: 0o700 });
-    const failure = spawnDetached(
-      "qsm-secrets",
-      ["scrub", target],
-      { file: log, append: true },
-      process.env,
-    );
-    return failure === null
-      ? ok(
-          { started: true, log },
-          `started the scrub in the background; its outcome goes to ${log}`,
-        )
-      : fail("missing", failure);
-  });
+const scrub: Handler = (call) => {
+  const target = requiredString(call, "transcript");
+  if (!flagArg(call, "detach")) {
+    const done = runScrub(target);
+    return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
+  }
+  const log = join(stateDir(process.env), "secrets-scrub.log");
+  mkdirSync(dirname(log), { recursive: true, mode: 0o700 });
+  const failure = spawnDetached(
+    "qsm-secrets",
+    ["scrub", target],
+    { file: log, append: true },
+    process.env,
+  );
+  return failure === null
+    ? ok({ started: true, log }, `started the scrub in the background; its outcome goes to ${log}`)
+    : fail("missing", failure);
+};
 
 /** The Bash command on stdin, refused with its code and the verb to use instead, or allowed. */
 const guard: Handler = async () => {
   if (process.stdin.isTTY) {
     return fail("usage", "guard reads the Bash command from stdin; pipe it in");
   }
-  const refusal = await guardCommand(readFileSync(0, "utf8"), {
-    home: process.env.HOME,
-    dataHome: process.env.XDG_DATA_HOME,
-    runtimeDir: process.env.XDG_RUNTIME_DIR,
-    passwordStore: process.env.PASSWORD_STORE_DIR,
-  });
+  const refusal = await guardCommand(await readStdin(), pathEnvOf(process.env));
   return refusal === null ? ok({ denied: false }) : fail("blocked", refusal.reason, refusal);
 };
 
@@ -283,7 +232,7 @@ function inSession(call: Call, run: (session: string) => Outcome): Outcome {
   const id = optionalString(call, "session") ?? process.env.CLAUDE_CODE_SESSION_ID;
   return id === undefined
     ? fail("usage", "pass --session <id>; CLAUDE_CODE_SESSION_ID is not set")
-    : attempt(() => run(id));
+    : run(id);
 }
 
 /** Only the path prints: the file holds values, and the caller reads it with the tool that needs it. */
@@ -303,7 +252,9 @@ const clean: Handler = (call) =>
     const done = runClean(id, process.env);
     return ok(
       done,
-      done.dir === null ? "nothing to remove: XDG_RUNTIME_DIR is not set" : `removed ${done.dir}`,
+      done.dir === null
+        ? "nothing to remove: the runtime directory is not set"
+        : `removed ${done.dir}`,
     );
   });
 
@@ -314,7 +265,7 @@ const REINSTALL =
 async function guardCheck(): Promise<Check> {
   const name = "guard parser";
   try {
-    const refusal = await guardCommand("true", { home: process.env.HOME });
+    const refusal = await guardCommand("true", pathEnvOf(process.env));
     return refusal === null
       ? { name, ok: true, detail: "allows `true`", fix: null }
       : { name, ok: false, detail: `refused \`true\`: ${refusal.reason}`, fix: REINSTALL };
@@ -329,13 +280,11 @@ async function guardCheck(): Promise<Check> {
  */
 const doctor: Handler = async (call) => {
   const parser = await guardCheck();
-  return attempt(() => {
-    const ns = namespace(call);
-    const checks = [...activeBackend().health(ns, process.env), parser];
-    const healthy = checks.every((check) => check.ok);
-    const data = { namespace: ns, checks, ok: healthy };
-    return healthy ? ok(data, formatChecks(checks)) : fail("missing", formatChecks(checks), data);
-  });
+  const ns = namespace(call);
+  const checks = [...activeBackend().health(ns, process.env), parser];
+  const healthy = checks.every((check) => check.ok);
+  const data = { namespace: ns, checks, ok: healthy };
+  return healthy ? ok(data, formatChecks(checks)) : fail("missing", formatChecks(checks), data);
 };
 
 if (import.meta.main) {

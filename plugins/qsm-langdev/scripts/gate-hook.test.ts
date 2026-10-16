@@ -4,23 +4,17 @@
 // CLI test and spawns the hook's own source, never dist/, which may be stale.
 
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { findRepoRoot } from "../lib/config.ts";
 import { recordStartPoint } from "../lib/state.ts";
 import { defined } from "../lib/test-support.ts";
 
 const GATE_HOOK = resolve(import.meta.dir, "../hooks/gate-hook.ts");
-const GIT = "/usr/bin/git";
-
-function git(root: string, args: string[]): void {
-  const r = spawnSync(GIT, args, { cwd: root, encoding: "utf8" });
-  if (r.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${r.stderr}`);
-  }
-}
 
 /** Opts `root` into `qsm-langdev init` without running it: the languages
  * a gate-hook test needs gated, and nothing else. */
@@ -35,18 +29,17 @@ function initGates(root: string, languages: readonly string[]): void {
 /** A sandbox git repository with one commit holding one tracked file. */
 function repoWithFile(fileName: string, content: string): string {
   const root = sandboxDir("qsm-langdev-gate-hook-repo-");
-  git(root, ["init", "-q"]);
+  git(root, "init", "-q");
   writeFileSync(join(root, fileName), content);
-  git(root, ["add", "-A"]);
-  git(root, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "base"]);
+  commit(root, "base");
   return root;
 }
 
 function runHook(hook: string, stateDir: string, stdin: string, env: Record<string, string> = {}) {
-  return spawnSync("bun", [hook], {
-    encoding: "utf8",
+  const home = sandboxDir("qsm-langdev-gate-hook-home-");
+  return runBin(hook, [], {
     input: stdin,
-    env: { ...process.env, ...env, QSM_LANGDEV_STATE_DIR: stateDir },
+    env: isolatedEnv(home, { ...env, QSM_LANGDEV_STATE_DIR: stateDir }),
   });
 }
 
@@ -73,7 +66,7 @@ describe("qsm-langdev gate hook", () => {
 
     const r = runGateHook(stateDir, "s1", "a1");
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("edited no tree");
   });
@@ -90,7 +83,7 @@ describe("qsm-langdev gate hook", () => {
 
     const r = runGateHook(stateDir, "s1", "a1");
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     expect(r.stdout).toBe("");
   });
 
@@ -106,11 +99,11 @@ describe("qsm-langdev gate hook", () => {
     // By the time the agent stops, the edit is undone: the worktree is
     // identical to the recorded start commit, so there is nothing to judge
     // worse.
-    git(root, ["checkout", "--", "notes.txt"]);
+    git(root, "checkout", "--", "notes.txt");
 
     const r = runGateHook(stateDir, "s1", "a1");
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     expect(r.stdout).not.toContain('"decision":"block"');
   });
 });
@@ -120,12 +113,11 @@ describe("qsm-langdev gate hook", () => {
 function slowFish(): string {
   const bin = sandboxDir("qsm-langdev-gate-hook-bin-");
   for (const name of ["fish", "fish_indent"]) {
-    const path = join(bin, name);
-    writeFileSync(
-      path,
-      '#!/bin/sh\nif [ "$1" = --version ]; then echo "fish, version 4.0.0"; exit 0; fi\nexec sleep 30\n',
+    fakeBin(
+      bin,
+      name,
+      'if [ "$1" = --version ]; then echo "fish, version 4.0.0"; exit 0; fi\nexec sleep 30',
     );
-    chmodSync(path, 0o755);
   }
   return bin;
 }
@@ -150,7 +142,7 @@ describe("qsm-langdev gate hook and a checker past its time", () => {
       env,
     );
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     expect(r.stdout).not.toContain('"decision":"block"');
     expect(r.stderr).toContain("fish-syntax: not measured: timed out after 0.5s");
   }, 60_000);

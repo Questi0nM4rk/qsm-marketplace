@@ -5,7 +5,9 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
-import { cacheDir, writeAtomic } from "./cache-dir.ts";
+import { writeAtomic } from "../../../lib/fs.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { cacheDir } from "./cache-dir.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isErrno } from "./errors.ts";
@@ -224,7 +226,7 @@ export class ResultStore {
         JSON.stringify({ shape: SHAPE, tally: score.tally, output: score.output }),
       );
     } catch (error) {
-      this.#unwritten ??= `${entry}: ${error instanceof Error ? error.message : String(error)}`;
+      this.#unwritten ??= `${entry}: ${messageOf(error)}`;
     }
   }
 

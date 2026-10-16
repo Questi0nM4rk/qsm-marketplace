@@ -3,18 +3,20 @@
 // that is not there, or at a missing prerequisite, except the MCP server,
 // which starts, lists its tools, and stops.
 import { afterEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
+import { bareRuntimePath, fakeBin } from "../../../lib/fixtures/bin.ts";
+import { envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { killBuilds, parseEnvelope } from "../lib/test-repo.ts";
+import { killBuilds } from "../lib/test-repo.ts";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
 /** Only the runtime itself: the binary is not on it, nor are the externals. */
-const BARE_PATH = dirname(process.execPath);
+const BARE_PATH = bareRuntimePath();
 
 afterEach(killBuilds);
 
@@ -37,16 +39,7 @@ function toolNamesOf(result: unknown): string[] {
 
 function run(entry: string, argv: readonly string[], env: Record<string, string> = {}) {
   const home = sandboxDir("qsm-index-cli-");
-  const r = spawnSync("bun", [entry, ...argv], {
-    encoding: "utf8",
-    env: {
-      PATH: process.env.PATH ?? "",
-      HOME: home,
-      XDG_CONFIG_HOME: join(home, "c"),
-      ...env,
-    },
-  });
-  return { exit: r.status, stdout: r.stdout, stderr: r.stderr };
+  return runBin(entry, argv, { env: isolatedEnv(home, env) });
 }
 
 describe("qsm-index", () => {
@@ -90,13 +83,13 @@ describe("qsm-index", () => {
   test("a path that is not there is missing, exit 4", () => {
     const r = run(CLI, ["build", "/nonexistent/tree", "--json"]);
     expect(r.exit).toBe(4);
-    expect(parseEnvelope(r.stdout)).toMatchObject({ code: "missing", exit: 4 });
+    expect(envelopeOf(r.stdout)).toMatchObject({ code: "missing", exit: 4 });
   });
 
   test("doctor with the binary not on PATH is missing, exit 4", () => {
     const r = run(CLI, ["doctor", "--json"], { PATH: BARE_PATH });
     expect(r.exit).toBe(4);
-    const envelope = parseEnvelope(r.stdout);
+    const envelope = envelopeOf(r.stdout);
     expect(envelope.code).toBe("missing");
     expect(envelope.data).toMatchObject({
       healthy: false,
@@ -111,12 +104,11 @@ describe("A cloned repository is queried exactly like the agent's own", () => {
     const repo = join(root, "repo");
     const sub = join(repo, "src", "deep");
     mkdirSync(sub, { recursive: true });
-    expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
+    git(root, "init", "-q", repo);
     // A fake semble that prints the tree it was asked to search.
     const bin = join(root, "bin");
     mkdirSync(bin);
-    writeFileSync(join(bin, "semble"), '#!/bin/sh\nfor last; do :; done\necho "searched $last"\n');
-    chmodSync(join(bin, "semble"), 0o755);
+    fakeBin(bin, "semble", 'for last; do :; done\necho "searched $last"');
 
     const r = run(CLI, ["search", sub, "parser"], { PATH: `${bin}:${process.env.PATH ?? ""}` });
     expect(r.stderr).toBe("");
@@ -143,12 +135,8 @@ describe("qsm-index mcp", () => {
   });
 
   test("mcp serve dispatches to the server and exits clean when stdin closes", () => {
-    const r = spawnSync("bun", [CLI, "mcp", "serve"], {
-      encoding: "utf8",
-      input: "",
-      env: { PATH: process.env.PATH ?? "" },
-    });
-    expect(r.status).toBe(0);
+    const r = runBin(CLI, ["mcp", "serve"], { input: "" });
+    expect(r.exit).toBe(0);
     expect(r.stdout).toBe("");
   });
 });
@@ -157,7 +145,7 @@ describe("qsm-index mcp serve", () => {
   test("a client lists the six tools, and the server exits 0 when stdin closes", async () => {
     const home = sandboxDir("qsm-index-mcp-");
     const server = spawnServer(["bun", CLI, "mcp", "serve"], {
-      env: { PATH: process.env.PATH ?? "", HOME: home, XDG_CONFIG_HOME: join(home, "c") },
+      env: isolatedEnv(home),
     });
     try {
       await server.request(initialize(1, LATEST_PROTOCOL_VERSION));
@@ -187,7 +175,7 @@ describe("qsm-index auto", () => {
     const dir = sandboxDir("qsm-index-cli-auto-");
     const r = run(CLI, ["auto", dir, "--json"]);
     expect(r.exit).toBe(0);
-    expect(parseEnvelope(r.stdout).data).toEqual({
+    expect(envelopeOf(r.stdout).data).toEqual({
       answer: "not-indexable",
       reason: `${dir} is not inside a git repository`,
     });

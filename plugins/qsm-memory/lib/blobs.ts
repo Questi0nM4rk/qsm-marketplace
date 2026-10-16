@@ -2,9 +2,10 @@
 // sha256 so the same bytes are stored once and a stored blob never changes.
 
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fail } from "./errors.ts";
+import { writeAtomic } from "../../../lib/fs.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { type Env, resolveDbPath } from "./store.ts";
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -27,7 +28,9 @@ export interface PutResult {
 /** Stores a file's bytes under their sha256, owner-only; a second put of the same bytes writes nothing. */
 export function putBlob(env: Env, file: string): PutResult {
   if (!existsSync(file)) {
-    fail("not-found", `no file at ${file}`, "pass the path of an existing file");
+    throw new QsmError("missing", `no file at ${file}`, {
+      next: "pass the path of an existing file",
+    });
   }
   const bytes = readFileSync(file);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
@@ -36,26 +39,22 @@ export function putBlob(env: Env, file: string): PutResult {
     return { sha256, path, stored: false };
   }
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  // a rename in the same directory is atomic, so a reader never sees half a blob
-  const partial = `${path}.${process.pid}.partial`;
-  writeFileSync(partial, bytes, { mode: 0o600 });
-  chmodSync(partial, 0o600);
-  renameSync(partial, path);
+  writeAtomic(path, bytes, 0o600);
   return { sha256, path, stored: true };
 }
 
 /** The path of a stored blob. */
 export function blobPath(env: Env, sha256: string): string {
   if (!SHA256.test(sha256)) {
-    fail(
-      "usage",
-      `'${sha256}' is not a sha256`,
-      "pass the 64 hex characters that blob put printed",
-    );
+    throw new QsmError("usage", `'${sha256}' is not a sha256`, {
+      next: "pass the 64 hex characters that blob put printed",
+    });
   }
   const path = pathOf(env, sha256);
   if (!existsSync(path)) {
-    fail("not-found", `no blob ${sha256}`, "store the file first with qsm-memory blob put <file>");
+    throw new QsmError("missing", `no blob ${sha256}`, {
+      next: "store the file first with qsm-memory blob put <file>",
+    });
   }
   return path;
 }
