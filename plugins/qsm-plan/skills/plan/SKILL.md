@@ -16,8 +16,9 @@ The flow, so each step knows its neighbours:
 
 1. **Business request**: the first messages of a conversation, before an intent exists. It is not
    stored; the session archive holds it.
-2. **Grilling** (product owner: what it does, how it behaves, how it looks) writes the epic with
-   the intent and the acceptance criteria. Gate: the person's yes.
+2. **Grilling** (product owner: what it does, how it behaves, how it looks) first reads the ask as
+   a top professional would (what they would ask, the raw material, the methods, the outside judge),
+   then writes the epic with the intent and the acceptance criteria. Gate: the person's yes.
 3. **Plan** (this skill, tech lead): splits the epic into pieces; each piece gets a spec change
    and its task, together. Gate: the person's yes to the spec.
 4. **Spec change**: spec-propose writes it and tasks.md, the developer's breakdown. Gate: the

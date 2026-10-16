@@ -13,6 +13,31 @@ It ends by writing the epic's intent and acceptance criteria, after his yes. It 
 ask or write the spec. It sits between the business request and plan in the qsm flow, and any flow
 that reaches an unresolved branch comes here.
 
+## First: see the ask as a top professional would
+
+Before the first round, read the ask as the best professional in its field would, because the
+person asks from inside the problem and misses what an outsider with depth sees at once. Answer
+four things in writing, each in a line or two:
+
+1. **What the expert would do, ask and think that the person is not.** The step they would not
+   skip, the question they would ask first, the risk they would see. Each one becomes a question in
+   the frontier with a recommendation, or a fact you fetch.
+2. **The rawest material.** What the expert starts from instead of what was already digested for
+   the person: the log, not its summary; the real session, not its description; the upstream
+   source or standard, not a blog post; the measured number, not the impression. Name it, and
+   fetch it before the round when it is in reach.
+3. **The methods and tools.** Named specifically, the ones they would reach for: a profiler and its
+   flame graph, a property-based test, a load test, five users on a prototype, a diff against a
+   reference implementation. Check which exist here; a missing one is a question or a task.
+4. **The outside judge.** What other than you and the person shows the result is right: a test
+   against the real system, a reference implementation, a standard, a measurement, a third-party
+   tool, a real user. It becomes the proof inside the acceptance criteria.
+
+Deeper, not bigger. The four answers deepen the same ask; they never widen it. What the expert
+would add beyond the ask goes into what the work is not, or becomes a question with "leave it
+out" as the recommendation; it never enters the epic silently. A fix skips this section, because
+its decision is settled.
+
 ## Rounds
 
 - **One round is the whole frontier.** The frontier is every open question whose prerequisites
@@ -60,9 +85,10 @@ conflict to the person; never edit the intent yourself.
 ## End: write the epic
 
 When the frontier is empty, show the person three things in one reply: the settled decisions, one
-line each; the intent of the work (who it is for, what they do with it, what it is not); and the
-acceptance criteria, each one a thing a run can show. The criteria are the contract the final
-test-it task checks, so a criterion that no run can show is rewritten until one can.
+line each; the intent of the work (who it is for, what they do with it, what it is not, the raw
+material it starts from, and its outside judge); and the acceptance criteria, each one a thing a
+run can show, checked by the outside judge where one exists. The criteria are the contract the
+final test-it task checks, so a criterion that no run can show is rewritten until one can.
 
 Ask for the yes through the ask tool. Only after the yes, write the intent and the criteria into
 the epic through the task tool: create it, or update the existing one. No yes, no epic. Then hand
@@ -79,9 +105,13 @@ to plan to split it. A fix has no epic: if the work turns out to be a fix, say s
 - When you are about to write the epic before the yes, stop, because the epic is the contract
   everything after it is checked against.
 - When a criterion reads "works well" or "is clean", rewrite it as something a run shows.
+- When the only proof is that you or the person read the result and liked it, name an outside
+  judge, because a reread confirms what was meant, not what was built.
+- When the expert's view adds work the ask did not hold, stop, because deeper is not bigger.
 
 ## Say it in the reply
 
-The round as an ask-tool call, recommendations included, or the one-reply explanation ending
-"Understand?". When the frontier empties, the decisions, the intent and the criteria for the yes;
-after it, the epic id written and plan as the next step.
+Before the first round, the four expert answers, one or two lines each. Then the round as an
+ask-tool call, recommendations included, or the one-reply explanation ending "Understand?". When the
+frontier empties, the decisions, the intent and the criteria for the yes; after it, the epic id
+written and plan as the next step.

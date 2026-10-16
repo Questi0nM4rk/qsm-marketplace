@@ -136,7 +136,26 @@ intent of the work, and its acceptance criteria, and after the person's yes it S
 intent and the acceptance criteria into the epic. Every round SHALL go through the ask tool with
 two to four named options per question, the recommended one first, and an explanation the user
 needs before answering SHALL be one short simple reply ending with "Understand?" in the chat
-language, after which the next round goes through the ask tool again.
+language, after which the next round goes through the ask tool again. Before the first round
+it SHALL read the ask as a top professional in its field would and write four answers: what that
+professional would do, ask and think that the person is not; the rawest material they would start
+from instead of a digest; the specific methods and tools they would use; and what other than the
+agent and the person would show the result is right. Those answers SHALL feed the frontier, the
+intent and the acceptance criteria, and SHALL NOT widen the ask: anything beyond it SHALL go into
+what the work is not, or into a question whose recommendation is to leave it out.
+
+#### Scenario: The ask is read as a top professional would read it
+
+- **WHEN** grilling starts on an ask that is not a fix
+- **THEN** the grilling skill SHALL name, before the first round, the questions the professional
+  would ask, the raw material, the methods and tools, and the outside judge, and the acceptance
+  criteria SHALL be checked by that judge where one exists
+
+#### Scenario: The professional would do more than was asked
+
+- **WHEN** the professional's view adds work the ask did not hold
+- **THEN** the grilling skill SHALL put it in what the work is not or ask it with "leave it out"
+  recommended, and SHALL NOT add it to the epic unasked
 
 #### Scenario: Several independent decisions are open
 
