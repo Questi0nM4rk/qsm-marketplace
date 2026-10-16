@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
 import { looksLikeSecret } from "../../../lib/secret-shapes.ts";
-import { fail } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 export interface NoteRow {
   readonly id: string;
@@ -29,10 +29,12 @@ export interface AddNoteInput {
 export function addNote(db: Database, input: AddNoteInput): NoteRow {
   const shape = looksLikeSecret(input.text);
   if (shape !== null) {
-    fail("secret", `text matches a secret shape (${shape})`, "remove the secret and try again");
+    throw new QsmError("blocked", `text matches a secret shape (${shape})`, {
+      next: "remove the secret and try again",
+    });
   }
   if (input.text.trim().length === 0) {
-    fail("usage", "a note needs text", "pass the note text");
+    throw new QsmError("usage", "a note needs text", { next: "pass the note text" });
   }
   const now = input.now ?? Date.now();
   const row: NoteRow = {
@@ -76,7 +78,7 @@ export function currentNotes(
 export function dropNote(db: Database, id: string): void {
   const r = db.query("DELETE FROM notes WHERE id = ?").run(id);
   if (r.changes === 0) {
-    fail("not-found", `no note ${id}`, "run qsm-memory notes");
+    throw new QsmError("missing", `no note ${id}`, { next: "run qsm-memory notes" });
   }
 }
 

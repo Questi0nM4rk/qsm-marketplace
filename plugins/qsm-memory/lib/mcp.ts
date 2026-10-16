@@ -3,7 +3,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { MemError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { addNote, currentNotes, dropNote, formatNotes, NOTE_DEFAULT_DAYS } from "./notes.ts";
 import { projectOf } from "./project.ts";
 import { projectsDir, unsavedTranscripts } from "./save.ts";
@@ -23,15 +23,16 @@ function text(value: string): ToolText {
   return { content: [{ type: "text", text: value }] };
 }
 
-/** Runs a tool body, turning a `MemError` into `<code>: <message>\n  next:
- * <next>` with `isError`. Any other error is the SDK's to report. */
+/** Runs a tool body, turning a `QsmError` into `<code>: <message>` and, with a next step,
+ * `\n  next: <next>`, with `isError`. Any other error is the SDK's to report. */
 function guarded(run: () => string): ToolText {
   try {
     return text(run());
   } catch (error) {
-    if (error instanceof MemError) {
+    if (error instanceof QsmError) {
+      const next = error.next === undefined ? "" : `\n  next: ${error.next}`;
       return {
-        content: [{ type: "text", text: `${error.code}: ${error.message}\n  next: ${error.next}` }],
+        content: [{ type: "text", text: `${error.code}: ${error.message}${next}` }],
         isError: true,
       };
     }

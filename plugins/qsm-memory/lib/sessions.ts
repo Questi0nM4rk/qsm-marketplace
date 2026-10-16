@@ -4,7 +4,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { fail } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { projectOf } from "./project.ts";
 import { sinceCutoff } from "./search.ts";
 import { fullTurns, type Turn } from "./transcript.ts";
@@ -28,10 +28,14 @@ export function resolveSession(db: Database, prefix: string): SessionRow {
     .all(prefix);
   const [first, second] = rows;
   if (first === undefined) {
-    fail("not-found", `no session starts with ${prefix}`, "run qsm-memory list");
+    throw new QsmError("missing", `no session starts with ${prefix}`, {
+      next: "run qsm-memory list",
+    });
   }
   if (second !== undefined) {
-    fail("ambiguous", `more than one session starts with ${prefix}`, "give more of the id");
+    throw new QsmError("usage", `more than one session starts with ${prefix}`, {
+      next: "give more of the id",
+    });
   }
   return first;
 }
@@ -76,10 +80,10 @@ function savedTurns(db: Database, session: SessionRow): [number, Turn][] {
 /** The turns of the transcript file, numbered by position; loud when the file is gone. */
 function transcriptTurns(session: SessionRow): [number, Turn][] {
   if (!existsSync(session.transcript_path)) {
-    fail(
-      "not-found",
+    throw new QsmError(
+      "missing",
       `the transcript ${session.transcript_path} is gone; only the saved text is left`,
-      `run qsm-memory show ${session.id} without --full`,
+      { next: `run qsm-memory show ${session.id} without --full` },
     );
   }
   return fullTurns(readFileSync(session.transcript_path, "utf8")).map((turn, i) => [i + 1, turn]);

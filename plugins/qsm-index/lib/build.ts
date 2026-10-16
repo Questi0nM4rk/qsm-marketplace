@@ -11,6 +11,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { type CacheFiles, cacheFiles, cacheRoot, type Env } from "./paths.ts";
 import { changedSet, excludeFile, head, topLevel } from "./repo.ts";
 import type { Runner } from "./run.ts";
@@ -25,9 +26,6 @@ import {
 
 export const GRAPH_DIR = "graphify-out";
 export const GRAPH_FILE = "graph.json";
-
-/** The one failure that stops a build before it starts: there is nothing to index. */
-export class IndexPathError extends Error {}
 
 export interface BuildDeps {
   readonly cwd: string;
@@ -56,18 +54,18 @@ function isDirectory(path: string): boolean {
   }
 }
 
-/** The top level of the git repository holding `path`, or IndexPathError. */
+/** The top level of the git repository holding `path`, or a `missing` QsmError: there is nothing to index. */
 function indexableRepo(path: string, deps: BuildDeps): string {
   const absPath = isAbsolute(path) ? resolve(path) : resolve(deps.cwd, path);
   if (!existsSync(absPath)) {
-    throw new IndexPathError(`path does not exist: ${absPath}`);
+    throw new QsmError("missing", `path does not exist: ${absPath}`);
   }
   if (!isDirectory(absPath)) {
-    throw new IndexPathError(`path is not a directory: ${absPath}`);
+    throw new QsmError("missing", `path is not a directory: ${absPath}`);
   }
   const top = topLevel(absPath, deps.run);
   if (!top.ok) {
-    throw new IndexPathError(`path is not inside a git repository: ${absPath}: ${top.detail}`);
+    throw new QsmError("missing", `path is not inside a git repository: ${absPath}: ${top.detail}`);
   }
   return top.stdout;
 }

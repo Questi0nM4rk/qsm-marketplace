@@ -12,8 +12,9 @@ import { buildIndex } from "./build.ts";
 import { cacheFiles, type Env } from "./paths.ts";
 import { type RunResult, spawnRunner } from "./run.ts";
 import { liveHolder, readStatus } from "./state.ts";
+import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { commit, fakeRunner, git, killBuilds, repoWithCache, until, world } from "./test-repo.ts";
+import { fakeRunner, killBuilds, repoWithCache, until, world } from "./test-repo.ts";
 import { context, impact, reindex, search, status, structure } from "./tools.ts";
 
 // A detached build starts a bun process and a fake graphify that sleeps; the default 5 s test

@@ -13,7 +13,7 @@ import {
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { askText, auto } from "../lib/auto.ts";
-import { type BuildReport, buildIndex, IndexPathError } from "../lib/build.ts";
+import { buildIndex } from "../lib/build.ts";
 import { doctor, formatReport } from "../lib/doctor.ts";
 import { spawnRunner } from "../lib/run.ts";
 import { edited, TOOLS, type ToolOutcome } from "../lib/tools.ts";
@@ -24,19 +24,7 @@ const manifest = parseManifest(manifestJson, "qsm-index/qsm.json");
 
 function build(call: Call): Outcome {
   const path = requiredString(call, "path");
-  let report: BuildReport;
-  try {
-    report = buildIndex(path, {
-      cwd: process.cwd(),
-      run: spawnRunner,
-      env: process.env,
-    });
-  } catch (cause) {
-    if (cause instanceof IndexPathError) {
-      return fail("missing", cause.message);
-    }
-    throw cause;
-  }
+  const report = buildIndex(path, { cwd: process.cwd(), run: spawnRunner, env: process.env });
   if (report.kind === "running") {
     return ok(report, `a build of ${report.repo} is already running since ${report.started_at}`);
   }

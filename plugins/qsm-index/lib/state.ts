@@ -1,8 +1,9 @@
 // What a repository's cache directory says about its builds: the lock a running build holds, and
 // the status file every build writes.
 
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { writeAtomic } from "../../../lib/fs.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 
 export interface Lock {
@@ -181,9 +182,6 @@ export function changedSince(
   return [...paths].filter((path) => atBuild[path] !== now[path]).length;
 }
 
-/** Written to a temp file and renamed over, so a reader never sees half a file. */
 export function writeStatus(file: string, status: BuildStatus): void {
-  const temp = `${file}.${process.pid}.tmp`;
-  writeFileSync(temp, `${JSON.stringify(status, null, 2)}\n`);
-  renameSync(temp, file);
+  writeAtomic(file, `${JSON.stringify(status, null, 2)}\n`);
 }

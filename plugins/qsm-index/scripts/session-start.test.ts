@@ -10,7 +10,6 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { auto } from "../lib/auto.ts";
 import { buildIndex } from "../lib/build.ts";
-import type { Env } from "../lib/paths.ts";
 import { spawnRunner } from "../lib/run.ts";
 import { readStatus } from "../lib/state.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
@@ -32,7 +31,7 @@ function sleepyWorld() {
 
 /** The verb's exit and the context the hook hands the session: the envelope's `askText`, or null
  * when there is nothing to ask. */
-function hook(cwd: string, env: Env) {
+function hook(cwd: string, env: Record<string, string>) {
   const r = verb(env, "auto", cwd);
   const askText: unknown =
     typeof r.data === "object" && r.data !== null ? Reflect.get(r.data, "askText") : null;

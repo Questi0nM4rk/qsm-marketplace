@@ -1,10 +1,10 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { MemError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { TranscriptBuilder } from "./fixtures/transcript.ts";
 import { saveTranscript } from "./save.ts";
 import { formatList, listSessions, resolveSession, show } from "./sessions.ts";
@@ -91,7 +91,7 @@ describe("show", () => {
 
   test("an id prefix that matches one session is accepted, two is ambiguous", () => {
     expect(resolveSession(archive(), "abc").id).toBe("abc-1");
-    expect(() => resolveSession(archive(), "ab")).toThrow(MemError);
+    expect(() => resolveSession(archive(), "ab")).toThrow(QsmError);
     expect(() => resolveSession(archive(), "zzz")).toThrow("no session starts with zzz");
   });
 });
@@ -133,12 +133,10 @@ describe("list", () => {
 
   test("--project a worktree lists the sessions archived under its main checkout", () => {
     const root = realpathSync(sandboxDir("qsm-memory-wt-"));
-    const git = (...args: string[]) =>
-      spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
-    git("init", "-q");
-    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x");
+    git(root, "init", "-q");
+    git(root, "commit", "-q", "--allow-empty", "-m", "x");
     const worktree = join(root, "wt");
-    expect(git("worktree", "add", "-q", worktree).status).toBe(0);
+    git(root, "worktree", "add", "-q", worktree);
     const db = new Database(":memory:");
     applySchema(db);
     const path = join(root, "s1.jsonl");

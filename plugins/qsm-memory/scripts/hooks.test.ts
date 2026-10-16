@@ -5,9 +5,11 @@
 
 import { z } from "zod";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { spawn as spawnAsync, spawnSync } from "node:child_process";
+import { spawn as spawnAsync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { cliShim } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
 
@@ -23,14 +25,12 @@ function sandbox() {
   for (const dir of [work, projects, bin]) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(join(bin, "qsm-memory"), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`);
-  chmodSync(join(bin, "qsm-memory"), 0o755);
-  const env = {
+  cliShim(bin, "qsm-memory", CLI);
+  const env = isolatedEnv(home, {
     PATH: `${bin}:${process.env.PATH ?? ""}`,
-    HOME: home,
     CLAUDE_CONFIG_DIR: join(home, "c"),
     XDG_DATA_HOME: join(home, "d"),
-  };
+  });
   return { home, work, projects, env, log: join(home, "d", "qsm-memory", "save.log") };
 }
 
@@ -38,7 +38,7 @@ type Box = ReturnType<typeof sandbox>;
 
 /** This checkout's CLI in the sandbox's work directory. */
 function spawn(box: Box, argv: readonly string[], env: Record<string, string> = box.env) {
-  return spawnSync(process.execPath, [CLI, ...argv], { encoding: "utf8", cwd: box.work, env });
+  return runBin(CLI, argv, { cwd: box.work, env });
 }
 
 function cli(box: Box, argv: readonly string[]): string {
@@ -52,7 +52,7 @@ const briefingSchema = z.object({ text: z.string() });
 /** One verb under --json: its exit and its envelope. */
 function verb(box: Box, argv: readonly string[], env?: Record<string, string>) {
   const r = spawn(box, [...argv, "--json"], env);
-  return { exit: r.status, ...envelopeSchema.parse(JSON.parse(r.stdout)) };
+  return { exit: r.exit, ...envelopeSchema.parse(JSON.parse(r.stdout)) };
 }
 
 /** Waits until save.log holds `text`, the line a detached child writes when it ends. */
