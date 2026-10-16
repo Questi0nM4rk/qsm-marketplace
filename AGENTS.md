@@ -125,8 +125,9 @@ what done means, ending in a `strict-reviewer` review.
 
 ## Before a commit
 
-Run `mise exec -- bun install` once after a clone: its `prepare` script points git at `hooks/`,
-so the pre-commit and pre-push gates run in that copy. Git never takes hooks from a clone by itself.
+Run `mise exec -- bun install` once after a clone: its `prepare` script points git at `hooks/` and
+installs each plugin's own dependencies, so the pre-commit and pre-push gates run in that copy.
+Git never takes hooks from a clone by itself.
 
 ```text
 mise exec -- bun run validate
