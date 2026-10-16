@@ -2,11 +2,11 @@
 
 // qsm-langdev: per-language quality checks over one declarative registry.
 
-import { readFileSync } from "node:fs";
 import {
   flagArg,
   type Handler,
   optionalString,
+  readStdin,
   runCli,
   stringList,
 } from "../../../lib/cli-base.ts";
@@ -393,15 +393,6 @@ const uninstallGitHooks: Handler = (call) => {
   return ok({ root, actions }, actions.map(describeUninstallAction).join("\n"));
 };
 
-/** Git's pre-push payload, read once and handed to every gate that wants it. */
-function pushedRefs(): string {
-  try {
-    return readFileSync(0, "utf8");
-  } catch {
-    return "";
-  }
-}
-
 function reportGateOutcomes(name: HookName, outcomes: readonly GateOutcome[]): void {
   for (const outcome of outcomes) {
     if (outcome.status === "pass") {
@@ -432,7 +423,8 @@ const hook: Handler = async (call) => {
   }
   const config = readGatesConfig(root);
   const outcomes = await runGates(root, name, config.hooks[name], {
-    pushLines: name === "pre-push" ? pushedRefs() : undefined,
+    // git's pre-push payload, read once and handed to every gate that wants it
+    pushLines: name === "pre-push" ? await readStdin() : undefined,
     allow: process.env.QSM_LANGDEV_ALLOW?.trim(),
   });
   reportGateOutcomes(name, outcomes);
