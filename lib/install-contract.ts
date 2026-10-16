@@ -1,7 +1,9 @@
 // The contract every plugin installer implements: scripts/install.ts exports install(ctx):
 // Promise<InstallResult>.
 import { spawnSync } from "node:child_process";
+import { type Call, flagArg, parseCall, requiredString } from "./cli-base.ts";
 import { exitOf, fail, type Outcome, ok, renderJson } from "./outcome.ts";
+import { type CommandArg, type QsmManifest, toKebab } from "./qsm-manifest.ts";
 
 export type InstallStatus =
   | "installed"
@@ -72,11 +74,51 @@ function outcomeOf(r: InstallResult): Outcome<InstallResult> {
   return ok(r, `${r.status}: ${r.detail}`);
 }
 
+/** An installer's own flags, declared as a manifest so parseCall reads them like any qsm CLI's. */
+const VERB = "run";
+const flag = (name: string, description: string): CommandArg => ({
+  name,
+  type: "boolean",
+  description,
+});
+const DRY_RUN = flag("dryRun", "plan the work, change nothing");
+
+/** The call, or the usage message: an unknown flag or a missing value is never ignored. */
+function parseArgv(args: readonly CommandArg[], argv: readonly string[]): Call | string {
+  const manifest: QsmManifest = {
+    qsm: { commands: { [`install ${VERB}`]: { description: "installer", args } } },
+  };
+  const parsed = parseCall(manifest, "install", [VERB, ...argv]);
+  if (parsed.ok) {
+    return parsed.call;
+  }
+  return parsed.message === ""
+    ? `flags: ${args.map((a) => `--${toKebab(a.name)}`).join(", ")}, --json`
+    : parsed.message;
+}
+
+/** A usage failure, in the form the caller asked for. */
+function usage(message: string, json: boolean): number {
+  const outcome = fail("usage", message);
+  if (json) {
+    process.stdout.write(renderJson(outcome));
+  } else {
+    process.stderr.write(`usage: ${message}\n`);
+  }
+  return exitOf(outcome.code);
+}
+
 /** One-line CLI entry: `if (import.meta.main) process.exit(await cliMain(install));`
  * Flags: --dry-run, --json (the outcome envelope, steps as data). */
-export async function cliMain(install: InstallFn, argv: string[] = process.argv): Promise<number> {
-  const r = await install(realContext({ dryRun: argv.includes("--dry-run") }));
-  return report(r, argv.includes("--json"));
+export async function cliMain(
+  install: InstallFn,
+  argv: readonly string[] = process.argv.slice(2),
+): Promise<number> {
+  const call = parseArgv([DRY_RUN], argv);
+  if (typeof call === "string") {
+    return usage(call, argv.includes("--json"));
+  }
+  return report(await install(realContext({ dryRun: flagArg(call, "dryRun") })), call.json);
 }
 
 /** An install or activation result: the envelope under --json, else lines on stderr. */
@@ -121,32 +163,6 @@ export interface Activation {
   readonly activate: (ctx: ActivationContext) => InstallResult | Promise<InstallResult>;
 }
 
-function listValues(values: readonly string[]): string {
-  return values.length < 2
-    ? values.join("")
-    : `${values.slice(0, -1).join(", ")} or ${values.at(-1)}`;
-}
-
-/** The choices from argv, or the usage message naming what is missing. */
-function readChoices(
-  options: readonly ActivationOption[],
-  argv: readonly string[],
-): Record<string, string> | string {
-  const choices: Record<string, string> = {};
-  for (const option of options) {
-    const at = argv.indexOf(`--${option.name}`);
-    const value = at === -1 ? undefined : argv[at + 1];
-    if (value === undefined) {
-      return `activation needs --${option.name} <${option.values.join("|")}>`;
-    }
-    if (!option.values.includes(value)) {
-      return `--${option.name} takes ${listValues(option.values)}, not ${value}`;
-    }
-    choices[option.name] = value;
-  }
-  return choices;
-}
-
 /**
  * One-line CLI entry for scripts/activate.ts: `if (import.meta.main) process.exit(await
  * activationMain(activation));` Flags: every declared option, --dry-run, --json; `--status`
@@ -154,36 +170,42 @@ function readChoices(
  */
 export async function activationMain(
   activation: Activation,
-  argv: string[] = process.argv,
+  argv: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
-  const json = argv.includes("--json");
-  if (argv.includes("--status")) {
+  const status = argv.includes("--status");
+  const choices: CommandArg[] = activation.options.map((o) => ({
+    name: o.name,
+    type: "string",
+    required: true,
+    choices: o.values,
+    description: o.description,
+  }));
+  const call = parseArgv(
+    status ? [flag("status", "report the state")] : [DRY_RUN, ...choices],
+    argv,
+  );
+  if (typeof call === "string") {
+    return usage(call, argv.includes("--json"));
+  }
+  if (status) {
     let state: ActivationState;
     try {
       state = activation.status(process.env);
     } catch (e) {
       const outcome = fail("failed", e instanceof Error ? e.message : String(e));
-      process.stdout.write(json ? renderJson(outcome) : `failed: ${outcome.message}\n`);
+      process.stdout.write(call.json ? renderJson(outcome) : `failed: ${outcome.message}\n`);
       return exitOf(outcome.code);
     }
     const data = { state, options: activation.options };
-    process.stdout.write(json ? renderJson(ok(data, state)) : `${state}\n`);
+    process.stdout.write(call.json ? renderJson(ok(data, state)) : `${state}\n`);
     return 0;
   }
-  const choices = readChoices(activation.options, argv);
-  if (typeof choices === "string") {
-    const outcome = fail("usage", choices);
-    if (json) {
-      process.stdout.write(renderJson(outcome));
-    } else {
-      process.stderr.write(`usage: ${choices}\n`);
-    }
-    return exitOf(outcome.code);
-  }
   const r = await activation.activate({
-    dryRun: argv.includes("--dry-run"),
+    dryRun: flagArg(call, "dryRun"),
     env: process.env,
-    choices,
+    choices: Object.fromEntries(
+      activation.options.map((o) => [o.name, requiredString(call, o.name)]),
+    ),
   });
-  return report(r, json);
+  return report(r, call.json);
 }
