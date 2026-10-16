@@ -4,35 +4,19 @@
 // that line before it reads the archive. Which event reaches which verb is hooks/register.test.ts.
 
 import { z } from "zod";
-import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawn as spawnAsync, spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
 
 setDefaultTimeout(30_000);
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
-const homes: string[] = [];
-afterEach(() => {
-  for (const home of homes.splice(0)) {
-    rmSync(home, { recursive: true, force: true });
-  }
-});
-
 function sandbox() {
-  const home = mkdtempSync(join(tmpdir(), "qsm-memory-hooks-"));
-  homes.push(home);
+  const home = sandboxDir("qsm-memory-hooks-");
   const work = join(home, "work");
   const projects = join(home, "c", "projects", "-home-work");
   const bin = join(home, "bin");
@@ -203,8 +187,7 @@ describe("session start", () => {
     );
     cli(box, ["save", path]);
     cli(box, ["note", "qsm-1: finish the gate"]);
-    const elsewhere = mkdtempSync(join(tmpdir(), "qsm-memory-hooks-elsewhere-"));
-    homes.push(elsewhere);
+    const elsewhere = sandboxDir("qsm-memory-hooks-elsewhere-");
 
     const here = verb(box, ["orient", "--cwd", box.work]);
     const there = verb(box, ["orient", "--cwd", elsewhere]);

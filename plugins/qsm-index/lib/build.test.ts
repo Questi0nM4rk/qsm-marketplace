@@ -22,9 +22,10 @@ import { cacheFiles } from "./paths.ts";
 import { changedSet } from "./repo.ts";
 import { spawnRunner } from "./run.ts";
 import { type BuildStatus, readStatus } from "./state.ts";
-import { commit, fakeRunner, git, removeSandboxes, repoWithCache, sandbox } from "./test-repo.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { commit, fakeRunner, git, killBuilds, repoWithCache } from "./test-repo.ts";
 
-afterEach(removeSandboxes);
+afterEach(killBuilds);
 
 function scenario() {
   const made = repoWithCache("qsm-index-build-");
@@ -278,7 +279,7 @@ describe("An existing graphify-out", () => {
 
 describe("A cloned repository is queried exactly like the agent's own", () => {
   test("a repository under the Clonned directory is indexed into the cache", () => {
-    const home = sandbox("qsm-index-home-");
+    const home = sandboxDir("qsm-index-home-");
     const repo = join(home, "Clonned", "dep");
     mkdirSync(repo, { recursive: true });
     writeFileSync(join(repo, "a.ts"), "export const a = 1;\n");

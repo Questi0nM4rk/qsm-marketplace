@@ -1,29 +1,16 @@
-// The one binary through its real surface: argv, stdout, stderr, exit. Every
-// sandbox this file makes is removed in afterEach, including after a failing
-// test, and the list is emptied so one failure cannot leak into the next.
+// The one binary through its real surface: argv, stdout, stderr, exit.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { dataOf, envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 function sandboxFile(name: string, content: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-usage-test-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-usage-test-");
   const path = join(dir, name);
   writeFileSync(path, content);
   return path;

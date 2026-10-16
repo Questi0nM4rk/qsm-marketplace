@@ -2,33 +2,23 @@
 // of a command. The two things it promises: it delegates to the filter when the filter is there,
 // and it gets out of the way when it is not, because a missing optimisation turning into a blocked
 // Bash call breaks every command in a session.
-//
-// Every sandbox this file makes is removed in afterEach, including after a failing test.
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { FILTER_HOOK_ARGS, isFilterAnswer } from "../lib/filter.ts";
 import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-// One directory for the whole file, removed after the last test, which stubs are written into
-// under a name of their own.
-const dir = mkdtempSync(join(tmpdir(), "qsm-usage-filter-"));
-let stubs = 0;
-
-afterAll(() => {
-  rmSync(dir, { recursive: true, force: true });
-});
 
 /** A stand-in for the filter binary: it records the stdin it was handed, prints `stdout`, writes
  * `stderr`, and answers with the exit code the test wants back. */
 function stubFilter(exitCode: number, stdout = "", stderr = ""): { bin: string; capture: string } {
-  stubs += 1;
-  const bin = join(dir, `stub-filter-${stubs}`);
-  const capture = join(dir, `stdin-${stubs}.txt`);
+  const dir = sandboxDir("qsm-usage-filter-");
+  const bin = join(dir, "stub-filter");
+  const capture = join(dir, "stdin.txt");
   writeFileSync(
     bin,
     `#!/usr/bin/env bash\ncat > '${capture}'\nprintf '%s' '${stdout}'\nprintf '%s' '${stderr}' >&2\nexit ${exitCode}\n`,
@@ -86,6 +76,7 @@ describe("qsm-usage filter", () => {
   });
 
   test("calls the filter with its own contract args, nothing guessed", () => {
+    const dir = sandboxDir("qsm-usage-filter-");
     const bin = join(dir, "stub-filter-args");
     const argsFile = join(dir, "args.txt");
     writeFileSync(

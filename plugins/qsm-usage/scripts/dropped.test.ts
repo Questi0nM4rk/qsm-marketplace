@@ -8,8 +8,6 @@ import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
-const sandbox = () => sandboxDir("qsm-usage-dropped-test-");
-
 function run(state: string, args: string[]) {
   return spawnSync("bun", [CLI, ...args], {
     encoding: "utf8",
@@ -19,7 +17,7 @@ function run(state: string, args: string[]) {
 
 describe("qsm-usage drop", () => {
   test("a dropped finding is listed once, however often it is dropped", () => {
-    const state = sandbox();
+    const state = sandboxDir("qsm-usage-dropped-test-");
     expect(run(state, ["dropped"]).stdout.trim()).toBe("");
     expect(run(state, ["drop", "unused-extensions:skill pdf-tools"]).status).toBe(0);
     expect(run(state, ["drop", "unused-extensions:skill pdf-tools"]).status).toBe(0);
@@ -31,12 +29,12 @@ describe("qsm-usage drop", () => {
   });
 
   test("a key that is not topic:target is a broken call", () => {
-    const ran = run(sandbox(), ["drop", "nothing"]);
+    const ran = run(sandboxDir("qsm-usage-dropped-test-"), ["drop", "nothing"]);
     expect(ran.status).toBe(2);
   });
 
   test("a damaged file fails loud instead of reading as empty", () => {
-    const state = sandbox();
+    const state = sandboxDir("qsm-usage-dropped-test-");
     run(state, ["drop", "duplicates:rule a"]);
     writeFileSync(join(state, "usage", "dropped.json"), "{}");
     expect(run(state, ["dropped"]).status).toBe(1);

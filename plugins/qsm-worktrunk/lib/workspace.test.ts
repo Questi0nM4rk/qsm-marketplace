@@ -1,29 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { gitReader, readMainCheckout, readWorkspace, workspaceContext } from "./workspace.ts";
 import type { Runner } from "./wt.ts";
-
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-worktrunk-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 const run: Runner = (argv, cwd) => {
   const [command, ...args] = argv;
@@ -39,7 +19,7 @@ const run: Runner = (argv, cwd) => {
  * workspace is made with raw git on purpose: the sandbox must not depend on
  * wt being installed to prove that detection reads what git reports. */
 function repository(): { main: string; workspace: string } {
-  const dir = sandbox();
+  const dir = sandboxDir("qsm-worktrunk-");
   const main = join(dir, "main");
   const workspace = join(dir, "feature");
   const git = (...args: string[]): void => {
@@ -77,7 +57,7 @@ describe("readWorkspace", () => {
   });
 
   test("outside a repository: nothing", async () => {
-    expect(await readWorkspace(gitReader(run, sandbox()))).toBeNull();
+    expect(await readWorkspace(gitReader(run, sandboxDir("qsm-worktrunk-")))).toBeNull();
   });
 
   test("a detached head reads as detached, not as a missing branch", async () => {
@@ -98,7 +78,7 @@ describe("readMainCheckout", () => {
   });
 
   test("outside a repository: nothing", async () => {
-    expect(await readMainCheckout(gitReader(run, sandbox()))).toBeNull();
+    expect(await readMainCheckout(gitReader(run, sandboxDir("qsm-worktrunk-")))).toBeNull();
   });
 });
 

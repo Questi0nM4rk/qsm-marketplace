@@ -1,37 +1,26 @@
-// Throwaway git repositories for the tests. Every sandbox the tests make is listed here and
-// removed by `removeSandboxes`, which each test file calls in its afterEach.
+// Throwaway git repositories for the tests. Their directories come from `sandboxDir`; `killBuilds`
+// ends the builds a test left running.
 
 import { afterEach, setDefaultTimeout } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { type Envelope, isRecord, OUTCOME_CODES, type OutcomeCode } from "../../../lib/outcome.ts";
 import { type CacheFiles, cacheFiles, type Env } from "./paths.ts";
 import { type RunResult, spawnRunner } from "./run.ts";
 import { liveHolder, readStatus } from "./state.ts";
 
-const sandboxes: string[] = [];
-
-export function sandbox(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  sandboxes.push(dir);
-  return dir;
-}
-
 /** Lock files of the builds a test started detached. */
 const locks: string[] = [];
 
-/** Kills the builds a test left running, with their process groups, then removes every sandbox. */
-export function removeSandboxes(): void {
+/** Kills the builds a test left running, with their process groups. */
+export function killBuilds(): void {
   for (const lock of locks.splice(0)) {
     const holder = liveHolder(lock);
     if (holder !== null && holder.pid !== process.pid) {
       process.kill(-holder.pid, "SIGKILL");
     }
-  }
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
   }
 }
 
@@ -65,7 +54,7 @@ export function commit(repo: string, message: string): void {
 
 /** A sandbox holding a repository with one commit, and a cache root beside it. */
 export function repoWithCache(prefix: string): { root: string; repo: string; cache: string } {
-  const root = sandbox(prefix);
+  const root = sandboxDir(prefix);
   const repo = join(root, "repo");
   mkdirSync(join(repo, "src"), { recursive: true });
   writeFileSync(join(repo, "src", "a.ts"), "export const a = 1;\n");
@@ -105,7 +94,7 @@ function executable(path: string, body: string): void {
 
 /** A repository, its cache, and a PATH whose `qsm-index` is this checkout's CLI, whose graphify
  * runs `before(root)` and then writes the graph, and whose semble answers nothing. A build left
- * running is killed by `removeSandboxes`. */
+ * running is killed by `killBuilds`. */
 export function world(prefix: string, before: (root: string) => string = () => "") {
   const { root, repo, cache } = repoWithCache(prefix);
   const bin = join(root, "bin");
@@ -138,11 +127,11 @@ export async function until(check: () => boolean, what: string): Promise<void> {
   }
 }
 
-/** The top of a test file that starts detached builds: a long limit, and every build and sandbox
- * removed after each test. */
+/** The top of a test file that starts detached builds: a long limit, and every build
+ * killed after each test. */
 export function detachedBuildTests(): void {
   setDefaultTimeout(30_000);
-  afterEach(removeSandboxes);
+  afterEach(killBuilds);
 }
 
 /** One verb of this checkout's CLI under `--json`, the way a hook's noun runs it: the exit and

@@ -2,18 +2,12 @@
 // command. graphify gates it: one older than 0.8.34 is upgraded by the install, and "already" is
 // the answer only for a new enough one. The whole installer runs in a sandbox home.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { InstallContext } from "../../../lib/install-contract.ts";
 import { SEMBLE } from "../lib/doctor.ts";
 import { graphifyStep, install } from "./install.ts";
-
-const sandbox = mkdtempSync(join(tmpdir(), "qsm-index-install-"));
-afterAll(() => {
-  rmSync(sandbox, { recursive: true, force: true });
-});
 
 function ctxOf(dryRun: boolean, exit = 0) {
   const ran: string[][] = [];
@@ -58,6 +52,7 @@ describe("graphify step", () => {
 
 describe("install", () => {
   test("semble missing is a suggestion carrying its install command", async () => {
+    const sandbox = sandboxDir("qsm-index-install-");
     const r = await install({
       dryRun: true,
       env: { HOME: sandbox, QSM_BIN_DIR: join(sandbox, "bin"), XDG_CONFIG_HOME: sandbox },

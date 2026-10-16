@@ -1,32 +1,15 @@
 // `qsm-usage report` through the real binary: argv, stdout, stderr, exit,
-// and the HTML file it does or does not write. Every sandbox this file makes
-// is removed in afterEach, including after a failing test.
+// and the HTML file it does or does not write.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { firstFinding } from "../lib/findings-fixture.ts";
 import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
-
-function sandboxDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-usage-report-test-"));
-  sandboxes.push(dir);
-  return dir;
-}
 
 function sandboxFile(dir: string, name: string, content: string): string {
   const path = join(dir, name);
@@ -76,14 +59,14 @@ describe("qsm-usage report: the call", () => {
   });
 
   test("--out is required", () => {
-    const dir = sandboxDir();
+    const dir = sandboxDir("qsm-usage-report-test-");
     const input = sandboxFile(dir, "findings.json", JSON.stringify(fiveTopicFindings()));
     expect(run(["report", input]).status).toBe(2);
   });
 
   // A missing input file
   test("a findings file that does not exist is missing, exit 4, and writes no file", () => {
-    const dir = sandboxDir();
+    const dir = sandboxDir("qsm-usage-report-test-");
     const out = join(dir, "report.html");
     const result = run(["report", join(dir, "nonexistent.json"), "--out", out, "--json"]);
     expect(result.status).toBe(4);
@@ -97,7 +80,7 @@ describe("qsm-usage report: the call", () => {
 describe("qsm-usage report: validation and rendering", () => {
   // Scenario: Rendering a standard review
   test("Rendering a standard review", () => {
-    const dir = sandboxDir();
+    const dir = sandboxDir("qsm-usage-report-test-");
     const input = sandboxFile(dir, "findings.json", JSON.stringify(fiveTopicFindings()));
     const out = join(dir, "report.html");
     const result = run(["report", input, "--out", out]);
@@ -121,7 +104,7 @@ describe("qsm-usage report: validation and rendering", () => {
 
   // Scenario: A finding without a saving
   test("A finding without a saving", () => {
-    const dir = sandboxDir();
+    const dir = sandboxDir("qsm-usage-report-test-");
     const doc = fiveTopicFindings();
     firstFinding(doc).savingTokens = undefined;
     const input = sandboxFile(dir, "findings.json", JSON.stringify(doc));
