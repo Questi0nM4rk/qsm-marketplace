@@ -11,7 +11,7 @@ import {
   parsePixelDump,
   summarizeRegion,
 } from "./color.ts";
-import { CaptureError, usageError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parsePoint, parseRect, type Rect, requireAmount, requireCount } from "./geometry.ts";
 import { run, runOrThrow } from "./run.ts";
 
@@ -80,7 +80,7 @@ function focusedMonitor(): string {
   }
   const focused = monitors.find((monitor) => monitor.focused);
   if (focused === undefined) {
-    throw new CaptureError(`no focused monitor reported by ${MONITOR_TOOL}`);
+    throw new QsmError("failed", `no focused monitor reported by ${MONITOR_TOOL}`);
   }
   return focused.name;
 }
@@ -97,7 +97,10 @@ function imageSize(image: string): { readonly w: number; readonly h: number } {
   const match = SIZE_LINE.exec(stdout.trim());
   const [, w, h] = match ?? [];
   if (w === undefined || h === undefined) {
-    throw new CaptureError(`${IMAGE_TOOL} did not report a size for ${image}: ${stdout.trim()}`);
+    throw new QsmError(
+      "failed",
+      `${IMAGE_TOOL} did not report a size for ${image}: ${stdout.trim()}`,
+    );
   }
   return { w: Number(w), h: Number(h) };
 }
@@ -106,7 +109,8 @@ function imageSize(image: string): { readonly w: number; readonly h: number } {
 function requireInside(image: string, rect: Rect): void {
   const size = imageSize(image);
   if (rect.x + rect.w > size.w || rect.y + rect.h > size.h) {
-    throw usageError(
+    throw new QsmError(
+      "usage",
       `region ${rect.x},${rect.y},${rect.w},${rect.h} runs outside ${image}, which is ${size.w}x${size.h}`,
     );
   }
@@ -117,7 +121,8 @@ function requireSameSize(a: string, b: string): void {
   const sa = imageSize(a);
   const sb = imageSize(b);
   if (sa.w !== sb.w || sa.h !== sb.h) {
-    throw usageError(
+    throw new QsmError(
+      "usage",
       `diff needs two images of the same size: ${a} is ${sa.w}x${sa.h}, ${b} is ${sb.w}x${sb.h}`,
     );
   }
@@ -140,7 +145,8 @@ function dumpPixels(image: string, rect: Rect): Pixel[] {
   ]);
   const pixels = parsePixelDump(stdout, rect);
   if (pixels.length === 0) {
-    throw new CaptureError(
+    throw new QsmError(
+      "failed",
       `no pixels at ${rect.x},${rect.y},${rect.w},${rect.h} of ${image}: is the region inside the image?`,
     );
   }
@@ -150,7 +156,7 @@ function dumpPixels(image: string, rect: Rect): Pixel[] {
 function samplePixel(image: string, x: number, y: number): Pixel {
   const [pixel] = dumpPixels(image, { x, y, w: 1, h: 1 });
   if (pixel === undefined) {
-    throw new CaptureError(`could not sample pixel ${x},${y} of ${image}`);
+    throw new QsmError("failed", `could not sample pixel ${x},${y} of ${image}`);
   }
   return pixel;
 }
@@ -212,7 +218,7 @@ export function diff(call: DiffCall): object {
   ensureDir(dirname(file));
   const result = run([IMAGE_TOOL, "compare", "-metric", "SSIM", a, b, file]);
   if (result.exitCode > COMPARE_DIFFERENT) {
-    throw new CaptureError(`${IMAGE_TOOL} compare failed: ${result.stderr.trim()}`);
+    throw new QsmError("failed", `${IMAGE_TOOL} compare failed: ${result.stderr.trim()}`);
   }
   // The tool prints a distortion for SSIM, not a similarity: "raw (normalized)", where 0 means
   // identical. It is reported under the name `distortion` so no reader reads it as a score.
@@ -220,7 +226,7 @@ export function diff(call: DiffCall): object {
   const normalized = SSIM_NORMALIZED.exec(raw)?.[1];
   const distortion = Number.parseFloat(normalized ?? raw);
   if (!Number.isFinite(distortion)) {
-    throw new CaptureError(`unreadable SSIM output from ${IMAGE_TOOL}: ${raw}`);
+    throw new QsmError("failed", `unreadable SSIM output from ${IMAGE_TOOL}: ${raw}`);
   }
   return { action: "diff", a, b, distortion, identical: result.exitCode === 0, diffImage: file };
 }
@@ -309,7 +315,8 @@ export interface RegionStatsCall {
 export function regionStats(call: RegionStatsCall): object {
   const rect = parseRect(call.rect);
   if (rect.w * rect.h > MAX_REGION_PIXELS) {
-    throw usageError(
+    throw new QsmError(
+      "usage",
       `region ${rect.w}x${rect.h} is over ${MAX_REGION_PIXELS} pixels: scan a tighter rect`,
     );
   }

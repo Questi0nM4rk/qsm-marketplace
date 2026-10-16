@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const DRIVER = resolve(import.meta.dir, "..", "docker", "driver");
 
@@ -17,7 +19,7 @@ describe("the container driver", () => {
       cwd: DRIVER,
       encoding: "utf8",
       // Bytecode would land in the source tree the image copies.
-      env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
+      env: isolatedEnv(sandboxDir("qsm-web-driver-"), { PYTHONDONTWRITEBYTECODE: "1" }),
     });
     if (run.status !== 0) {
       process.stderr.write(run.stderr ?? run.error?.message ?? "python3 did not run\n");

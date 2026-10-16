@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import { TAVILY_SKILLS } from "../lib/upstream.ts";
@@ -65,13 +66,11 @@ describe("install", () => {
       expect(existsSync(join(bin, "qsm-web"))).toBe(true);
       stubUpstreamBins(bin);
 
-      const env = {
-        ...process.env,
+      const env = isolatedEnv(home, {
         QSM_MARKETPLACE: resolve(PLUGIN, "..", ".."),
         PATH: `${bin}:${process.env.PATH ?? ""}`,
-        HOME: home,
         XDG_CONFIG_HOME: join(home, "c"),
-      } as Record<string, string>;
+      });
       const doctor = spawnSync(join(bin, "qsm-web"), ["doctor", "--json"], {
         encoding: "utf8",
         env,

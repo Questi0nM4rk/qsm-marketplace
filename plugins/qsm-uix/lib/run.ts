@@ -1,7 +1,7 @@
 // Running an external tool, and telling its absence apart from its failure.
 
 import { spawnSync } from "node:child_process";
-import { CaptureError, missingToolError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 export interface RunResult {
   readonly stdout: string;
@@ -16,9 +16,9 @@ export function run(cmd: Command): RunResult {
   const done = spawnSync(program, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (done.error !== undefined) {
     if ((done.error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw missingToolError(program);
+      throw new QsmError("missing", `required tool not found on PATH: ${program}`);
     }
-    throw new CaptureError(`${program} could not be run: ${done.error.message}`);
+    throw new QsmError("failed", `${program} could not be run: ${done.error.message}`);
   }
   return { stdout: done.stdout ?? "", stderr: done.stderr ?? "", exitCode: done.status ?? 1 };
 }
@@ -29,7 +29,7 @@ export function runOrThrow(cmd: Command): RunResult {
   const result = run(cmd);
   if (result.exitCode !== 0) {
     const said = result.stderr.trim().length > 0 ? result.stderr.trim() : result.stdout.trim();
-    throw new CaptureError(`${cmd[0]} failed (exit ${result.exitCode}): ${said}`);
+    throw new QsmError("failed", `${cmd[0]} failed (exit ${result.exitCode}): ${said}`);
   }
   return result;
 }

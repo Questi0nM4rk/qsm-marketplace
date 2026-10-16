@@ -2,8 +2,8 @@
 // The shared install base compiles the one bin and writes its completion.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { installBase } from "../../../lib/install-base.ts";
-import { cliMain, type InstallContext, type Step } from "../../../lib/install-contract.ts";
+import { installScript } from "../../../lib/install-base.ts";
+import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { home } from "../../../lib/paths.ts";
 import {
   CONTEXT7_SETUP_LINE,
@@ -18,7 +18,6 @@ import {
   TVLY_INSTALL_LINE,
 } from "../lib/upstream.ts";
 
-const PLUGIN_ROOT = join(import.meta.dir, "..");
 const RUNTIME_HINT =
   "install docker (https://docs.docker.com/engine/install) or podman (https://podman.io/docs/installation); qsm-web browserbox start builds the image on first use";
 
@@ -129,8 +128,7 @@ function tavilyTier(ctx: InstallContext): Step[] {
   return [tavilySkills(ctx), ...personSteps(ctx)];
 }
 
-export const install = installBase({
-  pluginRoot: PLUGIN_ROOT,
+export const install = installScript(import.meta, {
   upstream: [
     {
       cmd: "opensrc",
@@ -154,7 +152,3 @@ export const install = installBase({
   ],
   extra: (ctx) => [webTier(ctx), ...tavilyTier(ctx)],
 });
-
-if (import.meta.main) {
-  process.exit(await cliMain(install));
-}

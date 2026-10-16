@@ -1,7 +1,7 @@
 // The platform accessibility tree on Linux, read through gdbus: AT-SPI lives on its own bus, whose
 // address the session bus hands out, and every application answers on it for itself.
 
-import { CaptureError } from "./errors.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { run } from "./run.ts";
 
 export const KEY_SENDER = "wtype";
@@ -50,7 +50,7 @@ function exec(address: string, ref: NodeRef, method: string, extra: readonly str
 function call(address: string, ref: NodeRef, method: string, extra: readonly string[] = []) {
   const done = exec(address, ref, method, extra);
   if (done.exitCode !== 0) {
-    throw new CaptureError(`${method} on ${ref.bus} failed: ${done.stderr.trim()}`);
+    throw new QsmError("failed", `${method} on ${ref.bus} failed: ${done.stderr.trim()}`);
   }
   return done.stdout;
 }
@@ -70,9 +70,9 @@ function busAddress(): string {
   ]);
   const address = /'([^']+)'/.exec(done.stdout)?.[1];
   if (done.exitCode !== 0 || address === undefined) {
-    throw new CaptureError(
-      `no AT-SPI bus address from the session bus: ${done.stderr.trim()}; start it with ${RESTART_HINT}`,
+    throw new QsmError(
       "missing",
+      `no AT-SPI bus address from the session bus: ${done.stderr.trim()}; start it with ${RESTART_HINT}`,
     );
   }
   return address;
@@ -87,9 +87,9 @@ function checkBus(address: string): void {
     "ChildCount",
   ]);
   if (done.exitCode !== 0) {
-    throw new CaptureError(
-      `the AT-SPI address ${address} does not answer (${done.stderr.trim()}); restart it with ${RESTART_HINT}`,
+    throw new QsmError(
       "missing",
+      `the AT-SPI address ${address} does not answer (${done.stderr.trim()}); restart it with ${RESTART_HINT}`,
     );
   }
 }
@@ -100,7 +100,7 @@ export function busFinding(): string | null {
     checkBus(busAddress());
     return null;
   } catch (error) {
-    if (error instanceof CaptureError) {
+    if (error instanceof QsmError) {
       return error.message;
     }
     throw error;
@@ -122,7 +122,7 @@ function childrenOf(address: string, ref: NodeRef): NodeRef[] {
     const bus = strings[i];
     const path = strings[i + 1];
     if (bus === undefined || path === undefined) {
-      throw new CaptureError("a gdbus children reply held a name without its path");
+      throw new QsmError("failed", "a gdbus children reply held a name without its path");
     }
     pairs.push({ bus, path });
   }
@@ -175,7 +175,8 @@ export function accessibilityTree(app: string | undefined, depth: number): TreeN
     }
   }
   if (app !== undefined && found.length === 0) {
-    throw new CaptureError(
+    throw new QsmError(
+      "failed",
       `no accessible application named "${app}" on the AT-SPI bus; a Qt app registers only when launched with QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`,
     );
   }
