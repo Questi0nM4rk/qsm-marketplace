@@ -5,7 +5,7 @@ import { isPlainObject } from "./toon-scalar.ts";
 
 const FILTER_REPO = "https://github.com/rtk-ai/rtk";
 
-export const FILTER_REVISION = "5d32d0736f686b69d1e8b9dc45c007d4eb77a0a2";
+const FILTER_REVISION = "5d32d0736f686b69d1e8b9dc45c007d4eb77a0a2";
 
 export const FILTER_INSTALL_COMMAND = `cargo install --git ${FILTER_REPO} --rev ${FILTER_REVISION} --locked`;
 
