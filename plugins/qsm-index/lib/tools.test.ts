@@ -20,8 +20,9 @@ import { context, impact, reindex, search, status, structure } from "./tools.ts"
 // limit is too tight for the slowest of them.
 setDefaultTimeout(20_000);
 
-// A build is killed through its lock file, which sandboxDir removes with the sandbox, and a
-// top-level hook runs after sandboxDir's: so each describe that starts builds kills its own.
+// A build is killed through its lock file in the sandbox; this file's afterEach runs before the
+// preload's, which removes the sandbox.
+afterEach(killBuilds);
 
 const HIT: RunResult = { ok: true, stdout: "hit\n", detail: "" };
 
@@ -255,8 +256,6 @@ describe("context", () => {
 });
 
 describe("the staleness line", () => {
-  afterEach(killBuilds);
-
   test("a graph answer from a fresh index carries no staleness line", () => {
     const { repo, env } = built();
     const answer = structure({ repo, op: "explain", node: "a.ts" }, graphRunner().run, env);
@@ -291,8 +290,6 @@ describe("the staleness line", () => {
 });
 
 describe("a stale answer that starts nothing", () => {
-  afterEach(killBuilds);
-
   test("a stale answer in a declined repository says run reindex", () => {
     const { repo, env, files } = background(0);
     buildIndex(repo, { cwd: "/", run: fakeRunner().run, env });
@@ -326,8 +323,6 @@ describe("a stale answer that starts nothing", () => {
 });
 
 describe("a graph read with no index, and search", () => {
-  afterEach(killBuilds);
-
   test("No structural index built yet", () => {
     const { repo, env, files } = background(0);
     const runner = graphRunner();
@@ -364,8 +359,6 @@ function background(seconds: number) {
 }
 
 describe("reindex", () => {
-  afterEach(killBuilds);
-
   test("reindex returns before the build finishes", async () => {
     const { repo, env, files } = background(3);
 
@@ -398,8 +391,6 @@ describe("reindex", () => {
 });
 
 describe("the lock", () => {
-  afterEach(killBuilds);
-
   test("a lock left by a dead build is taken over", async () => {
     const { repo, env, files } = background(1);
     mkdirSync(files.dir, { recursive: true });
