@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { stateDir } from "../../../lib/paths.ts";
+import { runtimeDir, stateDir } from "../../../lib/paths.ts";
 import { recordOf } from "./json.ts";
 
 /** Who edited: the session, and the agent within it. The orchestrator has no
@@ -32,12 +32,13 @@ export interface EditedTree {
 }
 
 /** Per-user, never a shared /tmp path: a second user's write to a shared path would EACCES and the
- * gate would silently disarm for everyone but the first user. */
+ * gate would silently disarm for everyone but the first user. Session state lives in the login
+ * session's tmpfs, so a reboot clears it; without one it goes to the state home. */
 function sessionStateDir(): string {
   const override = process.env.QSM_LANGDEV_STATE_DIR;
   return override !== undefined && override !== ""
     ? override
-    : join(stateDir(process.env), "langdev-hook");
+    : join(runtimeDir(process.env) ?? stateDir(process.env), "qsm-langdev-hook");
 }
 
 function sessionKey(sessionId: string): string {
