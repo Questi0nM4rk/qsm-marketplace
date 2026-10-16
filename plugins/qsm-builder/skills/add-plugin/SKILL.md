@@ -14,7 +14,9 @@ only the plugin around them.
 
 1. Search for the concept, not the phrasing: plugin and skill descriptions, spec requirement
    titles, the READMEs' Why it exists, `qsm-memory search <concept>`. An owner found: edit it in
-   place, build the part with add-tool, add-hook or add-skill, and Done means below still holds.
+   place. Say whether its Why it exists still holds (if not, the request is a new plugin), add the
+   requirement and scenario to its spec, then build the part with add-tool, add-hook or
+   add-skill; Done means below still holds.
 2. A `qsm-builder lens tasks <plugin>` task of kind new is the person's intent, not a decision
    about where it goes: run step 1 in full, show what you found, build after their yes, and close
    the task with what was created and the eval that ran.
