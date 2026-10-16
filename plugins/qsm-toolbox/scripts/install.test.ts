@@ -16,11 +16,11 @@ function fakeContext(options: {
   env?: Record<string, string>;
   log?: string[];
 }): InstallContext {
-  const onPath = new Set(options.onPath ?? []);
+  const present = new Set(options.onPath ?? []);
   return {
     dryRun: options.dryRun ?? false,
     env: options.env ?? {},
-    probe: (cmd) => onPath.has(cmd),
+    probe: (cmd) => present.has(cmd),
     run: (cmd, args) => {
       options.log?.push([cmd, ...args].join(" "));
       return 0;

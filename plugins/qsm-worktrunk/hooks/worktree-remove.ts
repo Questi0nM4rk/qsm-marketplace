@@ -17,9 +17,9 @@
 // instead of silently leaving the workspace behind.
 
 import { readHookEvent } from "../../../lib/hooks-kit.ts";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../lib/outcome.ts";
 import { nodeRunner } from "../lib/node-io.ts";
-import { removeWorkspace, WtError } from "../lib/wt.ts";
+import { removeWorkspace } from "../lib/wt.ts";
 
 function eventOf(): { readonly worktreePath: string; readonly cwd: string } {
   const event = readHookEvent();
@@ -42,8 +42,6 @@ try {
   await removeAndAnnounce();
   process.exit(0);
 } catch (error) {
-  const message =
-    error instanceof WtError || error instanceof Error ? error.message : String(error);
-  process.stderr.write(`qsm-worktrunk: ${message}. Run /qsm-worktrunk.\n`);
+  process.stderr.write(`qsm-worktrunk: ${messageOf(error)}. Run /qsm-worktrunk.\n`);
   process.exit(1);
 }

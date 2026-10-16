@@ -2,6 +2,7 @@
 // the line that installs it.
 
 import { spawnSync } from "node:child_process";
+import { onPath } from "../../../lib/outcome.ts";
 import { TOOLS, type Tool } from "./catalog.ts";
 
 export interface ToolStatus {
@@ -52,7 +53,7 @@ function firstLine(text: string): string | null {
 
 /** The impure half: the real machine. Kept here so the CLI stays printing. */
 export const realProber: Prober = {
-  onPath: (bin) => spawnSync("command", ["-v", bin], { shell: true, stdio: "ignore" }).status === 0,
+  onPath: (bin) => onPath(bin),
   version: (tool) => {
     const probe = spawnSync(tool.bin, [...tool.versionArgs], { encoding: "utf8" });
     return probe.status === 0 ? firstLine(probe.stdout ?? "") : null;

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { lstatSync, readlinkSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, readlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import { skipKey, TOOLS, type Tool } from "./catalog.ts";
@@ -23,12 +23,12 @@ function fakeContext(options: {
   failing?: readonly string[];
   log?: string[];
 }): InstallContext {
-  const onPath = new Set(options.onPath ?? []);
+  const present = new Set(options.onPath ?? []);
   const failing = new Set(options.failing ?? []);
   return {
     dryRun: false,
     env: options.env ?? {},
-    probe: (cmd) => onPath.has(cmd),
+    probe: (cmd) => present.has(cmd),
     run: (cmd, args) => {
       options.log?.push([cmd, ...args].join(" "));
       return failing.has(args.at(-1) ?? "") ? 1 : 0;
@@ -113,15 +113,15 @@ test("a go row is linked out of GOBIN into the bin directory", () => {
   expect(readlinkSync(target)).toBe(join(gobin, "yq"));
 });
 
-test("a file already sitting at the link target is replaced", () => {
+test("a file already sitting at the link target is kept and reported", () => {
   const gobin = sandboxDir("qsm-toolbox-gobin-replace-");
   const bin = sandboxDir("qsm-toolbox-bin-replace-");
   writeFileSync(join(gobin, "scc"), "#!/bin/sh\nexit 0\n");
   writeFileSync(join(bin, "scc"), "an older copy\n");
   const outcome = installOne(row("scc"), goContext(gobin, bin));
-  expect(outcome.status).toBe("installed");
-  expect(lstatSync(join(bin, "scc")).isSymbolicLink()).toBe(true);
-  expect(statSync(join(bin, "scc")).size).toBe(Buffer.byteLength("#!/bin/sh\nexit 0\n"));
+  expect(outcome.status).toBe("error");
+  expect(outcome.detail).toContain("is not a link");
+  expect(lstatSync(join(bin, "scc")).isSymbolicLink()).toBe(false);
 });
 
 test("go install that reported success and produced nothing is an error", () => {
