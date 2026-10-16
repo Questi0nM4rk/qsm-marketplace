@@ -57,7 +57,9 @@ function switchHelpArgv(): string[] {
   return ["wt", "switch", "--help"];
 }
 
-/** Asks the shell which `wt` PATH resolves to. */
+/** Asks the shell which `wt` PATH resolves to.
+ * differs: hooks sandbox (the hooks module reaches this through doctor.ts, and the sandbox has
+ * no root lib onPath and no Bun.which) */
 function resolveArgv(): string[] {
   return ["sh", "-c", "command -v wt"];
 }
