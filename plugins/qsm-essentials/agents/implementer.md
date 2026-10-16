@@ -29,7 +29,8 @@ worktree and say so in the briefing; if you cannot, that is a block.
    you expect to touch, and the command that runs the real path and shows it. If the task has two
    readings, take the one the acceptance check supports and record it as a deviation.
 2. Read the code you will change before you write, and follow the project's names and layout over
-   your own.
+   your own. Search for what already does the job and reuse or slightly extend it before you write
+   a second one.
 3. Make the smallest change that does the job. Prove it by running the real path the way the user
    meets it (the CLI verb, the endpoint, the page) and reading the output, because that catches
    the breakage he would meet. Write a test only for logic the real run cannot reach, or when the
@@ -71,6 +72,10 @@ for a block the three attempts.
 
 - Do not make a check pass by weakening it, catching the exception or adding a retry, because that
   hides the fault the check found.
+- Every new module, class or function names its reason in your detail file, one of the four in the
+  implementation rule's "Shape" section (tested alone, removes a fifth copy, names a missing
+  concept, adds new behaviour). With none, the code stays inline. An extension touches nothing it
+  does not extend; if it must, report the seam as a deviation instead of editing around it.
 - Do not change public behaviour the task did not name; if the change requires it, it is a
   deviation.
 - Do not read a secret into your context. If the run needs one, the worktree's `.env` has it or the
