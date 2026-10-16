@@ -453,6 +453,19 @@ function respondUsage(message: string, help: string, json: boolean, io: CliIo): 
   return json ? emit(fail("usage", message), true, io) : exitOf("usage");
 }
 
+/** The handler of a parsed verb; checkHandlers has already refused a declared verb without one. */
+function handlerOf(
+  handlers: Readonly<Record<string, Handler>>,
+  bin: string,
+  verb: string,
+): Handler {
+  const handler = handlers[verb];
+  if (handler === undefined) {
+    throw new Error(`${bin}: no handler for verb "${verb}"`);
+  }
+  return handler;
+}
+
 async function callHandler(handler: Handler, call: Call): Promise<Outcome> {
   try {
     return await handler(call);
@@ -488,10 +501,6 @@ export async function runCli(
         : renderVerbHelp(manifest, bin, parsed.verb);
     return respondUsage(parsed.message, help, argv.includes("--json"), io);
   }
-  const handler = handlers[parsed.call.verb];
-  if (handler === undefined) {
-    throw new Error(`${bin}: no handler for verb "${parsed.call.verb}"`);
-  }
-  const outcome = await callHandler(handler, parsed.call);
+  const outcome = await callHandler(handlerOf(handlers, bin, parsed.call.verb), parsed.call);
   return emit(outcome, parsed.call.json, io);
 }
