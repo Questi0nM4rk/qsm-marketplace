@@ -228,7 +228,11 @@ function scoreDir(dir: string): ScoreDir {
   } catch {
     return { reason: "sentrux printed no JSON — this needs the qsm-patched build" };
   }
-  const report = recordOf(parsed) ?? {};
+  return readReport(recordOf(parsed) ?? {}, dir);
+}
+
+/** The shape numbers, the upward or sideways edges, and the violations of one sentrux report. */
+function readReport(report: Rec, dir: string): ScoreDir {
   const edgeList = recordsOf(report.cross_module_edges);
   if (typeof report.quality !== "number" || edgeList === null) {
     return { reason: "sentrux's JSON carries no quality or edge list" };
