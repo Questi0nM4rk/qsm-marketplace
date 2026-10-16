@@ -2,8 +2,6 @@
 // of a command. The two things it promises: it delegates to the filter when the filter is there,
 // and it gets out of the way when it is not, because a missing optimisation turning into a blocked
 // Bash call breaks every command in a session.
-//
-// Every sandbox comes from sandboxDir, which removes it after each test, a failing one included.
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";

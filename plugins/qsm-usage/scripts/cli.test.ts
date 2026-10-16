@@ -1,5 +1,4 @@
-// The one binary through its real surface: argv, stdout, stderr, exit. Every sandbox comes from
-// sandboxDir, which removes it after each test, a failing one included.
+// The one binary through its real surface: argv, stdout, stderr, exit.
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";

@@ -1,6 +1,5 @@
 // `qsm-usage report` through the real binary: argv, stdout, stderr, exit,
-// and the HTML file it does or does not write. Every sandbox comes from sandboxDir, which removes
-// it after each test, a failing one included.
+// and the HTML file it does or does not write.
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
