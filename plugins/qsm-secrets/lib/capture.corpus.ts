@@ -39,8 +39,11 @@ function random(alphabet: string, length: number): string {
   return out;
 }
 
+function part(value: object): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
 function jwt(): string {
-  const part = (value: object): string => Buffer.from(JSON.stringify(value)).toString("base64url");
   const header = part({ alg: "HS256", typ: "JWT" });
   const payload = part({
     sub: random(DIGITS, 10),
@@ -52,9 +55,8 @@ function jwt(): string {
 
 function privateKey(): string {
   const lines = Array.from({ length: 5 }, () => random(BASE64, 64)).join("\n");
-  return [`-----BEGIN ${"RSA PRIVATE"} KEY-----`, lines, `-----END ${"RSA PRIVATE"} KEY-----`].join(
-    "\n",
-  );
+  const kind = ["RSA", "PRIVATE"].join(" ");
+  return [`-----BEGIN ${kind} KEY-----`, lines, `-----END ${kind} KEY-----`].join("\n");
 }
 
 /** A prompt around a value, in the ways a value gets pasted. */
@@ -62,15 +64,15 @@ const WRAPPERS: ReadonlyArray<(secret: string) => string> = [
   (s) => `here is my key: ${s} please use it`,
   (s) => `export SERVICE_TOKEN=${s}`,
   (s) => `{"token": "${s}"}`,
-  (s) => `${s}`,
+  (s) => s,
   (s) => `curl -H 'X-Auth: ${s}' https://example.test/api`,
   (s) => `the new one is\n${s}\nthanks`,
 ];
 
 function wrapped(secrets: readonly string[], at: number): Case[] {
   return secrets.map((secret, i) => {
-    const wrap = WRAPPERS[(i + at) % WRAPPERS.length] as (s: string) => string;
-    return { text: wrap(secret), secrets: [secret] };
+    const wrap = WRAPPERS[(i + at) % WRAPPERS.length];
+    return { text: wrap === undefined ? secret : wrap(secret), secrets: [secret] };
   });
 }
 
@@ -104,7 +106,7 @@ const BARE: string[] = [
   ...many(3, () => random(LOWER + DIGITS, 40)),
 ];
 
-const POSITIVE_BARE = BARE.map((secret) => secret.replace(/^[-_+/]+|[-_+/]+$/g, "A"));
+const POSITIVE_BARE = BARE.map((secret) => secret.replaceAll(/^[-_+/]+|[-_+/]+$/g, "A"));
 
 /** Hex alone is a hash unless a name says credential. */
 const NAMED_HEX: Case[] = [

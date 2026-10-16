@@ -12,7 +12,7 @@ import { watchMarketplace } from "./watch.ts";
 export interface Served {
   readonly url: string;
   readonly port: number;
-  readonly stop: () => void;
+  readonly stop: () => Promise<void>;
 }
 
 const encoder = new TextEncoder();
@@ -137,7 +137,7 @@ function listen(
     // An event stream is idle between changes; the default would cut it after ten seconds.
     return serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch });
   } catch (error) {
-    if ((error as { code?: string }).code === "EADDRINUSE") {
+    if (error instanceof Error && "code" in error && error.code === "EADDRINUSE") {
       return new ModelError(
         "failed",
         `port ${port} is taken; choose another with --port <number>`,
@@ -183,10 +183,10 @@ export function serveLens(root: string, port: number): Served {
   return {
     url: `http://127.0.0.1:${server.port}/`,
     port: server.port ?? port,
-    stop() {
+    async stop() {
       unwatch();
       streams.end();
-      server.stop(true);
+      await server.stop(true);
     },
   };
 }

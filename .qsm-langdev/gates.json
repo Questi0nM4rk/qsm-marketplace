@@ -1,0 +1,8 @@
+{
+  "hooks": {
+    "pre-commit": ["secrets", "entropy", "langdev"],
+    "pre-push": ["langdev"]
+  },
+  "languages": ["ts", "py", "shell", "rust"],
+  "profile": "strict"
+}

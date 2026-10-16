@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 
 /** What the settings entry has to run. */
 export const STATUS_LINE_COMMAND = "qsm-statusline render";
@@ -28,15 +29,11 @@ export function settingsPath(env: Record<string, string | undefined>): string {
   return join(homedir(), ".claude", "settings.json");
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function errorCode(cause: unknown): string | null {
-  const code = record(cause)?.code;
-  return typeof code === "string" ? code : null;
+  if (!isRecord(cause)) {
+    return null;
+  }
+  return typeof cause.code === "string" ? cause.code : null;
 }
 
 function message(cause: unknown): string {
@@ -49,12 +46,11 @@ function unreadable(reason: string): SettingsState {
 
 /** The statusLine entry of a parsed settings file. */
 function classify(parsed: unknown): SettingsState {
-  const settings = record(parsed);
-  if (settings === null) {
+  if (!isRecord(parsed)) {
     return unreadable("the settings file does not hold a JSON object");
   }
-  const entry = record(settings.statusLine);
-  if (entry === null) {
+  const entry = parsed.statusLine;
+  if (!isRecord(entry)) {
     return { kind: "absent" };
   }
   const command = typeof entry.command === "string" ? entry.command : "";
@@ -80,14 +76,14 @@ export function readStatusLine(path: string): SettingsState {
 }
 
 export function describe(state: SettingsState): string {
-  switch (state.kind) {
-    case "wired":
-      return `the settings run ${STATUS_LINE_COMMAND}`;
-    case "absent":
-      return "no status line is configured";
-    case "other":
-      return `another status line is configured: ${state.command}`;
-    default:
-      return `the settings file could not be read: ${state.reason}`;
+  if (state.kind === "wired") {
+    return `the settings run ${STATUS_LINE_COMMAND}`;
   }
+  if (state.kind === "absent") {
+    return "no status line is configured";
+  }
+  if (state.kind === "other") {
+    return `another status line is configured: ${state.command}`;
+  }
+  return `the settings file could not be read: ${state.reason}`;
 }

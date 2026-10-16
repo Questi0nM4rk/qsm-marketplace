@@ -1,6 +1,7 @@
 // qsm-builder's function-hooks module: the noun, the manifest check at the moment a manifest is
 // written, and the open tasks of a plugin told to the agent the first time it touches its files.
 import type { On } from "claude-code";
+import { isRecord } from "../lib/guards.ts";
 import { pluginOfPath } from "../lib/brief-path.ts";
 import { applyEdit, checkManifest, denial, isManifestPath } from "../lib/manifest-check.ts";
 import { registerNoun } from "./noun.generated.ts";
@@ -11,8 +12,7 @@ const told = new Set<string>();
 
 /** The `text` of the brief verb's data: a string, or null when there is nothing to tell. */
 function briefText(data: unknown): string | null {
-  const text = typeof data === "object" && data !== null ? Reflect.get(data, "text") : null;
-  return typeof text === "string" ? text : null;
+  return isRecord(data) && typeof data.text === "string" ? data.text : null;
 }
 
 function registerBrief(on: On): void {

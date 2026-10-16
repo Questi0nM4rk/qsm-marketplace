@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
 import { spawn, which } from "bun";
+import { isRecord } from "../../../../lib/outcome.ts";
 import { isSha, sha256Of } from "./tasks.ts";
 
 /** Runs one command to its end and returns what it printed and its exit code. */
@@ -51,31 +52,48 @@ function pluginNames(root: string): string[] {
   if (!existsSync(file)) {
     return [];
   }
-  const { plugins } = JSON.parse(readFileSync(file, "utf8")) as { plugins?: { name?: string }[] };
-  return (plugins ?? []).map((p) => p.name ?? "");
+  const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+  if (!isRecord(parsed) || !Array.isArray(parsed.plugins)) {
+    return [];
+  }
+  const names: string[] = [];
+  const list: unknown[] = parsed.plugins;
+  for (const plugin of list) {
+    names.push(isRecord(plugin) && typeof plugin.name === "string" ? plugin.name : "");
+  }
+  return names;
 }
 
 /** The eight texts of an edit, each a string within the limit. */
 function textsOf(body: unknown): EditRequest {
-  if (typeof body !== "object" || body === null) {
+  if (!isRecord(body)) {
     throw new EditError(400, "the edit is not a JSON object");
   }
-  const raw = body as Record<string, unknown>;
+  const raw = body;
   if (raw.kind !== undefined && raw.kind !== "edit" && raw.kind !== "new") {
     throw new EditError(400, "kind must be edit or new");
   }
-  const bad = FIELDS.find(
-    (key) => typeof raw[key] !== "string" || (raw[key] as string).length > MAX,
-  );
-  if (bad !== undefined) {
-    throw new EditError(400, `${bad} must be a text of at most ${MAX} characters`);
-  }
-  return raw as unknown as EditRequest;
+  const text = (key: (typeof FIELDS)[number]): string => {
+    const value = raw[key];
+    if (typeof value !== "string" || value.length > MAX) {
+      throw new EditError(400, `${key} must be a text of at most ${MAX} characters`);
+    }
+    return value;
+  };
+  const request = {
+    where: text("where"),
+    file: text("file"),
+    sha: text("sha"),
+    section: text("section"),
+    what: text("what"),
+    before: text("before"),
+    after: text("after"),
+    note: text("note"),
+  };
+  return raw.kind === undefined ? request : { ...request, kind: raw.kind };
 }
 
-const isNameChar = (c: string): boolean =>
-  (c >= "a" && c <= "z") || (c >= "0" && c <= "9") || c === "-";
-const isName = (s: string): boolean => s !== "" && !s.startsWith("-") && [...s].every(isNameChar);
+const isName = (s: string): boolean => /^[a-z0-9][a-z0-9-]*$/.test(s);
 
 /** The shapes a new item's path may take after `plugins/<plugin>/`, each told by its parts. */
 const NEW_SHAPES: Record<string, (rest: string[]) => boolean> = {
@@ -150,7 +168,7 @@ export function parseEdit(body: unknown, root: string): EditRequest {
   return edit;
 }
 
-const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim().slice(0, 120);
+const oneLine = (s: string): string => s.replaceAll(/\s+/g, " ").trim().slice(0, 120);
 
 const titleOf = (e: EditRequest): string => `${e.where}: ${oneLine(e.what)}`;
 
@@ -192,7 +210,8 @@ export async function createEditTask(
   if (code !== 0) {
     throw new EditError(500, `br create failed (${code}): ${err.trim() || out.trim()}`);
   }
-  const { id } = JSON.parse(out) as { id?: string };
+  const created: unknown = JSON.parse(out);
+  const id = isRecord(created) ? created.id : undefined;
   if (typeof id !== "string") {
     throw new EditError(500, "br create gave no task id");
   }

@@ -5,8 +5,34 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { which } from "bun";
 import { sandboxDir, writeIn as write } from "../../../lib/fixtures/sandbox.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { listOf } from "../lib/guards.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
+
+/** The `--json` envelope of a run: its exit code and its data, checked before anything reads them. */
+function envelope(text: string): { exit: number; data: unknown } {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value) || typeof value.exit !== "number") {
+    throw new Error(`not an envelope: ${text}`);
+  }
+  return { exit: value.exit, data: value.data };
+}
+
+function dataOf(told: { data: unknown }): Record<string, unknown> {
+  if (!isRecord(told.data)) {
+    throw new Error("the envelope holds no object");
+  }
+  return told.data;
+}
+
+function textIn(data: Record<string, unknown>, key: string): string {
+  const value = data[key];
+  if (typeof value !== "string") {
+    throw new TypeError(`${key} is not a text`);
+  }
+  return value;
+}
 
 function marketplace(): string {
   const root = sandboxDir("qsm-builder-lens-");
@@ -140,7 +166,7 @@ describe("qsm-builder lens readme", () => {
 });
 
 describe("qsm-builder lens brief", () => {
-  const brief = (file: string) => JSON.parse(run(["lens", "brief", file, "--json"]).text);
+  const brief = (file: string) => envelope(run(["lens", "brief", file, "--json"]).text);
 
   test("tells a plugin's open feedback, and nothing for other files", () => {
     if (which("br") === null) {
@@ -157,11 +183,13 @@ describe("qsm-builder lens brief", () => {
 
     const told = brief(join(root, "plugins/qsm-a/README.md"));
     expect(told.exit).toBe(0);
-    expect(told.data.plugin).toBe("qsm-a");
-    expect(told.data.text).toContain("qsm-a has 1 open tasks");
-    expect(told.data.text).toContain("(feedback) qsm-a: the skill never fires");
-    expect(told.data.text).not.toContain("plain task");
-    expect(brief(join(root, "plugins/qsm-b/README.md")).data.text).toBeNull();
+    const data = dataOf(told);
+    const text = textIn(data, "text");
+    expect(data.plugin).toBe("qsm-a");
+    expect(text).toContain("qsm-a has 1 open tasks");
+    expect(text).toContain("(feedback) qsm-a: the skill never fires");
+    expect(text).not.toContain("plain task");
+    expect(dataOf(brief(join(root, "plugins/qsm-b/README.md"))).text).toBeNull();
     expect(brief(join(root, "README.md")).data).toBeNull();
     expect(run(["lens", "brief", "plugins/qsm-a/README.md"]).exit).toBe(2);
   });
@@ -170,10 +198,11 @@ describe("qsm-builder lens brief", () => {
 describe("qsm-builder lens plugin", () => {
   test("prints one plugin's view and refuses a name the marketplace lacks", () => {
     const root = marketplace();
-    const view = JSON.parse(run(["lens", "plugin", "qsm-a", "--dir", root, "--json"]).text);
+    const view = envelope(run(["lens", "plugin", "qsm-a", "--dir", root, "--json"]).text);
     expect(view.exit).toBe(0);
-    expect(view.data.plugin).toBe("qsm-a");
-    expect(Array.isArray(view.data.items)).toBe(true);
+    const data = dataOf(view);
+    expect(data.plugin).toBe("qsm-a");
+    expect(Array.isArray(data.items)).toBe(true);
     expect(run(["lens", "plugin", "qsm-zz", "--dir", root]).exit).toBe(2);
   });
 });
@@ -181,9 +210,10 @@ describe("qsm-builder lens plugin", () => {
 describe("qsm-builder lens marketplace", () => {
   test("prints every plugin with its dependencies and open tasks count", () => {
     const root = marketplace();
-    const view = JSON.parse(run(["lens", "marketplace", "--dir", root, "--json"]).text);
+    const view = envelope(run(["lens", "marketplace", "--dir", root, "--json"]).text);
     expect(view.exit).toBe(0);
-    expect(view.data.plugins.map((p: { name: string }) => p.name)).toContain("qsm-a");
-    expect(view.data.plugins[0]).toHaveProperty("openTasks");
+    const plugins = listOf(dataOf(view).plugins);
+    expect(plugins.map((p) => (isRecord(p) ? p.name : undefined))).toContain("qsm-a");
+    expect(plugins[0]).toHaveProperty("openTasks");
   });
 });

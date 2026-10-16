@@ -13,10 +13,10 @@ import { buildIndex } from "../lib/build.ts";
 import type { Env } from "../lib/paths.ts";
 import { spawnRunner } from "../lib/run.ts";
 import { readStatus } from "../lib/state.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   detachedBuildTests,
   fakeRunner,
-  sandbox,
   until,
   untilRefreshed,
   verb,
@@ -34,7 +34,8 @@ function sleepyWorld() {
  * when there is nothing to ask. */
 function hook(cwd: string, env: Env) {
   const r = verb(env, "auto", cwd);
-  const askText = (r.data as { askText?: unknown } | null)?.askText;
+  const askText: unknown =
+    typeof r.data === "object" && r.data !== null ? Reflect.get(r.data, "askText") : null;
   return { exit: r.exit, context: typeof askText === "string" ? askText : null };
 }
 
@@ -49,7 +50,7 @@ function moreFiles(repo: string, count: number): void {
 
 test("the session-start hook says nothing outside a git repository", () => {
   const { env } = sleepyWorld();
-  expect(hook(sandbox("qsm-index-hook-plain-"), env)).toEqual(silent);
+  expect(hook(sandboxDir("qsm-index-hook-plain-"), env)).toEqual(silent);
   expect(existsSync(String(env.QSM_INDEX_CACHE_DIR))).toBe(false);
 });
 
@@ -69,7 +70,8 @@ test("the session-start hook asks before the first index of a repository", () =>
 
 test("the first ask warns that a repository above 5000 files will be large", () => {
   const { repo, env, files } = sleepyWorld();
-  moreFiles(repo, 5000); // with src/a.ts, 5001
+  // with src/a.ts, 5001
+  moreFiles(repo, 5000);
 
   const { context } = hook(repo, env);
 
@@ -82,7 +84,8 @@ test("a stale index of at most 5000 files is refreshed in the background without
   const { repo, env, files } = sleepyWorld();
   buildIndex(repo, { cwd: "/", run: fakeRunner().run, env });
   const before = readStatus(files.status)?.started_at;
-  moreFiles(repo, 4999); // with src/a.ts, 5000
+  // with src/a.ts, 5000
+  moreFiles(repo, 4999);
 
   expect(hook(repo, env)).toEqual(silent);
 

@@ -57,7 +57,7 @@ describe("render", () => {
     const painted = render({ snapshot: readSnapshot(FIXTURE), git: GIT, now: NOW, color: true });
     // Built rather than written as a literal: an escape character inside a
     // regex literal is a finding this repository does not suppress.
-    const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+    const ansi = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, "g");
     expect(painted.map((line) => line.replaceAll(ansi, ""))).toEqual(plain);
   });
 });

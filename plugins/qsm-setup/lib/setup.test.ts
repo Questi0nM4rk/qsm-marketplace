@@ -1,12 +1,12 @@
 // The flows qsm-setup promises, run over a sandbox marketplace with fake
 // installers: dependency order, collect-all with blocking, the farm's
 // completions and pruning, and doctor's orphans and drift.
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fishCompletion, MARKER } from "../../../lib/completions.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { readRecord, writeRecord } from "../../../lib/install-base.ts";
 import { buildBins } from "./build-bins.ts";
 import { discoverPlugins } from "./discover.ts";
@@ -14,18 +14,6 @@ import { doctor } from "./doctor.ts";
 import { relink } from "./farm.ts";
 import { installOrder, requiredBy } from "./graph.ts";
 import { type Runner, runInstallers } from "./run-installers.ts";
-
-const sandboxes: string[] = [];
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-setup-"));
-  sandboxes.push(dir);
-  return dir;
-}
 
 interface FakePlugin {
   readonly name: string;
@@ -67,14 +55,14 @@ function marketplace(root: string, plugins: readonly FakePlugin[]): void {
 
 describe("install order", () => {
   test("a requirement installs before the plugin that needs it, and a named plugin pulls its requirements", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [{ name: "b", deps: ["a"] }, { name: "a" }, { name: "c", deps: ["b"] }]);
     const nodes = discoverPlugins(root);
     expect(installOrder(nodes)).toEqual(["a", "b", "c"]);
     expect(installOrder(nodes, ["c"])).toEqual(["a", "b", "c"]);
   });
   test("an unknown plugin name fails before anything runs", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [{ name: "a" }]);
     expect(() => installOrder(discoverPlugins(root), ["nope"])).toThrow("unknown plugin: nope");
   });
@@ -82,7 +70,7 @@ describe("install order", () => {
 
 describe("installing everything, collect-all", () => {
   test("A named plugin depends on one that fails", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [
       { name: "a", installer: true },
       { name: "b", deps: ["a"], installer: true },
@@ -117,7 +105,7 @@ describe("installing everything, collect-all", () => {
 
 describe("what each install line says", () => {
   test("a plugin with no installer answers the line an empty installer answers", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [{ name: "bare" }]);
     const nodes = discoverPlugins(root);
     const run: Runner = () => {
@@ -130,7 +118,7 @@ describe("what each install line says", () => {
   });
 
   test("an installer that exits 0 without an envelope failed, it did not install", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [{ name: "mute", installer: true }]);
     const run: Runner = () => ({ code: 0, result: null, stderr: "some noise\n" });
     const [out] = runInstallers(discoverPlugins(root), ["mute"], { dryRun: false, run });
@@ -141,7 +129,7 @@ describe("what each install line says", () => {
   });
 
   test("A requirement nobody named", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-setup-");
     marketplace(root, [
       { name: "base", installer: true },
       { name: "app", deps: ["base"], installer: true },
@@ -166,8 +154,8 @@ describe("what each install line says", () => {
 
 describe("bin farm", () => {
   test("completions are generated from the declared commands, and a dropped bin's completion is pruned", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     const completionDir = join(home, "fish");
     const binDir = join(home, "bin");
     mkdirSync(binDir, { recursive: true });
@@ -195,8 +183,8 @@ describe("bin farm", () => {
     expect(after.stale).toBe(false);
   });
   test("Checking staleness", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     marketplace(root, [{ name: "x", bins: { "qsm-x": "scripts/cli.ts" }, installer: true }]);
     const report = relink(discoverPlugins(root), {
       binDir: join(home, "bin"),
@@ -211,8 +199,8 @@ describe("bin farm", () => {
 
 describe("build-bins", () => {
   test("A compilable command with no build step", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     const binDir = join(home, "bin");
     mkdirSync(binDir, { recursive: true });
     marketplace(root, [
@@ -239,8 +227,8 @@ describe("build-bins", () => {
 
 describe("doctor", () => {
   test("A mix of pass, fail, and skip", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     marketplace(root, [
       { name: "pass", bins: { "qsm-pass": "scripts/cli.ts" } },
       { name: "fail", bins: { "qsm-fail": "scripts/cli.ts" } },
@@ -271,8 +259,8 @@ describe("doctor", () => {
     expect(report.ok).toBe(false);
   });
   test("An installed binary has drifted", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     const binDir = join(home, "bin");
     mkdirSync(binDir, { recursive: true });
     writeFileSync(join(binDir, "qsm-x"), "v2");
@@ -295,8 +283,8 @@ describe("doctor", () => {
 
 describe("doctor over PATH", () => {
   test("An old binary shadows a built one", () => {
-    const root = sandbox();
-    const home = sandbox();
+    const root = sandboxDir("qsm-setup-");
+    const home = sandboxDir("qsm-setup-");
     const binDir = join(home, "bin");
     const farm = join(home, "old-farm");
     mkdirSync(binDir, { recursive: true });

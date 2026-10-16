@@ -4,13 +4,35 @@
 // prerequisite, or inside --dry-run.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { symlinkSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { z } from "zod";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+
+const Envelope = z.object({ code: z.string(), message: z.string() });
+const DoctorEnvelope = z.object({
+  code: z.string(),
+  exit: z.number(),
+  message: z.string(),
+  data: z.object({
+    bins: z.array(z.object({ status: z.string() })),
+    skills: z.array(z.object({ status: z.string() })),
+  }),
+});
+const DryRunEnvelope = z.object({
+  code: z.string(),
+  data: z.object({ commands: z.array(z.string()) }),
+});
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
-/** Only the runtime itself: a bin the tier looks for is never on it. */
-const BARE_PATH = dirname(process.execPath);
+/** A directory holding only a link to the runtime: a bin the tier looks for is never on it, wherever
+ * the runtime is installed (its own directory may be /usr/bin). */
+function barePath(): string {
+  const dir = sandboxDir("qsm-web-bare-");
+  symlinkSync(process.execPath, join(dir, "bun"));
+  return dir;
+}
 
 function run(argv: readonly string[], env: Record<string, string> = {}) {
   const home = sandboxDir("qsm-web-cli-");
@@ -58,20 +80,17 @@ describe("qsm-web opensrc", () => {
 
 describe("qsm-web doctor", () => {
   test("on a machine with no web bin reports missing, exit 4", () => {
-    const r = run(["doctor", "--json"], { PATH: BARE_PATH });
+    const r = run(["doctor", "--json"], { PATH: barePath() });
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = DoctorEnvelope.parse(JSON.parse(r.stdout));
     expect(envelope).toMatchObject({ code: "missing", exit: 4 });
     expect(envelope.data.bins).toHaveLength(3);
-    for (const bin of ["shot-scraper", "tvly"]) {
-      expect(envelope.data.bins.find((b: { bin: string }) => b.bin === bin)).toMatchObject({
-        status: "unhealthy",
-      });
-    }
-    expect(envelope.data.skills.map((k: { status: string }) => k.status)).toEqual([
+    expect(envelope.data.bins.map((b) => b.status)).toEqual([
+      "unhealthy",
       "unhealthy",
       "unhealthy",
     ]);
+    expect(envelope.data.skills.map((k) => k.status)).toEqual(["unhealthy", "unhealthy"]);
     expect(envelope.message).toContain("npx ctx7 setup --claude");
   });
 });
@@ -87,7 +106,7 @@ describe("qsm-web searxng", () => {
   test("No instance configured, or unreachable", () => {
     const r = run(["searxng", "search", "typed", "ast", "--json"]);
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = Envelope.parse(JSON.parse(r.stdout));
     expect(envelope.code).toBe("missing");
     expect(envelope.message).toContain("no instance configured");
   });
@@ -125,17 +144,17 @@ describe("qsm-web browserbox", () => {
   test("ls --dry-run reports the commands it would run, exit 0", () => {
     const r = run(["browserbox", "ls", "--dry-run", "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = DryRunEnvelope.parse(JSON.parse(r.stdout));
     expect(envelope.code).toBe("ok");
     expect(envelope.data.commands.join(" ")).toContain("ps");
   });
 
   test("Container runtime unavailable", () => {
     const r = run(["browserbox", "ls", "--json"], {
-      PATH: BARE_PATH,
+      PATH: barePath(),
       QSM_CONTAINER_RUNTIME: "",
     });
     expect(r.exit).toBe(4);
-    expect(JSON.parse(r.stdout).code).toBe("missing");
+    expect(Envelope.parse(JSON.parse(r.stdout)).code).toBe("missing");
   });
 });

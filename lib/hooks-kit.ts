@@ -3,9 +3,11 @@
 
 import { readFileSync } from "node:fs";
 
-export function readHookEvent<T>(): T | null {
+/** The stdin payload, or null when it is missing or not JSON; the caller checks every field it reads. */
+export function readHookEvent(): unknown {
   try {
-    return JSON.parse(readFileSync(0, "utf8")) as T;
+    const event: unknown = JSON.parse(readFileSync(0, "utf8"));
+    return event;
   } catch {
     return null;
   }
@@ -15,7 +17,7 @@ async function runHook(main: () => Promise<void>, log: (msg: string) => void): P
   try {
     await main();
   } catch (error) {
-    log(`unexpected error: ${(error as Error).message}`);
+    log(`unexpected error: ${error instanceof Error ? error.message : String(error)}`);
   }
   process.exit(0);
 }

@@ -4,21 +4,39 @@
 // which starts, lists its tools, and stops.
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
-import { removeSandboxes, sandbox } from "../lib/test-repo.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { killBuilds, parseEnvelope } from "../lib/test-repo.ts";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
 /** Only the runtime itself: the binary is not on it, nor are the externals. */
 const BARE_PATH = dirname(process.execPath);
 
-afterEach(removeSandboxes);
+afterEach(killBuilds);
+
+/** The names of the tools a `tools/list` result carries; anything else fails the test. */
+function toolNamesOf(result: unknown): string[] {
+  const tools: unknown =
+    typeof result === "object" && result !== null ? Reflect.get(result, "tools") : null;
+  if (!Array.isArray(tools)) {
+    throw new TypeError("tools/list result has no tools array");
+  }
+  return tools.map((tool: unknown) => {
+    const name: unknown =
+      typeof tool === "object" && tool !== null ? Reflect.get(tool, "name") : null;
+    if (typeof name !== "string") {
+      throw new TypeError("a listed tool has no name");
+    }
+    return name;
+  });
+}
 
 function run(entry: string, argv: readonly string[], env: Record<string, string> = {}) {
-  const home = sandbox("qsm-index-cli-");
+  const home = sandboxDir("qsm-index-cli-");
   const r = spawnSync("bun", [entry, ...argv], {
     encoding: "utf8",
     env: {
@@ -53,16 +71,12 @@ describe("qsm-index", () => {
   });
 
   test("the build verb rejects the out flag", () => {
-    const tree = mkdtempSync(join(tmpdir(), "qsm-index-out-"));
+    const tree = sandboxDir("qsm-index-out-");
     const out = join(tree, "chosen");
-    try {
-      const r = run(CLI, ["build", tree, "--out", out], { PATH: BARE_PATH });
-      expect(r.exit).toBe(2);
-      expect(r.stderr).toContain("unknown flag --out");
-      expect(existsSync(out)).toBe(false);
-    } finally {
-      rmSync(tree, { recursive: true, force: true });
-    }
+    const r = run(CLI, ["build", tree, "--out", out], { PATH: BARE_PATH });
+    expect(r.exit).toBe(2);
+    expect(r.stderr).toContain("unknown flag --out");
+    expect(existsSync(out)).toBe(false);
   });
 
   test("the build verb rejects the dependency flags", () => {
@@ -76,48 +90,42 @@ describe("qsm-index", () => {
   test("a path that is not there is missing, exit 4", () => {
     const r = run(CLI, ["build", "/nonexistent/tree", "--json"]);
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
-    expect(envelope).toMatchObject({ code: "missing", exit: 4 });
+    expect(parseEnvelope(r.stdout)).toMatchObject({ code: "missing", exit: 4 });
   });
 
   test("doctor with the binary not on PATH is missing, exit 4", () => {
     const r = run(CLI, ["doctor", "--json"], { PATH: BARE_PATH });
     expect(r.exit).toBe(4);
-    const envelope = JSON.parse(r.stdout);
+    const envelope = parseEnvelope(r.stdout);
     expect(envelope.code).toBe("missing");
-    expect(envelope.data.healthy).toBe(false);
-    expect(envelope.data.required).toHaveLength(2);
+    expect(envelope.data).toMatchObject({
+      healthy: false,
+      required: [expect.anything(), expect.anything()],
+    });
   });
 });
 
 describe("A cloned repository is queried exactly like the agent's own", () => {
   test("a path inside a repository resolves to the repository's top level", () => {
-    const root = mkdtempSync(join(tmpdir(), "qsm-index-top-"));
-    try {
-      const repo = join(root, "repo");
-      const sub = join(repo, "src", "deep");
-      mkdirSync(sub, { recursive: true });
-      expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
-      // A fake semble that prints the tree it was asked to search.
-      const bin = join(root, "bin");
-      mkdirSync(bin);
-      writeFileSync(
-        join(bin, "semble"),
-        '#!/bin/sh\nfor last; do :; done\necho "searched $last"\n',
-      );
-      chmodSync(join(bin, "semble"), 0o755);
+    const root = sandboxDir("qsm-index-top-");
+    const repo = join(root, "repo");
+    const sub = join(repo, "src", "deep");
+    mkdirSync(sub, { recursive: true });
+    expect(spawnSync("git", ["init", "-q", repo]).status).toBe(0);
+    // A fake semble that prints the tree it was asked to search.
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "semble"), '#!/bin/sh\nfor last; do :; done\necho "searched $last"\n');
+    chmodSync(join(bin, "semble"), 0o755);
 
-      const r = run(CLI, ["search", sub, "parser"], { PATH: `${bin}:${process.env.PATH ?? ""}` });
-      expect(r.stderr).toBe("");
-      expect(r.exit).toBe(0);
-      expect(r.stdout.trim()).toBe(`searched ${repo}`);
+    const r = run(CLI, ["search", sub, "parser"], { PATH: `${bin}:${process.env.PATH ?? ""}` });
+    expect(r.stderr).toBe("");
+    expect(r.exit).toBe(0);
+    expect(r.stdout.trim()).toBe(`searched ${repo}`);
 
-      const s = run(CLI, ["status", sub], { QSM_INDEX_CACHE_DIR: join(root, "cache") });
-      expect(s.exit).toBe(0);
-      expect(s.stdout).toContain(`index of ${repo}: absent`);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    const s = run(CLI, ["status", sub], { QSM_INDEX_CACHE_DIR: join(root, "cache") });
+    expect(s.exit).toBe(0);
+    expect(s.stdout).toContain(`index of ${repo}: absent`);
   });
 });
 
@@ -147,16 +155,16 @@ describe("qsm-index mcp", () => {
 
 describe("qsm-index mcp serve", () => {
   test("a client lists the six tools, and the server exits 0 when stdin closes", async () => {
-    const home = mkdtempSync(join(tmpdir(), "qsm-index-mcp-"));
+    const home = sandboxDir("qsm-index-mcp-");
     const server = spawnServer(["bun", CLI, "mcp", "serve"], {
       env: { PATH: process.env.PATH ?? "", HOME: home, XDG_CONFIG_HOME: join(home, "c") },
     });
     try {
-      await server.request(initialize(1));
+      await server.request(initialize(1, LATEST_PROTOCOL_VERSION));
       server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
       const listed = await server.request({ jsonrpc: "2.0", id: 2, method: "tools/list" });
-      const tools = (listed.result as { tools: { name: string }[] }).tools.map((t) => t.name);
-      expect([...tools].sort((a, b) => a.localeCompare(b))).toEqual([
+      const tools = toolNamesOf(listed.result);
+      expect(tools.toSorted((a, b) => a.localeCompare(b))).toEqual([
         "context",
         "impact",
         "reindex",
@@ -169,17 +177,17 @@ describe("qsm-index mcp serve", () => {
       expect(await server.exited).toBe(0);
       expect(await server.restOfStdout()).toBe("");
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      server.kill("SIGKILL");
     }
   });
 });
 
 describe("qsm-index auto", () => {
   test("auto answers its decision in the envelope's data, exit 0", () => {
-    const dir = sandbox("qsm-index-cli-auto-");
+    const dir = sandboxDir("qsm-index-cli-auto-");
     const r = run(CLI, ["auto", dir, "--json"]);
     expect(r.exit).toBe(0);
-    expect(JSON.parse(r.stdout).data).toEqual({
+    expect(parseEnvelope(r.stdout).data).toEqual({
       answer: "not-indexable",
       reason: `${dir} is not inside a git repository`,
     });

@@ -4,6 +4,8 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { isPlainObject } from "../lib/toon-scalar.ts";
+import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -16,6 +18,20 @@ interface Wrap {
   reason: string;
 }
 
+function isWrap(value: unknown): value is Wrap {
+  return (
+    isPlainObject(value) &&
+    (value.use === "toon" || value.use === "original") &&
+    (value.format === null ||
+      value.format === "json" ||
+      value.format === "yaml" ||
+      value.format === "toml") &&
+    typeof value.originalTokens === "number" &&
+    typeof value.toonTokens === "number" &&
+    typeof value.reason === "string"
+  );
+}
+
 function wrap(stdin: string, args = ["--stdin", "--json"]) {
   return spawnSync("bun", [CLI, "toon", "wrap", ...args], { encoding: "utf8", input: stdin });
 }
@@ -24,11 +40,16 @@ function wrap(stdin: string, args = ["--stdin", "--json"]) {
  * throws, so every scenario also proves that both answers exit 0. */
 function wrapData(stdin: string): Wrap {
   const result = wrap(stdin);
-  const envelope = JSON.parse(result.stdout);
-  if (result.status !== 0 || envelope.code !== "ok" || envelope.exit !== 0) {
+  const envelope = envelopeOf(result.stdout);
+  if (
+    result.status !== 0 ||
+    envelope.code !== "ok" ||
+    envelope.exit !== 0 ||
+    !isWrap(envelope.data)
+  ) {
     throw new Error(`toon wrap exited ${result.status}: ${result.stdout}${result.stderr}`);
   }
-  return envelope.data as Wrap;
+  return envelope.data;
 }
 
 const ROWS = Array.from({ length: 200 }, (_, i) => ({

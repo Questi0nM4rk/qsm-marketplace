@@ -87,8 +87,7 @@ module.exports = {
     {
       name: "not-to-spec",
       severity: "error",
-      comment:
-        "Production code must not import a test file. Extract the shared bit into a helper.",
+      comment: "Production code must not import a test file. Extract the shared bit into a helper.",
       from: {},
       to: { path: "[.](?:spec|test)[.](?:js|mjs|cjs|jsx|ts|mts|cts|tsx)$" },
     },
@@ -96,6 +95,9 @@ module.exports = {
   options: {
     doNotFollow: { path: "node_modules" },
     tsPreCompilationDeps: true,
+    // `bun` is the runtime's own module, as `node:fs` is Node's: its types come
+    // from @types/bun at the root, which a plugin's own package.json never lists.
+    builtInModules: { add: ["bun"] },
     tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {
       // Required for extensionless relative TS imports (`./b` -> `./b.ts`).

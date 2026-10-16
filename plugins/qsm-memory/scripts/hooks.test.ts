@@ -3,35 +3,20 @@
 // real child. A detached child writes its outcome to save.log beside the archive; a test waits for
 // that line before it reads the archive. Which event reaches which verb is hooks/register.test.ts.
 
-import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { z } from "zod";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawn as spawnAsync, spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
 
 setDefaultTimeout(30_000);
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
-const homes: string[] = [];
-afterEach(() => {
-  for (const home of homes.splice(0)) {
-    rmSync(home, { recursive: true, force: true });
-  }
-});
-
 function sandbox() {
-  const home = mkdtempSync(join(tmpdir(), "qsm-memory-hooks-"));
-  homes.push(home);
+  const home = sandboxDir("qsm-memory-hooks-");
   const work = join(home, "work");
   const projects = join(home, "c", "projects", "-home-work");
   const bin = join(home, "bin");
@@ -61,16 +46,13 @@ function cli(box: Box, argv: readonly string[]): string {
   return r.stdout + r.stderr;
 }
 
-interface Envelope {
-  readonly code: string;
-  readonly message: string;
-  readonly data: unknown;
-}
+const envelopeSchema = z.object({ code: z.string(), message: z.string(), data: z.unknown() });
+const briefingSchema = z.object({ text: z.string() });
 
 /** One verb under --json: its exit and its envelope. */
 function verb(box: Box, argv: readonly string[], env?: Record<string, string>) {
   const r = spawn(box, [...argv, "--json"], env);
-  return { exit: r.status, ...(JSON.parse(r.stdout) as Envelope) };
+  return { exit: r.status, ...envelopeSchema.parse(JSON.parse(r.stdout)) };
 }
 
 /** Waits until save.log holds `text`, the line a detached child writes when it ends. */
@@ -84,7 +66,7 @@ async function logged(box: Box, text: string): Promise<string> {
     if (Date.now() > deadline) {
       throw new Error(`save.log never said ${text}; it holds: ${log}`);
     }
-    await new Promise((done) => setTimeout(done, 50));
+    await Bun.sleep(50);
   }
 }
 
@@ -110,7 +92,9 @@ function catchUpOutput(box: Box): Promise<string> {
     };
     child.stdout.on("data", add);
     child.stderr.on("data", add);
-    child.on("close", () => done(text.trim()));
+    child.on("close", () => {
+      done(text.trim());
+    });
   });
 }
 
@@ -203,19 +187,18 @@ describe("session start", () => {
     );
     cli(box, ["save", path]);
     cli(box, ["note", "qsm-1: finish the gate"]);
-    const elsewhere = mkdtempSync(join(tmpdir(), "qsm-memory-hooks-elsewhere-"));
-    homes.push(elsewhere);
+    const elsewhere = sandboxDir("qsm-memory-hooks-elsewhere-");
 
     const here = verb(box, ["orient", "--cwd", box.work]);
     const there = verb(box, ["orient", "--cwd", elsewhere]);
 
-    const { text } = here.data as { text: string };
+    const { text } = briefingSchema.parse(here.data);
     expect(text).toContain("Wire the briefing (1 user turns)");
     expect(text).toContain("qsm-1: finish the gate");
     expect(text).toContain("qsm-memory search <words>");
     expect(text.length).toBeLessThanOrEqual(1000);
     expect(here.message).toBe(text);
-    expect((there.data as { text: string }).text).not.toContain("Wire the briefing");
-    expect((there.data as { text: string }).text).not.toContain("finish the gate");
+    expect(briefingSchema.parse(there.data).text).not.toContain("Wire the briefing");
+    expect(briefingSchema.parse(there.data).text).not.toContain("finish the gate");
   });
 });

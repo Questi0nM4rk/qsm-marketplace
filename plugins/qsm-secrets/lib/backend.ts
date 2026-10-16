@@ -10,8 +10,12 @@ import { rbw } from "./rbw.ts";
 
 export interface Backend {
   readonly name: string;
-  /** Name, folder and marker of every entry. Never a value. A backend that cannot list fails loud. */
-  entries: () => Entry[];
+  /**
+   * Name, folder and marker of every entry. Never a value. A backend that cannot list fails loud.
+   * An entry stored before namespaces existed fails loud too, unless `allowLegacy`, where it comes
+   * back in `LEGACY_NAMESPACE`: only `rename` asks, to move it into a namespace.
+   */
+  entries: (allowLegacy?: boolean) => Entry[];
   /** The value as bytes, or null when the key is not stored. */
   read: (namespace: string, key: string) => Uint8Array | null;
   /**
@@ -34,21 +38,53 @@ type Choice = keyof typeof CHOICES;
 
 const ACTIVATE = "qsm-setup activate qsm-secrets -- --backend bitwarden|libsecret";
 
-/** The backend setup.json names under `secrets.backend`, or undefined when none was chosen. */
-function stored(env: Record<string, string | undefined>): string | undefined {
-  const path = setupConfigPath(env);
-  if (!existsSync(path)) {
-    return undefined;
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+function isJson(value: unknown): value is Json {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) {
+    return true;
   }
-  const choice = (JSON.parse(readFileSync(path, "utf8")) as SetupFile).secrets?.backend;
-  if (choice !== undefined && !(choice in CHOICES)) {
-    fail(`${path} names an unknown backend: ${choice}`, `run ${ACTIVATE}`, "usage");
+  if (Array.isArray(value)) {
+    return value.every((item) => isJson(item));
   }
-  return choice === undefined ? undefined : CHOICES[choice as Choice];
+  return typeof value === "object" && Object.values(value).every((item) => isJson(item));
 }
 
-interface SetupFile {
-  readonly secrets?: { readonly backend?: string };
+/** The object in setup.json, or `{}` when the file is absent. Anything else is `usage`. */
+export function readSetup(env: Record<string, string | undefined>): { [key: string]: Json } {
+  const path = setupConfigPath(env);
+  if (!existsSync(path)) {
+    return {};
+  }
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!isJson(parsed) || parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return fail(`${path} is not a JSON object`, `fix or delete it, then run ${ACTIVATE}`, "usage");
+  }
+  return parsed;
+}
+
+/** The `secrets.backend` of a setup object as written, undefined when absent. */
+export function setupBackend(file: { [key: string]: Json }): Json | undefined {
+  const secrets = file.secrets;
+  if (typeof secrets !== "object" || secrets === null || Array.isArray(secrets)) {
+    return undefined;
+  }
+  return secrets.backend;
+}
+
+const isChoice = (name: string): name is Choice => Object.hasOwn(CHOICES, name);
+
+/** The backend setup.json names under `secrets.backend`, or undefined when none was chosen. */
+function stored(env: Record<string, string | undefined>): string | undefined {
+  const choice = setupBackend(readSetup(env));
+  if (choice === undefined) {
+    return undefined;
+  }
+  if (typeof choice !== "string" || !isChoice(choice)) {
+    const named = typeof choice === "string" ? choice : JSON.stringify(choice);
+    fail(`${setupConfigPath(env)} names an unknown backend: ${named}`, `run ${ACTIVATE}`, "usage");
+  }
+  return CHOICES[choice];
 }
 
 /** Whether a backend is chosen at all. Without one nothing can be stored, so nothing needs masking. */

@@ -52,19 +52,21 @@ export function hexToRgb(hex: string): Rgb {
   };
 }
 
+const pair = (channel: number): string =>
+  Math.round(channel).toString(HEX_BASE).padStart(2, "0").toUpperCase();
+
+const linear = (channel: number): number => {
+  const scaled = channel / CHANNEL_MAX;
+  return scaled <= SRGB_KNEE
+    ? scaled / SRGB_SLOPE
+    : ((scaled + SRGB_OFFSET) / SRGB_SCALE) ** SRGB_GAMMA;
+};
+
 export function toHex(rgb: Rgb): string {
-  const pair = (channel: number): string =>
-    Math.round(channel).toString(HEX_BASE).padStart(2, "0").toUpperCase();
   return `#${pair(rgb.r)}${pair(rgb.g)}${pair(rgb.b)}`;
 }
 
 export function relativeLuminance(rgb: Rgb): number {
-  const linear = (channel: number): number => {
-    const scaled = channel / CHANNEL_MAX;
-    return scaled <= SRGB_KNEE
-      ? scaled / SRGB_SLOPE
-      : ((scaled + SRGB_OFFSET) / SRGB_SCALE) ** SRGB_GAMMA;
-  };
   return LUMA_R * linear(rgb.r) + LUMA_G * linear(rgb.g) + LUMA_B * linear(rgb.b);
 }
 
@@ -158,7 +160,7 @@ export function summarizeRegion(pixels: readonly Pixel[], top: number): RegionSu
   // finding that cites "the dominant colour" must not depend on which pixel the dump happened to
   // reach first.
   const palette = [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, top)
     .map(([hex, count]) => ({
       hex,

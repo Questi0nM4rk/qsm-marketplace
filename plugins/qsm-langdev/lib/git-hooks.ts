@@ -8,7 +8,7 @@ export const HOOK_NAMES = ["pre-commit", "pre-push"] as const;
 export type HookName = (typeof HOOK_NAMES)[number];
 
 /** The language a hook script is written in. */
-const HOOK_LANGS = ["sh", "py", "ts"] as const;
+export const HOOK_LANGS = ["sh", "py", "ts"] as const;
 export type HookLang = (typeof HOOK_LANGS)[number];
 
 const SHEBANG: Record<HookLang, string> = {

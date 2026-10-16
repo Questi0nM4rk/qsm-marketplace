@@ -8,5 +8,10 @@ qsm-langdev hook pre-push || exit 1
 # The marketplace's own gates, repo-specific, so nothing outside a langdev checker
 # (the generated contracts, every plugin's hooks tsconfig against .claude/types)
 # reaches origin red.
+# `bun check` arrived in Bun 1.4; an older bun says only "Script not found".
+if ! bun check --help >/dev/null 2>&1; then
+  echo "pre-push: bun $(bun --version) has no 'bun check'; mise.toml pins the version, run: mise install" >&2
+  exit 1
+fi
 bun run validate || exit 1
 bun run typecheck || exit 1

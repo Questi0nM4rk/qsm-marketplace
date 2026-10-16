@@ -53,12 +53,13 @@ export function keyExists(entries: readonly Entry[], namespace: string, key: str
   return entries.some((entry) => inNamespace(entry, namespace) && entry.name === key);
 }
 
-/** `list`: the key names this wrapper stored, sorted, no duplicates. */
+/** `list`: the key names this wrapper stored, sorted, no duplicates. Over every namespace (the empty
+ * one) a name repeats between namespaces, so each is `<namespace>/<name>`. */
 export function storedKeys(entries: readonly Entry[], namespace: string): string[] {
   const names = entries
     .filter((entry) => inNamespace(entry, namespace) && entry.user === WRAPPER_MARK)
-    .map((entry) => entry.name);
-  return [...new Set(names)].sort();
+    .map((entry) => (namespace === "" ? `${entry.folder}/${entry.name}` : entry.name));
+  return [...new Set(names)].toSorted();
 }
 
 export interface Metadata {
@@ -80,7 +81,7 @@ export function namespaceMetadata(entries: readonly Entry[], namespace: string):
       folder: entry.folder,
       storedBy: entry.user === WRAPPER_MARK ? WRAPPER_MARK : "other",
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .toSorted((a, b) => a.name.localeCompare(b.name));
 }
 
 export function formatMetadata(namespace: string, rows: readonly Metadata[]): string {

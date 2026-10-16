@@ -6,7 +6,7 @@ import type { Caught, EngineInterface, On } from "claude-code";
 import { gitDecision } from "../lib/blocked-git.ts";
 import { registerNoun } from "./noun.generated.ts";
 
-const EDIT_TOOLS: readonly string[] = ["Write", "Edit", "NotebookEdit"];
+const EDIT_TOOLS: ReadonlySet<string> = new Set(["Write", "Edit", "NotebookEdit"]);
 
 /** What every `.catch` here does first: a toast and a log for the person. */
 function failed($: EngineInterface, event: string, error: Caught["error"]): string {
@@ -18,8 +18,17 @@ function failed($: EngineInterface, event: string, error: Caught["error"]): stri
 
 /** The `text` of the edited verb's data; null when it had nothing to say. */
 function findingsText(data: unknown): string | null {
-  const text = typeof data === "object" && data !== null ? Reflect.get(data, "text") : null;
-  return typeof text === "string" && text.length > 0 ? text : null;
+  const text = stringField(data, "text");
+  return text !== null && text.length > 0 ? text : null;
+}
+
+/** The string under `key` of an object of unknown shape; null when it is not there or not a string. */
+function stringField(value: unknown, key: string): string | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const field: unknown = Reflect.get(value, key);
+  return typeof field === "string" ? field : null;
 }
 
 /** A commit or push that skips the git hooks is refused; `QSM_LANGDEV_ALLOW` goes to the person.
@@ -33,8 +42,8 @@ function registerGuard(on: On): void {
   }));
 
   on("tool.check", { tool: "Bash" }, (_$, e, next) => {
-    const command = (e.input as { command?: unknown } | null)?.command;
-    const answer = typeof command === "string" ? gitDecision(command) : null;
+    const command = stringField(e.input, "command");
+    const answer = command === null ? null : gitDecision(command);
     return answer?.decision === "ask" ? { decision: "ask", reason: answer.reason } : next(e);
   }).catch(($, _e, next) => ({
     decision: "deny",
@@ -47,11 +56,11 @@ function registerGuard(on: On): void {
 function registerEditFindings(on: On): void {
   on("tool.call", async ($, e, next) => {
     const result = await next(e);
-    if (result.deny !== undefined || result.isError === true || !EDIT_TOOLS.includes(e.tool)) {
+    if (result.deny !== undefined || result.isError === true || !EDIT_TOOLS.has(e.tool)) {
       return result;
     }
-    const file = Reflect.get(e, "file_path") ?? Reflect.get(e, "notebook_path");
-    if (typeof file !== "string") {
+    const file = stringField(e, "file_path") ?? stringField(e, "notebook_path");
+    if (file === null) {
       return result;
     }
     const text = findingsText(

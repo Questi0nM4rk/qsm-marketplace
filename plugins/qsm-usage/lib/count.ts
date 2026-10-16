@@ -1,6 +1,7 @@
 // Two ways to get a token count, and the line between them is a credential.
 
 import { estimateTokens } from "./estimate.ts";
+import { isPlainObject } from "./toon-scalar.ts";
 
 export type CountMode = "estimate" | "exact";
 
@@ -38,8 +39,8 @@ async function countOverApi(text: string, model: string, apiKey: string): Promis
       "failed",
     );
   }
-  const body = (await response.json()) as { input_tokens?: number };
-  if (typeof body.input_tokens !== "number") {
+  const body: unknown = await response.json();
+  if (!isPlainObject(body) || typeof body.input_tokens !== "number") {
     throw new CountError("exact count response carried no input_tokens", "failed");
   }
   return body.input_tokens;
@@ -66,5 +67,5 @@ export async function countText(text: string, options: CountOptions): Promise<nu
       "missing",
     );
   }
-  return await (options.exact ?? countOverApi)(text, options.model ?? DEFAULT_MODEL, apiKey);
+  return (options.exact ?? countOverApi)(text, options.model ?? DEFAULT_MODEL, apiKey);
 }

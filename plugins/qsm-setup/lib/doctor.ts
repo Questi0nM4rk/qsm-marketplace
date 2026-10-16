@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { readRecord, sha256 } from "../../../lib/install-base.ts";
 import type { PluginNode } from "./discover.ts";
 import { declaredBins } from "./farm.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 import type { PurgeReport } from "./purge.ts";
 import type { ActivationReader, Runner } from "./run-installers.ts";
 
@@ -39,8 +40,8 @@ export function readInstalled(path: string): string[] {
     return [];
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as { plugins?: unknown };
-    return Array.isArray(parsed.plugins)
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return isRecord(parsed) && Array.isArray(parsed.plugins)
       ? parsed.plugins.filter((x): x is string => typeof x === "string")
       : [];
   } catch {
@@ -265,7 +266,7 @@ export function doctor(nodes: readonly PluginNode[], opts: DoctorOptions): Docto
   const checks = targets.map((name) => pluginCheck(name, byName.get(name), opts));
   const read = opts.activation;
   for (const node of targets.map((t) => byName.get(t))) {
-    if (read !== undefined && node?.activation) {
+    if (read !== undefined && typeof node?.activation === "string") {
       checks.push(activationCheck(node, read));
     }
   }

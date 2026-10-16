@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -11,7 +12,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { LANGUAGE_TABLE, LANGUAGES, type Language, type LanguageInfo } from "./registry.ts";
+import { arrayOf } from "./json.ts";
+import {
+  isLanguage,
+  LANGUAGE_TABLE,
+  LANGUAGES,
+  type Language,
+  type LanguageInfo,
+} from "./registry.ts";
 
 const INTERPRETER_EXTENSION: Readonly<Record<string, string>> = {
   sh: ".sh",
@@ -81,10 +89,15 @@ export function matchingFiles(
   names?: RegExp,
 ): string[] {
   return files.filter((file) => {
+    // A tracked symlink is no source of its own: its target is matched under its own path, and
+    // a checker handed the link (semgrep) refuses it as a scan root.
+    if (lstatSync(join(root, file), { throwIfNoEntry: false })?.isSymbolicLink() === true) {
+      return false;
+    }
     if (extensions.some((suffix) => file.endsWith(suffix))) {
       return true;
     }
-    if (names?.test(basename(file))) {
+    if (names?.test(basename(file)) === true) {
       return true;
     }
     if (!hasNoExtension(file)) {
@@ -110,21 +123,35 @@ export function gitPaths(root: string, args: readonly string[], input?: string):
   return result.stdout.split("\0").filter((path) => path.length > 0);
 }
 
-/** The paths among `paths` that `.gitattributes` marks generated: the one definition of
- * "generated" here, the `linguist-generated` attribute the repository already carries. */
-export function generatedPaths(root: string, paths: readonly string[]): Set<string> {
+/** The paths among `paths` whose git attribute `attr` has one of `values`. */
+export function pathsWithAttr(
+  root: string,
+  attr: string,
+  values: readonly string[],
+  paths: readonly string[],
+): Set<string> {
+  const found = new Set<string>();
   if (paths.length === 0) {
-    return new Set();
+    return found;
   }
-  const fields =
-    gitPaths(root, ["check-attr", "-z", "--stdin", "linguist-generated"], paths.join("\0")) ?? [];
-  const generated = new Set<string>();
+  const fields = gitPaths(root, ["check-attr", "-z", "--stdin", attr], paths.join("\0")) ?? [];
   for (let at = 0; at + 2 < fields.length; at += 3) {
-    if (fields[at + 2] === "set" || fields[at + 2] === "true") {
-      generated.add(fields[at] as string);
+    const [path, , value] = fields.slice(at, at + 3);
+    if (path !== undefined && value !== undefined && values.includes(value)) {
+      found.add(path);
     }
   }
-  return generated;
+  return found;
+}
+
+/** The paths among `paths` that `.gitattributes` marks generated: the one definition of
+ * "generated" here, the `linguist-generated` or `export-ignore` attribute the repository already
+ * carries. */
+export function generatedPaths(root: string, paths: readonly string[]): Set<string> {
+  return new Set([
+    ...pathsWithAttr(root, "linguist-generated", ["set", "true"], paths),
+    ...pathsWithAttr(root, "export-ignore", ["set"], paths),
+  ]);
 }
 
 /**
@@ -141,14 +168,14 @@ export function repoFiles(root: string): string[] | null {
 }
 
 /** Languages that never toggle (`alwaysOn` in LANGUAGE_TABLE): docs, multi. */
-const ALWAYS_ON: readonly Language[] = LANGUAGES.filter(
-  (language) => (LANGUAGE_TABLE[language] as LanguageInfo).alwaysOn,
+const ALWAYS_ON: ReadonlySet<Language> = new Set(
+  LANGUAGES.filter((language) => (LANGUAGE_TABLE[language] as LanguageInfo).alwaysOn),
 );
 
 /** True when a language never toggles, so gates.json naming it would claim
  * a control that is not there. */
 export function alwaysOn(language: Language): boolean {
-  return ALWAYS_ON.includes(language);
+  return ALWAYS_ON.has(language);
 }
 
 /**
@@ -156,7 +183,7 @@ export function alwaysOn(language: Language): boolean {
  * when gates.json names it.
  */
 export function languageEnabled(language: Language, enabled: readonly Language[]): boolean {
-  return ALWAYS_ON.includes(language) || enabled.includes(language);
+  return ALWAYS_ON.has(language) || enabled.includes(language);
 }
 
 /** The languages whose `detects` extensions `files` match, by name or by
@@ -203,10 +230,7 @@ export function isLangdevRepo(repoRoot: string): boolean {
 }
 
 function knownLanguages(value: unknown): Language[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((name): name is Language => LANGUAGES.includes(name as Language));
+  return (arrayOf(value) ?? []).filter((name): name is Language => isLanguage(name));
 }
 
 /** The repository's gate selection, or the default when it has written none. */

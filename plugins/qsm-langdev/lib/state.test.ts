@@ -5,9 +5,9 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   clearBlocks,
   type Editor,
@@ -18,19 +18,12 @@ import {
   recordStartPoint,
 } from "./state.ts";
 
-const sandboxes: string[] = [];
 const previousStateDir = process.env.QSM_LANGDEV_STATE_DIR;
-
-function sandbox(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  sandboxes.push(dir);
-  return dir;
-}
 
 /** The state directory every function under test reads, pointed at a
  * sandbox so no test can see or write the real one. */
 function stateSandbox(): void {
-  process.env.QSM_LANGDEV_STATE_DIR = sandbox("qsm-langdev-state-");
+  process.env.QSM_LANGDEV_STATE_DIR = sandboxDir("qsm-langdev-state-");
 }
 
 afterEach(() => {
@@ -38,9 +31,6 @@ afterEach(() => {
     delete process.env.QSM_LANGDEV_STATE_DIR;
   } else {
     process.env.QSM_LANGDEV_STATE_DIR = previousStateDir;
-  }
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
   }
 });
 
@@ -53,7 +43,7 @@ function git(root: string, args: string[]): string {
 }
 
 function repo(): { root: string; head: string } {
-  const root = sandbox("qsm-langdev-repo-");
+  const root = sandboxDir("qsm-langdev-repo-");
   git(root, ["init", "-q", "-b", "main"]);
   git(root, ["config", "user.email", "test@example.invalid"]);
   git(root, ["config", "user.name", "qsm test"]);

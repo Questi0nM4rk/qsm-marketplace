@@ -12,7 +12,13 @@ structural checker, behind a single CLI.
 `check` SHALL score every selected checker against two sides: the reference,
 which is the last commit (`HEAD`), and the shipped side, which is the working
 tree with everything not yet committed (staged, unstaged, and untracked files
-git does not ignore). A checker SHALL pass only when the shipped side's total
+git does not ignore). Each side SHALL be scored in a scratch tree that holds
+the inputs the repository's own commands read, so a checker measures there
+what it measures in the live checkout: every dependency directory the live
+checkout installed (`node_modules`, `.venv`) at any depth, and every ignored
+path a tsconfig's `include` or `files` names, linked in from the live
+checkout. A generated file stays on disk for the code that imports it; the
+file sets leave it unscored. A checker SHALL pass only when the shipped side's total
 is no higher than the reference side's; where the checker names files, no file
 SHALL carry more findings than before, a moved file compared under its old
 name; and where the checker reports individual findings, no finding SHALL
@@ -34,6 +40,14 @@ content, against a stored result").
   reference tree
 - **THEN** `check` SHALL fail, name the checker, both totals, and the new
   finding's location
+
+#### Scenario: A side reads the same inputs as the live checkout
+
+- **WHEN** a package imports a dependency installed only in its own
+  `node_modules`, or a generated declaration file its tsconfig names and git
+  ignores, or a generated file marked `export-ignore`
+- **THEN** a type-aware checker SHALL resolve it on either side and report
+  what it reports when run directly in the live checkout
 
 #### Scenario: A fix does not offset a new finding elsewhere
 
@@ -119,7 +133,8 @@ score only what is missing. So the first run in a worktree scores both sides
 once, and every later run scores the shipped side only, because the reference
 is the content of the last commit, which the store already holds from when it
 was the shipped side. A change of tool version or configuration misses the
-store and scores both sides again, once. Switching branches, pulling or
+store and scores both sides again, once, and so does a qsm-langdev that scores
+a side with other inputs: an entry an older one stored is not read. Switching branches, pulling or
 rebasing needs nothing special: content the store does not know is scored
 once. A rule pack a checker would pull over the network (semgrep's `p/<pack>`,
 or a single rule, `r/<id>`) SHALL be fetched once per run into a local file the
@@ -204,7 +219,8 @@ rules, and supply-chain scanning. A checker that runs past its time limit SHALL 
 measured, naming the limit and the retry, and SHALL NOT be reported as worse. So SHALL a checker
 whose run ended with output its parser cannot read, a tool error rather than findings:
 `<checker>: not measured: <cause>; retry`, the cause the tool's own words (semgrep's JSON `errors`,
-else the first line of stderr that says something, else the exit code), and it SHALL NOT be stored.
+else the first line of stderr that says something, or the last when a Python traceback opens it,
+else the exit code), and it SHALL NOT be stored.
 Output the parser reads is measured whatever the exit code: semgrep exiting 1 with results is
 findings. A run with a checker not measured and none worse answers `blocked`, never `ok`: nothing
 proved the tree no worse. A worse checker in the same run answers `worse`. The stop gate logs a
@@ -476,15 +492,14 @@ and its thresholds, read live from the one registry every other verb reads.
 
 ### Requirement: Generated files are outside the quality gates, never the safety gates
 
-A path the repository's `.gitattributes` marks `linguist-generated` or `export-ignore` is owned by
-a generator. Every quality checker (duplication, dead code, complexity, lint, types, and
-`structure`) SHALL leave it out of what it scores, on either side. The marker is the one definition
-of "generated"; this plugin keeps no list of its own. The jscpd checker is handed the scored files,
-not the root. A checker whose registry row declares `guardsSafety` (semgrep, bandit, devskim,
-dotnet-vulnerable) SHALL keep the unnarrowed set, and the `secrets`, `entropy` and
-content-denylist gates read the staged files, so none of these ever skip a generated file.
-Whole-project tools (knip, depcruise, tsc) read the tree through their own configuration and are
-not narrowed.
+A path the repository's `.gitattributes` marks `linguist-generated` or `export-ignore` is owned by a
+generator. Every quality checker (duplication, dead code, complexity, lint, types, and `structure`)
+SHALL leave it out of what it scores, on either side. The marker is the one definition of
+"generated"; this plugin keeps no list of its own. The jscpd checker is handed the scored files, not
+the root. A checker whose registry row declares `guardsSafety` (semgrep, bandit, devskim,
+dotnet-vulnerable) SHALL keep the unnarrowed set, and the `secrets`, `entropy` and content-denylist
+gates read the staged files, so none of these ever skip a generated file. Whole-project tools (knip,
+depcruise, bun check) read the tree through their own configuration and are not narrowed.
 
 #### Scenario: A generated file changes
 
@@ -638,8 +653,8 @@ reason written where it would otherwise appear.
 
 #### Scenario: A rule that fires where it should not
 
-- **WHEN** a rule's findings are noise in this codebase, as biome's
-  noNodejsModules is in a CLI
+- **WHEN** a rule's findings are noise in this codebase, as oxlint's
+  import/no-nodejs-modules is in a CLI
 - **THEN** the config SHALL leave that rule out with the reason, and SHALL
   NOT enable it and suppress it at the call sites
 
@@ -681,7 +696,7 @@ get the checkers that finished.
 Before the comparison the hook, and the pre-commit gate over staged files with no unstaged changes,
 SHALL run each static fixer that covers the file and re-stage what the gate fixed. The fixers are
 the safe fix modes of the checkers langdev runs (`rumdl` and `markdownlint-cli2 --fix`,
-`biome check --write`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
+`oxlint --fix` and `oxfmt`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
 `rustfmt`, `csharpier format`, `dotnet format`), never an unsafe or code-deleting fix; a fixer whose
 binary is missing is skipped. When the pre-commit gate blocks, it names each staged file it skipped
 for unstaged changes.

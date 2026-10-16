@@ -4,22 +4,20 @@
 // being installed. Every tree is a sandbox under the system temp directory,
 // removed after each test whether the test passed or failed.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
-  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   type CompareOptions,
   compareTrees,
@@ -32,14 +30,7 @@ import { describeSets } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { type CheckSpec, REGISTRY } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
-
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
+import { defined } from "./test-support.ts";
 
 function git(root: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
@@ -52,8 +43,7 @@ function git(root: string, args: string[]): string {
 /** A sandbox git repository with one commit holding `files`, and that
  * commit's id. */
 function repoWith(files: Record<string, string>): { root: string; head: string } {
-  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-compare-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-langdev-compare-");
   git(root, ["init", "-q", "-b", "main"]);
   git(root, ["config", "user.email", "test@example.invalid"]);
   git(root, ["config", "user.name", "qsm test"]);
@@ -94,6 +84,16 @@ const MARKER = "BADLINE";
 /** Every line holding the marker is one finding, identified by the text on
  * that line, never by its line number. Null on a line that is not grep's
  * `path:line:text`, so an unreadable run never reads as a clean tree. */
+/** The order `Array#sort` gives lists of paths with no compare function. */
+function byJoined(a: readonly string[], b: readonly string[]): number {
+  const left = a.join(",");
+  const right = b.join(",");
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+}
+
 function countMarkers(stdout: string): Tally | null {
   const findings: Finding[] = [];
   const byPath: Record<string, number> = {};
@@ -105,8 +105,8 @@ function countMarkers(stdout: string): Tally | null {
     if (match === null) {
       return null;
     }
-    const path = match[1] as string;
-    const text = (match[3] as string).trim();
+    const path = defined(match[1], "a path");
+    const text = defined(match[3], "a text").trim();
     findings.push({ identity: text, locations: [{ path, line: Number(match[2]) }] });
     byPath[path] = (byPath[path] ?? 0) + 1;
   }
@@ -148,7 +148,7 @@ describe("compareTrees", () => {
     const { verdicts } = await run(root, head);
 
     expect(verdicts).toHaveLength(1);
-    const only = verdicts[0] as (typeof verdicts)[number];
+    const only = defined(verdicts[0], "a verdict");
     expect(only.pass).toBe(false);
     expect(only.summary).toContain("marked: 0 -> 1");
     expect((only.lines ?? []).join("\n")).toContain("a.txt");
@@ -292,7 +292,7 @@ function recorder(fileSet: CheckSpec["fileSet"], extensions: readonly string[] =
         stdout
           .split("\n")
           .filter((line) => line !== "")
-          .sort(),
+          .toSorted(),
       );
       return { total: 0 };
     },
@@ -359,7 +359,7 @@ describe("file sets: whole project and changes", () => {
 
     const { sets } = await runWith(root, head, spec);
 
-    expect([...handed].sort()).toEqual([
+    expect(handed.toSorted(byJoined)).toEqual([
       ["a.ts", "new.ts", "src/b.ts"],
       ["a.ts", "src/b.ts"],
     ]);
@@ -386,7 +386,7 @@ describe("file sets: whole project and changes", () => {
     const { changed } = await runWith(root, head, spec);
 
     expect(changed).toEqual(["b.ts", "d.ts"]);
-    expect([...handed].sort()).toEqual([["b.ts"], ["d.ts"]]);
+    expect(handed.toSorted(byJoined)).toEqual([["b.ts"], ["d.ts"]]);
   });
 });
 
@@ -462,7 +462,8 @@ describe("file sets: paths and languages", () => {
 describe("the registry's file sets", () => {
   test("a whole-project tool declares given, the rest changed, semgrep's per-file engine included", () => {
     const given = REGISTRY.filter((spec) => spec.fileSet === "given").map((spec) => spec.name);
-    expect(given.sort()).toEqual([
+    expect(given.toSorted()).toEqual([
+      "bun-check",
       "clippy",
       "depcruise",
       "dotnet",
@@ -470,7 +471,6 @@ describe("the registry's file sets", () => {
       "jscpd",
       "knip",
       "pyright",
-      "tsc",
     ]);
     const rest = REGISTRY.filter((spec) => spec.fileSet !== "given");
     expect(rest.every((spec) => spec.fileSet === "changed")).toBe(true);
@@ -507,7 +507,7 @@ test("A timeout", async () => {
   expect(verdicts).toHaveLength(1);
   expect(verdicts[0]?.notMeasured).toBe(true);
   expect(verdicts[0]?.summary).toBe("slow: not measured: timed out after 0.2s; retry");
-  expect(headline(verdicts[0] as Verdict)).not.toContain("WORSE");
+  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
 });
 
 test("time limit: a checker's declared pre-push limit is the one its pre-push run gets", async () => {
@@ -564,7 +564,7 @@ function entries(root: string, checker = "recorder", point = "pre-commit"): stri
   return existsSync(dir)
     ? readdirSync(dir)
         .filter((f) => f.endsWith(".json"))
-        .sort()
+        .toSorted()
     : [];
 }
 
@@ -599,8 +599,8 @@ function commitAll(root: string, message: string): string {
 
 /** A sandbox whose only commit holds `files`, with `a.ts` then changed to
  * `2` and staged: the one change every store test starts from. */
-function changedRepo(files: Record<string, string> = { "a.ts": "1\n" }) {
-  const { root, head } = repoWith(files);
+function changedRepo(files?: Record<string, string>) {
+  const { root, head } = repoWith(files ?? { "a.ts": "1\n" });
   write(root, { "a.ts": "2\n" });
   stage(root);
   return { root, head };
@@ -835,9 +835,12 @@ test("store: an unreadable or wrong-shaped entry is a miss, never a crash", asyn
   const { spec, handed } = recorder("changed");
   await runWith(root, head, spec);
   const [one, two] = entries(root);
-  writeFileSync(join(root, RESULTS, "recorder", "pre-commit", one as string), "{not json");
   writeFileSync(
-    join(root, RESULTS, "recorder", "pre-commit", two as string),
+    join(root, RESULTS, "recorder", "pre-commit", defined(one, "an entry")),
+    "{not json",
+  );
+  writeFileSync(
+    join(root, RESULTS, "recorder", "pre-commit", defined(two, "a second entry")),
     JSON.stringify({ shape: 1, tally: { total: "many" }, output: "" }),
   );
 
@@ -896,7 +899,9 @@ function packSource(...texts: string[]) {
   const fetched: string[] = [];
   const fetchPack = (pack: string): Promise<string> => {
     fetched.push(pack);
-    return Promise.resolve(texts[Math.min(fetched.length, texts.length) - 1] as string);
+    return Promise.resolve(
+      defined(texts[Math.min(fetched.length, texts.length) - 1], "a pack text"),
+    );
   };
   return { fetchPack, fetched };
 }
@@ -982,8 +987,7 @@ const REJECTED = "Failed to download configuration from https://semgrep.dev/c/p/
  * engine the argv asks for. A directory target is searched through, as
  * semgrep scans one. */
 function fakeSemgrep(engines: { pro?: FakeEngine; community?: FakeEngine } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-langdev-fake-semgrep-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-langdev-fake-semgrep-");
   const binary = join(dir, "semgrep");
   const failure = JSON.stringify({
     results: [],
@@ -1047,7 +1051,7 @@ const RULES: CompareOptions = { fetchPack: () => Promise.resolve("rules: []\n") 
 const scored = (calls: string[][]): string[][] =>
   calls
     .map((call) => call.filter((arg) => /^[a-z]\.(ts|py|cs|sh)$/.test(arg)))
-    .sort((x, y) => x.join().localeCompare(y.join()));
+    .toSorted((x, y) => x.join().localeCompare(y.join()));
 
 /** What a call scanned: every argument after semgrep's `-j <n>`. */
 const targets = (call: string[]): string[] => call.slice(call.indexOf("-j") + 2);
@@ -1104,7 +1108,7 @@ test("A push, logged in with the Pro engine", async () => {
   expect(calls.every((call) => call[0] === "--pro")).toBe(true);
   expect(calls.map((call) => targets(call).length)).toEqual([1, 1, 1, 1]);
   // Each target is the side's scratch tree, one directory, never a file of it.
-  const tree = new RegExp(`^${tmpdir()}/qsm-langdev-tree-[^/]+$`);
+  const tree = /\/qsm-langdev-tree-[^/]+$/;
   expect(calls.every((call) => tree.test(targets(call)[0] ?? ""))).toBe(true);
   expect(scored(calls)).toEqual([[], [], [], []]);
   expect(asked).toBe(1);
@@ -1223,7 +1227,7 @@ test("Both engines fail", async () => {
   expect(verdicts.map((v) => [v.notMeasured === true, v.summary])).toEqual([
     [true, `semgrep-ts: not measured: ${REJECTED}; retry`],
   ]);
-  expect(headline(verdicts[0] as Verdict)).not.toContain("WORSE");
+  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
   expect(runOutcome(verdicts, true).code).toBe("blocked");
   expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
 });
@@ -1248,6 +1252,27 @@ test("failed run: a checker whose output cannot be read is not measured, its std
     [true, "broken: not measured: boom: config broken; retry"],
   ]);
   expect(runOutcome(verdicts, true).code).toBe("blocked");
+});
+
+test("failed run: a Python crash is named by its exception, not by the Traceback line", async () => {
+  const { root, head } = repoWith({ "a.txt": "alpha\n" });
+  write(root, { "a.txt": `alpha\n${MARKER} fresh\n` });
+  stage(root);
+  const crashed: CheckSpec = {
+    ...MARKED,
+    name: "crashed",
+    binary: "sh",
+    args: () => [
+      "-c",
+      "echo 'not a finding'; printf 'Traceback (most recent call last):\\n  File \"x.py\", line 1\\nModuleNotFoundError: No module named y\\n' >&2; exit 2",
+    ],
+  };
+
+  const { verdicts } = await runWith(root, head, crashed);
+
+  expect(verdicts.map((v) => v.summary)).toEqual([
+    "crashed: not measured: ModuleNotFoundError: No module named y; retry",
+  ]);
 });
 
 test("failed run: a checker killed by a signal is not measured, never worse", async () => {

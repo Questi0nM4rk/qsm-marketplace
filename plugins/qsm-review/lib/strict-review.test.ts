@@ -5,11 +5,11 @@
 // decisions with stub agents, which is what this file tests. The script source
 // is never edited, only wrapped, so a rule that moves in the script moves here.
 
-import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 interface AgentOpts {
   readonly phase?: string;
@@ -60,17 +60,11 @@ interface Result {
   };
 }
 
-const sandbox = mkdtempSync(join(tmpdir(), "qsm-review-flow-"));
-afterAll(() => {
-  rmSync(sandbox, { recursive: true, force: true });
-});
+// The wrapped workflow is imported once below, so removing its directory after
+// the first test is safe.
+const sandbox = sandboxDir("qsm-review-flow-");
 
-const script = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "workflows",
-  "strict-review.mjs",
-);
+const script = join(import.meta.dirname, "..", "workflows", "strict-review.mjs");
 const source = readFileSync(script, "utf8").replace(/^export const meta/m, "const meta");
 const wrapped = `export async function reviewRun(inj) {
   const { agent, parallel, phase, log } = inj;
@@ -79,9 +73,20 @@ ${source}
 }`;
 const wrappedPath = join(sandbox, "flow.mjs");
 writeFileSync(wrappedPath, wrapped, "utf8");
-const loaded = (await import(pathToFileURL(wrappedPath).href)) as {
-  readonly reviewRun: (inj: Injection) => Promise<Result>;
-};
+const mod: unknown = await import(pathToFileURL(wrappedPath).href);
+
+function hasReviewRun(
+  value: unknown,
+): value is { readonly reviewRun: (inj: Injection) => Promise<Result> } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "reviewRun" in value &&
+    typeof value.reviewRun === "function"
+  );
+}
+if (!hasReviewRun(mod)) throw new Error("the wrapped workflow exports no reviewRun function");
+const loaded = mod;
 
 const CTX = {
   platform: "github",

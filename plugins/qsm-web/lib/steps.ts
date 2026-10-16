@@ -1,6 +1,21 @@
 // One ordered script of page actions, checked before any of it runs.
+import { isRecord } from "../../../lib/outcome.ts";
 
-type StepAction = "navigate" | "fill" | "fill-secret" | "click" | "wait" | "extract" | "screenshot";
+const STEP_ACTIONS = [
+  "navigate",
+  "fill",
+  "fill-secret",
+  "click",
+  "wait",
+  "extract",
+  "screenshot",
+] as const;
+
+type StepAction = (typeof STEP_ACTIONS)[number];
+
+function isStepAction(v: unknown): v is StepAction {
+  return STEP_ACTIONS.some((a) => a === v);
+}
 
 export interface Step {
   readonly action: StepAction;
@@ -29,16 +44,6 @@ export interface Script {
   readonly steps: readonly Step[];
 }
 
-const ACTIONS = new Set<string>([
-  "navigate",
-  "fill",
-  "fill-secret",
-  "click",
-  "wait",
-  "extract",
-  "screenshot",
-]);
-
 /** What each action cannot do without. `wait` is the exception: it takes a
  * selector, a text, or neither (a plain timeout), so it is checked apart. */
 const REQUIRED: Partial<Record<StepAction, readonly (keyof Step)[]>> = {
@@ -55,10 +60,6 @@ export class ScriptError extends Error {
     this.name = "ScriptError";
     this.index = index;
   }
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** Parse and check a script. Throws ScriptError naming the first bad step,
@@ -79,6 +80,40 @@ export function readScript(input: unknown): Script {
   return tab === undefined ? { steps } : { tab, steps };
 }
 
+type TextKey = "url" | "selector" | "value" | "item" | "field" | "text" | "path";
+type NumberKey = "timeoutMs" | "limit";
+
+/** One optional text field of a step, or nothing when absent; another type is refused. */
+function textField(
+  s: Record<string, unknown>,
+  key: TextKey,
+  index: number,
+): Partial<Pick<Step, TextKey>> {
+  const v = s[key];
+  if (v === undefined) {
+    return {};
+  }
+  if (typeof v !== "string") {
+    throw new ScriptError(`${key} must be a string`, index);
+  }
+  return { [key]: v };
+}
+
+function numberField(
+  s: Record<string, unknown>,
+  key: NumberKey,
+  index: number,
+): Partial<Pick<Step, NumberKey>> {
+  const v = s[key];
+  if (v === undefined) {
+    return {};
+  }
+  if (typeof v !== "number") {
+    throw new ScriptError(`${key} must be a number`, index);
+  }
+  return { [key]: v };
+}
+
 function requireWaitCondition(step: Step, index: number): void {
   if (
     step.action === "wait" &&
@@ -95,11 +130,23 @@ function readStep(s: unknown, index: number): Step {
     throw new ScriptError("a step is one JSON object", index);
   }
   const { action } = s;
-  if (typeof action !== "string" || !ACTIONS.has(action)) {
+  if (!isStepAction(action)) {
     throw new ScriptError(`unknown action ${JSON.stringify(action)}`, index);
   }
-  const step = s as unknown as Step;
-  for (const key of REQUIRED[action as StepAction] ?? []) {
+  const step: Step = {
+    action,
+    ...textField(s, "url", index),
+    ...textField(s, "selector", index),
+    ...textField(s, "value", index),
+    ...textField(s, "item", index),
+    ...textField(s, "field", index),
+    ...textField(s, "text", index),
+    ...numberField(s, "timeoutMs", index),
+    ...numberField(s, "limit", index),
+    ...textField(s, "path", index),
+    ...(s.redact === true ? { redact: true } : {}),
+  };
+  for (const key of REQUIRED[action] ?? []) {
     const v = step[key];
     if (typeof v !== "string" || v.length === 0) {
       throw new ScriptError(`${action} needs a ${key}`, index);
@@ -125,7 +172,7 @@ export function secretSteps(script: Script): Array<{ index: number; step: Step }
  * so the driver fills the field but reports the value as redacted.
  */
 export function withSecrets(script: Script, values: ReadonlyMap<number, string>): Script {
-  const steps = script.steps.map((step, index) => {
+  const steps = script.steps.map((step, index): Step => {
     if (step.action !== "fill-secret") {
       return step;
     }
@@ -133,7 +180,10 @@ export function withSecrets(script: Script, values: ReadonlyMap<number, string>)
     if (value === undefined) {
       throw new ScriptError("no value resolved for fill-secret", index);
     }
-    return { action: "fill" as const, selector: step.selector, value, redact: true } as Step;
+    const { selector } = step;
+    return selector === undefined
+      ? { action: "fill", value, redact: true }
+      : { action: "fill", selector, value, redact: true };
   });
   return script.tab === undefined ? { steps } : { tab: script.tab, steps };
 }

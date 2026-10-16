@@ -7,25 +7,37 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   // A hooks module is register.tsx (JSX for its dialogs); a test file is an
   // entry too, so a helper exported for its own test is used, not dead.
-  "entry": [
-    "plugins/*/scripts/*.ts",
-    "plugins/*/hooks/*.ts",
-    "plugins/*/hooks/*.tsx",
-    ".gates/*.ts",
-    "lib/generate-noun.ts",
-    "**/*.test.ts",
-    "lib/fixtures/**/*.ts"
-  ],
-  "project": ["lib/**/*.ts", "plugins/**/*.ts", ".gates/**/*.ts"],
+  // A plugin with npm dependencies holds its own package.json, so it is a
+  // workspace: knip reads its dependencies there, not from the root.
+  "workspaces": {
+    ".": {
+      "entry": [
+        "plugins/*/scripts/*.ts",
+        "plugins/*/hooks/*.ts",
+        "plugins/*/hooks/*.tsx",
+        ".gates/*.ts",
+        "lib/generate-noun.ts",
+        "**/*.test.ts",
+        "lib/fixtures/**/*.ts",
+      ],
+      "project": ["lib/**/*.ts", "plugins/**/*.ts", ".gates/**/*.ts"],
+    },
+    // An eval's run.ts is a script a person runs with bun, so it is an entry.
+    "plugins/*": {
+      "entry": ["scripts/*.ts", "hooks/*.ts", "hooks/*.tsx", "**/*.test.ts", "evals/*/run.ts"],
+      "project": ["**/*.ts"],
+    },
+  },
   // Binaries that come from PATH, never from package.json, so knip cannot see
   // where they come from and would report each as unlisted: the ones a
   // plugin's installer puts there (sentrux, openspec, toon, shot-scraper,
   // opensrc, wt, rumdl, br, which qsm-tasks installs and the qsm-memory
   // briefing and the qsm-builder lens call), a system tool (xdg-open,
   // magick), no-such-verb, a name a test runs because it must not exist, and
-  // search and lens, false positives: qsm-memory's cli test spawns
-  // `bun cli.ts search x` and the generated gate spawns `bun cli.ts lens
-  // readme`, and knip reads the verb in that argv as a binary.
+  // search, lens and check, false positives: qsm-memory's cli test spawns
+  // `bun cli.ts search x`, the generated gate spawns `bun cli.ts lens
+  // readme`, and the typecheck runs `bun check`, Bun's own verb; knip reads
+  // the verb in that argv as a binary.
   "ignoreBinaries": [
     "sentrux",
     "openspec",
@@ -39,15 +51,12 @@
     "magick",
     "no-such-verb",
     "search",
-    "lens"
+    "lens",
+    "check",
   ],
   // `claude-code` is the virtual module a function-hooks module imports its
   // types from; it exists only as the generated .claude/types declarations,
   // never as a package dependency. knip's hint to drop this is wrong: without
   // it every hooks module reports claude-code as unlisted.
   "ignoreDependencies": ["claude-code"],
-  // A hooks module imports its generated noun; .gitattributes marks every
-  // noun.generated.ts export-ignore, so the tree qsm-langdev scores (a git
-  // archive) does not hold it and the import cannot resolve there.
-  "ignoreUnresolved": ["\\./noun\\.generated\\.ts$"]
 }

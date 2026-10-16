@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { describeFailure, validateFindings } from "./findings.ts";
+import { firstFinding, firstTopic, listAt, objectAt } from "./findings-fixture.ts";
 
 function validDoc(): Record<string, unknown> {
   return {
@@ -40,11 +41,7 @@ describe("validateFindings: a valid document", () => {
 
   test("accepts an empty findings array", () => {
     const doc = validDoc();
-    const [topic] = doc.topics as Record<string, unknown>[];
-    if (topic === undefined) {
-      throw new Error("test fixture missing its topic");
-    }
-    topic.findings = [];
+    firstTopic(doc).findings = [];
     expect(validateFindings(doc).ok).toBe(true);
   });
 });
@@ -54,15 +51,6 @@ interface Case {
   /** Mutates (or replaces) the valid document to break exactly one field. */
   readonly breakIt: (doc: Record<string, unknown>) => unknown;
   readonly expected: string;
-}
-
-function firstFinding(doc: Record<string, unknown>): Record<string, unknown> {
-  const topics = doc.topics as Record<string, unknown>[];
-  const topic = topics[0] as Record<string, unknown>;
-  const findings = topic.findings as Record<string, unknown>[];
-  const finding = { ...(findings[0] as Record<string, unknown>) };
-  topic.findings = [finding];
-  return finding;
 }
 
 const CASES: readonly Case[] = [
@@ -95,14 +83,14 @@ const CASES: readonly Case[] = [
   {
     name: "window.sessions is negative",
     breakIt: (doc) => {
-      (doc.window as Record<string, unknown>).sessions = -1;
+      objectAt(doc.window, "window").sessions = -1;
     },
     expected: "window.sessions: must be a non-negative integer",
   },
   {
     name: "window.from is not an ISO date",
     breakIt: (doc) => {
-      (doc.window as Record<string, unknown>).from = "not a date";
+      objectAt(doc.window, "window").from = "not a date";
     },
     expected: "window.from: must be an ISO date string",
   },
@@ -116,9 +104,7 @@ const CASES: readonly Case[] = [
   {
     name: "a topic name is not one of the seven",
     breakIt: (doc) => {
-      const topics = doc.topics as Record<string, unknown>[];
-      const topic = topics[0] as Record<string, unknown>;
-      topic.topic = "made-up-topic";
+      firstTopic(doc).topic = "made-up-topic";
     },
     expected:
       "topics[0].topic: must be one of unused-extensions, duplicates, claude-md-trim, " +
@@ -148,10 +134,8 @@ const CASES: readonly Case[] = [
   {
     name: "two findings share one id",
     breakIt: (doc) => {
-      const topics = doc.topics as Record<string, unknown>[];
-      const topic = topics[0] as Record<string, unknown>;
-      const findings = topic.findings as Record<string, unknown>[];
-      const original = findings[0] as Record<string, unknown>;
+      const topic = firstTopic(doc);
+      const original = objectAt(listAt(topic.findings, "findings")[0], "findings[0]");
       topic.findings = [original, { ...original }];
     },
     expected: "topics[0].findings[1].id: must be unique in the document",

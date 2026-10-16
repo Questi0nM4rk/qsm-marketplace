@@ -1,6 +1,5 @@
 {
   "name": "qsm-usage",
-  "version": "0.1.0",
   "description": "Reviews how you use Claude Code and proposes what to cut, what to make permanent, and what to reach for instead, each with its saving in tokens; ships the measuring tools it stands on: qsm-usage count and toon, and a hook that filters shell output before the agent reads it.",
   "types": "./types/index.d.ts",
   "keywords": [

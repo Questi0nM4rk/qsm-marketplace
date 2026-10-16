@@ -2,14 +2,14 @@
 // hook, which cannot start a process of its own to speak the filter's protocol.
 
 import { spawnSync } from "node:child_process";
-import type { Handler } from "../../../lib/cli-base.ts";
+import { flagArg, type Handler, requiredString } from "../../../lib/cli-base.ts";
 import { ok } from "../../../lib/outcome.ts";
 import { filterBin } from "../lib/doctor.ts";
 import { FILTER_HOOK_ARGS, filterAnswer, NO_ANSWER, runsGit } from "../lib/filter.ts";
 
 export const filter: Handler = (call) => {
-  const command = call.args.command as string;
-  if (call.args.subagent === true && runsGit(command)) {
+  const command = requiredString(call, "command");
+  if (flagArg(call, "subagent") && runsGit(command)) {
     return ok(NO_ANSWER, "");
   }
   const payload = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } };

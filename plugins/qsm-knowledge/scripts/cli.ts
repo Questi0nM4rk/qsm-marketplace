@@ -3,19 +3,19 @@
 // qsm-knowledge: the two checks a skill cannot answer by reading.
 
 import { spawnSync } from "node:child_process";
-import { type Call, runCli } from "../../../lib/cli-base.ts";
+import { type Call, requiredString, runCli } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { validateFile } from "../lib/note.ts";
 import { doctorReport, NOTEBOOK_BIN } from "../lib/notebook.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-knowledge/qsm.json");
 
 /** A note with an error is a check that ran and found something, so the
  * verb failed; a note with only warnings passed, and carries them. */
 function validate(call: Call): Outcome {
-  const report = validateFile(call.args.note as string);
+  const report = validateFile(requiredString(call, "note"));
   const outcome = report.ok
     ? ok(report, `ok ${report.file}`)
     : fail("failed", `fail ${report.file}: ${report.errors.join("; ")}`, report);

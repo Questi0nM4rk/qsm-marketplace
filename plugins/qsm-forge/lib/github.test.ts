@@ -3,6 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { UsageError } from "./errors.ts";
+import { expectRejection } from "./rejection.ts";
 import type { Run } from "./exec.ts";
 import {
   CHANGES_REQUESTED,
@@ -258,8 +259,8 @@ describe("what an answer means", () => {
 
   test("the opening comment is not a reply to itself", () => {
     const threads = mapThreads(FULL, REPO, PR);
-    expect(latestReply(threads[0] as GhThread)).toBeNull();
-    expect(latestReply(threads[1] as GhThread)).toBe("Fixed in abc1234");
+    expect(latestReply(threadAt(threads, 0))).toBeNull();
+    expect(latestReply(threadAt(threads, 1))).toBe("Fixed in abc1234");
   });
 });
 
@@ -287,15 +288,23 @@ function recordedForge(answers: Readonly<Record<string, unknown>>, threads = FUL
 
 const RESOLVED_OK = { data: { resolveReviewThread: { thread: { isResolved: true } } } };
 
+function threadAt(threads: readonly GhThread[], index: number): GhThread {
+  const thread = threads[index];
+  if (thread === undefined) {
+    throw new Error(`no thread at index ${String(index)}`);
+  }
+  return thread;
+}
+
 describe("Platform unreachable", () => {
   test("Platform unreachable", async () => {
     const run: Run = () => Promise.reject(new Error("gh: gh auth login required"));
-    await expect(githubForge(run, REPO).status(PR)).rejects.toThrow("gh auth login required");
+    await expectRejection(githubForge(run, REPO).status(PR), "gh auth login required");
   });
 
   test("an answer that is not JSON is named rather than thrown as a parser fault", async () => {
     const run: Run = () => Promise.resolve("<html>proxy error</html>");
-    await expect(githubForge(run, REPO).threads(PR)).rejects.toThrow("did not answer with JSON");
+    await expectRejection(githubForge(run, REPO).threads(PR), "did not answer with JSON");
   });
 });
 
@@ -307,9 +316,10 @@ describe("Identity does not exist", () => {
 
   test("Identity does not exist", async () => {
     const { forge, calls } = recordedForge({});
-    await expect(
+    await expectRejection(
       replyToThread(forge, { pr: PR, commentId: 999_999, message: "hi", keepOpen: false }),
-    ).rejects.toThrow(UsageError);
+      UsageError,
+    );
     expect(calls.every((call) => !call.includes("--method"))).toBe(true);
   });
 });
@@ -363,7 +373,7 @@ describe("resolving one thread", () => {
 
   test("Identity not found", async () => {
     const { forge } = recordedForge({});
-    await expect(resolveThread(forge, PR, 42_424, null)).rejects.toThrow(UsageError);
+    await expectRejection(resolveThread(forge, PR, 42_424, null), UsageError);
   });
 });
 
@@ -460,9 +470,7 @@ describe("a connection longer than one page", () => {
   test("a connection that never ends is refused rather than paged forever", async () => {
     const endless = response([OPEN_THREAD], { threadsAfter: "and-another" });
     const run: Run = () => Promise.resolve(JSON.stringify(endless));
-    await expect(githubForge(run, REPO).threads(PR)).rejects.toThrow(
-      "more than 20 pages of threads",
-    );
+    await expectRejection(githubForge(run, REPO).threads(PR), "more than 20 pages of threads");
   });
 });
 

@@ -1,30 +1,36 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "./fixtures/sandbox.ts";
 import { checkNoun, generateNoun, type QsmManifest, stagedPluginDirs } from "./generate-noun.ts";
-
-const wrappers: string[] = [];
-afterAll(() => {
-  for (const dir of wrappers) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 interface Wrapper {
   readonly verbs: Record<string, unknown>;
   readonly argvOf: (row: unknown, options?: Record<string, unknown>) => string[];
 }
 
+function isWrapper(value: unknown): value is Wrapper {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "verbs" in value &&
+    "argvOf" in value &&
+    typeof value.argvOf === "function"
+  );
+}
+
 /** Writes a generated wrapper into a sandbox and imports it: its type-only
  * imports erase, so argvOf runs exactly as the engine would run it. */
 async function loadWrapper(manifest: QsmManifest): Promise<Wrapper> {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-noun-wrapper-"));
-  wrappers.push(dir);
+  const dir = sandboxDir("qsm-noun-wrapper-");
   const generated = generateNoun(manifest, dir);
   mkdirSync(join(dir, "hooks"), { recursive: true });
   writeFileSync(generated.hooksPath, generated.hooksContent);
-  return (await import(generated.hooksPath)) as Wrapper;
+  const mod: unknown = await import(generated.hooksPath);
+  if (!isWrapper(mod)) {
+    throw new Error("the generated hooks module does not export the wrapper");
+  }
+  return mod;
 }
 
 const fixture: QsmManifest = {

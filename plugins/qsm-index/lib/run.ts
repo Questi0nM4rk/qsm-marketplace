@@ -22,13 +22,18 @@ function cap(text: string): string {
   return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n[truncated]` : text;
 }
 
+/** spawnSync stopped the command at its timeout: the error it returns carries ETIMEDOUT. */
+function timedOut(error: Error | undefined): boolean {
+  return error !== undefined && "code" in error && error.code === "ETIMEDOUT";
+}
+
 /** A runner that runs a command with `env` and never throws: a missing binary, a non-zero exit
  * and a run past `timeoutMs` all come back as `ok: false` with the cause in `detail`. */
 export function timedRunner(timeoutMs: number, env: Env): Runner {
   return (command, args) => {
     const result = spawnSync(command, [...args], { encoding: "utf8", timeout: timeoutMs, env });
     const stdout = cap(result.stdout ?? "");
-    if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    if (timedOut(result.error)) {
       return {
         ok: false,
         stdout,

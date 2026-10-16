@@ -31,15 +31,15 @@ function commandExists(cmd: string): boolean {
  * through `_browser.py`, which no project venv on this machine owns. Try
  * each candidate that could supply it, in order, and keep the first that
  * answers; none answering means the runner-dependent tests skip and say why. */
-function findRunner(): readonly string[] | null {
-  const candidates: readonly (readonly string[])[] = [
+function findRunner(): readonly [string, ...string[]] | null {
+  const candidates: readonly (readonly [string, ...string[]])[] = [
     ["uv", "tool", "run", "--from", "shot-scraper", "python"],
     ["uvx", "--from", "shot-scraper", "python"],
     ["uv", "run", "--with", "playwright", "python"],
   ];
   for (const candidate of candidates) {
     const [cmd, ...rest] = candidate;
-    if (cmd === undefined || !commandExists(cmd)) {
+    if (!commandExists(cmd)) {
       continue;
     }
     const probe = spawnSync(cmd, [...rest, "-c", "import playwright.sync_api"], {
@@ -78,16 +78,18 @@ describe.skipIf(!PYTHON3)("instagram-saved scripts byte-compile", () => {
   }
 });
 
-describe.skipIf(RUNNER === null)("instagram-saved scripts answer --help", () => {
-  for (const [script, flag] of Object.entries(MAIN_FLAG)) {
-    test(`${script} names ${flag}`, () => {
-      const [cmd, ...rest] = RUNNER as readonly string[];
-      const r = spawnSync(cmd as string, [...rest, script, "--help"], {
-        cwd: SCRIPTS_DIR,
-        encoding: "utf8",
+if (RUNNER !== null) {
+  const [cmd, ...rest] = RUNNER;
+  describe("instagram-saved scripts answer --help", () => {
+    for (const [script, flag] of Object.entries(MAIN_FLAG)) {
+      test(`${script} names ${flag}`, () => {
+        const r = spawnSync(cmd, [...rest, script, "--help"], {
+          cwd: SCRIPTS_DIR,
+          encoding: "utf8",
+        });
+        expect(r.status).toBe(0);
+        expect(r.stdout).toContain(flag);
       });
-      expect(r.status).toBe(0);
-      expect(r.stdout).toContain(flag);
-    });
-  }
-});
+    }
+  });
+}

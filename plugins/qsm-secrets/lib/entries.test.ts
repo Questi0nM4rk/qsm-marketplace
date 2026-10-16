@@ -31,7 +31,7 @@ describe("parseEntries", () => {
   });
 
   test("a field carrying a control byte is dropped", () => {
-    expect(parseEntries("nor\u001b[2Kmal\tqsm\tqsm-secrets")).toEqual([]);
+    expect(parseEntries("nor\u001B[2Kmal\tqsm\tqsm-secrets")).toEqual([]);
   });
 });
 
@@ -40,8 +40,12 @@ describe("storedKeys", () => {
     expect(storedKeys(parseEntries(ROWS), "qsm")).toEqual(["github-token", "npm-token"]);
   });
 
-  test("the empty namespace is the whole vault", () => {
-    expect(storedKeys(parseEntries(ROWS), "")).toEqual(["elsewhere", "github-token", "npm-token"]);
+  test("the empty namespace is the whole vault, each key with its namespace", () => {
+    expect(storedKeys(parseEntries(ROWS), "")).toEqual([
+      "qsm/github-token",
+      "qsm/npm-token",
+      "work/elsewhere",
+    ]);
   });
 });
 
@@ -61,7 +65,7 @@ describe("namespaceMetadata", () => {
       .split("\n")
       .filter((line) => line.includes(":"))
       .map((line) => line.slice(0, line.indexOf(":")));
-    expect([...new Set(labels)].sort()).toEqual([
+    expect([...new Set(labels)].toSorted()).toEqual([
       "folder",
       "name",
       "namespace",

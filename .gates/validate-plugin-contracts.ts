@@ -2,11 +2,10 @@
 // Plugin manifests, marketplace entries, skill/agent/command frontmatter, hooks.json shape.
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
+import { isRecord, manifestlessPlugins, pluginDirs, rel, report, root, walk } from "./walk.ts";
 
 const findings: string[] = [];
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
+const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const isText = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
 function readJson(path: string): unknown {
@@ -81,8 +80,8 @@ if (isRecord(marketplace) && Array.isArray(marketplace.plugins)) {
 function classicHooks(json: unknown): string[] {
   const events = isRecord(json) && isRecord(json.hooks) ? Object.values(json.hooks) : [];
   return events
-    .flatMap((groups) => (Array.isArray(groups) ? groups : []))
-    .flatMap((group) => (isRecord(group) && Array.isArray(group.hooks) ? group.hooks : []))
+    .flatMap((groups) => list(groups))
+    .flatMap((group) => (isRecord(group) ? list(group.hooks) : []))
     .map((h) => (isRecord(h) && typeof h.command === "string" ? basename(h.command, '"') : ""))
     .filter((n) => n !== "");
 }
@@ -94,10 +93,15 @@ for (const dir of pluginDirs()) {
   if (existsSync(manifest)) {
     const json = readJson(manifest);
     if (isRecord(json)) {
-      for (const k of ["name", "version", "description"]) {
+      for (const k of ["name", "description"]) {
         if (!isText(json[k])) {
           findings.push(`${rel(manifest)}: ${k} must be a non-empty string`);
         }
+      }
+      if ("version" in json) {
+        findings.push(
+          `${rel(manifest)}: version must be absent, so Claude Code keys the plugin cache by commit`,
+        );
       }
       if (json.name !== name) {
         findings.push(`${rel(manifest)}: name must equal the directory name ${name}`);
@@ -115,7 +119,7 @@ for (const dir of pluginDirs()) {
   }
   for (const path of walk(dir)) {
     const r = rel(path);
-    if (/\/hooks\/hooks\.json$/.test(r)) {
+    if (r.endsWith("/hooks/hooks.json")) {
       const json = readJson(path);
       // "hooks" (classic command hooks) alone, or with "modules" (function
       // hooks) beside it: `claude plugin validate` accepts a hooks.json that

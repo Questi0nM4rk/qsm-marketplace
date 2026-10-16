@@ -5,7 +5,7 @@
 
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const PLUGIN_ROOT = join(import.meta.dir, "..");
 const PROFILES_ROOT = join(PLUGIN_ROOT, "profiles");
@@ -31,7 +31,7 @@ function subdirectories(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort();
+    .toSorted();
 }
 
 /** One language directory's files, keyed by the language and its targets. */
@@ -40,17 +40,17 @@ function readLanguage(language: string, languageDir: string, into: Record<string
   // runs on, which is a different question from how strict the profile is.
   // `ts/` is the language's default target and `ts/browser/` carries only
   // the files that differ, so nothing is duplicated to stay in sync by hand.
-  for (const source of readdirSync(languageDir, { withFileTypes: true }).sort(byName)) {
+  for (const source of readdirSync(languageDir, { withFileTypes: true }).toSorted(byName)) {
     const key = source.isDirectory() ? `${language}@${source.name}` : language;
     const from = source.isDirectory()
       ? readdirSync(join(languageDir, source.name))
-          .sort()
+          .toSorted()
           .map((file) => join(source.name, file))
       : [source.name];
     const entries = into[key] ?? [];
     for (const rel of from) {
       entries.push({
-        file: scaffoldedName(rel.split("/").pop() as string),
+        file: scaffoldedName(basename(rel)),
         content: readFileSync(join(languageDir, rel), "utf8"),
       });
     }
@@ -86,11 +86,11 @@ function main(): void {
   // JSON.stringify quotes every key and lays strings out its own way, which is
   // not what this repository's formatter prints. Formatting here rather than
   // leaving it to the next person means a regenerate is never a lint failure.
-  const formatted = spawnSync("bunx", ["biome", "format", "--write", OUT_FILE], {
+  const formatted = spawnSync("bunx", ["oxfmt", OUT_FILE], {
     stdio: ["ignore", "ignore", "inherit"],
   });
   if (formatted.status !== 0) {
-    console.error(`wrote ${OUT_FILE} but biome could not format it`);
+    console.error(`wrote ${OUT_FILE} but oxfmt could not format it`);
     process.exit(1);
   }
   console.log(`wrote ${OUT_FILE}`);

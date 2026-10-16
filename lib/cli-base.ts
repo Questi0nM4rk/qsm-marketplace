@@ -1,8 +1,9 @@
 // The one argument parser for every qsm binary.
-import { exitOf, fail, type Outcome, renderJson, renderText } from "./outcome.ts";
+import { exitOf, fail, type Outcome, renderJson, renderText, UsageError } from "./outcome.ts";
 import {
   type CommandArg,
   type CommandDecl,
+  declOf,
   groupVerbs,
   matchGroup,
   matchVerb,
@@ -31,6 +32,68 @@ export type ParseResult =
   /** `help` names the verb whose help was asked for, or "bin" */
   | { readonly ok: false; readonly help: string; readonly message: "" }
   | { readonly ok: false; readonly message: string; readonly verb?: string };
+
+// A call's args are a union of every argument type. qsm.json declares each verb's arguments and
+// parseCall has already refused a missing required one and coerced every value to its declared
+// type, so a handler reads through the accessors below. A required one that is absent is a
+// UsageError; a value of another type than the accessor asks for is a defect in the manifest or
+// the handler and throws a plain Error.
+function typeError(call: Call, name: string, wanted: string): Error {
+  return new Error(`${call.verb}: argument ${name} is not ${wanted}`);
+}
+
+export function optionalString(call: Call, name: string): string | undefined {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "string") {
+    return value;
+  }
+  throw typeError(call, name, "a string");
+}
+
+export function requiredString(call: Call, name: string): string {
+  const value = optionalString(call, name);
+  if (value === undefined) {
+    throw new UsageError(`${call.verb}: missing required argument ${name}`);
+  }
+  return value;
+}
+
+export function optionalNumber(call: Call, name: string): number | undefined {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "number") {
+    return value;
+  }
+  throw typeError(call, name, "a number");
+}
+
+export function requiredNumber(call: Call, name: string): number {
+  const value = optionalNumber(call, name);
+  if (value === undefined) {
+    throw new UsageError(`${call.verb}: missing required argument ${name}`);
+  }
+  return value;
+}
+
+/** A boolean flag: true when it was given, false when not. */
+export function flagArg(call: Call, name: string): boolean {
+  const value = call.args[name];
+  if (value === undefined || typeof value === "boolean") {
+    return value === true;
+  }
+  throw typeError(call, name, "a boolean");
+}
+
+/** A repeatable argument; none given is an empty list. */
+export function stringList(call: Call, name: string): string[] {
+  const value = call.args[name];
+  if (value === undefined) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  throw typeError(call, name, "a list");
+}
 
 function label(arg: CommandArg): string {
   return arg.positional === true ? arg.name : `--${toKebab(arg.name)}`;
@@ -76,9 +139,12 @@ class VerbParse {
 
   run(verb: string): ParseResult {
     while (this.at < this.argv.length) {
-      const token = this.argv[this.at] as string;
+      const word = this.argv[this.at];
+      if (word === undefined) {
+        break;
+      }
       this.at += 1;
-      const err = this.take(token);
+      const err = this.take(word);
       if (err !== null) {
         return { ok: false, message: err, verb };
       }
@@ -164,7 +230,8 @@ class VerbParse {
 
   private put(arg: CommandArg, value: string | number | boolean): string | null {
     if (arg.repeatable === true) {
-      const list = (this.values[arg.name] as string[] | undefined) ?? [];
+      const current = this.values[arg.name];
+      const list = Array.isArray(current) ? current : [];
       list.push(String(value));
       this.values[arg.name] = list;
       return null;
@@ -215,7 +282,7 @@ export function parseCall(
   if (before.includes("--help") || before.includes("-h")) {
     return { ok: false, help: verb, message: "" };
   }
-  return new VerbParse(verbs.get(verb) as CommandDecl, tail).run(verb);
+  return new VerbParse(declOf(verbs, verb), tail).run(verb);
 }
 
 /** No verb matched: a group's help, a group missing its verb, or an unknown verb. */
@@ -267,9 +334,13 @@ function renderGroupHelp(
   group: string,
 ): string {
   const rows = groupVerbs(verbs, group).map(
-    (v) => [v.slice(group.length + 1), (verbs.get(v) as CommandDecl).description] as const,
+    (v) => [v.slice(group.length + 1), declOf(verbs, v).description] as const,
   );
   return `usage: ${bin} ${group} <verb> [args] [--json] [--no-input]\n\n${column(rows)}\n\nrun ${bin} ${group} <verb> --help for its arguments\n`;
+}
+
+function describe(arg: CommandArg): string {
+  return `${arg.description}${arg.repeatable === true ? " (repeatable)" : ""}`;
 }
 
 export function renderVerbHelp(manifest: QsmManifest, bin: string, verb: string): string {
@@ -290,8 +361,6 @@ export function renderVerbHelp(manifest: QsmManifest, bin: string, verb: string)
     "[--json] [--no-input]",
     ...(decl.passthrough === true ? ["[-- <args...>]"] : []),
   ].join(" ");
-  const describe = (arg: CommandArg) =>
-    `${arg.description}${arg.repeatable === true ? " (repeatable)" : ""}`;
   const rows: (readonly [string, string])[] = [
     ...positionals.map((a) => [positionalUsage(a), describe(a)] as const),
     ...flags.map((a) => [flagUsage(a), describe(a)] as const),
@@ -337,8 +406,12 @@ interface CliIo {
 }
 
 const processIo: CliIo = {
-  stdout: (t) => process.stdout.write(t),
-  stderr: (t) => process.stderr.write(t),
+  stdout: (t) => {
+    process.stdout.write(t);
+  },
+  stderr: (t) => {
+    process.stderr.write(t);
+  },
 };
 
 function emit(outcome: Outcome, json: boolean, io: CliIo): number {
@@ -368,7 +441,7 @@ function checkHandlers(
   const unhandled = declared.filter((v) => !(v in handlers));
   if (undeclared.length > 0 || unhandled.length > 0) {
     throw new Error(
-      `${bin}: handlers and qsm.json disagree; not declared: [${undeclared}], no handler: [${unhandled}]`,
+      `${bin}: handlers and qsm.json disagree; not declared: [${undeclared.join(", ")}], no handler: [${unhandled.join(", ")}]`,
     );
   }
 }
@@ -380,11 +453,25 @@ function respondUsage(message: string, help: string, json: boolean, io: CliIo): 
   return json ? emit(fail("usage", message), true, io) : exitOf("usage");
 }
 
+/** The handler of a parsed verb; checkHandlers has already refused a declared verb without one. */
+function handlerOf(
+  handlers: Readonly<Record<string, Handler>>,
+  bin: string,
+  verb: string,
+): Handler {
+  const handler = handlers[verb];
+  if (handler === undefined) {
+    throw new Error(`${bin}: no handler for verb "${verb}"`);
+  }
+  return handler;
+}
+
 async function callHandler(handler: Handler, call: Call): Promise<Outcome> {
   try {
     return await handler(call);
   } catch (e) {
-    return fail("failed", e instanceof Error ? e.message : String(e));
+    const message = e instanceof Error ? e.message : String(e);
+    return fail(e instanceof UsageError ? "usage" : "failed", message);
   }
 }
 
@@ -414,6 +501,6 @@ export async function runCli(
         : renderVerbHelp(manifest, bin, parsed.verb);
     return respondUsage(parsed.message, help, argv.includes("--json"), io);
   }
-  const outcome = await callHandler(handlers[parsed.call.verb] as Handler, parsed.call);
+  const outcome = await callHandler(handlerOf(handlers, bin, parsed.call.verb), parsed.call);
   return emit(outcome, parsed.call.json, io);
 }

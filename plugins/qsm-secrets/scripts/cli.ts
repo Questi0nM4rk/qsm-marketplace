@@ -4,13 +4,23 @@
 
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
 import { spawnDetached } from "../../../lib/detach.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { stateDir } from "../../../lib/paths.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { binDir, stateDir } from "../../../lib/paths.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
+import { ask } from "../lib/askpass/ask.ts";
+import { argvFor, envLines, linkedKinds } from "../lib/askpass/link.ts";
 import { activeBackend } from "../lib/backend.ts";
-import { formatChecks } from "../lib/doctor.ts";
+import { type Check, formatChecks } from "../lib/doctor.ts";
 import { SecretError } from "../lib/errors.ts";
 import { guardCommand } from "../lib/guard.ts";
 import { runClean, runRender } from "../lib/render.ts";
@@ -32,10 +42,10 @@ import {
   runScrub,
   runSet,
 } from "../lib/run.ts";
-import { namespaceOf, parseEnvPair } from "../lib/vault.ts";
+import { LEGACY_NAMESPACE, listScopeOf, namespaceOf, parseEnvPair } from "../lib/vault.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-secrets/qsm.json");
 
 /**
  * The three verbs that carry a value refuse `--json` outright: a value must never be serialised,
@@ -44,23 +54,27 @@ const manifest = manifestJson as QsmManifest;
 const NO_JSON = "a secret value never prints as JSON; use pipe or env";
 
 function namespace(call: Call): string {
-  return namespaceOf(call.args.folder as string | undefined, process.env);
+  return namespaceOf(optionalString(call, "folder"), process.env);
 }
 
 function key(call: Call): string {
-  return call.args.key as string;
+  return requiredString(call, "key");
 }
 
 /** A SecretError carries its own outcome code and the next step; anything
  * else is a bug and keeps travelling. */
+function secretFailure(error: unknown): Outcome {
+  if (error instanceof SecretError) {
+    return fail(error.code, `${error.message}\n  next: ${error.next}`);
+  }
+  throw error;
+}
+
 function attempt(run: () => Outcome): Outcome {
   try {
     return run();
   } catch (error) {
-    if (error instanceof SecretError) {
-      return fail(error.code, `${error.message}\n  next: ${error.next}`);
-    }
-    throw error;
+    return secretFailure(error);
   }
 }
 
@@ -79,7 +93,7 @@ const env: Handler = (call) => {
   if (call.json) {
     return fail("blocked", NO_JSON);
   }
-  const pair = parseEnvPair(call.args.pair as string);
+  const pair = parseEnvPair(requiredString(call, "pair"));
   if (pair === null) {
     return fail("usage", "env takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -88,7 +102,7 @@ const env: Handler = (call) => {
 
 /** The probe runs like env but its output is discarded: only its exit code is the answer. */
 const probe: Handler = (call) => {
-  const pair = parseEnvPair(call.args.pair as string);
+  const pair = parseEnvPair(requiredString(call, "pair"));
   if (pair === null) {
     return fail("usage", "check takes <key>=<ENVVAR>, where ENVVAR is a valid variable name");
   }
@@ -102,10 +116,17 @@ const probe: Handler = (call) => {
 
 const rename: Handler = (call) =>
   attempt(() => {
-    const from = { namespace: namespace(call), key: call.args.from as string };
+    const legacy = flagArg(call, "legacy");
+    if (legacy && optionalString(call, "folder") !== undefined) {
+      return fail("usage", "--legacy names the entry that has no folder; drop --folder");
+    }
+    const from = {
+      namespace: legacy ? LEGACY_NAMESPACE : namespace(call),
+      key: requiredString(call, "from"),
+    };
     const to = {
-      namespace: (call.args.toFolder as string | undefined) ?? from.namespace,
-      key: call.args.to as string,
+      namespace: optionalString(call, "toFolder") ?? (legacy ? namespace(call) : from.namespace),
+      key: requiredString(call, "to"),
     };
     const done = runRename(from, to);
     return ok(done, `renamed ${done.from} to ${done.to}`);
@@ -113,18 +134,58 @@ const rename: Handler = (call) =>
 
 const prune: Handler = (call) =>
   attempt(() => {
-    const done = runPrune(call.args.dryRun === true);
+    const done = runPrune(flagArg(call, "dryRun"));
     return ok(done, done.ids.length === 0 ? undefined : done.ids.join("\n"));
+  });
+
+/** attempt for a verb that waits on the person. */
+async function attemptAsync(run: () => Promise<Outcome>): Promise<Outcome> {
+  try {
+    return await run();
+  } catch (error) {
+    return secretFailure(error);
+  }
+}
+
+/** The consumer's words follow `--`: for sudo, ssh and git the first is the prompt it wants shown. */
+const askpass: Handler = (call) =>
+  call.json
+    ? fail("blocked", NO_JSON)
+    : attemptAsync(() =>
+        ask(requiredString(call, "kind"), call.rest, {
+          env: process.env,
+          namespace: namespace(call),
+        }),
+      );
+
+/** Only the lines print; the file the person puts them in is theirs. */
+const askpassEnable: Handler = (call) =>
+  attempt(() => {
+    const picked = linkedKinds().filter((kind) => flagArg(call, kind));
+    if (picked.length === 0) {
+      return fail(
+        "usage",
+        `askpass enable takes at least one of: ${linkedKinds()
+          .map((k) => `--${k}`)
+          .join(" ")}`,
+      );
+    }
+    const lines = envLines(picked, binDir(process.env));
+    return ok({ lines }, lines.join("\n"));
   });
 
 const get: Handler = (call) =>
   call.json ? fail("blocked", NO_JSON) : attempt(() => ok(runGet(namespace(call), key(call))));
 
 const set: Handler = (call) =>
-  attempt(() => {
-    const stored = runSet(namespace(call), key(call));
-    return ok(stored, `stored ${stored.key}`);
-  });
+  flagArg(call, "gui")
+    ? attemptAsync(() =>
+        ask("secret", [key(call)], { env: process.env, namespace: namespace(call) }),
+      )
+    : attempt(() => {
+        const stored = runSet(namespace(call), key(call));
+        return ok(stored, `stored ${stored.key}`);
+      });
 
 const has: Handler = (call) =>
   attempt(() => {
@@ -138,7 +199,7 @@ const has: Handler = (call) =>
 
 const list: Handler = (call) =>
   attempt(() => {
-    const listed = runList(namespace(call));
+    const listed = runList(listScopeOf(optionalString(call, "folder"), process.env));
     return ok(listed, listed.keys.length === 0 ? undefined : listed.keys.join("\n"));
   });
 
@@ -167,11 +228,11 @@ const capture: Handler = () =>
  */
 const mask: Handler = (call) =>
   attempt(() => {
-    if (call.args.all === true) {
+    if (flagArg(call, "all")) {
       const masked = runMaskAll();
       return ok(masked, JSON.stringify(masked.texts));
     }
-    const ids = (call.args.id as string[] | undefined) ?? [];
+    const ids = stringList(call, "id");
     if (ids.length === 0) {
       return fail("usage", "mask takes at least one --id, or --all");
     }
@@ -182,8 +243,8 @@ const mask: Handler = (call) =>
 /** A transcript's captured values swapped for their placeholders; detached for a hook's 1.5 s. */
 const scrub: Handler = (call) =>
   attempt(() => {
-    const target = call.args.transcript as string;
-    if (call.args.detach !== true) {
+    const target = requiredString(call, "transcript");
+    if (!flagArg(call, "detach")) {
       const done = runScrub(target);
       return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
     }
@@ -205,20 +266,21 @@ const scrub: Handler = (call) =>
 
 /** The Bash command on stdin, refused with its code and the verb to use instead, or allowed. */
 const guard: Handler = async () => {
-  if (process.stdin.isTTY === true) {
+  if (process.stdin.isTTY) {
     return fail("usage", "guard reads the Bash command from stdin; pipe it in");
   }
   const refusal = await guardCommand(readFileSync(0, "utf8"), {
     home: process.env.HOME,
     dataHome: process.env.XDG_DATA_HOME,
     runtimeDir: process.env.XDG_RUNTIME_DIR,
+    passwordStore: process.env.PASSWORD_STORE_DIR,
   });
   return refusal === null ? ok({ denied: false }) : fail("blocked", refusal.reason, refusal);
 };
 
 /** The session a render or clean belongs to: `--session`, else the id the engine sets for Bash. */
 function inSession(call: Call, run: (session: string) => Outcome): Outcome {
-  const id = (call.args.session as string | undefined) ?? process.env.CLAUDE_CODE_SESSION_ID;
+  const id = optionalString(call, "session") ?? process.env.CLAUDE_CODE_SESSION_ID;
   return id === undefined
     ? fail("usage", "pass --session <id>; CLAUDE_CODE_SESSION_ID is not set")
     : attempt(() => run(id));
@@ -227,7 +289,12 @@ function inSession(call: Call, run: (session: string) => Outcome): Outcome {
 /** Only the path prints: the file holds values, and the caller reads it with the tool that needs it. */
 const render: Handler = (call) =>
   inSession(call, (id) => {
-    const done = runRender(call.args.template as string, call.args.out as string, id, process.env);
+    const done = runRender(
+      requiredString(call, "template"),
+      requiredString(call, "out"),
+      id,
+      process.env,
+    );
     return ok(done, done.path);
   });
 
@@ -240,40 +307,65 @@ const clean: Handler = (call) =>
     );
   });
 
+const REINSTALL =
+  "run `bun install` in the marketplace checkout, then `qsm-setup install qsm-secrets`";
+
+/** The guard's parser, run on a command it must allow, because a guard that cannot parse denies every Bash call. */
+async function guardCheck(): Promise<Check> {
+  const name = "guard parser";
+  try {
+    const refusal = await guardCommand("true", { home: process.env.HOME });
+    return refusal === null
+      ? { name, ok: true, detail: "allows `true`", fix: null }
+      : { name, ok: false, detail: `refused \`true\`: ${refusal.reason}`, fix: REINSTALL };
+  } catch (error) {
+    return { name, ok: false, detail: String(error), fix: REINSTALL };
+  }
+}
+
 /**
  * Every check probes a prerequisite: the backend on PATH, an account, an unlocked vault, an
- * editor, a listable namespace.
+ * editor, a listable namespace, and the guard's parser.
  */
-const doctor: Handler = (call) =>
-  attempt(() => {
+const doctor: Handler = async (call) => {
+  const parser = await guardCheck();
+  return attempt(() => {
     const ns = namespace(call);
-    const checks = activeBackend().health(ns, process.env);
+    const checks = [...activeBackend().health(ns, process.env), parser];
     const healthy = checks.every((check) => check.ok);
     const data = { namespace: ns, checks, ok: healthy };
     return healthy ? ok(data, formatChecks(checks)) : fail("missing", formatChecks(checks), data);
   });
+};
 
 if (import.meta.main) {
   process.exit(
-    await runCli(manifest, "qsm-secrets", {
-      pipe,
-      env,
-      set,
-      has,
-      list,
-      inspect,
-      rm,
-      rename,
-      prune,
-      check: probe,
-      get,
-      doctor,
-      capture,
-      guard,
-      mask,
-      scrub,
-      render,
-      clean,
-    }),
+    await runCli(
+      manifest,
+      "qsm-secrets",
+      {
+        pipe,
+        env,
+        set,
+        askpass,
+        "askpass enable": askpassEnable,
+        has,
+        list,
+        inspect,
+        rm,
+        rename,
+        prune,
+        check: probe,
+        get,
+        doctor,
+        capture,
+        guard,
+        mask,
+        scrub,
+        render,
+        clean,
+      },
+      { argv: argvFor(process.argv0, process.argv.slice(2)) },
+    ),
   );
 }

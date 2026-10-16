@@ -59,7 +59,7 @@ function prompt($: Engine) {
 }
 
 function end($: Engine, reason: "clear" | "other") {
-  return $.session.end({ sessionId: "s1", reason, resume: {} as never });
+  return $.session.end({ sessionId: "s1", reason, resume: { id: "s1" } });
 }
 
 test("a session start starts the catch-up save and the first prompt carries the briefing", async ($, on) => {

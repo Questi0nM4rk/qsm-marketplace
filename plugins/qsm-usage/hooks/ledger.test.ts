@@ -2,7 +2,16 @@
 // the engine's own chain, on the host test-host.tsx stubs.
 import type { On, SessionMessage } from "claude-code";
 import { type Engine, expect, test } from "claude-code/testing";
-import { newSeen, type Store, stubHost, stubStore } from "./test-host.tsx";
+import { isPlainObject } from "../lib/toon-scalar.ts";
+import {
+  newSeen,
+  sessionIn,
+  stdoutOf,
+  stringsIn,
+  type Store,
+  stubHost,
+  stubStore,
+} from "./test-host.tsx";
 
 const PROMPT_TEXT = "PRIVATE-PROMPT-TEXT do not keep me";
 const ANSWER_TEXT = "PRIVATE-ANSWER-TEXT";
@@ -34,12 +43,12 @@ async function injectEach($: Engine): Promise<void> {
   await $.prompt.attachment({
     type: "todo_reminder",
     text: PROMPT_TEXT,
-    origin: { kind: "engine" } as never,
+    origin: { kind: "engine" },
   });
   await $.tool.describe({
     tool: "Bash",
     description: "runs commands",
-    provider: { kind: "core" } as never,
+    provider: { plugin: "engine", tier: "core" },
   });
   await $.skill.prompt({ skill: "tdd", text: PROMPT_TEXT });
 }
@@ -73,14 +82,9 @@ test("A session ends", async ($, on) => {
   await $.session.start(START);
   await injectEach($);
   await threeTurns($);
-  await $.session.end({ sessionId: "s1", reason: "other", resume: {} as never });
+  await $.session.end({ sessionId: "s1", reason: "other", resume: { id: "s1" } });
 
-  const rec = store.get("session:s1") as Record<string, unknown> & {
-    start: { categories: unknown[] } | null;
-    turns: { usage: unknown; costUsd: number | null }[];
-    injected: { source: string; name: string; chars: number }[];
-    uses: { skills: Record<string, number>; tools: Record<string, number> };
-  };
+  const rec = sessionIn(store, "s1");
   expect(store.get("sessions")).toEqual(["s1"]);
   expect(rec.start?.categories.length).toBe(4);
   expect(rec.turns.length).toBe(3);
@@ -143,8 +147,8 @@ test("Two turns: the second counts only the tool_use blocks its own messages add
     usage: TURN_USAGE,
   });
 
-  const rec = store.get("session:s2") as { uses: { tools: Record<string, number> } };
-  expect(Object.entries(rec.uses.tools).sort()).toEqual([
+  const rec = sessionIn(store, "s2");
+  expect(Object.entries(rec.uses.tools).toSorted(([a], [b]) => a.localeCompare(b))).toEqual([
     ["Bash", 2],
     ["Read", 1],
   ]);
@@ -178,19 +182,20 @@ function toolHost(on: On, sessionId: string, result: unknown, answers: Record<st
   stubStore(on, store);
   stubHost(on, sessionId);
   stubMessages(on, () => []);
-  const verbs = { filter: NO_REWRITE, ...answers };
+  const verbs: Record<string, unknown> = { filter: NO_REWRITE, ...answers };
   const seen = {
     store,
     runs: [] as { argv: string; stdin?: string }[],
     commands: [] as unknown[],
   };
   on("tool.call", (_$, e) => {
-    seen.commands.push((e as { command?: unknown }).command);
-    return { result: result as never, text: "model text" };
+    seen.commands.push("command" in e ? e.command : undefined);
+    return { result, text: "model text" };
   });
   on("process.run", (_$, e) => {
     seen.runs.push({ argv: e.argv.join(" "), stdin: e.init?.stdin });
-    const data = verbs[e.argv[1] as keyof typeof verbs];
+    const name = e.argv[1];
+    const data = name === undefined ? undefined : verbs[name];
     const code = data === undefined ? "failed" : "ok";
     const envelope = { code, exit: data === undefined ? 1 : 0, message: "", reason: "", data };
     return {
@@ -221,13 +226,13 @@ test("A large listing from a wrapped command reaches the model as TOON and the l
 
   await $.session.start(START);
   const ran = await $.tool.call({ tool: "Bash", command: "gh pr list --json number,title" });
-  await $.session.end({ sessionId: "s5", reason: "other", resume: {} as never });
+  await $.session.end({ sessionId: "s5", reason: "other", resume: { id: "s5" } });
 
-  expect((ran.result as { stdout: string }).stdout).toBe(
+  expect(stdoutOf(ran.result)).toBe(
     `[qsm-toon: YAML -> TOON, 6.5k -> 2.1k tokens; raw: QSM_TOON=0 gh pr list --json number,title]\n${TOON}`,
   );
   expect(toonRuns(seen)).toEqual([{ argv: "qsm-usage toon wrap --stdin --json", stdin: raw }]);
-  const rec = seen.store.get("session:s5") as { toon: unknown[] };
+  const rec = sessionIn(seen.store, "s5");
   expect(rec.toon).toEqual([
     { pattern: "gh * --json *", count: 1, fromTokens: 6500, toTokens: 2100 },
   ]);
@@ -238,7 +243,7 @@ test("A short result reaches the model unchanged and nothing is asked", async ($
 
   const ran = await $.tool.call({ tool: "Bash", command: "gh pr list --json number" });
 
-  expect((ran.result as { stdout: string }).stdout).toBe("short output");
+  expect(stdoutOf(ran.result)).toBe("short output");
   expect(toonRuns(seen)).toEqual([]);
 });
 
@@ -254,7 +259,7 @@ test("An MCP tool's large result reaches the model as TOON, told how to turn it 
   const seen = toolHost(on, "s8", listing(400), { toon: TOON_ANSWER });
 
   // The typed tool names are the ones this repo's plugins declare; any other server's is loose.
-  const ran = await $.tool.call({ tool: "mcp__qsm-index__search" } as never);
+  const ran = await $.tool.call({ tool: "mcp__qsm-index__search" });
 
   expect(ran.result).toBe(
     `[qsm-toon: YAML -> TOON, 6.5k -> 2.1k tokens; raw: drop "mcp__*" from the qsm-usage toonWrap option]\n${TOON}`,
@@ -280,7 +285,7 @@ test("A verb that fails leaves the output unchanged", async ($, on) => {
 
   const ran = await $.tool.call({ tool: "Bash", command: "gh pr list --json number" });
 
-  expect((ran.result as { stdout: string }).stdout).toBe(listing(400));
+  expect(stdoutOf(ran.result)).toBe(listing(400));
 });
 
 test("The command output filter's rewrite is the command the tool runs", async ($, on) => {
@@ -303,7 +308,7 @@ test("A command the filter rewrote is still matched against the wrap list as wri
   const ran = await $.tool.call({ tool: "Bash", command: "gh pr list --json number" });
 
   expect(seen.commands).toEqual(["rtk gh pr list --json number"]);
-  expect((ran.result as { stdout: string }).stdout).toContain(TOON);
+  expect(stdoutOf(ran.result)).toContain(TOON);
 });
 
 test("A filter with nothing to say runs the command as written", async ($, on) => {
@@ -345,9 +350,9 @@ test("The store is full", async ($, on) => {
   stubHost(on, "new");
 
   await $.session.start(START);
-  await $.session.end({ sessionId: "new", reason: "other", resume: {} as never });
+  await $.session.end({ sessionId: "new", reason: "other", resume: { id: "new" } });
 
-  const index = store.get("sessions") as string[];
+  const index = stringsIn(store, "sessions");
   expect(index.length).toBe(200);
   expect(index[0]).toBe("old1");
   expect(index[199]).toBe("new");
@@ -367,7 +372,7 @@ test("Recording fails", async ($, on) => {
   const section = await $.prompt.attachment({
     type: "todo_reminder",
     text: "kept as is",
-    origin: { kind: "engine" } as never,
+    origin: { kind: "engine" },
   });
   const turn = await $.turn.complete({
     answer: "done",
@@ -382,7 +387,7 @@ test("Recording fails", async ($, on) => {
   expect(section).toEqual({ text: "kept as is" });
   expect(turn.text).toBe("done");
   // The engine names the plugin before every log line, so the line itself starts with the event.
-  const errors = seen.logs.filter((l) => / failed: /.test(l));
+  const errors = seen.logs.filter((l) => l.includes(" failed: "));
   expect(errors.length).toBe(1);
   expect(errors[0]).toStartWith("session.start failed: ");
 });
@@ -401,7 +406,5 @@ test("The breakdown and ledger tools answer from the summary breakdown and the r
   expect(String(breakdown.result)).toContain("Messages,27000,used");
   expect(String(ledger.result)).toContain("s4");
   expect(seen.usageArgs.length).toBeGreaterThan(0);
-  expect(seen.usageArgs.every((a) => (a as { breakdown?: string }).breakdown === "summary")).toBe(
-    true,
-  );
+  expect(seen.usageArgs.every((a) => isPlainObject(a) && a.breakdown === "summary")).toBe(true);
 });

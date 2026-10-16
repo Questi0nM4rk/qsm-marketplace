@@ -5,7 +5,6 @@ import { availableParallelism } from "node:os";
 import { basename, join } from "node:path";
 import {
   countBanditJson,
-  countBiome,
   countCheckbashisms,
   countClippy,
   countCsharpier,
@@ -19,6 +18,7 @@ import {
   countKnip,
   countLizard,
   countMarkdownlint,
+  countOxlint,
   countNonZeroExits,
   countPyright,
   countRuff,
@@ -55,7 +55,7 @@ export const JOBS = Math.max(1, availableParallelism());
  * lives.
  *
  * `nursery` is off because clippy itself calls it unstable, the argument that
- * keeps biome's nursery off. `restriction` is off because it is not a quality
+ * keeps oxlint's nursery off. `restriction` is off because it is not a quality
  * set: it holds lints that contradict each other, and clippy ships
  * `blanket_clippy_restriction_lints` to say so. */
 const CLIPPY_LINTS: readonly string[] = [
@@ -95,6 +95,21 @@ export interface LanguageInfo {
   configless?: true;
 }
 
+const LANGUAGE_NAMES = [
+  "docs",
+  "multi",
+  "ts",
+  "py",
+  "dotnet",
+  "shell",
+  "zsh",
+  "fish",
+  "rust",
+] as const;
+
+export type Language = (typeof LANGUAGE_NAMES)[number];
+export const LANGUAGES: readonly Language[] = LANGUAGE_NAMES;
+
 export const LANGUAGE_TABLE = {
   docs: { alwaysOn: true, module: null },
   multi: { alwaysOn: true, module: null },
@@ -109,10 +124,11 @@ export const LANGUAGE_TABLE = {
   zsh: { module: "qsm-langdev-zsh", detects: [".zsh"] },
   fish: { configless: true, module: "qsm-langdev-fish", detects: [".fish"] },
   rust: { module: null, detects: [".rs"] },
-} as const satisfies Record<string, LanguageInfo>;
+} as const satisfies Record<Language, LanguageInfo>;
 
-export type Language = keyof typeof LANGUAGE_TABLE;
-export const LANGUAGES = Object.keys(LANGUAGE_TABLE) as readonly Language[];
+export function isLanguage(name: unknown): name is Language {
+  return LANGUAGES.some((language) => language === name);
+}
 
 export function isConfigless(language: Language): boolean {
   const info: LanguageInfo = LANGUAGE_TABLE[language];
@@ -122,12 +138,12 @@ export function isConfigless(language: Language): boolean {
 /** The language a user-typed name means: the name itself or one of its
  * aliases; null when it is neither. */
 export function resolveLanguage(name: string): Language | null {
-  if (name in LANGUAGE_TABLE) {
-    return name as Language;
+  if (isLanguage(name)) {
+    return name;
   }
   for (const language of LANGUAGES) {
     const info: LanguageInfo = LANGUAGE_TABLE[language];
-    if (info.aliases?.includes(name)) {
+    if (info.aliases?.includes(name) === true) {
       return language;
     }
   }
@@ -137,7 +153,7 @@ export function resolveLanguage(name: string): Language | null {
 /** When a checker runs. Every checker runs at pre-push; the pre-commit set
  * is the subset whose question a single file can answer. */
 export type EnforcementPoint = "pre-commit" | "pre-push";
-const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = ["pre-commit", "pre-push"];
+export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = ["pre-commit", "pre-push"];
 
 /**
  * How a checker's binary gets onto a machine: `run` executes a portable
@@ -179,8 +195,8 @@ function shellQuote(arg: string): string {
   return `'${arg.replaceAll("'", `'\\''`)}'`;
 }
 
-const bunGlobal = (pkg: string): Install => ({
-  run: { command: "bun", args: ["add", "-g", pkg], prereq: "bun" },
+const bunGlobal = (...pkgs: string[]): Install => ({
+  run: { command: "bun", args: ["add", "-g", ...pkgs], prereq: "bun" },
 });
 const uvTool = (pkg: string): Install => ({
   run: { command: "uv", args: ["tool", "install", pkg], prereq: "uv" },
@@ -253,6 +269,14 @@ const SEMGREP_ENGINE_SET = "changed";
  * has every file it passes through.
  */
 const SEMGREP_PUSH: PrePush = { fileSet: "given", timeoutMs: 160_000 };
+
+/** A checker that writes a report is always built with the directory the run made for it. */
+function reportDirOf(reportDir: string | undefined): string {
+  if (reportDir === undefined) {
+    throw new Error("a report-writing checker was built without a report directory");
+  }
+  return reportDir;
+}
 
 /** Each rule pack a run fetched, by name, to the local file holding it. */
 export type LocalRules = ReadonlyMap<string, string>;
@@ -462,33 +486,48 @@ const SPECS: readonly CheckSpec[] = [
     count: countMarkdownlint,
   },
   {
-    name: "biome",
+    name: "oxlint",
     measures: {
-      counts:
-        "biome lint and format diagnostics about the code; biome's own configuration diagnostics are not counted",
+      counts: "oxlint diagnostics about the code, type-aware rules included, one per diagnostic",
     },
     language: "ts",
     runsAt: "pre-commit",
-    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc"],
-    binary: "biome",
-    install: bunGlobal("@biomejs/biome"),
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+    binary: "oxlint",
+    // tsgolint runs the type-aware rules; oxlint finds it beside itself.
+    install: bunGlobal("oxlint", "oxlint-tsgolint"),
     fileSet: "changed",
-    // .gitignore: biome's vcs.useIgnoreFile decides which named files it skips.
-    configFiles: ["**/biome.json", "**/biome.jsonc", ".editorconfig", ".gitignore"],
-    args: (files) => ["check", "--reporter=json", ...files],
-    count: (stdout) => countBiome(stdout),
+    configFiles: ["**/.oxlintrc.json", "**/.oxlintrc.jsonc", "**/oxlint.config.ts", ...TS_PROJECT],
+    args: (files) => ["--format", "json", ...files],
+    count: (stdout) => countOxlint(stdout),
   },
   {
-    name: "tsc",
+    name: "oxfmt",
+    measures: { counts: "files whose formatting differs from oxfmt's, one per file" },
+    language: "ts",
+    runsAt: "pre-commit",
+    extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc"],
+    binary: "oxfmt",
+    install: bunGlobal("oxfmt"),
+    fileSet: "changed",
+    // .gitignore: oxfmt skips what it names.
+    configFiles: ["**/.oxfmtrc.json", "**/.oxfmtrc.jsonc", "**/oxfmt.config.ts", ".gitignore"],
+    args: (files) => ["--list-different", ...files],
+    count: countFileList,
+  },
+  {
+    name: "bun-check",
     measures: { counts: "type errors, one per `error TSxxxx` diagnostic" },
     language: "ts",
     runsAt: "pre-push",
     extensions: [".ts", ".tsx"],
-    binary: "tsc",
-    install: bunGlobal("typescript"),
+    binary: "bun",
+    // `bun check` reports the same errors as tsc, about 2.5 times faster
+    // (measured on qsm-marketplace with Bun 1.4.3; older Bun has no `check`).
+    install: { suggest: "bun upgrade" },
     fileSet: "given",
     configFiles: TS_PROJECT,
-    args: () => ["--noEmit", "--pretty", "false"],
+    args: () => ["check", "--no-pretty"],
     count: countTsc,
     appliesWhen: {
       needs: "a tsconfig.json at the repository root",
@@ -551,7 +590,7 @@ const SPECS: readonly CheckSpec[] = [
       "json",
       "--silent",
       "--output",
-      reportDir as string,
+      reportDirOf(reportDir),
     ],
     count: countJscpd,
   },
@@ -944,7 +983,7 @@ const SPECS: readonly CheckSpec[] = [
       "--include",
       ...files,
       "--report",
-      reportDir as string,
+      reportDirOf(reportDir),
     ],
     count: countDotnetFormatReport,
   },
@@ -999,7 +1038,7 @@ const SPECS: readonly CheckSpec[] = [
     args: (files) => [
       "analyze",
       "--source-code",
-      files[0] as string,
+      ...files.slice(0, 1),
       "-f",
       "sarif",
       "-o",
@@ -1043,7 +1082,7 @@ function hasNoExtension(file: string): boolean {
 /** A file semgrep picks no language for by its name: `bin/deploy`, chosen
  * by its shebang, or `Dockerfile.prod`, chosen by its base name. */
 function namedUnknown(file: string): boolean {
-  return hasNoExtension(file) || /^Dockerfile\./.test(basename(file));
+  return hasNoExtension(file) || basename(file).startsWith("Dockerfile.");
 }
 
 /**

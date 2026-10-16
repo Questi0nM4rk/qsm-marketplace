@@ -1,6 +1,7 @@
 // One review payload, the same on both forges.
 
 import { readFileSync } from "node:fs";
+import { isRecord } from "../../../lib/outcome.ts";
 import { UsageError } from "./errors.ts";
 import { MissingError } from "./missing-error.ts";
 
@@ -21,10 +22,6 @@ export interface ReviewPayload {
   /** The overall comment. Empty only when the review approves. */
   readonly body: string;
   readonly inline: readonly InlineComment[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isDecision(value: unknown): value is Decision {

@@ -5,6 +5,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { type Env, stateDir } from "../../../lib/paths.ts";
+import { codeOf } from "./formats.ts";
+import { isPlainObject } from "./toon-scalar.ts";
 
 export interface Dropped {
   readonly key: string;
@@ -15,6 +17,10 @@ export function droppedPath(env: Env): string {
   return join(stateDir(env), "usage", "dropped.json");
 }
 
+function isDropped(record: unknown): record is Dropped {
+  return isPlainObject(record) && typeof record.key === "string" && typeof record.at === "string";
+}
+
 /** The dropped findings; a file nothing wrote yet is an empty list, a file that is not a list of
  * records is an error, never an empty list. */
 export function readDropped(path: string): Dropped[] {
@@ -22,19 +28,16 @@ export function readDropped(path: string): Dropped[] {
   try {
     text = readFileSync(path, "utf8");
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === "ENOENT") {
+    if (codeOf(error) === "ENOENT") {
       return [];
     }
     throw error;
   }
   const parsed: unknown = JSON.parse(text);
-  const valid =
-    Array.isArray(parsed) &&
-    parsed.every((r) => typeof r?.key === "string" && typeof r?.at === "string");
-  if (!valid) {
+  if (!Array.isArray(parsed) || !parsed.every((record) => isDropped(record))) {
     throw new Error(`${path} is not a list of { key, at } records`);
   }
-  return parsed as Dropped[];
+  return parsed;
 }
 
 /** Records the key once; dropping a dropped key changes nothing. */

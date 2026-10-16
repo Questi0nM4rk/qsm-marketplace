@@ -14,5 +14,11 @@
     "jsxFactory": "h",
     "jsxFragmentFactory": "Fragment"
   },
-  "include": ["../../../.claude/types", "register.tsx", "noun.generated.ts", "../types"]
+  "include": [
+    "../../../.claude/types",
+    "register.tsx",
+    "register.test.ts",
+    "noun.generated.ts",
+    "../types"
+  ]
 }

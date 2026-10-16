@@ -10,8 +10,9 @@ validates once, where outside data is mapped into it, so code past that line hol
 cannot be invalid. The compiler and lint gate reject the rest; this skill holds the choices they
 cannot make. Out of scope: a tutorial, Bun APIs (bun-dev).
 
-The gate: `qsm-langdev init` writes `tsconfig.qsm.json` and `biome.jsonc`, which require `strict`,
-`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax` and `??` over `||`.
+The gate: `qsm-langdev init` writes `tsconfig.qsm.json` and `.oxlintrc.json`, which require `strict`,
+`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `??` over `||`,
+no `any` flowing into a typed value, and every promise awaited; oxfmt formats.
 Write against them; do not restate them in code or prose. A repository may opt into
 `isolatedDeclarations` (explicit return type on every export) and `erasableSyntaxOnly` (no enums,
 no namespaces with code, no parameter properties).

@@ -6,6 +6,7 @@ import { join, relative } from "node:path";
 import { YAML } from "bun";
 import type { Check } from "./doctor.ts";
 import { jsonErrorAt } from "./json-position.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface ClaudePaths {
   /** `CLAUDE_CONFIG_DIR`, else `~/.claude` */
@@ -67,8 +68,8 @@ function readFrontmatter(text: string): Frontmatter {
   const where = `1-${end + 1}`;
   try {
     const data: unknown = YAML.parse(lines.slice(1, end).join("\n"));
-    if (data !== null && typeof data === "object" && !Array.isArray(data)) {
-      return { kind: "ok", data: data as Record<string, unknown> };
+    if (isRecord(data)) {
+      return { kind: "ok", data };
     }
     return end === 1 ? { kind: "ok", data: {} } : { kind: "broken", lines: where };
   } catch {
@@ -83,7 +84,7 @@ function markdownFiles(dir: string, recursive: boolean): string[] {
   return readdirSync(dir, { withFileTypes: true, recursive })
     .filter((e) => e.isFile() && e.name.endsWith(".md"))
     .map((e) => join(e.parentPath, e.name))
-    .sort();
+    .toSorted();
 }
 
 function brokenFrontmatter(name: string, file: string, lines: string): Check {
@@ -162,7 +163,7 @@ function skillFiles(skillsDir: string): string[] {
     .filter((e) => e.isDirectory())
     .map((e) => join(skillsDir, e.name, "SKILL.md"))
     .filter((f) => existsSync(f))
-    .sort();
+    .toSorted();
 }
 
 export function skillChecks(p: ClaudePaths): Check[] {

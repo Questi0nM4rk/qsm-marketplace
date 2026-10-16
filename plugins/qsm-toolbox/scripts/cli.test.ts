@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 const CLI = join(import.meta.dir, "cli.ts");
 
@@ -41,14 +42,15 @@ describe("qsm-toolbox cli", () => {
   test("doctor --json is one envelope whose data is the table", () => {
     const r = run(["doctor", "--json"]);
     expect(r.exit).toBe(0);
-    const envelope = JSON.parse(r.stdout) as {
-      code: string;
-      exit: number;
-      data: { bin: string; present: boolean; install: string }[];
-    };
+    const envelope: unknown = JSON.parse(r.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope.data.length).toBeGreaterThan(0);
-    expect(envelope.data[0]).toHaveProperty("bin");
-    expect(envelope.data[0]).toHaveProperty("install");
+    const data = isRecord(envelope) ? envelope["data"] : null;
+    expect(Array.isArray(data) && data.length > 0).toBe(true);
+    const rows: unknown[] = Array.isArray(data) ? data : [];
+    for (const row of rows) {
+      expect(isRecord(row) && typeof row["bin"] === "string").toBe(true);
+      expect(isRecord(row) && typeof row["present"] === "boolean").toBe(true);
+      expect(isRecord(row) && typeof row["install"] === "string").toBe(true);
+    }
   }, 60_000);
 });

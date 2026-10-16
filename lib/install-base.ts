@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -12,6 +13,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
@@ -89,12 +91,28 @@ export interface BuildRecord {
   readonly bins: Readonly<Record<string, { readonly plugin: string; readonly sha256: string }>>;
 }
 
+/** A JSON object: not null, not an array. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function isBuildRecord(v: unknown): v is BuildRecord {
+  return (
+    isRecord(v) &&
+    isRecord(v["bins"]) &&
+    Object.values(v["bins"]).every(
+      (b) => isRecord(b) && typeof b["plugin"] === "string" && typeof b["sha256"] === "string",
+    )
+  );
+}
+
 export function readRecord(path: string): BuildRecord | null {
   if (!existsSync(path)) {
     return null;
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as BuildRecord;
+    const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return isBuildRecord(raw) ? raw : null;
   } catch {
     return null;
   }
@@ -108,8 +126,44 @@ export function writeRecord(path: string, record: BuildRecord): void {
 /** Whoever compiles a bin records its hash, so the record is current after any install. */
 function recordBin(env: Env, plugin: string, bin: string, binPath: string): void {
   const path = buildRecordPath(env);
-  const bins = { ...(readRecord(path)?.bins ?? {}), [bin]: { plugin, sha256: sha256(binPath) } };
+  const bins = { ...readRecord(path)?.bins, [bin]: { plugin, sha256: sha256(binPath) } };
   writeRecord(path, { bins });
+}
+
+/** The last line of a failed command's stderr, the cause an error step names. */
+function lastLine(stderr: string): string {
+  return stderr.trim().split("\n").at(-1) ?? "";
+}
+
+/** A plugin with a package.json has npm dependencies of its own. */
+function hasDeps(pluginRoot: string): boolean {
+  return existsSync(join(pluginRoot, "package.json"));
+}
+
+/** The plugin's own npm dependencies, installed from its lockfile before anything compiles. */
+function dependencyStep(pluginRoot: string): Step | null {
+  if (!hasDeps(pluginRoot)) {
+    return null;
+  }
+  const name = "dependencies";
+  // bun install leaves an empty hidden file in its temp directory, so it gets one of its own.
+  const scratch = mkdtempSync(join(tmpdir(), "qsm-bun-install-"));
+  const done = spawnSync("bun", ["install", "--frozen-lockfile"], {
+    cwd: pluginRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, TMPDIR: scratch },
+  });
+  rmSync(scratch, { recursive: true, force: true });
+  if (done.status !== 0) {
+    const detail = `bun install failed in ${pluginRoot}: ${lastLine(done.stderr)}; run \`bun install\` in the plugin and commit its bun.lock`;
+    return { name, status: "error", detail };
+  }
+  // bun prints "(no changes)" when node_modules already matched the lockfile.
+  if (done.stdout.includes("(no changes)")) {
+    return { name, status: "already", detail: "node_modules matches bun.lock" };
+  }
+  return { name, status: "installed", detail: "ran bun install --frozen-lockfile" };
 }
 
 /** Compiles `entry` to `outFile`, replacing it only when the bytes differ. */
@@ -132,8 +186,11 @@ function compile(pluginRoot: string, entry: string, outFile: string): Step {
     if (existsSync(tmp)) {
       unlinkSync(tmp);
     }
-    const why = built.stderr.trim().split("\n").at(-1) ?? "";
-    return { name, status: "error", detail: `bun build failed for ${entry}: ${why}` };
+    return {
+      name,
+      status: "error",
+      detail: `bun build failed for ${entry}: ${lastLine(built.stderr)}`,
+    };
   }
   if (existsSync(outFile) && sha256(outFile) === sha256(tmp)) {
     unlinkSync(tmp);
@@ -171,7 +228,10 @@ function declaredHooks(
   const names = new Set<string>();
   for (const command of commands) {
     for (const m of command.matchAll(/\/dist\/([a-z0-9-]+)/g)) {
-      names.add(m[1] as string);
+      const name = m[1];
+      if (name !== undefined) {
+        names.add(name);
+      }
     }
   }
   return [...names].map((name) => ({ name, entry: `hooks/${name}.ts` }));
@@ -258,15 +318,14 @@ function completionStep(dir: string, bin: string, manifest: QsmManifest): Step {
 function plan(config: InstallBaseConfig, manifest: QsmManifest, ctx: InstallContext): Step[] {
   // the extra steps are asked too, with ctx.dryRun set, so their plan lines land here
   const bins = binDir(ctx.env);
-  const lines = Object.entries(manifest.qsm.bin ?? {}).map(
-    ([bin, entry]) => `would compile ${entry} to ${join(bins, bin)}`,
-  );
-  for (const h of declaredHooks(config.pluginRoot)) {
-    lines.push(`would compile ${h.entry} to dist/${h.name}`);
-  }
-  for (const name of staleDist(config.pluginRoot)) {
-    lines.push(`would remove dist/${name}`);
-  }
+  const lines = [
+    ...(hasDeps(config.pluginRoot) ? ["would run bun install --frozen-lockfile"] : []),
+    ...Object.entries(manifest.qsm.bin ?? {}).map(
+      ([bin, entry]) => `would compile ${entry} to ${join(bins, bin)}`,
+    ),
+    ...declaredHooks(config.pluginRoot).map((h) => `would compile ${h.entry} to dist/${h.name}`),
+    ...staleDist(config.pluginRoot).map((name) => `would remove dist/${name}`),
+  ];
   const completions = Object.keys(manifest.qsm.bin ?? {}).map(
     (bin) => `would write ${join(fishCompletionDir(ctx.env), `${bin}.fish`)}`,
   );
@@ -305,15 +364,21 @@ async function run(
   ctx: InstallContext,
 ): Promise<Step[]> {
   const completionDir = fishCompletionDir(ctx.env);
+  const deps = dependencyStep(config.pluginRoot);
+  // a plugin that cannot install its dependencies cannot compile either; stop at the cause
+  if (deps?.status === "error") {
+    return [deps];
+  }
   const steps: Step[] = [
+    ...(deps === null ? [] : [deps]),
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
     ...(config.upstream ?? []).map((t) => installUpstream(ctx, t)),
     ...Object.keys(manifest.qsm.bin ?? {}).map((bin) =>
       completionStep(completionDir, bin, manifest),
     ),
+    ...(await extraSteps(config, ctx)),
   ];
-  steps.push(...(await extraSteps(config, ctx)));
   return steps;
 }
 
@@ -363,12 +428,12 @@ export function installBase(config: InstallBaseConfig): InstallFn {
  * code. The script exports the result so its own test can call it.
  */
 export function installScript(
-  meta: ImportMeta,
+  meta: Pick<ImportMeta, "dir" | "main">,
   config: Omit<InstallBaseConfig, "pluginRoot"> = {},
 ): InstallFn {
   const install = installBase({ ...config, pluginRoot: resolve(meta.dir, "..") });
   if (meta.main) {
-    cliMain(install).then((code) => process.exit(code));
+    void cliMain(install).then((code) => process.exit(code));
   }
   return install;
 }

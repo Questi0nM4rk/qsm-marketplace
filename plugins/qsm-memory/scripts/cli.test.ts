@@ -1,13 +1,23 @@
 // qsm-memory through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
+import { which } from "bun";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { z } from "zod";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
+
+const envelopeSchema = z.object({ code: z.string(), message: z.string(), data: z.unknown() });
+
+const partialSchema = envelopeSchema.extend({ warnings: z.array(z.string()) });
+
+/** The `--json` envelope a verb printed. */
+const envelopeOf = (stdout: string) => envelopeSchema.parse(JSON.parse(stdout));
 
 // Every call starts a bun process (0.6 to 1 s idle); the catch-up and note tests make five, so
 // 5 s at rest and more under a loaded gate. 30 s leaves six times the measured worst case.
@@ -78,7 +88,7 @@ describe("qsm-memory cli", () => {
     expect(run(box, ["save", path]).text).toContain("saved s1: 2 turns, 2 new");
     const found = run(box, ["search", "flaky found", "--json"]);
     expect(found.exit).toBe(0);
-    expect(JSON.parse(found.stdout).message).toContain("s1 #");
+    expect(envelopeOf(found.stdout).message).toContain("s1 #");
     expect(run(box, ["show", "s1"]).text).not.toContain("tool Bash");
     expect(run(box, ["show", "s1", "--full"]).text).toContain("#3 tool Bash");
     expect(run(box, ["list"]).text).toContain("s1 2 Flaky test");
@@ -86,7 +96,7 @@ describe("qsm-memory cli", () => {
 
   test("nothing matches says so and guesses nothing", () => {
     const r = run(sandbox(), ["search", "nothing", "--json"]);
-    expect(JSON.parse(r.stdout).message).toBe("no session matches");
+    expect(envelopeOf(r.stdout).message).toBe("no session matches");
   });
 
   test("a session with no human turn is skipped", () => {
@@ -94,7 +104,7 @@ describe("qsm-memory cli", () => {
     const path = transcript(box, "s2.jsonl", new TranscriptBuilder().assistant("x").text());
     const r = run(box, ["save", path, "--json"]);
     expect(r.exit).toBe(0);
-    expect(JSON.parse(r.stdout).message).toBe(`skipped: no human turn in ${path}`);
+    expect(envelopeOf(r.stdout).message).toBe(`skipped: no human turn in ${path}`);
   });
 });
 
@@ -128,16 +138,89 @@ describe("qsm-memory cli, main sessions only", () => {
   });
 });
 
+describe("qsm-memory cli, bounds and loud failures", () => {
+  test("list stops at --limit and says how many more, in the CLI text and its json data", () => {
+    const box = sandbox();
+    for (let i = 0; i < 4; i++) {
+      transcript(
+        box,
+        `m${i}.jsonl`,
+        new TranscriptBuilder({ sessionId: `m${i}` }).human("x").text(),
+      );
+    }
+    expect(run(box, ["save", "--catch-up"]).text).toContain("saved 4");
+
+    const text = run(box, ["list", "--limit", "3"]).stdout.trimEnd().split("\n");
+    expect(text).toHaveLength(4);
+    expect(text.at(-1)).toBe("1 more: --limit 4");
+    const listed = z
+      .object({ rows: z.array(z.unknown()), more: z.number() })
+      .parse(envelopeOf(run(box, ["list", "--limit", "3", "--json"]).stdout).data);
+    expect(listed.rows).toHaveLength(3);
+    expect(listed.more).toBe(1);
+    expect(run(box, ["list", "--limit", "0"]).exit).toBe(2);
+    expect(run(box, ["list", "--limit", "2.5"]).exit).toBe(2);
+  });
+
+  test("--log stamps only save: another verb's usage error stays plain", () => {
+    const box = sandbox();
+    const out = run(box, ["search", "--log", "x"]).stderr;
+    expect(out).toContain("unknown flag --log");
+    expect(out).not.toMatch(/^\d{4}-\d\d-\d\dT/);
+  });
+
+  test("an unparseable --since is usage, not the whole archive", () => {
+    const box = sandbox();
+    transcript(box, "w1.jsonl", new TranscriptBuilder({ sessionId: "w1" }).human("x").text());
+    run(box, ["save", "--catch-up"]);
+    const r = run(box, ["list", "--since", "last week", "--json"]);
+    expect(r.exit).toBe(2);
+    expect(envelopeOf(r.stdout).message).toContain("--since takes Nd or a date (got 'last week')");
+    const text = run(box, ["search", "x", "--since", "7days"]);
+    expect(text.exit).toBe(2);
+    expect(text.stderr.split("\n").slice(0, 2)).toEqual([
+      "--since takes Nd or a date (got '7days')",
+      "  next: e.g. --since 7d or 2026-09-30",
+    ]);
+    expect(text.stderr).not.toContain("usage: usage");
+    expect(text.stderr).not.toContain("warning:");
+  });
+
+  test("a catch-up with a file it cannot read is partial, names it, and saves the rest", () => {
+    const box = sandbox();
+    transcript(box, "ok1.jsonl", new TranscriptBuilder({ sessionId: "ok1" }).human("x").text());
+    mkdirSync(join(box.projects, "bad.jsonl"));
+    const r = run(box, ["save", "--catch-up", "--json"]);
+    const out = partialSchema.parse(JSON.parse(r.stdout));
+    expect(r.exit).toBe(0);
+    expect(out.code).toBe("partial");
+    expect(out.message).toBe("saved 1, 1 failed, 0 remain");
+    expect(out.warnings[0]).toContain("bad.jsonl");
+    expect(run(box, ["list"]).stdout).toContain("ok1");
+  });
+
+  test("save --log puts an ISO timestamp before every line it prints", () => {
+    const box = sandbox();
+    mkdirSync(join(box.projects, "bad.jsonl"));
+    const r = run(box, ["save", "--catch-up", "--log"]);
+    const lines = (r.stdout + r.stderr).trimEnd().split("\n");
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z \S/);
+    }
+  });
+});
+
 describe("qsm-memory cli, notes and errors", () => {
   test("note and notes, with the secret refusal and drop", () => {
     const box = sandbox();
     const noted = run(box, ["note", "qsm-x: gate red, fix first", "--json"]);
     expect(noted.exit).toBe(0);
-    const { id } = JSON.parse(noted.stdout).data as { id: string };
+    const { id } = z.object({ id: z.string() }).parse(envelopeOf(noted.stdout).data);
     expect(run(box, ["notes"]).text).toContain("qsm-x: gate red, fix first");
     const refused = run(box, ["note", `key AKIA${"A".repeat(16)}`, "--json"]);
     expect(refused.exit).toBe(5);
-    expect(JSON.parse(refused.stdout).code).toBe("blocked");
+    expect(envelopeOf(refused.stdout).code).toBe("blocked");
     expect(run(box, ["note", "--drop", id]).text).toContain(`dropped ${id}`);
     expect(run(box, ["notes"]).text).toContain("no notes");
   });
@@ -147,7 +230,7 @@ describe("qsm-memory cli, notes and errors", () => {
     transcript(box, "s5.jsonl", new TranscriptBuilder().human("a").text());
     const r = run(box, ["doctor", "--json"]);
     expect(r.exit).toBe(0);
-    expect(JSON.parse(r.stdout).message).toContain("0 sessions, 0 notes; 1 unsaved");
+    expect(envelopeOf(r.stdout).message).toContain("0 sessions, 0 notes; 1 unsaved");
   });
 
   test("no verb removes a saved session", () => {
@@ -179,31 +262,46 @@ describe("qsm-memory cli, contract", () => {
   test("a missing session is missing, an unknown verb is usage", () => {
     const r = run(sandbox(), ["show", "nope", "--json"]);
     expect(r.exit).toBe(4);
-    expect(JSON.parse(r.stdout).code).toBe("missing");
+    expect(envelopeOf(r.stdout).code).toBe("missing");
     expect(run(sandbox(), ["recall", "x"]).exit).toBe(2);
   });
 
   test("orient in a repository with a tracker and no task tool is missing, naming qsm-tasks", () => {
     const box = sandbox();
     mkdirSync(join(box.work, ".beads"));
-    const r = run(box, ["orient", "--json"], { ...env(box), PATH: dirname(process.execPath) });
+    // git stays reachable: without it the project key fails first, which is its own error.
+    const bin = join(box.home, "bin");
+    mkdirSync(bin);
+    const git = which("git");
+    if (git === null) {
+      throw new Error("git is not on PATH");
+    }
+    symlinkSync(git, join(bin, "git"));
+    const r = run(box, ["orient", "--json"], {
+      ...env(box),
+      PATH: `${dirname(process.execPath)}:${bin}`,
+    });
     expect(r.exit).toBe(4);
-    expect(JSON.parse(r.stdout).message).toContain("qsm-tasks");
+    expect(envelopeOf(r.stdout).message).toContain("qsm-tasks");
   });
 
   test("a client lists five tools", async () => {
     const box = sandbox();
     const server = spawnServer(["bun", CLI, "mcp"], { env: env(box), cwd: box.work });
-    await server.request(initialize(1));
+    await server.request(initialize(1, LATEST_PROTOCOL_VERSION));
     server.notify({ jsonrpc: "2.0", method: "notifications/initialized" });
-    const reply = (await server.request({
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/list",
-    })) as unknown as { result: { tools: { name: string }[] } };
+    const reply = z
+      .object({ result: z.object({ tools: z.array(z.object({ name: z.string() })) }) })
+      .parse(
+        await server.request({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "tools/list",
+        }),
+      );
     server.closeStdin();
     await server.exited;
-    expect(reply.result.tools.map((t) => t.name).sort((a, b) => a.localeCompare(b))).toEqual([
+    expect(reply.result.tools.map((t) => t.name).toSorted((a, b) => a.localeCompare(b))).toEqual([
       "list",
       "note",
       "notes",

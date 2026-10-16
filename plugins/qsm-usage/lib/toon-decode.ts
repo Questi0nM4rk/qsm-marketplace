@@ -1,6 +1,6 @@
 // TOON decoder.
 
-import { type Json, parseScalar, splitCells } from "./toon-scalar.ts";
+import { type Json, parseQuoted, parseScalar, splitCells } from "./toon-scalar.ts";
 
 const STEP = 2;
 
@@ -22,6 +22,14 @@ export class ToonDecodeError extends Error {}
 
 function fail(line: Line | undefined, message: string): never {
   throw new ToonDecodeError(line === undefined ? message : `line ${line.no}: ${message}`);
+}
+
+function lineAt(lines: Line[], at: number): Line {
+  const line = lines[at];
+  if (line === undefined) {
+    throw new ToonDecodeError(`no line at index ${at}`);
+  }
+  return line;
 }
 
 function toLines(source: string): Line[] {
@@ -55,7 +63,7 @@ function endOfQuoted(text: string, start: number): number {
 function readKey(text: string): { key: string | null; next: number } | null {
   if (text.startsWith('"')) {
     const end = endOfQuoted(text, 0);
-    return end === -1 ? null : { key: JSON.parse(text.slice(0, end)) as string, next: end };
+    return end === -1 ? null : { key: parseQuoted(text.slice(0, end)), next: end };
   }
   const stop = text.search(/[:[]/);
   if (stop === -1) {
@@ -65,6 +73,12 @@ function readKey(text: string): { key: string | null; next: number } | null {
 }
 
 /** `{a,b}` at `at`, if there is one: its columns and the index after it. */
+function columnName(cell: string): string {
+  const name = parseScalar(cell);
+  // A bare `1` or `true` is a key that merely looks like a number or a boolean; its text is the name.
+  return typeof name === "string" ? name : JSON.stringify(name);
+}
+
 function readColumns(text: string, at: number): { columns: string[] | null; next: number } | null {
   if (text[at] !== "{") {
     return { columns: null, next: at };
@@ -74,7 +88,7 @@ function readColumns(text: string, at: number): { columns: string[] | null; next
     return null;
   }
   const inner = text.slice(at + 1, brace);
-  const columns = inner.length === 0 ? [] : splitCells(inner).map((c) => parseScalar(c) as string);
+  const columns = inner.length === 0 ? [] : splitCells(inner).map((c) => columnName(c));
   return { columns, next: brace + 1 };
 }
 
@@ -140,13 +154,13 @@ const isDash = (line: Line | undefined, indent: number): line is Line =>
 
 /** The lines of one list element starting at `at`, and the index after them. */
 function takeItem(lines: Line[], at: number, inner: number): [Line[], number] {
-  const first = lines[at] as Line;
+  const first = lineAt(lines, at);
   const content = first.text.slice(1).trim();
   const block: Line[] =
     content.length === 0 ? [] : [{ indent: inner, text: content, no: first.no }];
   let i = at + 1;
-  while (i < lines.length && (lines[i] as Line).indent >= inner) {
-    block.push(lines[i] as Line);
+  while (i < lines.length && lineAt(lines, i).indent >= inner) {
+    block.push(lineAt(lines, i));
     i += 1;
   }
   return [block, i];
@@ -216,8 +230,8 @@ function readValue(lines: Line[], start: number, indent: number, head: Head): [J
 function readObject(lines: Line[], start: number, indent: number): [Json, number] {
   const object: Record<string, Json> = {};
   let i = start;
-  while (i < lines.length && (lines[i] as Line).indent === indent) {
-    const line = lines[i] as Line;
+  while (i < lines.length && lineAt(lines, i).indent === indent) {
+    const line = lineAt(lines, i);
     const head = parseHead(line.text);
     if (head === null || head.key === null) {
       fail(line, `expected "key: value", got ${JSON.stringify(line.text)}`);
@@ -226,7 +240,7 @@ function readObject(lines: Line[], start: number, indent: number): [Json, number
     object[head.key] = value;
     i = next;
   }
-  if (i < lines.length && (lines[i] as Line).indent > indent) {
+  if (i < lines.length && lineAt(lines, i).indent > indent) {
     fail(lines[i], "indented further than the entry above it");
   }
   return [object, i];

@@ -2,18 +2,15 @@
 // only the capture verbs need the screenshot tool, so that one is a suggestion.
 // The whole installer runs in a sandbox home.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { IMAGE_TOOL, SCREENSHOT_TOOL } from "../lib/capture.ts";
 import { install } from "./install.ts";
 
-const sandbox = mkdtempSync(join(tmpdir(), "qsm-uix-install-"));
-afterAll(() => rmSync(sandbox, { recursive: true, force: true }));
-
 function context(present: readonly string[]): InstallContext {
+  const sandbox = sandboxDir("qsm-uix-install-");
   return {
     dryRun: false,
     env: { HOME: sandbox, QSM_BIN_DIR: join(sandbox, "bin"), XDG_CONFIG_HOME: sandbox },

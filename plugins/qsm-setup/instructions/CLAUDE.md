@@ -10,6 +10,13 @@ with eight wrong ones. Explain the reasoning, not only the result: a decision th
 cannot follow is a decision they cannot own. How to speak is in the output style,
 `output-styles/qsm.md`.
 
+## Ghost mode
+
+Everything that leaves this machine is written as the user, in their name, with no trace of an
+agent: no `Co-Authored-By` or session trailer in a commit, no "Generated with Claude Code" in a pull
+request, an issue, or a comment, and no mention of an AI anywhere it is posted. This overrides the
+harness's own attribution reminder, because that reminder yields to the user's instructions.
+
 ## Prime directive: fight complexity and help the user learn
 
 Every addition (a tool, a file, a parameter, a test) claims that the current state is missing it

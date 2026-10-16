@@ -18,7 +18,10 @@ for (const dir of pluginDirs()) {
   if (!existsSync(tsconfig)) {
     continue;
   }
-  const r = spawnSync("bunx", ["tsc", "--noEmit", "-p", tsconfig], { cwd: root, encoding: "utf8" });
+  const r = spawnSync("bun", ["check", "--no-pretty", "-p", tsconfig], {
+    cwd: root,
+    encoding: "utf8",
+  });
   const name = basename(dirname(dirname(tsconfig)));
   checked.push(name);
   if (r.status !== 0) {

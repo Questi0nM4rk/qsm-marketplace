@@ -42,16 +42,22 @@ function stubOperations(
     const argv = e.argv.join(" ");
     const help = "Options:\n  -c, --create\n  -b, --base <BASE>\n";
     if (argv.includes("switch --help")) {
-      return { value: { exitCode: 0, stdout: help, stderr: "" } };
+      return done(help);
     }
     if (argv.includes("--version")) {
-      return { value: { exitCode: 0, stdout: "wt v0.68.0\n", stderr: "" } };
+      return done("wt v0.68.0\n");
     }
     if (e.argv[0] === "sh") {
-      return { value: { exitCode: 0, stdout: "/usr/bin/wt\n", stderr: "" } };
+      return done("/usr/bin/wt\n");
     }
-    return { value: { exitCode: 0, stdout: "", stderr: "" } };
+    return done("");
   });
+}
+
+function done(stdout: string) {
+  return {
+    value: { exitCode: 0, stdout, stderr: "", isStdoutTruncated: false, isStderrTruncated: false },
+  };
 }
 
 function bashCall(command: string) {
@@ -102,10 +108,10 @@ test("a prompt submitted inside a workspace carries its name, path and branch", 
       "rev-parse --show-toplevel": "/home/p/repo.feature\n",
       "symbolic-ref --short HEAD": "feature\n",
     };
-    return { value: { exitCode: 0, stdout: answers[git] ?? "", stderr: "" } };
+    return done(answers[git] ?? "");
   });
 
-  await $.prompt.submit({ text: "hello" });
+  await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
   expect(seen.join("\n")).toContain("branch: feature");
   expect(seen.join("\n")).toContain("path: ~/repo.feature");
@@ -121,12 +127,10 @@ test("a prompt submitted in the main checkout carries no workspace context", asy
   on("env.get", () => ({ value: "/home/p" }));
   on("process.run", (_$, e) => {
     const inside = e.argv.includes("--is-inside-work-tree");
-    return {
-      value: { exitCode: 0, stdout: inside ? "true\n" : "/home/p/repo/.git\n", stderr: "" },
-    };
+    return done(inside ? "true\n" : "/home/p/repo/.git\n");
   });
 
-  await $.prompt.submit({ text: "hello" });
+  await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
   expect(seen).toBeUndefined();
 });
@@ -140,7 +144,7 @@ test("A new turn starts", async ($, on) => {
   });
   stubOperations(on, { onRun: (argv) => argvs.push(argv.join(" ")) });
 
-  await $.prompt.submit({ text: "hello" });
+  await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
   expect(bottomRan).toBe(1);
   expect(argvs.some((argv) => argv.startsWith("wt config state marker set "))).toBe(true);
@@ -189,12 +193,12 @@ test("a wt that cannot create workspaces is reported unhealthy, not healthy", as
   on("process.run", (_$, e) => {
     const argv = e.argv.join(" ");
     if (argv.includes("switch --help")) {
-      return { value: { exitCode: 0, stdout: "Options:\n  --create\n", stderr: "" } };
+      return done("Options:\n  --create\n");
     }
     if (argv.includes("--version")) {
-      return { value: { exitCode: 0, stdout: "wt 0.22.0\n", stderr: "" } };
+      return done("wt 0.22.0\n");
     }
-    return { value: { exitCode: 0, stdout: "/home/someone/.cargo/bin/wt\n", stderr: "" } };
+    return done("/home/someone/.cargo/bin/wt\n");
   });
 
   const result = await $.command.run({
@@ -223,7 +227,11 @@ test("a prompt submitted toasts and still lets the prompt through when process.r
   // process.run is left unstubbed: the harness throws "no implementation
   // for process.run" into the hook, which reaches `.catch`.
 
-  const result = await $.prompt.submit({ text: "hello" });
+  const result = await $.prompt.submit({
+    text: "hello",
+    wait: false,
+    origin: { kind: "composer" },
+  });
 
   expect(bottomRan).toBe(1);
   expect(result.text).toBe("hello");

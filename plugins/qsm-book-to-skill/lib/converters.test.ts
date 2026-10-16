@@ -1,15 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { converterFor, missingConverter, onPath } from "./converters.ts";
-
-const sandboxes: string[] = [];
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 /** A directory of fake binaries, to be put in front of the real PATH. */
 function fakeBinDir(commands: readonly string[]): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-bin-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-book-to-skill-bin-");
   for (const command of commands) {
     const path = join(dir, command);
     writeFileSync(path, "#!/bin/sh\nexit 0\n");
@@ -17,15 +14,6 @@ function fakeBinDir(commands: readonly string[]): string {
   }
   return dir;
 }
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 describe("onPath", () => {
   test("finds an executable file in a PATH entry", () => {

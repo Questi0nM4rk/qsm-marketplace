@@ -1,5 +1,5 @@
 // Tools: the qsm binaries on origin/main next to the ones on this machine.
-import { type QsmManifest, verbsOf } from "../../../lib/qsm-manifest.ts";
+import { parseManifest, type QsmManifest, verbsOf } from "../../../lib/qsm-manifest.ts";
 import type { PluginNode } from "./discover.ts";
 
 export interface GitResult {
@@ -80,12 +80,14 @@ function readMain(git: ToolsProbes["git"]): Map<string, Declared> | string {
   for (const file of files) {
     const shown = git(["show", `${MAIN}:${file}`]);
     const plugin = file.split("/")[1] ?? file;
+    let manifest: QsmManifest;
     try {
-      for (const [bin, d] of declared(plugin, JSON.parse(shown.stdout) as QsmManifest)) {
-        out.set(bin, d);
-      }
-    } catch {
-      return `${MAIN}:${file} is not a readable qsm.json`;
+      manifest = parseManifest(JSON.parse(shown.stdout), `${MAIN}:${file}`);
+    } catch (error) {
+      return `not a readable qsm.json: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    for (const [bin, d] of declared(plugin, manifest)) {
+      out.set(bin, d);
     }
   }
   return out;
@@ -169,7 +171,7 @@ export function compareTools(
   }
   const local = readLocal(nodes);
   const installed = p.installed();
-  const names = [...new Set([...main.keys(), ...installed])].sort();
+  const names = [...new Set([...main.keys(), ...installed])].toSorted();
   const binaries = names.map((bin) =>
     compare(bin, main.get(bin), local.get(bin), installed.has(bin)),
   );

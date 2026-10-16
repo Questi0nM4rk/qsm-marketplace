@@ -65,7 +65,7 @@ function scan(dir: string, parent: string, depth: number, found: string[]): void
   if (depth > MAX_DEPTH || !isDir(dir)) {
     return;
   }
-  for (const entry of entriesOf(dir).sort((a, b) => alphabetical(a.name, b.name))) {
+  for (const entry of entriesOf(dir).toSorted((a, b) => alphabetical(a.name, b.name))) {
     if (SKIPPED.has(entry.name)) {
       continue;
     }
@@ -84,7 +84,7 @@ function scan(dir: string, parent: string, depth: number, found: string[]): void
 export function generatedPrompts(root: string): string[] {
   const found: string[] = [];
   scan(root, "", 0, found);
-  return found.sort(alphabetical);
+  return found.toSorted(alphabetical);
 }
 
 export interface DoctorInput {

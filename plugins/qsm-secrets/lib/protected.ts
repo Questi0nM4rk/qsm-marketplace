@@ -7,21 +7,30 @@ export interface PathEnv {
   readonly dataHome?: string | undefined;
   /** `XDG_RUNTIME_DIR` */
   readonly runtimeDir?: string | undefined;
+  /** `PASSWORD_STORE_DIR`, where `pass` keeps its gpg files when that is not `~/.password-store` */
+  readonly passwordStore?: string | undefined;
 }
 
 export interface Root {
   readonly path: string;
   /** `store` holds credentials themselves; `rendered` holds config files with values filled in,
-   * which a command may be handed by path but never read. */
-  readonly kind: "store" | "rendered";
+   * which a command may be handed by path but never read; `askpass` holds the reply sockets of the
+   * askpass pane, which no command may name. */
+  readonly kind: "store" | "rendered" | "askpass";
 }
 
-/** The keyring files, the rbw data directory and the rendered config directory. */
+/** The keyring files, the rbw data directory, the pass store and the rendered config directory. */
 export function protectedRoots(env: PathEnv): Root[] {
   const roots: Root[] = [];
   const data = env.dataHome ?? (env.home === undefined ? undefined : `${env.home}/.local/share`);
   if (data !== undefined) {
     roots.push({ path: `${data}/keyrings`, kind: "store" }, { path: `${data}/rbw`, kind: "store" });
+  }
+  if (env.home !== undefined) {
+    roots.push({ path: `${env.home}/.password-store`, kind: "store" });
+  }
+  if (env.passwordStore !== undefined && env.passwordStore !== "") {
+    roots.push({ path: normalizePath(expand(env.passwordStore, env)), kind: "store" });
   }
   if (env.runtimeDir !== undefined && env.runtimeDir !== "") {
     roots.push({ path: `${env.runtimeDir}/qsm-secrets`, kind: "rendered" });
@@ -37,6 +46,7 @@ export function expand(text: string, env: PathEnv): string {
     ["HOME", env.home],
     ["XDG_DATA_HOME", env.dataHome],
     ["XDG_RUNTIME_DIR", env.runtimeDir],
+    ["PASSWORD_STORE_DIR", env.passwordStore],
   ];
   for (const [name, value] of variables) {
     if (value !== undefined) {
@@ -91,7 +101,7 @@ export function reaches(
 
 /** A glob word as a pattern over one path part: `*`, `?` and `[...]` as the shell reads them. */
 function partPattern(part: string): RegExp {
-  const source = [...part]
+  const source = Array.from(part)
     .map((char) => {
       if (char === "*") {
         return "[^/]*";
@@ -124,7 +134,10 @@ export function globMentioned(
     const rootParts = root.path.split("/");
     return (
       parts.length >= rootParts.length &&
-      rootParts.every((rootPart, at) => partPattern(parts[at] as string).test(rootPart))
+      rootParts.every((rootPart, at) => {
+        const part = parts[at];
+        return part !== undefined && partPattern(part).test(rootPart);
+      })
     );
   });
 }

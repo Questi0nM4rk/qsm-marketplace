@@ -12,14 +12,8 @@ import { join } from "node:path";
 import { buildIndex } from "../lib/build.ts";
 import type { Env } from "../lib/paths.ts";
 import { readStatus } from "../lib/state.ts";
-import {
-  detachedBuildTests,
-  fakeRunner,
-  sandbox,
-  untilRefreshed,
-  verb,
-  world,
-} from "../lib/test-repo.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { detachedBuildTests, fakeRunner, untilRefreshed, verb, world } from "../lib/test-repo.ts";
 
 detachedBuildTests();
 
@@ -75,7 +69,12 @@ test("the twentieth distinct edited file starts a refresh", async () => {
 test("editing the same file again does not count twice", () => {
   const { repo, env, files } = indexedWorld();
 
-  expect(editsAreOk(new Array(20).fill(join(repo, "src", "a.ts")), env)).toBe(true);
+  expect(
+    editsAreOk(
+      Array.from({ length: 20 }, () => join(repo, "src", "a.ts")),
+      env,
+    ),
+  ).toBe(true);
 
   expect(existsSync(files.log)).toBe(false);
 });
@@ -92,7 +91,7 @@ test("an edited path relative to --cwd counts as the absolute file", () => {
 
 test("an edit outside any repository counts nothing", () => {
   const { env, files } = indexedWorld();
-  const plain = sandbox("qsm-index-refresh-plain-");
+  const plain = sandboxDir("qsm-index-refresh-plain-");
 
   expect(editsAreOk(numbered(plain, 1, 1), env)).toBe(true);
 

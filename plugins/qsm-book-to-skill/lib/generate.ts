@@ -94,7 +94,7 @@ function summaryFiles(draftDir: string): string[] {
   }
   return readdirSync(dir)
     .filter((file) => file.endsWith(".md") && !file.endsWith(".source.md"))
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 }
 
 /** One level down, so a chapter's title becomes a section of the skill and its sections the

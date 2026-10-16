@@ -9,7 +9,7 @@ export function classifyTarget(s: string): TargetKind {
   if (/^https?:\/\//.test(t)) {
     return "address";
   }
-  if (/^ssh:\/\//.test(t)) {
+  if (t.startsWith("ssh://")) {
     return "address";
   }
   if (/^git@[^:]+:/.test(t)) {
@@ -31,8 +31,9 @@ export function resolvedVersionFromPath(p: string): string | null {
     return seg.replace(/^v/, "");
   }
   const at = seg.match(/@(v?\d+\.\d+[^@/\s]*)$/);
-  if (at?.[1]) {
-    return at[1].replace(/^v/, "");
+  const version = at?.[1];
+  if (version !== undefined) {
+    return version.replace(/^v/, "");
   }
   return null;
 }
@@ -45,7 +46,7 @@ export function libName(spec: string): string {
   const s = withoutVersion(
     stripLocator(spec.trim().replace(/^(?:pypi|crates|gitlab|bitbucket):(.+)$/, "$1")),
   );
-  const last = s.split("/").filter(Boolean).at(-1) ?? s;
+  const last = s.split("/").findLast(Boolean) ?? s;
   return last.toLowerCase();
 }
 

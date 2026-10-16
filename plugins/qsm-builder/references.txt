@@ -22,7 +22,8 @@ fd
 sqlite3
 semgrep
 ast-grep
-biome
+oxlint
+oxfmt
 tsc
 uv
 ruff

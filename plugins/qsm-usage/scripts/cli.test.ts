@@ -1,28 +1,16 @@
-// The one binary through its real surface: argv, stdout, stderr, exit. Every
-// sandbox this file makes is removed in afterEach, including after a failing
-// test, and the list is emptied so one failure cannot leak into the next.
+// The one binary through its real surface: argv, stdout, stderr, exit.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { dataOf, envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 function sandboxFile(name: string, content: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-usage-test-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-usage-test-");
   const path = join(dir, name);
   writeFileSync(path, content);
   return path;
@@ -72,9 +60,9 @@ describe("qsm-usage toon", () => {
     const file = sandboxFile("people.json", '[{"id":1,"name":"Alice"}]');
     const result = run(CLI, ["toon", "encode", file, "--json"]);
     expect(result.status).toBe(0);
-    const envelope = JSON.parse(result.stdout);
+    const envelope = envelopeOf(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope.data.toon).toBe("[1]{id,name}:\n  1,Alice");
+    expect(dataOf(envelope).toon).toBe("[1]{id,name}:\n  1,Alice");
   });
 
   test("decode writes unindented JSON to stdout", () => {
@@ -130,9 +118,9 @@ describe("qsm-usage size, doctor and unknown verbs", () => {
       QSM_FILTER_BIN: "qsm-no-such-filter-binary",
     });
     expect(result.status).toBe(4);
-    const envelope = JSON.parse(result.stdout);
+    const envelope = envelopeOf(result.stdout);
     expect(envelope).toMatchObject({ code: "missing", exit: 4 });
-    expect(envelope.data.allUsable).toBe(false);
+    expect(dataOf(envelope).allUsable).toBe(false);
   });
 
   test("an unknown verb is usage, exit 2", () => {
@@ -159,10 +147,10 @@ describe("qsm-usage count", () => {
     const two = sandboxFile("b.md", "Goodbye, world!");
     const result = run(CLI, ["count", one, two, "--json"]);
     expect(result.status).toBe(0);
-    const envelope = JSON.parse(result.stdout);
+    const envelope = envelopeOf(result.stdout);
     expect(envelope.code).toBe("ok");
-    expect(envelope.data.files).toHaveLength(2);
-    expect(envelope.data.total).toBeGreaterThan(0);
+    expect(dataOf(envelope).files).toHaveLength(2);
+    expect(dataOf(envelope).total).toBeGreaterThan(0);
   });
 
   test("Exact mode without the credential", () => {
@@ -178,7 +166,7 @@ describe("qsm-usage count", () => {
     // the outcome table's wording, the same code the sibling plugins give it.
     const result = run(CLI, ["count", "/nonexistent/qsm-usage-missing.md", "--json"]);
     expect(result.status).toBe(4);
-    const envelope = JSON.parse(result.stdout);
+    const envelope = envelopeOf(result.stdout);
     expect(envelope.code).toBe("missing");
     expect(envelope.message).toContain("/nonexistent/qsm-usage-missing.md");
   });

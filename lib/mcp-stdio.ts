@@ -3,24 +3,34 @@
 
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 
 const STOP_SIGNALS = ["SIGTERM", "SIGINT"] as const;
 
-/** Serves `server` on stdin/stdout until stdin closes, the transport closes,
- * or SIGTERM or SIGINT arrives; then closes the server and resolves. */
-export async function serveStdio(server: McpServer): Promise<void> {
+/** What serveStdio needs of a plugin's SDK server. Lib names no SDK type: the plugin's own copy
+ * of the SDK is the only one in the program. */
+interface Servable<Transport> {
+  connect: (transport: Transport) => Promise<void>;
+  close: () => Promise<void>;
+  server: { onclose?: (() => void) | undefined };
+}
+
+/** Serves `server` over `transport` (the plugin's stdio transport) until stdin closes, the
+ * transport closes, or SIGTERM or SIGINT arrives; then closes the server and resolves. */
+export async function serveStdio<Transport>(
+  server: Servable<Transport>,
+  transport: Transport,
+): Promise<void> {
   const { promise: released, resolve: release } = Promise.withResolvers<void>();
-  const onRelease = () => release();
+  const onRelease = () => {
+    release();
+  };
   for (const signal of STOP_SIGNALS) {
     process.once(signal, onRelease);
   }
   process.stdin.once("end", onRelease);
   server.server.onclose = onRelease;
   try {
-    await server.connect(new StdioServerTransport());
+    await server.connect(transport);
     await released;
   } finally {
     for (const signal of STOP_SIGNALS) {
@@ -38,6 +48,16 @@ interface Message {
   [key: string]: unknown;
 }
 
+function isMessage(value: unknown): value is Message {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "jsonrpc" in value &&
+    value.jsonrpc === "2.0" &&
+    (!("id" in value) || typeof value.id === "number")
+  );
+}
+
 /** A running server process, spoken to one JSON-RPC line at a time. */
 export interface ServerProcess {
   /** Writes `message` and resolves with the reply that carries its id. */
@@ -51,14 +71,15 @@ export interface ServerProcess {
   restOfStdout: () => Promise<string>;
 }
 
-/** The `initialize` request a client opens every session with. */
-export function initialize(id: number): Message {
+/** The `initialize` request a client opens every session with; `protocolVersion` is the plugin
+ * SDK's LATEST_PROTOCOL_VERSION. */
+export function initialize(id: number, protocolVersion: string): Message {
   return {
     jsonrpc: "2.0",
     id,
     method: "initialize",
     params: {
-      protocolVersion: LATEST_PROTOCOL_VERSION,
+      protocolVersion,
       capabilities: {},
       clientInfo: { name: "qsm-probe", version: "0" },
     },
@@ -98,7 +119,12 @@ export function spawnServer(
       if (child.stdout.readableEnded) {
         throw new Error(`server closed stdout before a full line: ${buffered}`);
       }
-      await Promise.race([new Promise<void>((wake) => waiting.push(wake)), exited]);
+      await Promise.race([
+        new Promise<void>((wake) => {
+          waiting.push(wake);
+        }),
+        exited,
+      ]);
     }
   }
 
@@ -110,15 +136,24 @@ export function spawnServer(
     async request(message) {
       write(message);
       for (;;) {
-        const reply = JSON.parse(await nextLine()) as Message;
+        const reply: unknown = JSON.parse(await nextLine());
+        if (!isMessage(reply)) {
+          throw new Error(
+            `server sent a line that is not a JSON-RPC message: ${JSON.stringify(reply)}`,
+          );
+        }
         if (reply.id === message.id) {
           return reply;
         }
       }
     },
     notify: write,
-    closeStdin: () => child.stdin.end(),
-    kill: (signal) => child.kill(signal),
+    closeStdin: () => {
+      child.stdin.end();
+    },
+    kill: (signal) => {
+      child.kill(signal);
+    },
     exited,
     async restOfStdout() {
       await exited;

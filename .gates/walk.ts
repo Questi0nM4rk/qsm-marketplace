@@ -8,9 +8,18 @@ export function rel(path: string): string {
   return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
 }
 
-/** The parsed JSON file at path, or null when there is none. */
-export function readJson<T>(path: string): T | null {
-  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as T) : null;
+/** The parsed JSON file at path, to be narrowed by the caller, or null when there is none. */
+export function readJson(path: string): unknown {
+  if (!existsSync(path)) {
+    return null;
+  }
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  return parsed;
+}
+
+/** A parsed JSON object: not null, not an array. The gates' narrowing of what readJson returns. */
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** Every file under dir, recursively, skipping node_modules and dist. */

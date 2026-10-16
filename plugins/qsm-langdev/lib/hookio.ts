@@ -9,7 +9,7 @@ export interface HookEvent {
 }
 
 /** Who is running, from the hook payload. */
-export function editorOf(event: HookEvent): Editor {
+export function editorOf(event: Pick<HookEvent, "session_id" | "agent_id">): Editor {
   const sessionId =
     typeof event.session_id === "string" && event.session_id ? event.session_id : "unknown";
   const agentId =

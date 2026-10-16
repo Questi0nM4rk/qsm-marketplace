@@ -1,8 +1,9 @@
 // Materializes a tree as an on-disk directory for a checker to score: a
-// commit via `git archive`, or the working tree via a scratch git index
-// (`git add -A` into it, `git write-tree`, then `git archive` that tree) so
-// an ignored path — node_modules, dist — never enters a score just because
-// it sits on disk. Both sides of every comparison go through one of these,
+// commit checked out through a scratch index, or the working tree via a
+// scratch git index (`git add -A` into it, `git write-tree`, then that tree
+// checked out) so an ignored path — node_modules, dist — never enters a
+// score just because it sits on disk; the ignored inputs the repository's
+// own commands read are linked back in (linkInputs). Both sides of every comparison go through one of these,
 // so the only difference a checker ever sees is the change itself. The
 // materialized directory is then given its own throwaway git index (`git
 // init` + `git add -A`, no commit) — a checker that discovers its targets
@@ -11,9 +12,19 @@
 // resolution at all, scoring nothing real under an inflated quality number.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { arrayOf, recordOf, str } from "./json.ts";
 
 const SCRATCH_PREFIX = "qsm-langdev-tree-";
 const ABANDONED_MS = 60 * 60 * 1000;
@@ -48,7 +59,7 @@ function sweepAbandoned(prefix: string): void {
 }
 
 function fail(step: string, result: ReturnType<typeof spawnSync>): never {
-  const stderr = result.stderr ? String(result.stderr).trim() : "";
+  const stderr = result.stderr === null ? "" : String(result.stderr).trim();
   const suffix = stderr.length > 0 ? `: ${stderr}` : "";
   throw new Error(`${step} failed${suffix}`);
 }
@@ -74,30 +85,97 @@ function gitEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
   return extra ? { ...env, ...extra } : env;
 }
 
+/** A git command's NUL-separated output; `input` goes to its stdin. `check-ignore` exits 1 when
+ * it matched nothing, which is an answer, not a failure. */
+function gitLines(root: string, args: readonly string[], input?: string): string[] {
+  const result = spawnSync("git", ["-C", root, ...args], {
+    env: gitEnv(),
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    ...(input === undefined ? {} : { input }),
+  });
+  const matchedNothing = args[0] === "check-ignore" && result.status === 1;
+  if (result.status !== 0 && !matchedNothing) {
+    fail(`git ${args[0] ?? ""}`, result);
+  }
+  return result.stdout.split("\0").filter((path) => path.length > 0);
+}
+
+const DEPENDENCY_DIRS = new Set(["node_modules", ".venv"]);
+const TSCONFIG = /^tsconfig(?:\.[^/]*)?\.json$/;
+const GLOB = /[*?[{]/;
+
+/** The paths a tsconfig's `include` and `files` name, cut at the first glob segment, relative to
+ * the tree's root; one that leaves the tree is not the tree's input. */
+function tsconfigInputs(dir: string, config: string): string[] {
+  const parsed = recordOf(Bun.JSONC.parse(readFileSync(join(dir, config), "utf8")));
+  const entries = [...(arrayOf(parsed?.include) ?? []), ...(arrayOf(parsed?.files) ?? [])];
+  const inputs: string[] = [];
+  for (const entry of entries) {
+    const segments = str(entry).split("/");
+    const glob = segments.findIndex((segment) => GLOB.test(segment));
+    const literal = (glob === -1 ? segments : segments.slice(0, glob)).join("/");
+    const path = relative(dir, resolve(dir, dirname(config), literal));
+    if (literal.length > 0 && path.length > 0 && !path.startsWith("..") && !isAbsolute(path)) {
+      inputs.push(path);
+    }
+  }
+  return inputs;
+}
+
 /**
- * A materialized tree resolves the same packages a live checkout would: dependency directories
- * symlink in from the live worktree rather than being reinstalled per comparison.
+ * A materialized tree is scored with the inputs the repository's own commands read, though git
+ * holds none of them: every dependency directory the live checkout installed, at any depth (a
+ * plugin's own node_modules), and every ignored path a tsconfig names (generated declarations).
+ * Each is symlinked in from the live worktree, never reinstalled or regenerated per comparison.
+ * Only an ignored path qualifies, so a file the reference commit lacks never enters it this way.
  */
-function linkDeps(dir: string, root: string): void {
-  for (const deps of ["node_modules", ".venv"]) {
-    const installed = join(root, deps);
-    if (existsSync(installed) && !existsSync(join(dir, deps))) {
-      symlinkSync(installed, join(dir, deps));
+function linkInputs(dir: string, root: string, treeish: string): void {
+  const ignoredDirs = gitLines(root, [
+    "ls-files",
+    "-z",
+    "--others",
+    "--ignored",
+    "--exclude-standard",
+    "--directory",
+  ]).map((path) => path.replace(/\/$/, ""));
+  const deps = ignoredDirs.filter((path) => DEPENDENCY_DIRS.has(basename(path)));
+  const configs = gitLines(root, ["ls-tree", "-r", "-z", "--name-only", treeish]).filter((path) =>
+    TSCONFIG.test(basename(path)),
+  );
+  const named = configs.flatMap((config) => tsconfigInputs(dir, config));
+  const ignored = new Set(
+    named.length === 0
+      ? []
+      : gitLines(root, ["check-ignore", "-z", "--stdin", "--no-index"], named.join("\0")),
+  );
+  const inputs = [...deps.filter((path) => existsSync(join(dir, dirname(path)))), ...ignored];
+  for (const path of new Set(inputs)) {
+    if (existsSync(join(root, path)) && !existsSync(join(dir, path))) {
+      mkdirSync(join(dir, dirname(path)), { recursive: true });
+      symlinkSync(join(root, path), join(dir, path));
     }
   }
 }
 
-function archiveInto(root: string, treeish: string, dir: string): void {
-  const archive = spawnSync("git", ["-C", root, "archive", "--format=tar", treeish], {
-    env: gitEnv(),
-    maxBuffer: 1024 * 1024 * 1024,
-  });
-  if (archive.status !== 0) {
-    fail(`git archive ${treeish}`, archive);
-  }
-  const extract = spawnSync("tar", ["-x", "-C", dir], { input: archive.stdout });
-  if (extract.status !== 0) {
-    fail("tar -x", extract);
+/** Writes `treeish` into `dir` through a scratch index and `checkout-index`, not `git archive`:
+ * archive drops an `export-ignore` path, and a generated file the code imports must be on disk for
+ * a type-aware checker to resolve it. Leaving generated files unscored is the file sets' job. */
+function checkoutInto(root: string, treeish: string, dir: string): void {
+  const env = gitEnv({ GIT_INDEX_FILE: `${dir}.checkout-index` });
+  try {
+    const read = spawnSync("git", ["-C", root, "read-tree", treeish], { env });
+    if (read.status !== 0) {
+      fail(`git read-tree ${treeish}`, read);
+    }
+    const checkout = spawnSync("git", ["-C", root, "checkout-index", "-a", `--prefix=${dir}/`], {
+      env,
+    });
+    if (checkout.status !== 0) {
+      fail("git checkout-index", checkout);
+    }
+  } finally {
+    rmSync(`${dir}.checkout-index`, { force: true });
   }
 }
 
@@ -108,7 +186,7 @@ function archiveInto(root: string, treeish: string, dir: string): void {
  * `git init` plus `git add -A` gives the materialized tree a git index — no
  * commit needed, `git ls-files` reads the index — so it scans and resolves
  * imports exactly as it would in the live checkout. `.gitignore` travelled
- * in with the archive, so `node_modules`/`dist` stay excluded the same way. */
+ * in with the checkout, so `node_modules`/`dist` stay excluded the same way. */
 function gitIndexInto(dir: string): void {
   const env = gitEnv();
   const init = spawnSync("git", ["-C", dir, "init", "-q", "--initial-branch=main", "."], { env });
@@ -182,8 +260,8 @@ export function withCommitTree<T>(
   fn: (dir: string) => Promise<T> | T,
 ): Promise<T> {
   return withScratchDir(SCRATCH_PREFIX, (dir) => {
-    archiveInto(root, ref, dir);
-    linkDeps(dir, root);
+    checkoutInto(root, ref, dir);
+    linkInputs(dir, root, ref);
     gitIndexInto(dir);
     return fn(dir);
   });
@@ -192,7 +270,7 @@ export function withCommitTree<T>(
 /** A scratch directory holding what the working tree would ship: a scratch
  * git index seeded with `git add -A` over the live worktree — tracked,
  * modified, and new non-ignored files; an ignored file never enters it —
- * then that index's tree archived out. This is "the shipped side" for
+ * then that index's tree checked out. This is "the shipped side" for
  * every comparison: the live directory itself is never handed to a
  * checker, so node_modules/ or dist/ never enter a score just because they
  * sit on disk. Removed once `fn` settles. */
@@ -209,8 +287,9 @@ export function withWorktreeTree<T>(root: string, fn: (dir: string) => Promise<T
       if (writeTree.status !== 0) {
         fail("git write-tree (scratch index)", writeTree);
       }
-      archiveInto(root, writeTree.stdout.trim(), dir);
-      linkDeps(dir, root);
+      const tree = writeTree.stdout.trim();
+      checkoutInto(root, tree, dir);
+      linkInputs(dir, root, tree);
       gitIndexInto(dir);
       return fn(dir);
     } finally {

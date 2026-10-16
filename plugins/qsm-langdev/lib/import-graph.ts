@@ -132,5 +132,5 @@ export function within(graph: ImportGraph, files: readonly string[], n: number):
       seen.add(file);
     }
   }
-  return [...seen].sort();
+  return [...seen].toSorted();
 }

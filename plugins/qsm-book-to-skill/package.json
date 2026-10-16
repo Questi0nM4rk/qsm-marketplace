@@ -1,0 +1,7 @@
+{
+  "name": "qsm-book-to-skill",
+  "private": true,
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

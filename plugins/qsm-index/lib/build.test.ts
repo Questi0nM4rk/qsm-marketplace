@@ -21,9 +21,11 @@ import { type BuildDeps, buildIndex, IndexPathError } from "./build.ts";
 import { cacheFiles } from "./paths.ts";
 import { changedSet } from "./repo.ts";
 import { spawnRunner } from "./run.ts";
-import { commit, fakeRunner, git, removeSandboxes, repoWithCache, sandbox } from "./test-repo.ts";
+import { type BuildStatus, readStatus } from "./state.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { commit, fakeRunner, git, killBuilds, repoWithCache } from "./test-repo.ts";
 
-afterEach(removeSandboxes);
+afterEach(killBuilds);
 
 function scenario() {
   const made = repoWithCache("qsm-index-build-");
@@ -34,8 +36,12 @@ function deps(runner: ReturnType<typeof fakeRunner>, cache: string): BuildDeps {
   return { cwd: "/", run: runner.run, env: { QSM_INDEX_CACHE_DIR: cache } };
 }
 
-function statusOf(file: string) {
-  return JSON.parse(readFileSync(file, "utf8"));
+function statusOf(file: string): BuildStatus {
+  const status = readStatus(file);
+  if (status === null) {
+    throw new Error(`no readable status at ${file}`);
+  }
+  return status;
 }
 
 describe("Index a local path", () => {
@@ -70,7 +76,7 @@ describe("Index a local path", () => {
 
     buildIndex(repo, deps(fakeRunner(), cache));
 
-    expect(Object.keys(statusOf(files.status).changed_at_build).sort()).toEqual([
+    expect(Object.keys(statusOf(files.status).changed_at_build).toSorted()).toEqual([
       "new.ts",
       "src/a.ts",
     ]);
@@ -273,7 +279,7 @@ describe("An existing graphify-out", () => {
 
 describe("A cloned repository is queried exactly like the agent's own", () => {
   test("a repository under the Clonned directory is indexed into the cache", () => {
-    const home = sandbox("qsm-index-home-");
+    const home = sandboxDir("qsm-index-home-");
     const repo = join(home, "Clonned", "dep");
     mkdirSync(repo, { recursive: true });
     writeFileSync(join(repo, "a.ts"), "export const a = 1;\n");

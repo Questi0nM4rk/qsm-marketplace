@@ -11,10 +11,11 @@ and straightforward: we value each other's time and do not overcomplicate. Singl
 
 ```text
 .claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0: install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
+lib/                              # layer 0, imports no third-party package (a plugin's packages are in its own package.json, installed by its installer): install-contract.ts, install-base.ts, cli-base.ts, outcome.ts, qsm-manifest.ts, completions.ts, paths.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/sandbox.ts (tests), nothing else
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI
+  package.json + bun.lock         # the plugin's own npm dependencies, only when it has any; the install base runs `bun install --frozen-lockfile` before it compiles
   lib/ scripts/ skills/ agents/ commands/ hooks/ openspec/
   README.md                       # always, opens with `## Why it exists`; INSTALL.md + USAGE.md only with a bin
 .gates/                           # bun run validate
@@ -71,7 +72,9 @@ touching its users (Cockburn, ports and adapters).
 5. **One canonical owner per concept.** Search before adding; edit in place; never `v2` copies.
 6. **No versioning, no history in the tree.** When a decision changes, the old form is deleted
    everywhere it appears: no deprecated markers, no renamed-from notes, no dates, no changelogs,
-   no "previously". Git is the only history.
+   no "previously". Git is the only history. A `plugin.json` carries no `version`: Claude Code
+   then names the plugin's cache after the commit, so `claude plugin update` picks up each new
+   commit; a pinned version keeps the old copy forever. Enforced by `validate-plugin-contracts`.
 7. **The plugin is the install unit.** `scripts/install.ts` exports `install(ctx)` from
    `lib/install-contract.ts`; a plugin that needs another names it in the `dependencies` array of
    its `.claude-plugin/plugin.json`, with its reason in the spec (Architecture, rule 2), and never
@@ -123,6 +126,10 @@ touching its users (Cockburn, ports and adapters).
 - **Evals over unit tests.** A change is proved by the least work that runs the real path end to
   end; a unit test only for logic an eval cannot reach. A skill's or agent's eval is
   `bun run eval <plugin>` (`evals/` in the plugin). Single user, personal tools: no test count goal.
+- **A test leaves no temp behind.** The `bun test` preload `lib/fixtures/sandbox.ts` points TMPDIR
+  at one dir per run, removes each `sandboxDir` after its test, and fails the run naming every
+  leftover; `validate-test-temp` fails on `mkdtemp`, `mkdtempSync` or `tmpdir()` in
+  any test file or test-only helper, so a test's temp dir is `sandboxDir`.
 - **Every seam proves itself, or the gate fails loud** (spec: hooks prove seams and behaviour, fail
   loud). One reader per seam in `hooks/`: `bun test` feeds binary output, `claude plugin test` feeds
   shapes; a stub alone is never proof. A `.catch` toasts `<plugin> ERROR: <event>: <reason>`, logs,
@@ -137,8 +144,9 @@ touching its users (Cockburn, ports and adapters).
   (link, PATH block, data dir, backup) before it writes and names each removal; a second run
   removes nothing. Anything that creates a temp directory writes the full cleanup; a `finally` is
   not it. Spec: `qsm-setup`, install purge.
-- `bun run validate`, `bun run lint`, `bun run typecheck`, `bun test` before a commit. `bun test`
-  skips `plugins/*/hooks/*.test.ts` (they import `claude-code/testing`); `bun run test:hooks` runs
-  those and `claude plugin validate` over every plugin, and skips visibly without `claude` on PATH.
+- `bun run validate`, `bun run lint`, `bun run typecheck`, `bun test ./ ./.gates` before a commit
+  (bun skips a dot directory unless it is named). `bun test` skips `plugins/*/hooks/*.test.ts` (they
+  import `claude-code/testing`); `bun run test:hooks` runs those and `claude plugin validate` over
+  every plugin, and skips visibly without `claude` on PATH.
 - The langdev guard blocks `--no-verify`; a person lets a measured regression pass once with
   `QSM_LANGDEV_ALLOW="<why>"` before the command, which always asks.

@@ -3,10 +3,22 @@
 
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface Lock {
   readonly pid: number;
   readonly started_at: string;
+}
+
+/** The errno code of a caught error, or undefined when it carries none. */
+export function errnoCode(cause: unknown): string | undefined {
+  return isRecord(cause) && typeof cause.code === "string" ? cause.code : undefined;
+}
+
+function parseLock(value: unknown): Lock | null {
+  return isRecord(value) && typeof value.pid === "number" && value.pid > 0
+    ? { pid: value.pid, started_at: String(value.started_at) }
+    : null;
 }
 
 function readJson(file: string): unknown {
@@ -23,16 +35,14 @@ function isAlive(pid: number): boolean {
     return true;
   } catch (cause) {
     // EPERM: the process is there, it is only not ours.
-    return (cause as NodeJS.ErrnoException).code === "EPERM";
+    return errnoCode(cause) === "EPERM";
   }
 }
 
 /** The lock, when a live process holds it; null when there is none or its process is dead. */
 export function liveHolder(file: string): Lock | null {
-  const lock = readJson(file) as Partial<Lock> | null;
-  return typeof lock?.pid === "number" && lock.pid > 0 && isAlive(lock.pid)
-    ? { pid: lock.pid, started_at: String(lock.started_at) }
-    : null;
+  const lock = parseLock(readJson(file));
+  return lock !== null && isAlive(lock.pid) ? lock : null;
 }
 
 export type LockTake = { readonly taken: true } | { readonly taken: false; readonly holder: Lock };
@@ -43,7 +53,7 @@ function createOnce(file: string, content: string): boolean {
     writeFileSync(file, content, { flag: "wx" });
     return true;
   } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code === "EEXIST") {
+    if (errnoCode(cause) === "EEXIST") {
       return false;
     }
     throw cause;
@@ -66,13 +76,12 @@ export function takeLock(file: string, now: Date): LockTake {
     return { taken: true };
   }
   // Another build took the stale lock between the remove and the create.
-  return { taken: false, holder: (readJson(file) as Lock | null) ?? mine };
+  return { taken: false, holder: parseLock(readJson(file)) ?? mine };
 }
 
 /** Removes the lock when this process holds it, and leaves anyone else's alone. */
 export function releaseLock(file: string): void {
-  const lock = readJson(file) as Partial<Lock> | null;
-  if (lock?.pid === process.pid) {
+  if (parseLock(readJson(file))?.pid === process.pid) {
     rmSync(file, { force: true });
   }
 }
@@ -94,9 +103,72 @@ export interface BuildStatus {
   readonly warning: string | null;
 }
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
+}
+
+/** A guard for a field that is either null or what `guard` accepts. */
+function nullable<T>(guard: (item: unknown) => item is T): (value: unknown) => value is T | null {
+  return (value): value is T | null => value === null || guard(value);
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+const isNumber = (value: unknown): value is number => typeof value === "number";
+const isState = (value: unknown): value is "running" | "done" =>
+  value === "running" || value === "done";
+const isPhase = (value: unknown): value is "graph" | "semantic" =>
+  value === "graph" || value === "semantic";
+const isResult = (value: unknown): value is BuildResult =>
+  value === "ok" || value === "partial" || value === "failed";
+
+/** One guard per field of the status file, so no field a reader uses goes unchecked. */
+const STATUS_FIELDS: {
+  readonly [K in keyof BuildStatus]-?: (value: unknown) => value is BuildStatus[K];
+} = {
+  repo: isString,
+  state: isState,
+  phase: nullable(isPhase),
+  started_at: isString,
+  finished_at: nullable(isString),
+  duration_ms: nullable(isNumber),
+  result: nullable(isResult),
+  cause: nullable(isString),
+  built_at_commit: nullable(isString),
+  changed_at_build: isStringRecord,
+  warning: nullable(isString),
+};
+
+function hasStatusFields(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & BuildStatus {
+  return Object.entries(STATUS_FIELDS).every(([field, guard]) => guard(value[field]));
+}
+
+/** The status when every field a reader uses has its type; null for anything else. */
+function parseStatus(value: unknown): BuildStatus | null {
+  if (!(isRecord(value) && hasStatusFields(value))) {
+    return null;
+  }
+  const { repo, state, phase, started_at, finished_at, duration_ms, result, cause } = value;
+  const { built_at_commit, changed_at_build, warning } = value;
+  return {
+    repo,
+    state,
+    phase,
+    started_at,
+    finished_at,
+    duration_ms,
+    result,
+    cause,
+    built_at_commit,
+    changed_at_build,
+    warning,
+  };
+}
+
 /** The status file, or null when no build ever wrote one. */
 export function readStatus(file: string): BuildStatus | null {
-  return readJson(file) as BuildStatus | null;
+  return parseStatus(readJson(file));
 }
 
 /** How many paths differ, in either direction, between the changed set a build started from and

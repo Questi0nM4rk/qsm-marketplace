@@ -37,8 +37,7 @@ describe("generated gate", () => {
   });
 
   test("A verb is added to qsm.json without regenerating", () => {
-    const edited = new Map(committed);
-    edited.set(fresh.hooksPath, "// hand-edited\n");
+    const edited = new Map([...committed, [fresh.hooksPath, "// hand-edited\n"]]);
     edited.delete(fresh.typesPath);
     const out = generatedFindings(DIR, files({ readFile: (p) => edited.get(p) ?? null }));
     expect(out).toEqual([

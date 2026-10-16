@@ -1,11 +1,14 @@
 // The gl half of qsm-forge through its real surface, against a `glab` the
 // test writes into a sandbox and puts first on PATH, with every call
 // prefixed "gl" for the merged binary.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { parseJson } from "../lib/exec.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -22,9 +25,11 @@ const MERGE_REQUEST = {
 const DISCUSSIONS = [
   {
     id: "D1",
+    individual_note: false,
     notes: [
       {
         id: 301,
+        system: false,
         body: "this leaks a handle",
         author: { username: "a-reviewer" },
         resolvable: true,
@@ -38,9 +43,9 @@ const DISCUSSIONS = [
 let sandbox = "";
 let cwd = "";
 
-beforeAll(() => {
-  sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-gl-"));
-  cwd = mkdtempSync(join(tmpdir(), "qsm-forge-gl-cwd-"));
+beforeEach(() => {
+  sandbox = sandboxDir("qsm-forge-gl-");
+  cwd = sandboxDir("qsm-forge-gl-cwd-");
   writeFileSync(join(sandbox, "mr.json"), JSON.stringify(MERGE_REQUEST));
   writeFileSync(join(sandbox, "discussions.json"), JSON.stringify(DISCUSSIONS));
   const fake = join(sandbox, "glab");
@@ -55,14 +60,6 @@ esac
 `,
   );
   chmodSync(fake, 0o755);
-});
-
-afterAll(() => {
-  for (const dir of [sandbox, cwd]) {
-    if (dir !== "") {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
 });
 
 interface Run {
@@ -80,12 +77,20 @@ function cli(args: readonly string[], env: Record<string, string> = {}): Run {
   return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 }
 
-function envelope(run: Run): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(run.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
-  };
+interface Envelope {
+  readonly code: string;
+  readonly exit: number;
+  readonly data: Record<string, unknown> | null;
+}
+
+const isEnvelope = objectOf<Envelope>({ code: isString, exit: isNumber, data: orNull(isRecord) });
+
+function envelope(run: Run): Envelope {
+  const parsed = parseJson(run.stdout, "qsm-forge");
+  if (!isEnvelope(parsed)) {
+    throw new Error(`not an envelope: ${run.stdout}`);
+  }
+  return parsed;
 }
 
 describe("qsm-forge gl through the shared base", () => {

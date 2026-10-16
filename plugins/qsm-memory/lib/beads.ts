@@ -6,6 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 import type { Env } from "./store.ts";
 
 /** The repository has a tracker and the task tool that reads it is not installed. */
@@ -17,11 +18,15 @@ export interface Bead {
   readonly epic: { readonly id: string; readonly title: string } | null;
 }
 
-interface Issue {
-  readonly id?: string;
-  readonly title?: string;
-  readonly parent?: string;
-}
+const issueSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  parent: z.string().optional(),
+  closed_at: z.string().optional(),
+});
+type Issue = z.infer<typeof issueSchema>;
+
+const listSchema = z.object({ issues: z.array(issueSchema).optional() }).nullable();
 
 function hasTracker(cwd: string): boolean {
   for (let dir = cwd; ; dir = dirname(dir)) {
@@ -51,7 +56,8 @@ function br(args: readonly string[], cwd: string, env: Env): unknown {
 /** `br show` answers an array of one issue. */
 function issue(id: string, cwd: string, env: Env): Issue | undefined {
   const shown = br(["show", id, "--json"], cwd, env);
-  return Array.isArray(shown) ? (shown[0] as Issue | undefined) : undefined;
+  const parsed = z.array(issueSchema).safeParse(shown);
+  return parsed.success ? parsed.data[0] : undefined;
 }
 
 export interface Closed {
@@ -65,11 +71,9 @@ export function recentlyClosed(cwd: string, env: Env = process.env): Closed[] {
   if (!hasTracker(cwd)) {
     return [];
   }
-  const listed = br(
-    ["list", "-s", "closed", "--sort", "updated_at", "--limit", "50", "--json"],
-    cwd,
-    env,
-  ) as { issues?: (Issue & { closed_at?: string })[] } | null;
+  const listed = listSchema.parse(
+    br(["list", "-s", "closed", "--sort", "updated_at", "--limit", "50", "--json"], cwd, env),
+  );
   return (listed?.issues ?? []).flatMap((item) =>
     item.id === undefined || item.closed_at === undefined
       ? []
@@ -77,12 +81,14 @@ export function recentlyClosed(cwd: string, env: Env = process.env): Closed[] {
   );
 }
 
-export function inProgress(cwd: string, env: Env = process.env): Bead[] {
+/** At most `limit` in-progress tasks, each resolved with its epic: a `br show` per task and per
+ * parent, so the list is cut first. */
+export function inProgress(cwd: string, limit: number, env: Env = process.env): Bead[] {
   if (!hasTracker(cwd)) {
     return [];
   }
-  const listed = br(["list", "-s", "in_progress", "--json"], cwd, env) as { issues?: Issue[] };
-  return (listed.issues ?? []).flatMap((item) => {
+  const listed = listSchema.parse(br(["list", "-s", "in_progress", "--json"], cwd, env));
+  return (listed?.issues ?? []).slice(0, limit).flatMap((item) => {
     if (item.id === undefined) {
       return [];
     }

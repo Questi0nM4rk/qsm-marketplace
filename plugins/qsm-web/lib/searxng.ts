@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 
 export interface SearchResult {
   readonly url: string;
@@ -51,6 +52,15 @@ export const DEFAULT_CONFIG: SearxngConfig = {
   timeoutMs: 10_000,
 };
 
+const CONFIG_FILE = z.object({
+  instance: z.string().exactOptional(),
+  defaultEngines: z.array(z.string()).exactOptional(),
+  defaultNumResults: z.number().exactOptional(),
+  timeoutMs: z.number().exactOptional(),
+  defaultLanguage: z.string().exactOptional(),
+  defaultSafesearch: z.number().exactOptional(),
+});
+
 export function configPath(overridePath?: string, homeDir: string = homedir()): string {
   if (overridePath !== undefined && overridePath.length > 0) {
     return overridePath;
@@ -72,7 +82,7 @@ export function loadConfig(path: string): LoadedConfig {
     };
   }
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<SearxngConfig>;
+    const parsed = CONFIG_FILE.parse(JSON.parse(readFileSync(path, "utf8")));
     return { config: { ...DEFAULT_CONFIG, ...parsed }, warnings: [] };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -124,11 +134,7 @@ export async function runSetup(path: string, io: SetupIo): Promise<number> {
 }
 
 /** The instance to query. */
-export function resolveInstance(
-  config: SearxngConfig,
-  flag: string | undefined,
-  env: string | undefined,
-): string {
+export function resolveInstance(config: SearxngConfig, flag?: string, env?: string): string {
   if (flag !== undefined && flag.length > 0) {
     return flag;
   }
@@ -161,21 +167,25 @@ export function buildSearchUrl(instance: string, opts: SearchOptions): string {
   return `${instance.replace(/\/$/, "")}/search?${params.toString()}`;
 }
 
-interface RawResult {
-  url?: string;
-  title?: string;
-  content?: string;
-  engine?: string;
-  engines?: string[];
-  score?: number;
-  category?: string;
-  publishedDate?: string | null;
-}
+// A field an instance sends as null is as absent as one it leaves out.
+const RAW_RESULT = z.object({
+  url: z.string().nullish(),
+  title: z.string().nullish(),
+  content: z.string().nullish(),
+  engine: z.string().nullish(),
+  engines: z.array(z.string()).nullish(),
+  score: z.number().nullish(),
+  category: z.string().nullish(),
+  publishedDate: z.string().nullish(),
+});
 
-export interface SearxngResponse {
-  results?: RawResult[];
-  unresponsive_engines?: [string, string][];
-}
+const RESPONSE = z.object({
+  results: z.array(RAW_RESULT).optional(),
+  unresponsive_engines: z.array(z.tuple([z.string(), z.string()])).optional(),
+});
+
+type RawResult = z.infer<typeof RAW_RESULT>;
+export type SearxngResponse = z.infer<typeof RESPONSE>;
 
 class SearchFailure extends Error {
   readonly exitCode: number;
@@ -196,16 +206,18 @@ export interface SearchOutcome {
   readonly warnings: readonly string[];
 }
 
+/** A text field of a raw result: sent as null or left out, it reads as empty. */
+const text = (value: string | null | undefined): string => value ?? "";
+
 function toResult(r: RawResult): SearchResult {
-  const { engine = "", score = 0, category = "general" } = r;
   return {
-    url: r.url ?? "",
-    title: r.title ?? "",
-    content: r.content ?? "",
-    engine,
+    url: text(r.url),
+    title: text(r.title),
+    content: text(r.content),
+    engine: text(r.engine),
     engines: engineList(r),
-    score,
-    category,
+    score: r.score ?? 0,
+    category: r.category ?? "general",
     publishedDate: r.publishedDate ?? null,
   };
 }
@@ -214,7 +226,7 @@ function engineList(r: RawResult): string[] {
   if (r.engines) {
     return r.engines;
   }
-  return r.engine ? [r.engine] : [];
+  return r.engine === undefined || r.engine === null || r.engine === "" ? [] : [r.engine];
 }
 
 /** Turn one instance response into results and warnings. */
@@ -244,7 +256,7 @@ export async function search(
   }
   let body: SearxngResponse;
   try {
-    body = (await resp.json()) as SearxngResponse;
+    body = RESPONSE.parse(await resp.json());
   } catch (err: unknown) {
     throw SearchFailure.because(
       err,

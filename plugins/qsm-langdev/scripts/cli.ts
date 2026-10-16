@@ -3,9 +3,15 @@
 // qsm-langdev: per-language quality checks over one declarative registry.
 
 import { readFileSync } from "node:fs";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import {
+  flagArg,
+  type Handler,
+  optionalString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
+import { fail, ok } from "../../../lib/outcome.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   compareTrees,
   type DoctorRow,
@@ -20,27 +26,26 @@ import {
 import {
   alwaysOn,
   detectLanguages,
-  findRepoRoot,
   type GatesConfig,
   isLangdevRepo,
   languageEnabled,
   readGatesConfig,
   writeGatesConfig,
 } from "../lib/config.ts";
-import { editFindings } from "../lib/edit-findings.ts";
 import { type GateOutcome, gatesCode, runGates, SELF_GATES } from "../lib/gate-runner.ts";
 import {
+  HOOK_LANGS,
   HOOK_NAMES,
   type HookAction,
-  type HookLang,
   type HookName,
   installHooks,
   uninstallHooks,
 } from "../lib/git-hooks.ts";
 import { resolveRef } from "../lib/gitref.ts";
+import { errorMessage } from "../lib/errors.ts";
 import { profileGaps, type ScaffoldAction, scaffoldProfile } from "../lib/profiles.ts";
 import {
-  type EnforcementPoint,
+  ENFORCEMENT_POINTS,
   LANGUAGES,
   type Language,
   REGISTRY,
@@ -48,54 +53,11 @@ import {
   resolveLanguage,
 } from "../lib/registry.ts";
 import { semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
-import { type Editor, editedTrees, MAIN_AGENT, readStartPoint } from "../lib/state.ts";
-import {
-  compareWorktreeSince,
-  type StructureResult,
-  type StructureVerdict,
-  verdict,
-} from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
+import { dirOf, err, guarded, optOneOf, refuse, required, requireRepo } from "./call.ts";
+import { handlers as judgeHandlers } from "./cli-judge.ts";
 
-const manifest = manifestJson as QsmManifest;
-
-function err(line: string): void {
-  process.stderr.write(`${line}\n`);
-}
-
-/** A refusal raised from deep inside a verb's helpers. */
-class Refuse extends Error {
-  readonly outcome: Outcome;
-  constructor(outcome: Outcome) {
-    super(outcome.message ?? "");
-    this.outcome = outcome;
-  }
-}
-
-function refuse(code: Exclude<OutcomeCode, "ok">, message: string): never {
-  throw new Refuse(fail(code, message));
-}
-
-function guarded(handler: Handler): Handler {
-  return async (call) => {
-    try {
-      return await handler(call);
-    } catch (error) {
-      if (error instanceof Refuse) {
-        return error.outcome;
-      }
-      throw error;
-    }
-  };
-}
-
-function requireRepo(target: string): string {
-  const root = findRepoRoot(target);
-  if (root === null) {
-    refuse("missing", `${target} is not inside a git repository`);
-  }
-  return root;
-}
+const manifest = parseManifest(manifestJson, "qsm-langdev/qsm.json");
 
 function parseLanguages(csv: string): Language[] {
   const named = csv.split(",").filter((f) => f.length > 0);
@@ -104,10 +66,8 @@ function parseLanguages(csv: string): Language[] {
   if (unknown.length > 0) {
     refuse("usage", `unknown language: ${unknown.join(", ")} (known: ${LANGUAGES.join(", ")})`);
   }
-  return [...new Set(resolved as Language[])];
+  return [...new Set(resolved.filter((language): language is Language => language !== null))];
 }
-
-const dirOf = (call: Call): string => (call.args.dir as string | undefined) ?? ".";
 
 function printVerdicts(verdicts: readonly Verdict[], changedCount: number): void {
   if (verdicts.length === 0) {
@@ -139,16 +99,16 @@ function resolveAgainst(root: string, against: string, explicit: boolean): strin
 }
 
 const check: Handler = guarded(async (call) => {
-  const at = (call.args.at as EnforcementPoint | undefined) ?? "pre-commit";
+  const at = optOneOf(call, "at", ENFORCEMENT_POINTS) ?? "pre-commit";
   const root = requireRepo(dirOf(call));
   if (!isLangdevRepo(root)) {
     refuse("missing", `qsm-langdev is not set up in ${root}: run qsm-langdev init`);
   }
   const config = readGatesConfig(root);
-  const named = call.args.against as string | undefined;
+  const named = optionalString(call, "against");
   const against = named ?? "HEAD";
   const beforeRef = resolveAgainst(root, against, named !== undefined);
-  const lang = call.args.lang as string | undefined;
+  const lang = optionalString(call, "lang");
 
   const { changed, sets, verdicts, store, warnings } = await compareTrees(
     root,
@@ -157,8 +117,8 @@ const check: Handler = guarded(async (call) => {
     {
       at,
       languages: lang === undefined ? config.languages : parseLanguages(lang),
-      allFindings: call.args.allFindings === true,
-      given: (call.args.path as string[] | undefined) ?? [],
+      allFindings: flagArg(call, "allFindings"),
+      given: stringList(call, "path"),
     },
   );
 
@@ -243,7 +203,8 @@ const doctor: Handler = guarded(async (call) => {
   return { ...(gone ? fail("missing", text, data) : ok(data, text)), warnings };
 });
 
-type LanguagesAction = "list" | "add" | "remove";
+const LANGUAGES_ACTIONS = ["list", "add", "remove"] as const;
+type LanguagesAction = (typeof LANGUAGES_ACTIONS)[number];
 
 /** `config.languages` after applying `action` on `name`; writes the config back when it changed. */
 function applyLanguagesEdit(
@@ -268,10 +229,10 @@ function applyLanguagesEdit(
 }
 
 const languages: Handler = guarded((call) => {
-  const action = (call.args.action as LanguagesAction | undefined) ?? "list";
+  const action = optOneOf(call, "action", LANGUAGES_ACTIONS) ?? "list";
   const root = requireRepo(".");
   const config = readGatesConfig(root);
-  const selected = applyLanguagesEdit(root, config, action, call.args.name as string | undefined);
+  const selected = applyLanguagesEdit(root, config, action, optionalString(call, "name"));
   const text =
     selected.length === 0
       ? "(none — tree-derived mode: every language with matching files runs)"
@@ -288,9 +249,9 @@ function describeScaffold(action: ScaffoldAction): string {
 }
 
 /** `--target ts=browser`, repeatable, as the map gates.json records. */
-function parseTargets(raw: readonly string[] | undefined): Record<string, string> {
+function parseTargets(raw: readonly string[]): Record<string, string> {
   const parsed: Record<string, string> = {};
-  for (const pair of raw ?? []) {
+  for (const pair of raw) {
     const sep = pair.indexOf("=");
     if (sep < 1) {
       refuse(
@@ -314,7 +275,7 @@ function seedProfile(
   try {
     actions = scaffoldProfile(root, profile, detected, targets);
   } catch (error) {
-    refuse("usage", (error as Error).message);
+    refuse("usage", errorMessage(error));
   }
   for (const action of actions) {
     err(`  ${action.file}: ${describeScaffold(action)}`);
@@ -349,8 +310,8 @@ const init: Handler = guarded((call) => {
   }
   err(`[qsm-langdev] detected: ${detected.join(", ")}`);
   const config = readGatesConfig(root);
-  const profile = (call.args.profile as string | undefined) ?? config.profile ?? "general";
-  const targets = { ...config.targets, ...parseTargets(call.args.target as string[] | undefined) };
+  const profile = optionalString(call, "profile") ?? config.profile ?? "general";
+  const targets = { ...config.targets, ...parseTargets(stringList(call, "target")) };
   const actions = seedProfile(root, profile, detected, targets);
   const { languages: widened, added } = widenLanguages(config.languages, detected);
   const hooks = seedGates(config.hooks);
@@ -361,119 +322,6 @@ const init: Handler = guarded((call) => {
   }
   err(`[qsm-langdev] profile '${profile}' recorded in ${root}/.qsm-langdev/gates.json`);
   return ok({ profile, languages: widened, added, actions });
-});
-
-interface StructureTree {
-  root: string;
-  start: string;
-}
-
-/**
- * The commit `structure` compares against with no `--against`: the agent's own start point in this
- * tree when `--session` names one, else HEAD.
- */
-function namedCommit(
-  root: string,
-  against: string | undefined,
-  session: string | undefined,
-  agent: string | undefined,
-): string {
-  if (against !== undefined) {
-    return against;
-  }
-  if (session === undefined) {
-    return "HEAD";
-  }
-  const editor: Editor = { sessionId: session, agentId: agent ?? MAIN_AGENT };
-  const start = readStartPoint(editor, root);
-  if (start !== null) {
-    return start;
-  }
-  err(
-    `[qsm-langdev] no start point for agent ${editor.agentId} of session ${session} in this tree` +
-      " — comparing against HEAD. Commits the session already made here are not judged.",
-  );
-  return "HEAD";
-}
-
-/** The trees to judge: the single tree at `path` (or `.`), or, given
- * `--session`/`--agent` and no path, every tree that agent edited. */
-function structureTreesToJudge(
-  target: string | undefined,
-  values: { against?: string; session?: string; agent?: string },
-): StructureTree[] {
-  if (target !== undefined || values.agent === undefined) {
-    const root = requireRepo(target ?? ".");
-    const named = namedCommit(root, values.against, values.session, values.agent);
-    const start = resolveRef(root, named);
-    if (start === null) {
-      refuse("usage", `unknown commit '${named}'`);
-    }
-    return [{ root, start }];
-  }
-  if (values.session === undefined) {
-    refuse("usage", "--agent names an agent of a session; pass --session too");
-  }
-  return editedTrees({ sessionId: values.session, agentId: values.agent });
-}
-
-/** The first failing tree's verdict, else the last tree's, else the
- * report of an agent that edited nothing. */
-async function structureJudgeAll(trees: StructureTree[]): Promise<
-  StructureVerdict & {
-    tree: StructureTree | null;
-    result: StructureResult | null;
-  }
-> {
-  if (trees.length === 0) {
-    return {
-      tree: null,
-      result: null,
-      pass: true,
-      summary: "agent edited no tree in this session; nothing to score",
-      detail: [],
-    };
-  }
-  let last: (StructureVerdict & { tree: StructureTree; result: StructureResult }) | null = null;
-  for (const tree of trees) {
-    const result = await compareWorktreeSince(tree.root, tree.start);
-    last = { tree, result, ...verdict(result) };
-    if (!last.pass) {
-      return last;
-    }
-  }
-  return last as NonNullable<typeof last>;
-}
-
-const structure: Handler = guarded(async (call) => {
-  const against = call.args.against as string | undefined;
-  const session = call.args.session as string | undefined;
-  const agent = call.args.agent as string | undefined;
-  if (against !== undefined && session !== undefined) {
-    return fail(
-      "usage",
-      "--against and --session both name the commit to compare against; pass one",
-    );
-  }
-  const trees = structureTreesToJudge(call.args.path as string | undefined, {
-    ...(against === undefined ? {} : { against }),
-    ...(session === undefined ? {} : { session }),
-    ...(agent === undefined ? {} : { agent }),
-  });
-  const report = await structureJudgeAll(trees);
-  err(`  ${report.summary}`);
-  for (const line of report.detail) {
-    err(`  ${line}`);
-  }
-  const data = {
-    root: report.tree?.root ?? null,
-    against: report.tree?.start ?? null,
-    pass: report.pass,
-    summary: report.summary,
-    detail: report.detail,
-    result: report.result,
-  };
-  return report.pass ? ok(data) : fail("worse", report.summary, data);
 });
 
 /** One installed-hook action as the line it prints, or nothing for a kind
@@ -495,13 +343,16 @@ function describeInstallAction(action: HookAction): string | null {
         `${action.path} was NOT touched — ${action.why}.\n` +
         `  Add this line to it yourself:\n    ${action.line}`
       );
-    default:
-      return null;
+    case "absent":
+    case "removed":
+    case "unappended":
+      break;
   }
+  return null;
 }
 
 const installGitHooks: Handler = guarded((call) => {
-  const lang = (call.args.lang as HookLang | undefined) ?? "sh";
+  const lang = optOneOf(call, "lang", HOOK_LANGS) ?? "sh";
   const root = requireRepo(dirOf(call));
   const actions = installHooks(root, HOOK_NAMES, lang);
   const config = readGatesConfig(root);
@@ -561,14 +412,14 @@ function reportGateOutcomes(name: HookName, outcomes: readonly GateOutcome[]): v
   if (gatesCode(outcomes) === "ok") {
     return;
   }
-  if (outcomes.some((outcome) => outcome.status === "failed" && outcome.regression)) {
+  if (outcomes.some((outcome) => outcome.status === "failed" && outcome.regression === true)) {
     const verb = name === "pre-push" ? "push" : "commit";
     err(`  To let this regression pass once: QSM_LANGDEV_ALLOW="<why>" git ${verb} ...`);
   }
 }
 
 const hook: Handler = guarded(async (call) => {
-  const name = call.args.name as HookName;
+  const name = required(optOneOf(call, "name", HOOK_NAMES), "name");
   const root = requireRepo(".");
   if (!isLangdevRepo(root)) {
     return ok({ hook: name, root, outcomes: [] });
@@ -588,15 +439,6 @@ const hook: Handler = guarded(async (call) => {
   return fail(code, deciding.map((outcome) => outcome.gate).join(", "), data);
 });
 
-const edited: Handler = async (call) => {
-  const editor: Editor = {
-    sessionId: call.args.session as string,
-    agentId: (call.args.agent as string | undefined) ?? MAIN_AGENT,
-  };
-  const text = await editFindings(editor, call.args.file as string);
-  return ok({ text }, text ?? "");
-};
-
 if (import.meta.main) {
   process.exit(
     await runCli(manifest, "qsm-langdev", {
@@ -605,11 +447,10 @@ if (import.meta.main) {
       doctor,
       languages,
       init,
-      structure,
       install: installGitHooks,
       uninstall: uninstallGitHooks,
       hook,
-      edited,
+      ...judgeHandlers,
     }),
   );
 }

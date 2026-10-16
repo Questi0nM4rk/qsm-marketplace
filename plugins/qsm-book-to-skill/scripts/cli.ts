@@ -5,20 +5,27 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import { z } from "zod";
+import {
+  type Call,
+  type Handler,
+  optionalString,
+  runCli,
+  stringList,
+} from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
+import { skillFile, sourcesFile, structureFile } from "../lib/artifacts.ts";
 import { onPath, UPSTREAM } from "../lib/converters.ts";
 import { extractSources, systemDeps } from "../lib/extract.ts";
 import { assembleSkill, draftSkill, skillContents } from "../lib/generate.ts";
 import { resolveName, titleHint } from "../lib/naming.ts";
 import { scanSkill } from "../lib/scan.ts";
-import type { Source } from "../lib/sources.ts";
 import { scanInputs } from "../lib/sources.ts";
-import { analyzeText, type Structure } from "../lib/structure.ts";
+import { analyzeText } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-book-to-skill/qsm.json");
 
 /** A stage that cannot go on: the file it reads is not there, or it is
  * there and unreadable. Thrown so every reader can stay a plain function. */
@@ -36,15 +43,11 @@ class StageError extends Error {
   }
 }
 
-function text(call: Call, name: string): string | undefined {
-  return call.args[name] as string | undefined;
-}
-
 /** Every stage's files sit together, so a run is one directory a caller can
  * inspect, archive, or delete. */
 function workDir(call: Call): string {
   const dir =
-    text(call, "work") ??
+    optionalString(call, "work") ??
     process.env.QSM_BOOK_TO_SKILL_WORKDIR ??
     join(tmpdir(), "qsm-book-to-skill");
   mkdirSync(dir, { recursive: true });
@@ -55,7 +58,7 @@ function artifact(call: Call, named: string | undefined, fallback: string): stri
   return named === undefined ? join(workDir(call), fallback) : resolve(named);
 }
 
-function readJson<T>(path: string, what: string): T {
+function readJson<T>(path: string, what: string, schema: z.ZodType<T>): T {
   if (!existsSync(path)) {
     throw new StageError(
       `${what} is not at ${path}; run the stage before this one or pass the path`,
@@ -65,7 +68,7 @@ function readJson<T>(path: string, what: string): T {
     );
   }
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as T;
+    return schema.parse(JSON.parse(readFileSync(path, "utf8")));
   } catch (cause) {
     throw new StageError(
       `${path} is not readable JSON: ${cause instanceof Error ? cause.message : ""}`,
@@ -104,7 +107,7 @@ function partialIf(outcome: Outcome, warnings: readonly string[]): Outcome {
 }
 
 const validate: Handler = (call) => {
-  const scan = scanInputs(call.args.input as string[]);
+  const scan = scanInputs(stringList(call, "input"));
   const path = join(workDir(call), "sources.json");
   writeJson(path, scan);
   const lines = [
@@ -123,9 +126,10 @@ const validate: Handler = (call) => {
 };
 
 const extract: Handler = (call) => {
-  const scan = readJson<{ sources: readonly Source[] }>(
-    artifact(call, text(call, "sources"), "sources.json"),
+  const scan = readJson(
+    artifact(call, optionalString(call, "sources"), "sources.json"),
     "the validated source list",
+    sourcesFile,
   );
   const result = extractSources(scan.sources, systemDeps(process.env));
   const dir = workDir(call);
@@ -154,7 +158,10 @@ const extract: Handler = (call) => {
 };
 
 const analyze: Handler = (call) => {
-  const body = readText(artifact(call, text(call, "text"), "text.md"), "the consolidated text");
+  const body = readText(
+    artifact(call, optionalString(call, "text"), "text.md"),
+    "the consolidated text",
+  );
   const structure = analyzeText(body);
   const path = join(workDir(call), "structure.json");
   writeJson(path, structure);
@@ -167,12 +174,16 @@ const analyze: Handler = (call) => {
 };
 
 const draft: Handler = (call) => {
-  const body = readText(artifact(call, text(call, "text"), "text.md"), "the consolidated text");
-  const structure = readJson<Structure>(
-    artifact(call, text(call, "structure"), "structure.json"),
-    "the analyzed structure",
+  const body = readText(
+    artifact(call, optionalString(call, "text"), "text.md"),
+    "the consolidated text",
   );
-  const dir = artifact(call, text(call, "out"), "draft");
+  const structure = readJson(
+    artifact(call, optionalString(call, "structure"), "structure.json"),
+    "the analyzed structure",
+    structureFile,
+  );
+  const dir = artifact(call, optionalString(call, "out"), "draft");
   const result = draftSkill(body, structure, dir);
   return said(result, [
     `drafted ${result.chapters.length} chapters into ${dir}`,
@@ -181,11 +192,11 @@ const draft: Handler = (call) => {
 };
 
 function skillRoot(call: Call): string {
-  return text(call, "out") ?? process.env.QSM_SKILLS_DIR ?? join(workDir(call), "skills");
+  return optionalString(call, "out") ?? process.env.QSM_SKILLS_DIR ?? join(workDir(call), "skills");
 }
 
 const assemble: Handler = (call) => {
-  const given = text(call, "name");
+  const given = optionalString(call, "name");
   const hint =
     given === undefined
       ? titleHint(readText(artifact(call, undefined, "text.md"), "the consolidated text"))
@@ -195,10 +206,10 @@ const assemble: Handler = (call) => {
     return fail("failed", name.problems.join("\n"));
   }
   const result = assembleSkill({
-    draftDir: artifact(call, text(call, "draft"), "draft"),
+    draftDir: artifact(call, optionalString(call, "draft"), "draft"),
     outRoot: skillRoot(call),
     slug: name.slug,
-    description: text(call, "description") ?? "",
+    description: optionalString(call, "description") ?? "",
   });
   writeJson(join(workDir(call), "skill.json"), result);
   return said(result, [
@@ -208,12 +219,11 @@ const assemble: Handler = (call) => {
 };
 
 function skillDir(call: Call): string {
-  const named = text(call, "skill");
+  const named = optionalString(call, "skill");
   if (named !== undefined) {
     return resolve(named);
   }
-  return readJson<{ dir: string }>(artifact(call, undefined, "skill.json"), "the assembled skill")
-    .dir;
+  return readJson(artifact(call, undefined, "skill.json"), "the assembled skill", skillFile).dir;
 }
 
 /** The verdict on a generated skill: a skill that does not pass is never done, whatever else it

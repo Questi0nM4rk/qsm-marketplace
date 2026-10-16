@@ -5,7 +5,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import { basename, dirname, join } from "node:path";
-import { fail } from "./errors.ts";
+import { fail, messageOf } from "./errors.ts";
 import { projectOf } from "./project.ts";
 import { parseTranscript, sessionIdOf, type Turn } from "./transcript.ts";
 
@@ -96,6 +96,7 @@ export function saveTranscript(
         db
           .query<{ n: number }, [string]>("SELECT COUNT(*) AS n FROM turns WHERE session_id = ?")
           .get(id)?.n ?? 0;
+      db.query("DELETE FROM skipped WHERE id = ?").run(id);
       db.query(UPSERT_SESSION).run(
         id,
         cwd,
@@ -144,6 +145,19 @@ export function listTranscripts(projects: string): string[] {
   return out;
 }
 
+/** A transcript's mtime, or null when the file is gone: Claude Code deletes old transcripts at
+ * its own start, the moment catch-up runs. */
+function mtimeOf(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /** Transcripts the archive lacks, or whose file is newer than its saved-at
  * (or than the skip that judged it empty), oldest first. */
 export function unsavedTranscripts(db: Database, projects: string): string[] {
@@ -154,35 +168,52 @@ export function unsavedTranscripts(db: Database, projects: string): string[] {
     .all()) {
     seen.set(row.id, row.mtime);
   }
-  return listTranscripts(projects)
-    .filter((path) => {
-      const seenAt = seen.get(sessionIdOf(path));
-      return seenAt === undefined || statSync(path).mtimeMs > seenAt;
-    })
-    .sort((a, b) => statSync(a).mtimeMs - statSync(b).mtimeMs);
+  const pending: [string, number][] = [];
+  for (const path of listTranscripts(projects)) {
+    const mtime = mtimeOf(path);
+    const seenAt = seen.get(sessionIdOf(path));
+    if (mtime !== null && (seenAt === undefined || mtime > seenAt)) {
+      pending.push([path, mtime]);
+    }
+  }
+  return pending.toSorted((a, b) => a[1] - b[1]).map(([path]) => path);
 }
 
 export interface CatchUpResult {
   readonly saved: number;
   readonly skipped: number;
   readonly remain: number;
+  /** `<path>: <reason>` of each transcript that could not be saved */
+  readonly failed: readonly string[];
 }
 
 const CATCH_UP_MAX = 20;
 
-/** Saves at most `max` unsaved transcripts and says how many remain. */
+/** Saves at most `max` unsaved transcripts and says how many remain. One that cannot be saved is
+ * named in `failed` and the rest still save; it stays unsaved for the next run. */
 export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): CatchUpResult {
   const pending = unsavedTranscripts(db, projects);
-  const batch = pending.slice(0, max);
   let saved = 0;
   let skipped = 0;
-  for (const path of batch) {
-    const r = saveTranscript(db, path);
-    if (r.status === "saved") {
-      saved += 1;
-    } else {
-      skipped += 1;
+  let tried = 0;
+  const failed: string[] = [];
+  // Only saved and skipped files use up the budget, so a file that always fails (it sorts first,
+  // being old) cannot starve the new ones; `max * 2` attempts is the hard stop.
+  for (const path of pending) {
+    if (saved + skipped >= max || tried >= max * 2) {
+      break;
+    }
+    tried += 1;
+    try {
+      const r = saveTranscript(db, path);
+      if (r.status === "saved") {
+        saved += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
+      failed.push(`${path}: ${messageOf(error)}`);
     }
   }
-  return { saved, skipped, remain: pending.length - batch.length };
+  return { saved, skipped, remain: pending.length - tried, failed };
 }

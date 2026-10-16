@@ -5,10 +5,11 @@
 // each plugin's real unwrap, feed it the real stdout of its own binary
 // called with an unknown verb, and check it reads the envelope loud.
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
+import { isolatedEnv, runBin } from "./fixtures/cli.ts";
+import { sandboxDir } from "./fixtures/sandbox.ts";
+import { parseManifest } from "./qsm-manifest.ts";
 
 const root = resolve(import.meta.dir, "..");
 const pluginsDir = resolve(root, "plugins");
@@ -25,9 +26,16 @@ interface Candidate {
   readonly script: string;
 }
 
-/** The one shape this file reads off qsm.json: bin name -> entry script. */
-interface BinManifest {
-  readonly qsm: { readonly bin?: Readonly<Record<string, string>> };
+async function loadUnwrap(dir: string): Promise<Unwrap> {
+  const mod: unknown = await import(resolve(dir, "hooks/noun.generated.ts"));
+  if (typeof mod !== "object" || mod === null || !("unwrap" in mod) || !isUnwrap(mod.unwrap)) {
+    throw new Error(`${dir}/hooks/noun.generated.ts does not export unwrap`);
+  }
+  return mod.unwrap;
+}
+
+function isUnwrap(value: unknown): value is Unwrap {
+  return typeof value === "function";
 }
 
 /** Every plugins/<name>/qsm.json that declares a qsm.bin, its first bin and script. */
@@ -42,7 +50,7 @@ function candidates(): Candidate[] {
     if (!existsSync(manifestPath)) {
       continue;
     }
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as BinManifest;
+    const manifest = parseManifest(JSON.parse(readFileSync(manifestPath, "utf8")));
     const [bin, script] = Object.entries(manifest.qsm.bin ?? {})[0] ?? [];
     if (bin !== undefined && script !== undefined) {
       found.push({ plugin: basename(dir), dir, bin, script });
@@ -51,34 +59,20 @@ function candidates(): Candidate[] {
   return found;
 }
 
-/** HOME and every XDG var point into a fresh sandbox: never the real home config. */
-function sandboxEnv(home: string): Record<string, string> {
-  return {
-    PATH: process.env.PATH ?? "",
-    HOME: home,
-    XDG_CONFIG_HOME: join(home, "c"),
-    XDG_DATA_HOME: join(home, "d"),
-  };
-}
-
 /** Calls a plugin's own binary script with an unknown verb under --json and
  * returns its real stdout: the outcome envelope the binary actually prints,
  * not a fixture standing in for one. */
 function unknownVerbStdout(candidate: Candidate): string {
-  const home = mkdtempSync(join(tmpdir(), "qsm-noun-contract-"));
-  const r = spawnSync("bun", [resolve(candidate.dir, candidate.script), "no-such-verb", "--json"], {
-    encoding: "utf8",
-    env: sandboxEnv(home),
+  const home = sandboxDir("qsm-noun-contract-");
+  const r = runBin(resolve(candidate.dir, candidate.script), ["no-such-verb", "--json"], {
+    env: isolatedEnv(home),
   });
-  rmSync(home, { recursive: true, force: true });
-  return r.stdout ?? "";
+  return r.stdout;
 }
 
 describe.each(candidates())("$plugin noun contract", (candidate) => {
   test("unwrap reads the real binary's usage envelope and throws code + message", async () => {
-    const { unwrap } = (await import(resolve(candidate.dir, "hooks/noun.generated.ts"))) as {
-      unwrap: Unwrap;
-    };
+    const unwrap = await loadUnwrap(candidate.dir);
     const stdout = unknownVerbStdout(candidate);
     const argv = [candidate.bin, "no-such-verb", "--json"];
     let thrown: unknown;
@@ -88,7 +82,7 @@ describe.each(candidates())("$plugin noun contract", (candidate) => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(Error);
-    const { message } = thrown as Error;
+    const message = thrown instanceof Error ? thrown.message : String(thrown);
     expect(message).toContain("usage");
     expect(message).toContain("no-such-verb");
   });
@@ -103,10 +97,7 @@ async function memoryUnwrap(): Promise<Unwrap> {
       "qsm-memory candidate not found; is plugins/qsm-memory/qsm.json missing qsm.bin?",
     );
   }
-  const { unwrap } = (await import(resolve(memory.dir, "hooks/noun.generated.ts"))) as {
-    unwrap: Unwrap;
-  };
-  return unwrap;
+  return loadUnwrap(memory.dir);
 }
 
 describe("unwrap pure failure cases (qsm-memory's own copy)", () => {

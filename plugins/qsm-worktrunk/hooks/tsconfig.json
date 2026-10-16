@@ -17,6 +17,7 @@
   "include": [
     "../../../.claude/types",
     "register.tsx",
+    "register.test.ts",
     "../lib/doctor.ts",
     "../lib/git-worktree-block.ts",
     "../lib/workspace.ts",

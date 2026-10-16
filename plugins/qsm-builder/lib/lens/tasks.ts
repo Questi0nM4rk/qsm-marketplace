@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync, which } from "bun";
+import { isRecord } from "../../../../lib/outcome.ts";
 
 /** What the task is: an edit made on the lens, a new item asked for on it, feedback on a tool, or any other task. */
 type TaskKind = "edit" | "new" | "feedback" | "task";
@@ -29,13 +30,42 @@ export interface TaskRead {
   readonly note: string;
 }
 
-interface Issue {
+export interface Issue {
   readonly id: string;
   readonly title: string;
   readonly status: string;
   readonly issue_type?: string;
   readonly description?: string;
   readonly labels?: readonly string[];
+}
+
+/** An optional field: absent, or a string. */
+function isOptionalText(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+/** An optional field: absent, or a list of strings. */
+function isOptionalTexts(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((l) => typeof l === "string"));
+}
+
+function isIssue(value: unknown): value is Issue {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.status === "string" &&
+    isOptionalText(value.issue_type) &&
+    isOptionalText(value.description) &&
+    isOptionalTexts(value.labels)
+  );
+}
+
+/** The issues of `br list --json` output; throws when the text is not JSON. */
+export function issuesOf(text: string): Issue[] {
+  const parsed: unknown = JSON.parse(text);
+  const listed: unknown = isRecord(parsed) ? parsed.issues : undefined;
+  return Array.isArray(listed) ? listed.filter(isIssue) : [];
 }
 
 /** A sha256 in hex, or `missing` for a file that was not there. */
@@ -77,7 +107,7 @@ export function readTasks(root: string): TaskRead {
     return { open: null, note: "Tasks were not read: br list --json failed here." };
   }
   try {
-    const { issues = [] } = JSON.parse(run.stdout.toString()) as { issues?: Issue[] };
+    const issues = issuesOf(run.stdout.toString());
     return {
       open: issues.filter((i) => i.status !== "closed").map((i) => openTask(i, root)),
       note: "Open tasks come from br: a title starting with the plugin name (or the name without qsm-) and a colon, or a project task that names the plugin. An edit task is stale when its file changed after the page it came from.",
@@ -87,11 +117,12 @@ export function readTasks(root: string): TaskRead {
   }
 }
 
+const word = (c: string | undefined): boolean => c !== undefined && /[a-z0-9-]/.test(c);
+
 /** Whether a title names `name` as a whole word (a hyphen continues a name). */
 export function names(title: string, name: string): boolean {
   const lower = title.toLowerCase();
   const want = name.toLowerCase();
-  const word = (c: string | undefined) => c !== undefined && /[a-z0-9-]/.test(c);
   for (let at = lower.indexOf(want); at >= 0; at = lower.indexOf(want, at + 1)) {
     if (!(word(lower[at - 1]) || word(lower[at + want.length]))) {
       return true;

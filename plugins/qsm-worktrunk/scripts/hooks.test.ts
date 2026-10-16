@@ -9,11 +9,11 @@
 // stub: it is what proves the hook against, not what the hook is proved to
 // answer well.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const HOOKS = resolve(import.meta.dir, "../hooks");
 
@@ -21,19 +21,6 @@ interface Sandbox {
   readonly repo: string;
   readonly env: NodeJS.ProcessEnv;
 }
-
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 function git(cwd: string, env: NodeJS.ProcessEnv, args: readonly string[]): void {
   const r = spawnSync("git", args, { cwd, env, encoding: "utf8" });
@@ -44,8 +31,7 @@ function git(cwd: string, env: NodeJS.ProcessEnv, args: readonly string[]): void
 
 /** A real git repository with one commit on `main`, and a `HOME` of its own. */
 function sandbox(): Sandbox {
-  const root = mkdtempSync(join(tmpdir(), "qsm-worktrunk-hooks-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-worktrunk-hooks-");
   const repo = join(root, "repo");
   const home = join(root, "home");
   mkdirSync(repo, { recursive: true });

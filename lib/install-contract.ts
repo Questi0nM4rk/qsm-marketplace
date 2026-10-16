@@ -116,7 +116,7 @@ export type ActivationState = "activated" | "absent" | "differs";
  */
 export interface Activation {
   readonly options: readonly ActivationOption[];
-  /** Whether the user's files hold what activation writes; a read, never a write. */
+  /** Whether the user's files hold what activation writes; a read, never a write. Throws, naming the cause, when the files cannot be read as a state. */
   readonly status: (env: ActivationContext["env"]) => ActivationState;
   readonly activate: (ctx: ActivationContext) => InstallResult | Promise<InstallResult>;
 }
@@ -158,7 +158,14 @@ export async function activationMain(
 ): Promise<number> {
   const json = argv.includes("--json");
   if (argv.includes("--status")) {
-    const state = activation.status(process.env);
+    let state: ActivationState;
+    try {
+      state = activation.status(process.env);
+    } catch (e) {
+      const outcome = fail("failed", e instanceof Error ? e.message : String(e));
+      process.stdout.write(json ? renderJson(outcome) : `failed: ${outcome.message}\n`);
+      return exitOf(outcome.code);
+    }
     const data = { state, options: activation.options };
     process.stdout.write(json ? renderJson(ok(data, state)) : `${state}\n`);
     return 0;

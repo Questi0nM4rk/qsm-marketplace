@@ -1,20 +1,13 @@
 // Doctor checks the Claude Code installation itself, over a sandbox home and
 // project: which, the version, and the release lookup are fakes, so nothing
 // touches the real home or the network.
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { type Channel, type ClaudeProbes, claudeChecks, type Lookup } from "./claude-health.ts";
 import type { Check } from "./doctor.ts";
 import { jsonErrorAt } from "./json-position.ts";
-
-const sandboxes: string[] = [];
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 interface World {
   readonly home: string;
@@ -24,8 +17,7 @@ interface World {
 }
 
 function world(): World {
-  const root = mkdtempSync(join(tmpdir(), "qsm-claude-health-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-claude-health-");
   const home = join(root, "home");
   const cwd = join(root, "project");
   mkdirSync(home, { recursive: true });

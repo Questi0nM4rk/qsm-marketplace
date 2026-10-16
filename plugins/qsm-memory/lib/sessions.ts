@@ -43,7 +43,8 @@ export interface ShowOptions {
   readonly lines?: readonly [number, number] | undefined;
 }
 
-const SHOW_WINDOW = 200;
+/** Characters of turns one show prints, so a whole session never lands in the reader's context. */
+const SHOW_CHARS = 20_000;
 
 function turnLine(seq: number, turn: Turn): string {
   if (turn.kind === "tool_use") {
@@ -90,13 +91,25 @@ export function show(db: Database, prefix: string, options: ShowOptions = {}): s
   const all = options.full === true ? transcriptTurns(session) : savedTurns(db, session);
   const rows = all.filter(([seq]) => seq >= from && seq <= to);
   if (rows.length === 0) {
-    return `${header(session)}\nno turns in ${from}-${to === Number.MAX_SAFE_INTEGER ? "end" : to}; the session has ${all.length}`;
+    return `${header(session)}\nno turns in ${from}-${to === Number.MAX_SAFE_INTEGER ? "end" : to}; the last turn is #${all.at(-1)?.[0] ?? 0}`;
   }
-  const window = rows.slice(0, SHOW_WINDOW);
-  const lines = [header(session), ...window.map(([seq, turn]) => turnLine(seq, turn))];
-  const lastSeq = window.at(-1)?.[0] ?? to;
-  if (rows.length > SHOW_WINDOW) {
-    lines.push(`next: --lines ${lastSeq + 1}-${lastSeq + SHOW_WINDOW}`);
+  const lines = [header(session)];
+  let shown = 0;
+  let lastSeq = from;
+  let size = 0;
+  for (const [seq, turn] of rows) {
+    const line = turnLine(seq, turn);
+    size += line.length;
+    if (size > SHOW_CHARS && shown > 0) {
+      break;
+    }
+    const cut = `${line.slice(0, SHOW_CHARS)} [turn cut at ${SHOW_CHARS} of ${line.length} characters]`;
+    lines.push(line.length > SHOW_CHARS ? cut : line);
+    shown += 1;
+    lastSeq = seq;
+  }
+  if (rows.length > shown) {
+    lines.push(`next: --lines ${lastSeq + 1}-${rows.at(-1)?.[0]}`);
   }
   return lines.join("\n");
 }
@@ -119,14 +132,29 @@ export function listSessions(db: Database, options: ListOptions = {}): SessionRo
     .all(cutoff, options.project === undefined ? null : projectOf(options.project));
 }
 
-export function formatList(rows: readonly SessionRow[]): string {
+export const LIST_LIMIT = 20;
+
+/** The first `limit` items and how many more there are, so a list never lands whole in the
+ * reader's context. */
+export function page<T>(items: readonly T[], limit: number): { rows: T[]; more: number } {
+  return { rows: items.slice(0, limit), more: Math.max(0, items.length - limit) };
+}
+
+/** The first `limit` lines, and `N more: --limit <all>` when there are others. */
+export function bounded(lines: readonly string[], limit: number = LIST_LIMIT): string {
+  const { rows, more } = page(lines, limit);
+  return more > 0 ? [...rows, `${more} more: --limit ${lines.length}`].join("\n") : rows.join("\n");
+}
+
+export function formatList(rows: readonly SessionRow[], limit: number = LIST_LIMIT): string {
   if (rows.length === 0) {
     return "no sessions";
   }
-  return rows
-    .map(
+  return bounded(
+    rows.map(
       (row) =>
         `${row.ended_at.slice(0, 10)} ${basename(row.project)} ${row.id} ${row.turn_count} ${row.title}`,
-    )
-    .join("\n");
+    ),
+    limit,
+  );
 }

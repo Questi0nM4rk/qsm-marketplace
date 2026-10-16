@@ -6,7 +6,7 @@ import { PROFILE_DATA } from "./profiles-data.ts";
 import { isConfigless, LANGUAGES, type Language } from "./registry.ts";
 
 function listProfiles(): string[] {
-  return Object.keys(PROFILE_DATA).sort();
+  return Object.keys(PROFILE_DATA).toSorted();
 }
 
 interface ProfileFile {
@@ -74,7 +74,8 @@ export function hasScaffoldedConfig(root: string, language: Language): boolean {
     }
   }
   if (names.size === 0) {
-    return true; // no profile ships anything for this language at all
+    // no profile ships anything for this language at all
+    return true;
   }
   return [...names].some((name) => existsSync(join(root, name)));
 }
@@ -130,6 +131,7 @@ function seededByAnotherProfile(
       return profile;
     }
   }
+  return undefined;
 }
 
 /**

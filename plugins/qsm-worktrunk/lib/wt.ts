@@ -112,7 +112,7 @@ function lastLineOf(result: CommandResult | null): string {
     return "";
   }
   const lines = `${result.stderr}\n${result.stdout}`.split("\n").map((l) => l.trim());
-  return lines.filter((l) => l.length > 0).at(-1) ?? "";
+  return lines.findLast((l) => l.length > 0) ?? "";
 }
 
 function describeFailure(

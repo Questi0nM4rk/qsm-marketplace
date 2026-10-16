@@ -3,6 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { UsageError } from "./errors.ts";
+import { expectRejection } from "./rejection.ts";
 import type { Run } from "./exec.ts";
 import {
   type ApiDiscussion,
@@ -196,7 +197,7 @@ function recordedForge(discussions: readonly ApiDiscussion[] = ALL): Recorded {
 describe("Platform unreachable", () => {
   test("the client's own error is what the caller sees", async () => {
     const run: Run = () => Promise.reject(new Error("glab: no token found"));
-    await expect(gitlabForge(run, PROJECT).status(MR)).rejects.toThrow("no token found");
+    await expectRejection(gitlabForge(run, PROJECT).status(MR), "no token found");
   });
 });
 
@@ -207,7 +208,7 @@ describe("Identity does not exist", () => {
 
   test("reply posts nothing when the note belongs to no thread", async () => {
     const { forge, calls } = recordedForge();
-    await expect(replyToThread(forge, MR, 999_999, "hello")).rejects.toThrow(UsageError);
+    await expectRejection(replyToThread(forge, MR, 999_999, "hello"), UsageError);
     expect(calls.every((call) => !call.args.includes("POST"))).toBe(true);
   });
 });
@@ -251,7 +252,7 @@ describe("resolving one thread", () => {
 
   test("Identity not found", async () => {
     const { forge } = recordedForge();
-    await expect(resolveThread(forge, MR, 42_424, null)).rejects.toThrow(UsageError);
+    await expectRejection(resolveThread(forge, MR, 42_424, null), UsageError);
   });
 });
 

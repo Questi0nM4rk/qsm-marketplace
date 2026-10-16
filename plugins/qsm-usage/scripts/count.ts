@@ -1,7 +1,7 @@
 // `qsm-usage count`: how big is this, before it is sent.
 
 import { readFileSync } from "node:fs";
-import type { Handler } from "../../../lib/cli-base.ts";
+import { flagArg, type Handler, optionalString, stringList } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   CountError,
@@ -19,11 +19,7 @@ interface Counted {
 }
 
 export async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return Bun.stdin.text();
 }
 
 function render(results: readonly Counted[], showTotal: boolean, total: number): string {
@@ -66,14 +62,24 @@ async function countInputs(
   return results;
 }
 
+function modeOf(value: string | undefined): CountMode {
+  if (value === undefined || value === "estimate") {
+    return "estimate";
+  }
+  if (value === "exact") {
+    return "exact";
+  }
+  throw new TypeError(`argument mode is ${value}, not estimate or exact`);
+}
+
 export const count: Handler = async (call) => {
-  const files = (call.args.files as string[] | undefined) ?? [];
-  const useStdin = call.args.stdin === true;
+  const files = stringList(call, "files");
+  const useStdin = flagArg(call, "stdin");
   if (files.length === 0 && !useStdin) {
     return fail("usage", "no input: pass one or more files, or --stdin");
   }
-  const mode = (call.args.mode as CountMode | undefined) ?? "estimate";
-  const model = (call.args.model as string | undefined) ?? DEFAULT_MODEL;
+  const mode = modeOf(optionalString(call, "mode"));
+  const model = optionalString(call, "model") ?? DEFAULT_MODEL;
   const options = { mode, model, apiKey: process.env[CREDENTIAL_ENV] };
   let results: Counted[] | Outcome;
   try {
@@ -89,6 +95,6 @@ export const count: Handler = async (call) => {
   }
   const total = results.reduce((sum, r) => sum + r.tokens, 0);
   const data = { mode, model, estimated: mode === "estimate", files: results, total };
-  const outcome = ok(data, render(results, call.args.total === true, total));
+  const outcome = ok(data, render(results, flagArg(call, "total"), total));
   return mode === "estimate" ? { ...outcome, warnings: [ESTIMATE_NOTE] } : outcome;
 };

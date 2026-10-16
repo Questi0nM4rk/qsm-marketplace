@@ -15,11 +15,22 @@ import {
 const NAME = "harness-memory";
 const CLEANUP_DAYS = 7;
 
-export type MemoryChoice = "qsm" | "skip";
+const MEMORY_CHOICES = ["qsm", "skip"] as const;
+export type MemoryChoice = (typeof MEMORY_CHOICES)[number];
 
 function settingsPath(env: ActivationContext["env"]): string {
   const home = env.CLAUDE_CONFIG_DIR ?? resolve(env.HOME ?? homedir(), ".claude");
   return resolve(home, "settings.json");
+}
+
+/** The settings object in `text`; JSON that is not an object is as unusable as JSON that does not
+ * parse. */
+function parseSettings(text: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("settings.json is not a JSON object");
+  }
+  return Object.fromEntries(Object.entries(parsed));
 }
 
 /**
@@ -27,7 +38,7 @@ function settingsPath(env: ActivationContext["env"]): string {
  * untouched, or null when it already says so.
  */
 export function withHarnessMemoryOff(existing: string | null): string | null {
-  const settings: Record<string, unknown> = existing ? JSON.parse(existing) : {};
+  const settings = existing === null || existing === "" ? {} : parseSettings(existing);
   const days = settings.cleanupPeriodDays;
   const daysFine = typeof days === "number" && days <= CLEANUP_DAYS;
   if (settings.autoMemoryEnabled === false && daysFine) {
@@ -45,8 +56,11 @@ const KEYS = `autoMemoryEnabled: false, cleanupPeriodDays: ${CLEANUP_DAYS}`;
 /** The one write, taken or not taken. A settings.json that does not parse is
  * an error naming the file: rewriting it would lose what the user has there. */
 export function harnessMemoryStep(ctx: ActivationContext): Step {
-  const choice = ctx.choices.memory as MemoryChoice;
+  const choice = MEMORY_CHOICES.find((c) => c === ctx.choices.memory);
   const path = settingsPath(ctx.env);
+  if (choice === undefined) {
+    return { name: NAME, status: "error", detail: `unknown memory choice '${ctx.choices.memory}'` };
+  }
   if (choice === "skip") {
     return { name: NAME, status: "skipped", detail: `${path} left alone` };
   }
@@ -77,7 +91,7 @@ export const activation: Activation = {
   options: [
     {
       name: "memory",
-      values: ["qsm", "skip"],
+      values: [...MEMORY_CHOICES],
       description:
         "qsm turns Claude Code's own memory off (autoMemoryEnabled: false) and has it delete transcripts after 7 days (cleanupPeriodDays) so this archive is the one memory; skip leaves settings.json alone",
     },

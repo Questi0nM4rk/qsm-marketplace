@@ -47,12 +47,12 @@ function versionOf(text: string): number[] | null {
 /** True when the version text names `GRAPHIFY.minVersion` or newer. */
 export function graphifyNewEnough(text: string): boolean {
   const have = versionOf(text);
-  const want = versionOf(GRAPHIFY.minVersion) as number[];
-  if (have === null) {
+  const want = versionOf(GRAPHIFY.minVersion);
+  if (have === null || want === null) {
     return false;
   }
   const at = have.findIndex((n, i) => n !== want[i]);
-  return at === -1 || (have[at] as number) > (want[at] as number);
+  return at === -1 || (have[at] ?? 0) > (want[at] ?? 0);
 }
 
 function graphifyCheck(run: Runner): Check {

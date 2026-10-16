@@ -3,9 +3,16 @@
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   type Answer,
   checkBins,
@@ -25,7 +32,7 @@ import { filter } from "./filter.ts";
 import { report as reportVerb } from "./report.ts";
 import { wrap } from "./wrap.ts";
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-usage/qsm.json");
 
 /**
  * A refusal raised from a helper: `usage` for a broken call, `failed` for a call that was fine and
@@ -67,7 +74,7 @@ function read(path: string): string {
   try {
     return readFileSync(path, "utf8");
   } catch (error) {
-    inputError(`cannot read ${path}: ${messageOf(error)}`);
+    return inputError(`cannot read ${path}: ${messageOf(error)}`);
   }
 }
 
@@ -80,20 +87,20 @@ interface Selection {
 /** The three ways to name the data inside a file: the whole file, its
  * frontmatter, or one table under a heading. */
 function select(call: Call): Selection {
-  const file = call.args.file as string;
-  const section = call.args.section as string | undefined;
+  const file = requiredString(call, "file");
+  const section = optionalString(call, "section");
   const source = read(file);
-  if (call.args.frontmatter === true && call.args.table === true) {
+  if (flagArg(call, "frontmatter") && flagArg(call, "table")) {
     badCall("--frontmatter and --table name two different things; pass one");
   }
-  if (call.args.frontmatter === true) {
+  if (flagArg(call, "frontmatter")) {
     return {
       label: `${file} (frontmatter)`,
       original: frontmatterText(source),
       value: extractFrontmatter(source),
     };
   }
-  if (call.args.table === true) {
+  if (flagArg(call, "table")) {
     if (section === undefined || section.length === 0) {
       badCall("--table needs --section <heading>");
     }
@@ -111,7 +118,7 @@ const answer: Answer = (bin, args) => {
   if (probed.error !== undefined || probed.status !== 0) {
     return null;
   }
-  const [line] = `${probed.stdout}`.trim().split("\n");
+  const [line] = probed.stdout.trim().split("\n");
   return line === undefined || line.length === 0 ? null : line;
 };
 
@@ -121,7 +128,7 @@ const encodeVerb: Handler = guarded((call) => {
 });
 
 const decodeVerb: Handler = guarded((call) => {
-  const value = decode(read(call.args.file as string));
+  const value = decode(read(requiredString(call, "file")));
   return ok(value, JSON.stringify(value));
 });
 

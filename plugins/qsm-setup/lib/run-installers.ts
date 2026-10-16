@@ -1,13 +1,14 @@
 // Collect-all over the plugins' own installers.
 import { spawnSync } from "node:child_process";
 import { NOTHING } from "../../../lib/install-base.ts";
-import type {
-  ActivationOption,
-  ActivationState,
-  InstallResult,
-  Step,
-} from "../../../lib/install-contract.ts";
+import type { InstallResult, Step } from "../../../lib/install-contract.ts";
 import type { PluginNode } from "./discover.ts";
+import {
+  type ActivationReport,
+  isActivationReport,
+  isInstallResult,
+  parseEnvelope,
+} from "./json.ts";
 
 export interface InstallOutcome {
   readonly plugin: string;
@@ -30,18 +31,10 @@ export function isFailedOutcome(o: { readonly status: string }): boolean {
   return FAILED.has(o.status);
 }
 
-/** The envelope cliMain prints under --json: `{ code, ..., data: InstallResult }`. */
-function parseEnvelope(stdout: string): InstallResult | null {
-  const text = stdout.trim();
-  if (text.length === 0) {
-    return null;
-  }
-  try {
-    const envelope = JSON.parse(text) as { data?: InstallResult | null };
-    return envelope.data ?? null;
-  } catch {
-    return null;
-  }
+/** The install result inside the envelope cliMain prints under --json. */
+function installResultOf(stdout: string): InstallResult | null {
+  const envelope = parseEnvelope(stdout.trim());
+  return envelope !== null && isInstallResult(envelope.data) ? envelope.data : null;
 }
 
 export const bunRunner: Runner = (installer, dryRun) => {
@@ -49,27 +42,29 @@ export const bunRunner: Runner = (installer, dryRun) => {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-  return { code: r.status ?? 1, result: parseEnvelope(r.stdout ?? ""), stderr: r.stderr ?? "" };
+  return { code: r.status ?? 1, result: installResultOf(r.stdout ?? ""), stderr: r.stderr ?? "" };
 };
 
-interface ActivationReport {
-  readonly state: ActivationState;
-  readonly options: readonly ActivationOption[];
-}
 /** What an activation script says of the machine, or the reason it could not. */
 export type ActivationReader = (activation: string) => ActivationReport | string;
 
 export const bunActivationReader: ActivationReader = (activation) => {
+  // Bun's spawnSync without `env` passes the environment the process started with, not
+  // process.env as it is now; a caller that set CLAUDE_CONFIG_DIR would read the wrong home.
   const r = spawnSync("bun", [activation, "--status", "--json"], {
     encoding: "utf8",
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  try {
-    return (JSON.parse(r.stdout) as { data: ActivationReport }).data;
-  } catch {
-    const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
-    return `status exited ${r.status} and printed no envelope: ${last}`;
+  const envelope = parseEnvelope(r.stdout);
+  if (envelope !== null && isActivationReport(envelope.data)) {
+    return envelope.data;
   }
+  if (envelope !== null && envelope.data === null) {
+    return envelope.message;
+  }
+  const last = (r.stderr ?? "").trim().split("\n").at(-1) ?? "";
+  return `status exited ${r.status} and printed no envelope: ${last}`;
 };
 
 function outcomeOf(name: string, r: RunResult): InstallOutcome {
@@ -84,8 +79,7 @@ function outcomeOf(name: string, r: RunResult): InstallOutcome {
   const last = r.stderr
     .trim()
     .split("\n")
-    .filter((l) => l.length > 0)
-    .at(-1);
+    .findLast((l) => l.length > 0);
   // An installer that printed no envelope cannot say what it did, so it did
   // not install: loud, never an empty success.
   const why = `installer exited ${r.code} and printed no envelope`;

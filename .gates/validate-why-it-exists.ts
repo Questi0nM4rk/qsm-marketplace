@@ -11,7 +11,7 @@ export const MAX_SENTENCES = 5;
 
 /** A sentence ends at ., ! or ? followed by whitespace or the end of the section; code spans are ignored. */
 export function countSentences(section: string): number {
-  const text = section.replace(/`[^`]*`/g, "x");
+  const text = section.replaceAll(/`[^`]*`/g, "x");
   return (text.match(/[.!?](?=\s|$)/g) ?? []).length;
 }
 

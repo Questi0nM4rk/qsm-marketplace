@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { type Env, home } from "../../../lib/paths.ts";
 import { agentChecks, type ClaudePaths, configChecks, skillChecks } from "./claude-files.ts";
 import type { Check } from "./doctor.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export type Channel = "latest" | "stable";
 export type Lookup =
@@ -104,17 +105,15 @@ function installs(on: readonly string[], l: Layout): Install[] {
   return [...found].map(([kind, path]) => ({ kind, path }));
 }
 
+const REMOVALS: Record<InstallKind, (i: Install, l: Layout) => string> = {
+  native: (_i, l) => `rm ${l.launcher} && rm -rf ${l.nativeData}`,
+  npm: () => "npm uninstall -g @anthropic-ai/claude-code",
+  local: (_i, l) => `rm -rf ${l.localDir}`,
+  other: (i) => `rm ${i.path}`,
+};
+
 function removal(i: Install, l: Layout): string {
-  switch (i.kind) {
-    case "native":
-      return `rm ${l.launcher} && rm -rf ${l.nativeData}`;
-    case "npm":
-      return "npm uninstall -g @anthropic-ai/claude-code";
-    case "local":
-      return `rm -rf ${l.localDir}`;
-    default:
-      return `rm ${i.path}`;
-  }
+  return REMOVALS[i.kind](i, l);
 }
 
 /** A key of `.claude.json` or settings, read alone; null when the file is
@@ -124,8 +123,8 @@ function readKey(file: string, key: string): unknown {
     return null;
   }
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-    return parsed[key] ?? null;
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    return isRecord(parsed) ? (parsed[key] ?? null) : null;
   } catch {
     return null;
   }

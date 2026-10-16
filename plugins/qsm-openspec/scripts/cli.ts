@@ -2,9 +2,9 @@
 
 // qsm-openspec: the answer a skill cannot reach by reading.
 
-import { type Call, runCli } from "../../../lib/cli-base.ts";
+import { type Call, optionalString, runCli } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   type DoctorSections,
   doctorSections,
@@ -14,11 +14,11 @@ import {
 } from "../lib/doctor.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-openspec/qsm.json");
 
 /** doctor is `missing` when the upstream openspec CLI is not on PATH. */
 function doctor(call: Call): Outcome {
-  const root = (call.args.root as string | undefined) ?? repositoryRoot(process.cwd());
+  const root = optionalString(call, "root") ?? repositoryRoot(process.cwd());
   if (!isDir(root)) {
     return fail("missing", `--root ${root} is not a directory`);
   }

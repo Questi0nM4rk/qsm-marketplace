@@ -38,6 +38,8 @@ export interface SourceScan {
 }
 
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "dist", "build", ".git"]);
+/** An input holding one of these is a glob pattern, not a path. */
+const GLOB_CHARACTERS = ["*", "?", "["];
 
 function* filesUnder(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -88,11 +90,11 @@ function expandGlob(pattern: string, cwd: string): string[] {
   const glob = new Glob(resolve(cwd, pattern));
   return [...filesUnder(base)]
     .filter((path) => glob.match(path))
-    .sort((a, b) => a.localeCompare(b));
+    .toSorted((a, b) => a.localeCompare(b));
 }
 
 function resolveInput(input: string, cwd: string): { files: string[]; rejected: Rejected[] } {
-  if ([...input].some((char) => "*?[".includes(char))) {
+  if (GLOB_CHARACTERS.some((char) => input.includes(char))) {
     const files = expandGlob(input, cwd);
     return files.length === 0
       ? { files, rejected: [{ path: input, reason: "matched no file" }] }
@@ -103,7 +105,7 @@ function resolveInput(input: string, cwd: string): { files: string[]; rejected: 
     return { files: [], rejected: [{ path, reason: "does not exist" }] };
   }
   if (statSync(path).isDirectory()) {
-    const files = [...filesUnder(path)].sort((a, b) => a.localeCompare(b));
+    const files = [...filesUnder(path)].toSorted((a, b) => a.localeCompare(b));
     return files.length === 0
       ? { files, rejected: [{ path, reason: "directory holds no file" }] }
       : { files, rejected: [] };

@@ -19,7 +19,7 @@ const RULES_SUFFIX = ".yaml";
  * nothing, which reads as a clean file. */
 export function readOwnRules(rulesRoot: string): Record<string, string> {
   const rules: Record<string, string> = {};
-  for (const file of readdirSync(rulesRoot).sort()) {
+  for (const file of readdirSync(rulesRoot).toSorted()) {
     if (!file.endsWith(RULES_SUFFIX)) {
       continue;
     }
@@ -46,11 +46,11 @@ function main(): void {
   writeFileSync(OUT_FILE, header + body);
 
   // Formatted here, so a regenerate is never a lint failure.
-  const formatted = spawnSync("bunx", ["biome", "format", "--write", OUT_FILE], {
+  const formatted = spawnSync("bunx", ["oxfmt", OUT_FILE], {
     stdio: ["ignore", "ignore", "inherit"],
   });
   if (formatted.status !== 0) {
-    console.error(`wrote ${OUT_FILE} but biome could not format it`);
+    console.error(`wrote ${OUT_FILE} but oxfmt could not format it`);
     process.exit(1);
   }
   console.log(`wrote ${OUT_FILE}`);

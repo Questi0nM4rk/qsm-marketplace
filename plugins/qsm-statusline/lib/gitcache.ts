@@ -3,6 +3,7 @@
 
 import { cacheKey, isFresh, readCache, releaseLock, tryLock, writeCache } from "./cache.ts";
 import type { GitState } from "./git.ts";
+import { isRecord } from "../../../lib/outcome.ts";
 
 export interface GitResolution {
   /**
@@ -19,6 +20,27 @@ export function gitCacheName(cwd: string): string {
   return cacheKey("git", cwd);
 }
 
+/** The stored state, null for a stored "no git state", undefined for a body of another shape. */
+function parseGitState(value: unknown): GitState | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const { branch, staged, modified, untracked, conflicts } = value;
+  if (
+    (typeof branch === "string" || branch === null) &&
+    typeof staged === "number" &&
+    typeof modified === "number" &&
+    typeof untracked === "number" &&
+    typeof conflicts === "number"
+  ) {
+    return { branch, staged, modified, untracked, conflicts };
+  }
+  return undefined;
+}
+
 /** Serves the cache and says whether a refresh is due. A body written by a
  * layout this build does not read counts as nothing cached. */
 export function resolveGit(dir: string, cwd: string, now: number, maxAgeMs: number): GitResolution {
@@ -28,7 +50,9 @@ export function resolveGit(dir: string, cwd: string, now: number, maxAgeMs: numb
   }
   const stale = !isFresh(entry, maxAgeMs);
   try {
-    return { state: JSON.parse(entry.body) as GitState | null, stale };
+    const parsed: unknown = JSON.parse(entry.body);
+    const state = parseGitState(parsed);
+    return state === undefined ? { state: null, stale: true } : { state, stale };
   } catch {
     return { state: null, stale: true };
   }

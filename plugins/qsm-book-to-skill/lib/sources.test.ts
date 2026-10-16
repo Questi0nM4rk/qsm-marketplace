@@ -1,29 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { READER_BY_EXTENSION, scanInputs } from "./sources.ts";
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-sources-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 describe("scanInputs", () => {
   test("a named file with a supported extension carries its reader and size", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-sources-");
     writeFileSync(join(dir, "book.md"), "hello");
     const scan = scanInputs([join(dir, "book.md")]);
     expect(scan.rejected).toEqual([]);
@@ -34,7 +17,7 @@ describe("scanInputs", () => {
   });
 
   test("a named file this converter cannot read is rejected with the reason", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-sources-");
     writeFileSync(join(dir, "cover.png"), "x");
     const scan = scanInputs([join(dir, "cover.png")]);
     expect(scan.sources).toEqual([]);
@@ -42,19 +25,19 @@ describe("scanInputs", () => {
   });
 
   test("a path that is not there is rejected rather than ignored", () => {
-    const scan = scanInputs([join(sandbox(), "missing.pdf")]);
+    const scan = scanInputs([join(sandboxDir("qsm-book-to-skill-sources-"), "missing.pdf")]);
     expect(scan.sources).toEqual([]);
     expect(scan.rejected[0]?.reason).toBe("does not exist");
   });
 
   test("a directory contributes only the files this converter reads", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-sources-");
     mkdirSync(join(dir, "nested"));
     writeFileSync(join(dir, "one.epub"), "a");
     writeFileSync(join(dir, "nested", "two.pdf"), "b");
     writeFileSync(join(dir, "cover.png"), "c");
     const scan = scanInputs([dir]);
-    expect(scan.sources.map((s) => s.reader).sort((a, b) => a.localeCompare(b))).toEqual([
+    expect(scan.sources.map((s) => s.reader).toSorted((a, b) => a.localeCompare(b))).toEqual([
       "pandoc",
       "pdftotext",
     ]);
@@ -64,14 +47,14 @@ describe("scanInputs", () => {
 
 describe("scanInputs over several inputs", () => {
   test("the same file named twice is one source", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-sources-");
     writeFileSync(join(dir, "book.md"), "hello");
     const scan = scanInputs([join(dir, "book.md"), dir]);
     expect(scan.sources).toHaveLength(1);
   });
 
   test("a quoted glob expands relative to the working directory", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-sources-");
     mkdirSync(join(dir, "chapters"));
     writeFileSync(join(dir, "chapters", "one.md"), "a");
     writeFileSync(join(dir, "chapters", "two.md"), "b");
@@ -81,7 +64,7 @@ describe("scanInputs over several inputs", () => {
   });
 
   test("a glob that matches nothing is reported, not silently empty", () => {
-    const scan = scanInputs(["*.epub"], sandbox());
+    const scan = scanInputs(["*.epub"], sandboxDir("qsm-book-to-skill-sources-"));
     expect(scan.rejected[0]?.reason).toBe("matched no file");
   });
 

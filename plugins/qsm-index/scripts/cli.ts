@@ -3,9 +3,15 @@
 // qsm-index: `build`, `auto`, `edited`, `doctor`, `mcp serve`, and every tool of the MCP server as
 // a verb.
 
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { askText, auto } from "../lib/auto.ts";
 import { type BuildReport, buildIndex, IndexPathError } from "../lib/build.ts";
 import { doctor, formatReport } from "../lib/doctor.ts";
@@ -14,12 +20,13 @@ import { edited, TOOLS, type ToolOutcome } from "../lib/tools.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as mcpHandlers } from "./mcp.ts";
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-index/qsm.json");
 
 function build(call: Call): Outcome {
+  const path = requiredString(call, "path");
   let report: BuildReport;
   try {
-    report = buildIndex(call.args.path as string, {
+    report = buildIndex(path, {
       cwd: process.cwd(),
       run: spawnRunner,
       env: process.env,
@@ -44,9 +51,10 @@ function build(call: Call): Outcome {
 
 /** The session-start decision; every answer but a failed start is a decision, exit 0. */
 function runAuto(call: Call): Outcome {
-  const consent =
-    call.args.consent === "yes" || call.args.consent === "no" ? call.args.consent : undefined;
-  const answer = auto({ path: call.args.path as string, consent }, spawnRunner, process.env);
+  const path = requiredString(call, "path");
+  const given = optionalString(call, "consent");
+  const consent = given === "yes" || given === "no" ? given : undefined;
+  const answer = auto({ path, consent }, spawnRunner, process.env);
   if (answer.answer === "ask") {
     const text = askText(answer);
     return ok({ ...answer, askText: text }, text);
@@ -59,8 +67,9 @@ function runAuto(call: Call): Outcome {
 
 /** One edited file counted towards a refresh; a refresh that cannot start is the one failure. */
 function runEdited(call: Call): Outcome {
-  const cwd = typeof call.args.cwd === "string" ? call.args.cwd : undefined;
-  return printed(edited({ path: call.args.path as string, cwd }, spawnRunner, process.env));
+  const cwd = optionalString(call, "cwd");
+  const path = requiredString(call, "path");
+  return printed(edited({ path, cwd }, spawnRunner, process.env));
 }
 
 /** Unhealthy is a prerequisite that is not there: a binary is off PATH or

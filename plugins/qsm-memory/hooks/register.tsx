@@ -10,11 +10,15 @@ let briefingOwed = false;
 
 /** The `text` of the orient verb's data; anything else is a failure. */
 function briefingText(data: unknown): string {
-  const text = typeof data === "object" && data !== null ? Reflect.get(data, "text") : null;
-  if (typeof text !== "string") {
-    throw new Error("qsm-memory orient answered no text");
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "text" in data &&
+    typeof data.text === "string"
+  ) {
+    return data.text;
   }
-  return text;
+  throw new Error("qsm-memory orient answered no text");
 }
 
 /** Why a hook failed, in words: the thrown message (it names the verb, its exit and its stderr or

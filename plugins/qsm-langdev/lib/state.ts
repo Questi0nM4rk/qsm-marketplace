@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { recordOf } from "./json.ts";
 
 /** Who edited: the session, and the agent within it. The orchestrator has no
  * agent id of its own and is `MAIN_AGENT`. */
@@ -35,18 +36,18 @@ export interface EditedTree {
  */
 function stateDir(): string {
   const override = process.env.QSM_LANGDEV_STATE_DIR;
-  if (override) {
+  if (override !== undefined && override !== "") {
     return override;
   }
   const runtime = process.env.XDG_RUNTIME_DIR;
-  if (runtime) {
+  if (runtime !== undefined && runtime !== "") {
     return join(runtime, "qsm-langdev-hook");
   }
   return `/tmp/qsm-langdev-hook-${process.getuid?.() ?? "nouid"}`;
 }
 
 function sessionKey(sessionId: string): string {
-  return sessionId.replace(/[^A-Za-z0-9._-]/g, "_") || "unknown";
+  return sessionId.replaceAll(/[^A-Za-z0-9._-]/g, "_") || "unknown";
 }
 
 function editorDir(kind: string, editor: Editor): string {
@@ -78,8 +79,8 @@ export function recordStartPoint(editor: Editor, root: string): void {
 
 function readTree(path: string): EditedTree | null {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<EditedTree>;
-    if (typeof parsed.root !== "string" || typeof parsed.start !== "string") {
+    const parsed = recordOf(JSON.parse(readFileSync(path, "utf8")));
+    if (typeof parsed?.root !== "string" || typeof parsed.start !== "string") {
       return null;
     }
     return /^[0-9a-f]{40,64}$/.test(parsed.start)
@@ -104,7 +105,7 @@ export function editedTrees(editor: Editor): EditedTree[] {
     return [];
   }
   return names
-    .sort()
+    .toSorted()
     .map((name) => readTree(join(editorDir("start", editor), name)))
     .filter((tree): tree is EditedTree => tree !== null);
 }

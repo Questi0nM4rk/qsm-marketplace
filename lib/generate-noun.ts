@@ -1,7 +1,14 @@
 // Generates a plugin's `$.<noun>` contract and wrapper from its qsm.json.
 
 import { basename } from "node:path";
-import { type CommandArg, type QsmManifest, toCamel, toKebab, verbsOf } from "./qsm-manifest.ts";
+import {
+  type CommandArg,
+  parseManifest,
+  type QsmManifest,
+  toCamel,
+  toKebab,
+  verbsOf,
+} from "./qsm-manifest.ts";
 
 export type { CommandArg, CommandDecl, QsmManifest } from "./qsm-manifest.ts";
 
@@ -330,7 +337,7 @@ async function regenerateStaged(): Promise<void> {
   const { resolve } = await import("node:path");
   const staged = (await git(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])).split("\n");
   for (const dir of stagedPluginDirs(staged)) {
-    const manifest = JSON.parse(await git(["show", `:${dir}/qsm.json`])) as QsmManifest;
+    const manifest = parseManifest(JSON.parse(await git(["show", `:${dir}/qsm.json`])));
     const hasBin = Object.keys(manifest.qsm.bin ?? {}).length > 0;
     if (hasBin && manifest.qsm.noun !== undefined) {
       await writeNoun(generateNoun(manifest, resolve(dir)), true);
@@ -342,7 +349,7 @@ async function regenerateOne(pluginDir: string, check: boolean): Promise<number>
   const { existsSync, readFileSync } = await import("node:fs");
   const { resolve } = await import("node:path");
   const dir = resolve(pluginDir);
-  const manifest = JSON.parse(readFileSync(resolve(dir, "qsm.json"), "utf8")) as QsmManifest;
+  const manifest = parseManifest(JSON.parse(readFileSync(resolve(dir, "qsm.json"), "utf8")));
   if (!check) {
     await writeNoun(generateNoun(manifest, dir), false);
     return 0;

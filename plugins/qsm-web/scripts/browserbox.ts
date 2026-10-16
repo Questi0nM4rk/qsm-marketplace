@@ -3,8 +3,16 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Call, Handler } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalNumber,
+  optionalString,
+  requiredNumber,
+  requiredString,
+} from "../../../lib/cli-base.ts";
+import { fail, isRecord, type Outcome, ok } from "../../../lib/outcome.ts";
 import { BoxError } from "../lib/box-error.ts";
 import {
   buildDefinition,
@@ -70,7 +78,7 @@ class Box {
       this.commands.push(renderCommand(this.runtime(), args));
       return { status: 0, stdout: "" };
     }
-    const { status, stdout } = spawnSync(this.runtime(), args as string[], {
+    const { status, stdout } = spawnSync(this.runtime(), args, {
       encoding: "utf8",
       stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
     });
@@ -92,15 +100,22 @@ class Box {
       input: `${JSON.stringify(job)}\n`,
       stdio: ["pipe", "pipe", quiet ? "ignore" : "inherit"],
     });
-    const text = (stdout ?? "").trim();
-    if (status !== 0 && text.length === 0) {
+    const reply = (stdout ?? "").trim();
+    if (status !== 0 && reply.length === 0) {
       return { ok: false, error: { kind: "driver", message: `the driver exited ${status ?? 1}` } };
     }
+    let answer: unknown;
     try {
-      return JSON.parse(text) as Record<string, unknown>;
+      answer = JSON.parse(reply);
     } catch {
       return { ok: false, error: { kind: "driver", message: "the driver answered with non-JSON" } };
     }
+    return isRecord(answer)
+      ? answer
+      : {
+          ok: false,
+          error: { kind: "driver", message: "the driver answered with non-object JSON" },
+        };
   }
 }
 
@@ -110,8 +125,8 @@ function redact(job: Record<string, unknown>): Record<string, unknown> {
   if (!Array.isArray(steps)) {
     return job;
   }
-  const shown = steps.map((s: Record<string, unknown>) =>
-    s.redact === true ? { ...s, value: "[redacted]" } : s,
+  const shown = steps.map((s: unknown) =>
+    isRecord(s) && s.redact === true ? { ...s, value: "[redacted]" } : s,
   );
   return { ...job, steps: shown };
 }
@@ -183,8 +198,8 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
   return { name, port, liveView, out: where };
 }
 
-function start({ args }: Call, box: Box): Outcome {
-  const instance = startInstance(box, args.out as string | undefined);
+function start(call: Call, box: Box): Outcome {
+  const instance = startInstance(box, optionalString(call, "out"));
   return ok(instance, JSON.stringify(instance));
 }
 
@@ -193,19 +208,19 @@ function ls(_call: Call, box: Box): Outcome {
   return ok(live, JSON.stringify(live));
 }
 
-function stop({ args }: Call, box: Box): Outcome {
-  const name = args.name as string | undefined;
-  const all = args.all === true;
+function stop(call: Call, box: Box): Outcome {
+  const name = optionalString(call, "name");
+  const all = flagArg(call, "all");
   if (all === (name !== undefined)) {
     return fail("usage", "stop takes exactly one of an instance name and --all");
   }
-  if (all) {
+  if (name === undefined) {
     for (const i of instances(box)) {
       box.run(stopDefinition(i.name));
     }
     return ok({ stopped: "all" }, "stopped every instance");
   }
-  const { status } = box.run(stopDefinition(name as string));
+  const { status } = box.run(stopDefinition(name));
   if (status !== 0) {
     throw new BoxError("failed", `${name} could not be stopped (exit ${status})`);
   }
@@ -213,23 +228,26 @@ function stop({ args }: Call, box: Box): Outcome {
 }
 
 /** One address, one result. */
-function fetchOne({ args }: Call, box: Box): Outcome {
-  const given = args.in as string | undefined;
-  const keep = args.keep === true;
+function fetchOne(call: Call, box: Box): Outcome {
+  const given = optionalString(call, "in");
+  const keep = flagArg(call, "keep");
+  const url = requiredString(call, "url");
   const name = given ?? startInstance(box).name;
   const job: Record<string, unknown> = {
     cmd: "fetch",
-    url: args.url as string,
-    html: args.html === true,
-    screenshot: args.screenshot === true,
-    cookies: args.cookies === true,
+    url,
+    html: flagArg(call, "html"),
+    screenshot: flagArg(call, "screenshot"),
+    cookies: flagArg(call, "cookies"),
     keep,
   };
-  if (args.settle !== undefined) {
-    job.settle = args.settle;
+  const settle = optionalNumber(call, "settle");
+  if (settle !== undefined) {
+    job.settle = settle;
   }
-  if (args.timeout !== undefined) {
-    job.timeout = args.timeout;
+  const timeout = optionalNumber(call, "timeout");
+  if (timeout !== undefined) {
+    job.timeout = timeout;
   }
   const answer = box.send(name, job);
   const result: Record<string, unknown> = { ...answer, instance: name };
@@ -238,7 +256,7 @@ function fetchOne({ args }: Call, box: Box): Outcome {
   }
   return answer.ok === true
     ? ok(result, JSON.stringify(result))
-    : fail("failed", `${args.url as string} could not be fetched`, result);
+    : fail("failed", `${url} could not be fetched`, result);
 }
 
 /** Resolve every fill-secret step from the user's vault. The values exist
@@ -262,7 +280,7 @@ function fillSecrets(box: Box, script: Script): Script {
     const value = readValue(
       cli,
       (cmd, args) => {
-        const r = spawnSync(cmd, args as string[], { encoding: "utf8" });
+        const r = spawnSync(cmd, args, { encoding: "utf8" });
         return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
       },
       step.item ?? "",
@@ -289,32 +307,49 @@ function readJob(box: Box, file: string | undefined, steps: string | undefined):
   }
 }
 
-function runScript({ args }: Call, box: Box): Outcome {
-  const file = args.file as string | undefined;
-  const steps = args.steps as string | undefined;
+function runScript(call: Call, box: Box): Outcome {
+  const file = optionalString(call, "file");
+  const steps = optionalString(call, "steps");
   if ((file === undefined) === (steps === undefined)) {
     return fail("usage", "script takes exactly one of --file and --steps");
   }
   const job = readJob(box, file, steps);
-  const result = box.send(args.name as string, { cmd: "script", ...job });
+  const result = box.send(requiredString(call, "name"), { cmd: "script", ...job });
   return result.ok === true
     ? ok(result, JSON.stringify(result))
     : fail("failed", "the script did not finish", result);
+}
+
+/** Polls the armed wait until the human cleared the wall (true), or it timed out or the caller's
+ * timeout passed (false). */
+function cleared(box: Box, name: string, tab: number, timeoutMs: number): boolean {
+  const deadline = Date.now() + timeoutMs + POLL_PAUSE_MS;
+  while (Date.now() < deadline) {
+    pause(POLL_PAUSE_MS);
+    const status = box.send(name, { cmd: "wait_status", tab }, true);
+    if (status.state === "cleared") {
+      return true;
+    }
+    if (status.state === "timeout") {
+      return false;
+    }
+  }
+  return false;
 }
 
 /**
  * Hand one tab to a human: arm the wait, name the page to open, and poll until the wall is gone or
  * the caller's timeout passes.
  */
-function takeover({ args }: Call, box: Box): Outcome {
-  const name = args.name as string;
-  const tab = args.tab as number;
-  const timeoutMs = (args.timeout as number | undefined) ?? DEFAULT_WAIT_MS;
+function takeover(call: Call, box: Box): Outcome {
+  const name = requiredString(call, "name");
+  const tab = requiredNumber(call, "tab");
+  const timeoutMs = optionalNumber(call, "timeout") ?? DEFAULT_WAIT_MS;
   const view = liveViewUrl(Number(name.replace(/^bbox-/, "")));
   const armed = box.send(name, {
     cmd: "wait_for_human",
     tab,
-    reason: (args.reason as string | undefined) ?? "a wall the agent cannot clear",
+    reason: optionalString(call, "reason") ?? "a wall the agent cannot clear",
     timeout: timeoutMs,
   });
   if (armed.ok !== true) {
@@ -324,20 +359,11 @@ function takeover({ args }: Call, box: Box): Outcome {
   if (box.dryRun) {
     return ok({ liveView: view }, view);
   }
-  if (args.open === true) {
+  if (flagArg(call, "open")) {
     spawnSync("xdg-open", [view], { stdio: "ignore" });
   }
-  const deadline = Date.now() + timeoutMs + POLL_PAUSE_MS;
-  while (Date.now() < deadline) {
-    pause(POLL_PAUSE_MS);
-    const status = box.send(name, { cmd: "wait_status", tab }, true);
-    if (status.state === "cleared") {
-      const cleared = { resumed: true, liveView: view };
-      return ok(cleared, `${name} tab ${tab} was cleared`);
-    }
-    if (status.state === "timeout") {
-      break;
-    }
+  if (cleared(box, name, tab, timeoutMs)) {
+    return ok({ resumed: true, liveView: view }, `${name} tab ${tab} was cleared`);
   }
   return fail("failed", `nobody cleared ${name} tab ${tab} in time`, {
     resumed: false,
@@ -353,7 +379,7 @@ type BoxHandler = (call: Call, box: Box) => Outcome;
  */
 function handler(run: BoxHandler): Handler {
   return (call) => {
-    const box = new Box(call.args.dryRun === true);
+    const box = new Box(flagArg(call, "dryRun"));
     let outcome: Outcome;
     try {
       outcome = run(call, box);

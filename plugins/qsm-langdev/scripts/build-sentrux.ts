@@ -6,9 +6,11 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { errorMessage } from "../lib/errors.ts";
 
 export const UPSTREAM_REPO = "https://github.com/sentrux/sentrux";
-export const UPSTREAM_COMMIT = "f36da08a53e7f06c5b6aec33eb05816b371000ea"; // pragma: allowlist secret
+// pragma: allowlist nextline secret
+export const UPSTREAM_COMMIT = "f36da08a53e7f06c5b6aec33eb05816b371000ea";
 export const PATCH = resolve(import.meta.dir, "..", "sentrux", "wiring.patch");
 
 /** Every file this plugin owns outright, and where upstream's tree wants it.
@@ -116,13 +118,13 @@ if (import.meta.main) {
   try {
     if (target === "install") {
       installPatched();
-    } else if (target) {
+    } else if (target !== undefined && target !== "") {
       console.log(buildPatched(resolve(target)));
     } else {
       throw new Error("usage: build-sentrux.ts install | build-sentrux.ts <empty dir>");
     }
   } catch (e) {
-    console.error(`qsm-langdev build-sentrux: ${(e as Error).message}`);
+    console.error(`qsm-langdev build-sentrux: ${errorMessage(e)}`);
     process.exit(1);
   }
 }

@@ -14,7 +14,14 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { type CacheFiles, cacheFiles, cacheRoot, type Env } from "./paths.ts";
 import { changedSet, excludeFile, head, topLevel } from "./repo.ts";
 import type { Runner } from "./run.ts";
-import { type BuildResult, type BuildStatus, releaseLock, takeLock, writeStatus } from "./state.ts";
+import {
+  type BuildResult,
+  type BuildStatus,
+  errnoCode,
+  releaseLock,
+  takeLock,
+  writeStatus,
+} from "./state.ts";
 
 export const GRAPH_DIR = "graphify-out";
 export const GRAPH_FILE = "graph.json";
@@ -75,13 +82,14 @@ function linkGraph(repo: string, files: CacheFiles, env: Env): string | null {
   try {
     target = resolve(repo, readlinkSync(link));
   } catch (cause) {
-    const { code } = cause as NodeJS.ErrnoException;
+    const code = errnoCode(cause);
     if (code === "ENOENT") {
       symlinkSync(files.graph, link);
       return null;
     }
     if (code === "EINVAL") {
-      return null; // a real directory
+      // a real directory
+      return null;
     }
     throw cause;
   }

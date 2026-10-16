@@ -3,6 +3,7 @@
 
 import type { Database } from "bun:sqlite";
 import { basename } from "node:path";
+import { fail } from "./errors.ts";
 import { projectOf } from "./project.ts";
 
 export interface SearchOptions {
@@ -57,15 +58,18 @@ export function ftsQuery(query: string): string | null {
   return `(${terms.join(" OR ")})`;
 }
 
-/** `7d` -> now minus seven days; anything else is parsed as a date. Null
- * when it parses as neither. */
-export function sinceCutoff(since: string, now: number): string | null {
+/** `7d` -> now minus seven days; anything else is parsed as a date; neither is a usage error,
+ * never "no filter". */
+export function sinceCutoff(since: string, now: number): string {
   const days = /^(\d+)d$/.exec(since);
   if (days?.[1] !== undefined) {
     return new Date(now - Number(days[1]) * DAY_MS).toISOString();
   }
   const parsed = Date.parse(since);
-  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  if (Number.isNaN(parsed)) {
+    fail("usage", `--since takes Nd or a date (got '${since}')`, "e.g. --since 7d or 2026-09-30");
+  }
+  return new Date(parsed).toISOString();
 }
 
 function freshness(endedAt: string, now: number): number {
@@ -82,11 +86,11 @@ const SQL = `SELECT t.session_id, t.seq, t.role, s.project, s.title, s.ended_at,
 
 export function search(db: Database, query: string, options: SearchOptions = {}): Hit[] {
   const now = options.now ?? Date.now();
+  const cutoff = options.since === undefined ? null : sinceCutoff(options.since, now);
   const match = ftsQuery(query);
   if (match === null) {
     return [];
   }
-  const cutoff = options.since === undefined ? null : sinceCutoff(options.since, now);
   const rows = db
     .query<Row, [string, string | null, string | null]>(SQL)
     .all(match, cutoff, options.project === undefined ? null : projectOf(options.project));
@@ -102,10 +106,10 @@ function rank(rows: readonly Row[], now: number, limit: number): Hit[] {
       date: row.ended_at.slice(0, 10),
       project: row.project,
       title: row.title,
-      snippet: row.snippet.replace(/\s+/g, " ").trim(),
+      snippet: row.snippet.replaceAll(/\s+/g, " ").trim(),
       score: -row.bm + FRESH_WEIGHT * freshness(row.ended_at, now),
     }))
-    .sort((a, b) => b.score - a.score)
+    .toSorted((a, b) => b.score - a.score)
     .slice(0, limit);
 }
 

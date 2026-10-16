@@ -1,6 +1,5 @@
 {
   "name": "qsm-plan",
-  "version": "0.1.0",
   "description": "The single entry point for planning work of any size: it understands the ask, sizes it as a fix or an epic, writes the epic's intent and acceptance criteria through grilling, and splits the epic into tasks that each get a spec. Two skills: plan, grilling.",
   "keywords": [
     "planning",

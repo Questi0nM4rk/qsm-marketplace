@@ -68,7 +68,7 @@ function afterGit(tokens: readonly string[]): string[] | null {
   if (executable === undefined || basename(executable) !== "git") {
     return null;
   }
-  return [...tokens.slice(skipGitOptions(tokens, start + 1))];
+  return tokens.slice(skipGitOptions(tokens, start + 1));
 }
 
 /** The index of the first word that is not an assignment or a wrapper. */
@@ -132,6 +132,11 @@ const QUOTED = /\\(.)|'([^']*)'|"([^"]*)"/g;
 function unquote(word: string): string {
   return word.replace(
     QUOTED,
-    (_match, escaped, single, double) => escaped ?? single ?? double ?? "",
+    (
+      _match: string,
+      escaped: string | undefined,
+      single: string | undefined,
+      double: string | undefined,
+    ) => escaped ?? single ?? double ?? "",
   );
 }

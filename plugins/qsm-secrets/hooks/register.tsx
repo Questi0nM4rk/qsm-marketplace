@@ -1,7 +1,7 @@
 // qsm-secrets' function-hooks module: the noun, `$.secrets`, one method per verb, and the guard that
 // refuses a Bash command that would print a stored credential into the tool result (the decision is
-// `qsm-secrets guard`, which reads the command's syntax tree and needs the WASM parser this sandbox
-// cannot load), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
+// `qsm-secrets guard`, which reads the command's syntax tree with the WASM parser compiled into the
+// binary, because this sandbox cannot load it), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
 // before the prompt enters the session (the decision is `qsm-secrets capture`), and the use of a
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
@@ -18,7 +18,7 @@ const CAPTURE_TIMEOUT_MS = 10_000;
 // What a person typed or pasted: the terminal, the remote bridge, the SDK host, a channel's human. Every
 // other origin is text the engine, another session or a model wrote (a task notification, a subagent
 // hand-back, a schedule): it holds ids and paths that look like tokens, and a capture would replace them.
-const PERSON_ORIGINS: readonly string[] = ["composer", "bridge", "sdk", "channel"];
+const PERSON_ORIGINS: ReadonlySet<string> = new Set(["composer", "bridge", "sdk", "channel"]);
 
 /** What a failed hook says about itself in the log: the kind and the message, which names the verb,
  * the exit code, the outcome code or stderr; never a stdout, which may hold the prompt. */
@@ -26,48 +26,107 @@ function cause(error: { readonly kind: string; readonly message?: string }): str
   return `${error.kind}: ${(error.message ?? "no message").slice(0, 400)}`;
 }
 
-function isEnvelope(stdout: string): boolean {
-  try {
-    return typeof (JSON.parse(stdout) as { exit?: unknown }).exit === "number";
-  } catch {
-    return false;
-  }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item: unknown) => typeof item === "string");
+
+const isBlocks = (value: unknown): value is ApiContentBlock[] =>
+  Array.isArray(value) &&
+  value.every((item: unknown) => isRecord(item) && typeof item.type === "string");
+
+interface MaskData {
+  readonly texts: string[];
 }
 
-/** A verb's data from a `process.run` result. unwrap quotes a stdout that is no envelope, which for
- * capture and mask can be the prompt or the result, so that case is rebuilt from exit code and stderr. */
-function dataOf(
+interface CaptureData {
+  readonly text: string;
+  readonly captured: readonly { readonly id: string }[];
+  readonly taken: string[];
+}
+
+const isMaskData = (value: unknown): value is MaskData => isRecord(value) && isStrings(value.texts);
+
+const isCaptureData = (value: unknown): value is CaptureData =>
+  isRecord(value) &&
+  typeof value.text === "string" &&
+  Array.isArray(value.captured) &&
+  value.captured.every((item: unknown) => isRecord(item) && typeof item.id === "string") &&
+  isStrings(value.taken);
+
+interface Envelope {
+  readonly code: string;
+  readonly message: string | undefined;
+  readonly reason: string | undefined;
+}
+
+/** The outcome envelope a binary printed on stdout, or undefined when stdout is not one. */
+function envelopeOf(stdout: string): Envelope | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed) || typeof parsed.exit !== "number" || typeof parsed.code !== "string") {
+    return undefined;
+  }
+  return {
+    code: parsed.code,
+    message: typeof parsed.message === "string" ? parsed.message : undefined,
+    reason:
+      isRecord(parsed.data) && typeof parsed.data.reason === "string"
+        ? parsed.data.reason
+        : undefined,
+  };
+}
+
+/** A verb's data from a `process.run` result, checked by `isData`. unwrap quotes a stdout that is no
+ * envelope, which for capture and mask can be the prompt or the result, so that case is rebuilt from
+ * exit code and stderr. */
+function dataOf<T>(
   argv: string[],
   ran: { exitCode: number; stdout: string; stderr: string },
-): unknown {
-  if (!isEnvelope(ran.stdout)) {
+  isData: (value: unknown) => value is T,
+): T {
+  if (envelopeOf(ran.stdout) === undefined) {
     const stderr = ran.stderr.trim().slice(0, 300);
     throw new Error(
       `${argv.slice(0, 2).join(" ")} printed no outcome envelope (exit ${ran.exitCode}): ${stderr.length > 0 ? stderr : "no stderr"}`,
     );
   }
-  return unwrap(argv, ran);
+  const data = unwrap(argv, ran);
+  if (!isData(data)) {
+    throw new Error(`${argv.slice(0, 2).join(" ")} answered data of an unexpected shape`);
+  }
+  return data;
+}
+
+/** The row of a verb the noun was generated with. */
+function verbOf(name: string): VerbRow {
+  const row = verbs[name];
+  if (row === undefined) {
+    throw new Error(`qsm.json has no verb ${name}`);
+  }
+  return row;
 }
 
 /** What `qsm-secrets guard` said: the reason to deny with, or null when the command may run. A verb
  * that did not answer is an error, and the hook's catch denies the call. */
 function refusalOf(ran: { exitCode: number; stdout: string; stderr: string }): string | null {
-  if (!isEnvelope(ran.stdout)) {
+  const envelope = envelopeOf(ran.stdout);
+  if (envelope === undefined) {
     const stderr = ran.stderr.trim().slice(0, 300);
     throw new Error(
       `qsm-secrets guard printed no outcome envelope (exit ${ran.exitCode}): ${stderr.length > 0 ? stderr : "no stderr"}`,
     );
   }
-  const envelope = JSON.parse(ran.stdout) as {
-    code: string;
-    message?: string;
-    data?: { reason?: string };
-  };
   if (envelope.code === "ok") {
     return null;
   }
-  if (envelope.code === "blocked" && typeof envelope.data?.reason === "string") {
-    return envelope.data.reason;
+  if (envelope.code === "blocked" && envelope.reason !== undefined) {
+    return envelope.reason;
   }
   throw new Error(
     `qsm-secrets guard answered ${envelope.code}: ${(envelope.message ?? "").slice(0, 200)}`,
@@ -83,7 +142,7 @@ const RECOVERY = /^\s*qsm-secrets doctor\s*$/;
  * rewrites it. */
 function registerGuard(on: On): void {
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
-    const argv = argvOf(verbs.guard as VerbRow);
+    const argv = argvOf(verbOf("guard"));
     const ran = await $.process.run(argv, { stdin: e.command, timeoutMs: GUARD_TIMEOUT_MS });
     const reason = refusalOf(ran);
     if (reason === null) {
@@ -103,28 +162,35 @@ function registerGuard(on: On): void {
   });
 }
 
-/** Read and Grep put a file's lines into the tool result as surely as `cat` does. A Grep also walks
- * everything under its path, so a path above a protected directory is refused too. */
+/** Read and Grep put a file's lines into the tool result as surely as `cat` does, and a Glob names
+ * the files of the store. A Grep also walks everything under its path, so a path above a
+ * protected directory is refused too; a Glob lists names only, like `ls`, so only a path inside one is. */
 function registerFileGuard(on: On): void {
-  // The shipped types list no Grep (a build without the tool has nothing to guard), so its name is
-  // cast; a build that has the tool routes its calls here.
+  // The shipped types list no Grep or Glob (a build without the tool has nothing to guard), so their
+  // names are cast; a build that has the tool routes its calls here.
   const guarded = [
-    { tool: "Read" as const, ancestors: false },
-    { tool: "Grep" as "Read", ancestors: true },
+    { tool: "Read" as const, ancestors: false, globs: false },
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the engine's declared tool names list no Grep
+    { tool: "Grep" as "Read", ancestors: true, globs: false },
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the engine's declared tool names list no Glob
+    { tool: "Glob" as "Read", ancestors: false, globs: true },
   ];
-  for (const { tool, ancestors } of guarded) {
+  for (const { tool, ancestors, globs } of guarded) {
     on("tool.call", { tool }, async ($, e, next) => {
-      const input = e as { file_path?: string; path?: string };
-      // A Grep with no path searches the working directory, so that is its path.
+      const input = e as { file_path?: string; path?: string; pattern?: string };
+      // A Grep or a Glob with no path searches the working directory, so that is its path.
       const target =
-        input.file_path ?? input.path ?? (ancestors ? await $.session.cwd() : undefined);
+        input.file_path ?? input.path ?? (ancestors || globs ? await $.session.cwd() : undefined);
       if (target === undefined) {
         return next(e);
       }
-      const home = await $.env.get("HOME");
-      const dataHome = await $.env.get("XDG_DATA_HOME");
-      const runtimeDir = await $.env.get("XDG_RUNTIME_DIR");
-      const env: PathEnv = { home, dataHome, runtimeDir };
+      const [home, dataHome, runtimeDir, passwordStore] = await Promise.all([
+        $.env.get("HOME"),
+        $.env.get("XDG_DATA_HOME"),
+        $.env.get("XDG_RUNTIME_DIR"),
+        $.env.get("PASSWORD_STORE_DIR"),
+      ]);
+      const env: PathEnv = { home, dataHome, runtimeDir, passwordStore };
       const roots = protectedRoots(env);
       let real: string | undefined;
       try {
@@ -132,13 +198,22 @@ function registerFileGuard(on: On): void {
       } catch {
         // a path that is not there is judged by its spelling
       }
-      const spellings = [target, real].filter((path): path is string => path !== undefined);
+      // A Glob's own pattern may start at a protected directory (`~/.password-store/**`): its part
+      // before the first wildcard is a path too.
+      const written = globs ? input.pattern?.split(/[*?[{]/)[0] : undefined;
+      const lead =
+        written !== undefined && written !== "" && !/^[/~$]/.test(written)
+          ? `${target}/${written}`
+          : written;
+      const spellings = [target, real, lead].filter(
+        (path): path is string => path !== undefined && path !== "",
+      );
       if (!spellings.some((path) => reaches(path, roots, env, ancestors) !== undefined)) {
         return next(e);
       }
       $.ui.log(`refused a ${tool} of ${target}`);
       return {
-        deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
+        deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials, or the names of the store's files, in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
       };
     }).catch(($, _e, next) => {
       const reason = cause(next.error);
@@ -176,22 +251,24 @@ function mapTexts(content: ApiContentBlock[], map: (text: string) => string): Ap
     if (block.type === "tool_result" && typeof block.content === "string") {
       return { ...block, content: map(block.content) };
     }
-    if (block.type === "tool_result" && Array.isArray(block.content)) {
-      return { ...block, content: (block.content as ApiContentBlock[]).map(mapBlock) };
+    if (block.type === "tool_result" && isBlocks(block.content)) {
+      return { ...block, content: block.content.map(mapBlock) };
     }
     return block;
   };
   return content.map(mapBlock);
 }
 
+function withheld(reason: string): string {
+  return `qsm-secrets: this text could not be masked and was withheld (${reason.slice(0, 300)})`;
+}
+
+function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAppendInput {
+  return { ...e, message: { ...e.message, content } };
+}
+
 /** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
 function registerMask(on: On): void {
-  const withheld = (reason: string): string =>
-    `qsm-secrets: this text could not be masked and was withheld (${reason.slice(0, 300)})`;
-  const rewritten = (e: SessionAppendInput, content: ApiContentBlock[]): SessionAppendInput => ({
-    ...e,
-    message: { ...e.message, content },
-  });
   on("session.append", async ($, e, next) => {
     const texts: string[] = [];
     mapTexts(e.message.content, (text) => {
@@ -201,12 +278,12 @@ function registerMask(on: On): void {
     if (texts.every((text) => text === "")) {
       return next(e);
     }
-    const argv = argvOf(verbs.mask as VerbRow, { all: true });
+    const argv = argvOf(verbOf("mask"), { all: true });
     const ran = await $.process.run(argv, {
       stdin: JSON.stringify(texts),
       timeoutMs: CAPTURE_TIMEOUT_MS,
     });
-    const done = (dataOf(argv, ran) as { texts: string[] }).texts;
+    const done = [...dataOf(argv, ran, isMaskData).texts];
     if (done.length !== texts.length) {
       throw new Error(`the mask returned ${done.length} texts for ${texts.length}`);
     }
@@ -214,7 +291,13 @@ function registerMask(on: On): void {
     return next(
       rewritten(
         e,
-        mapTexts(e.message.content, () => done.shift() as string),
+        mapTexts(e.message.content, () => {
+          const text = done.shift();
+          if (text === undefined) {
+            throw new Error("the mask returned too few texts");
+          }
+          return text;
+        }),
       ),
     );
   }).catch(($, e, next) => {
@@ -246,7 +329,12 @@ function registerScrub(on: On): void {
       try {
         await step();
       } catch (error) {
-        failed.push(cause({ kind: "failed", message: String((error as Error).message) }));
+        failed.push(
+          cause({
+            kind: "failed",
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
     }
     if (failed.length > 0) {
@@ -272,17 +360,13 @@ export function register(on: On): void {
   registerScrub(on);
 
   on("prompt.submit", async ($, e, next) => {
-    if (!PERSON_ORIGINS.includes(e.origin.kind)) {
+    if (!PERSON_ORIGINS.has(e.origin.kind)) {
       $.ui.log(`a ${e.origin.kind} prompt is not the person's own; it was not captured`);
       return next(e);
     }
-    const argv = argvOf(verbs.capture as VerbRow);
+    const argv = argvOf(verbOf("capture"));
     const ran = await $.process.run(argv, { stdin: e.text, timeoutMs: CAPTURE_TIMEOUT_MS });
-    const done = dataOf(argv, ran) as {
-      text: string;
-      captured: { id: string }[];
-      taken: string[];
-    };
+    const done = dataOf(argv, ran, isCaptureData);
     if (done.captured.length === 0) {
       return next(e);
     }

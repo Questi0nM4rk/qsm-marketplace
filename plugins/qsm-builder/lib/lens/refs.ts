@@ -4,10 +4,12 @@
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isRecord } from "../../../../lib/outcome.ts";
 // Imported as text so `bun build --compile` embeds the copy the binary falls back to.
 import builtIn from "../../references.txt" with { type: "text" };
 
-export type RefKind = "plugin" | "tool" | "web" | "mcp";
+export const REF_KINDS = ["plugin", "tool", "web", "mcp"] as const;
+export type RefKind = (typeof REF_KINDS)[number];
 
 export interface Reference {
   readonly name: string;
@@ -40,8 +42,8 @@ export function searchedNames(root: string): ReadonlySet<string> {
 /** A whole word: a letter, digit, underscore or hyphen on either side continues it. */
 function wordsOf(names: ReadonlySet<string>): RegExp | null {
   const alt = [...names]
-    .sort((a, b) => b.length - a.length)
-    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    .toSorted((a, b) => b.length - a.length)
+    .map((n) => n.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return alt.length === 0 ? null : new RegExp(`(?<![\\w-])(?:${alt.join("|")})(?![\\w-])`, "g");
 }
 
@@ -70,8 +72,8 @@ function mcpServers(dir: string): string[] {
     return [];
   }
   try {
-    const cfg = JSON.parse(readFileSync(file, "utf8")) as { mcpServers?: object };
-    return Object.keys(cfg.mcpServers ?? {});
+    const cfg: unknown = JSON.parse(readFileSync(file, "utf8"));
+    return isRecord(cfg) && isRecord(cfg.mcpServers) ? Object.keys(cfg.mcpServers) : [];
   } catch {
     return [];
   }
@@ -99,7 +101,7 @@ export const scopeOf = (
 
 function scan(text: string, found: Found, { self, known, words }: Scope): void {
   for (const m of text.matchAll(/\bqsm-[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?::([a-z][a-z0-9-]*))?/g)) {
-    const name = m[0].split(":")[0] as string;
+    const [name = ""] = m[0].split(":");
     if (name !== self && known.has(name)) {
       const set = found.plugins.get(name) ?? new Set<string>();
       set.add(m[1] ?? "");
@@ -110,16 +112,16 @@ function scan(text: string, found: Found, { self, known, words }: Scope): void {
     found.tools.add(m[0]);
   }
   for (const m of text.matchAll(/https?:\/\/([a-z0-9][a-z0-9.-]*\.[a-z]{2,})/gi)) {
-    found.hosts.add((m[1] as string).toLowerCase());
+    found.hosts.add((m[1] ?? "").toLowerCase());
   }
   for (const m of text.matchAll(/\bmcp__([a-zA-Z0-9-]+)__/g)) {
-    found.mcp.add(m[1] as string);
+    found.mcp.add(m[1] ?? "");
   }
 }
 
 const plain = (kind: RefKind, names: Iterable<string>): Reference[] =>
   [...names]
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
     .map((name) => ({ name, kind, dependency: false, items: [] }));
 
 /** The names found in `files`; `mcp` are servers the plugin declares beyond what the text names. */
@@ -143,9 +145,9 @@ export function refsOfFiles(
       name,
       kind: "plugin" as const,
       dependency: dependencies.includes(name),
-      items: [...set].filter((x) => x !== "").sort((a, b) => a.localeCompare(b)),
+      items: [...set].filter((x) => x !== "").toSorted((a, b) => a.localeCompare(b)),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .toSorted((a, b) => a.name.localeCompare(b.name));
   return [
     ...pluginRefs,
     ...plain("tool", found.tools),

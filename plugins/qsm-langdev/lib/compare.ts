@@ -5,9 +5,17 @@ import { type SpawnSyncReturns, spawn as spawnChild } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generatedPaths, gitPaths, languageEnabled, matchingFiles, repoFiles } from "./config.ts";
+import {
+  generatedPaths,
+  gitPaths,
+  languageEnabled,
+  matchingFiles,
+  pathsWithAttr,
+  repoFiles,
+} from "./config.ts";
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
+import { isErrno } from "./errors.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
 import {
   asRunAt,
@@ -65,27 +73,19 @@ interface Side {
  * node_modules/ or dist/ must never enter a score just because it sits on
  * disk), or a scratch copy of a commit. Either way removed once `fn`
  * settles. */
-function withSide<T>(
-  root: string,
-  ref: string | "worktree",
-  fn: (side: Side) => Promise<T>,
-): Promise<T> {
-  // A path the materialized tree does not hold (`export-ignore` keeps a
-  // generated file out of `git archive`) is not the checker's to score.
-  const held = (dir: string, listed: readonly string[]) =>
-    listed.filter((path) => existsSync(join(dir, path)));
+function withSide<T>(root: string, ref: string, fn: (side: Side) => Promise<T>): Promise<T> {
   const files = sidePaths(root, ref);
   if (files === null) {
     throw new Error(`git could not list the tree at ${ref}`);
   }
   if (ref === "worktree") {
-    return withWorktreeTree(root, (dir) => fn({ root: dir, files: held(dir, files) }));
+    return withWorktreeTree(root, (dir) => fn({ root: dir, files }));
   }
-  return withCommitTree(root, ref, (dir) => fn({ root: dir, files: held(dir, files) }));
+  return withCommitTree(root, ref, (dir) => fn({ root: dir, files }));
 }
 
 /** Every path the tree at `ref` holds, or null when git could not list it. */
-function sidePaths(root: string, ref: string | "worktree"): string[] | null {
+function sidePaths(root: string, ref: string): string[] | null {
   return ref === "worktree"
     ? worktreePaths(root)
     : gitPaths(root, ["ls-tree", "-r", "-z", "--name-only", ref]);
@@ -132,13 +132,11 @@ async function mapLimit<T, R>(
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
+  const results: R[] = [];
+  const queue = items.entries();
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const index = next;
-      next += 1;
-      results[index] = await fn(items[index] as T, index);
+    for (const [index, item] of queue) {
+      results[index] = await fn(item, index);
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
@@ -152,9 +150,14 @@ interface SpawnFailure {
   failedRun?: true;
 }
 
-function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
+function noStatus(binary: string): SpawnFailure {
+  return { reason: `${binary} exited with no status`, failedRun: true };
+}
+
+/** The exit status of a run that finished normally, else why it did not. */
+function spawnStatus(result: Spawned, binary: string): number | SpawnFailure {
   if (result.error) {
-    const { code } = result.error as NodeJS.ErrnoException;
+    const code = isErrno(result.error) ? result.error.code : undefined;
     if (code === "ENOENT") {
       return { reason: `${binary} not on PATH` };
     }
@@ -167,9 +170,14 @@ function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
     return { reason: `${binary} killed by ${result.signal}`, failedRun: true };
   }
   if (result.status === null) {
-    return { reason: `${binary} exited with no status`, failedRun: true };
+    return noStatus(binary);
   }
-  return null;
+  return result.status;
+}
+
+function spawnFailure(result: Spawned, binary: string): SpawnFailure | null {
+  const status = spawnStatus(result, binary);
+  return typeof status === "number" ? null : status;
 }
 
 /** Tool output names a file however it likes; one form, relative to the
@@ -191,12 +199,10 @@ function normalise(value: number | Tally, root: string): Tally {
     value.findings === undefined
       ? {}
       : {
-          findings: value.findings.map(
-            (f): Finding => ({
-              identity: f.identity,
-              locations: f.locations.map((l) => ({ ...l, path: relativeTo(root, l.path) })),
-            }),
-          ),
+          findings: value.findings.map((f): Finding => ({
+            identity: f.identity,
+            locations: f.locations.map((l) => ({ ...l, path: relativeTo(root, l.path) })),
+          })),
         };
   if (value.byPath === undefined) {
     return { total: value.total, ...findings };
@@ -226,9 +232,9 @@ interface OneRun {
 }
 
 /** The repository's own copy of an npm tool wins over whatever PATH holds:
- * `bun run lint` runs node_modules/.bin/biome, so the gate must run the same
- * binary or the two disagree (seen: a system biome 2.5.14 reporting on files
- * the pinned 2.5.11 passes). The scratch tree links node_modules in, so the
+ * `bun run lint` runs node_modules/.bin/oxlint, so the gate must run the same
+ * binary or the two disagree: a system copy of another version reports on files
+ * the pinned one passes. The scratch tree links node_modules in, so the
  * lookup works on both sides of a comparison. */
 export function resolveBinary(root: string, binary: string): string {
   const local = join(root, "node_modules", ".bin", binary);
@@ -240,13 +246,12 @@ async function readOne(run: OneRun): Promise<Score> {
   const { binary } = spec;
   const where = run.where ?? "";
   const result = await spawnAsync(root, resolveBinary(root, binary), args, timeoutMs);
-  const failure = spawnFailure(result, binary);
-  if (failure !== null) {
-    return { ...failure, reason: `${where}${failure.reason}` };
+  const exitCode = spawnStatus(result, binary);
+  if (typeof exitCode !== "number") {
+    return { ...exitCode, reason: `${where}${exitCode.reason}` };
   }
   const stdout = readReport ? readReport() : (result.stdout ?? "");
   const stderr = result.stderr ?? "";
-  const exitCode = result.status as number;
   const value = spec.count(stdout, stderr, exitCode);
   if (value === null) {
     const cause = failureCause(spec, stdout, stderr, exitCode);
@@ -263,23 +268,30 @@ const CAUSE_MAX_CHARS = 200;
  * code.
  */
 function failureCause(spec: CheckSpec, stdout: string, stderr: string, exitCode: number): string {
+  const lines = stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /[\p{L}\p{N}]/u.test(line));
+  // A Python crash opens with "Traceback" and names its exception on the last line.
   const said =
     spec.failure?.(stdout) ??
-    stderr
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => /[\p{L}\p{N}]/u.test(line));
+    (lines[0]?.startsWith("Traceback") === true ? lines.at(-1) : lines[0]);
   if (said === undefined) {
     return `unreadable ${spec.binary} output (exit ${exitCode})`;
   }
   return said.length > CAUSE_MAX_CHARS ? `${said.slice(0, CAUSE_MAX_CHARS)}…` : said;
 }
 
-function scoreWithReport(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promise<Score> {
+function scoreWithReport(
+  spec: CheckSpec,
+  reportFile: string,
+  side: KeptSide,
+  timeoutMs: number,
+): Promise<Score> {
   return withScratchDir(REPORT_SCRATCH_PREFIX, (reportDir) => {
     const readReport = (): string => {
       try {
-        return readFileSync(join(reportDir, spec.reportFile as string), "utf8");
+        return readFileSync(join(reportDir, reportFile), "utf8");
       } catch {
         return "";
       }
@@ -311,8 +323,9 @@ async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promis
   const through = (files: readonly string[], compute: () => Promise<Score>): Promise<Score> =>
     store.through(keying, contentHash(side.root, files), compute, use);
   const argsFor = (files: readonly string[]) => spec.args(files, side.root, undefined, side.rules);
-  if (spec.reportFile) {
-    return through(side.files, () => scoreWithReport(spec, side, timeoutMs));
+  const { reportFile } = spec;
+  if (reportFile !== undefined) {
+    return through(side.files, () => scoreWithReport(spec, reportFile, side, timeoutMs));
   }
   if (!spec.eachFile) {
     return through(side.files, () =>
@@ -334,11 +347,14 @@ async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promis
   const byPath: Record<string, number> = {};
   const outputs: string[] = [];
   for (const [index, one] of ones.entries()) {
+    const file = side.files[index];
     if (!("tally" in one)) {
       return one;
     }
     total += one.tally.total;
-    byPath[side.files[index] as string] = one.tally.total;
+    if (file !== undefined) {
+      byPath[file] = one.tally.total;
+    }
     outputs.push(one.output);
   }
   return { tally: { total, byPath }, output: outputs.join("\n") };
@@ -366,11 +382,11 @@ function worsePaths(previous: Tally, current: Tally, renames: Renames): WorsePat
       out.push({ path, before, after });
     }
   }
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return out.toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
 function occurrenceKey(finding: Finding, renames: Renames): string {
-  const files = finding.locations.map((l) => renames.get(l.path) ?? l.path).sort();
+  const files = finding.locations.map((l) => renames.get(l.path) ?? l.path).toSorted();
   return [finding.identity, ...files].join("\0");
 }
 
@@ -397,7 +413,7 @@ interface Gained {
 
 function newFindings(previous: Tally, current: Tally, renames: Renames): Gained | undefined {
   if (previous.findings === undefined || current.findings === undefined) {
-    return;
+    return undefined;
   }
   const before = occurrences(previous.findings, new Map());
   const out: Gained = { gained: 0, lines: [] };
@@ -558,6 +574,7 @@ function verdictLines(
   if (!result.pass && result.output !== undefined && !looksLikeJson(result.output)) {
     return capped(linesNaming(result.output, changed));
   }
+  return undefined;
 }
 
 /** before/after through one checker: the ratchet's whole rule. `before ===
@@ -579,6 +596,9 @@ interface KeptSide extends Side {
 
 type Scored = Extract<Score, { tally: Tally }>;
 
+const failedCause = (one: Score): string | undefined =>
+  "reason" in one && one.failedRun === true ? one.reason : undefined;
+
 /** A side that could not be scored: past the time limit, or a run whose
  * output could not be read, is not measured; any other reason fails. */
 function unscored(name: string, current: Score, previous: Score, timeoutMs: number): CheckerResult {
@@ -586,8 +606,6 @@ function unscored(name: string, current: Score, previous: Score, timeoutMs: numb
     const summary = `${name}: not measured: timed out after ${(timeoutMs / 1000).toFixed(1)}s; retry`;
     return { pass: false, notMeasured: true, summary };
   }
-  const failedCause = (one: Score): string | undefined =>
-    "reason" in one && one.failedRun === true ? one.reason : undefined;
   const previousCause = failedCause(previous);
   const failed =
     failedCause(current) ??
@@ -646,29 +664,18 @@ function compared(
 }
 
 /**
- * The paths a comparison may score: a path marked `export-ignore` never reaches a materialized
- * tree (`git archive` leaves it out), so it is a generated file a checker would only find missing.
+ * The paths a comparison may score: a path marked `export-ignore` is a generated file, left out
+ * of every checker's set, the safety checkers' too; it stays on disk for what imports it.
  */
 function scoredPaths(root: string, paths: readonly string[]): string[] {
   if (paths.length === 0) {
     return [];
   }
-  const fields =
-    gitPaths(root, ["check-attr", "-z", "--stdin", "export-ignore"], paths.join("\0")) ?? [];
-  const ignored = new Set<string>();
-  for (let at = 0; at + 2 < fields.length; at += 3) {
-    if (fields[at + 2] === "set") {
-      ignored.add(fields[at] as string);
-    }
-  }
+  const ignored = pathsWithAttr(root, "export-ignore", ["set"], paths);
   return paths.filter((path) => !ignored.has(path));
 }
 
-function changedBetween(
-  root: string,
-  beforeRef: string,
-  after: string | "worktree",
-): string[] | null {
+function changedBetween(root: string, beforeRef: string, after: string): string[] | null {
   const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
   // --no-renames: a moved file is in the set under both names.
   const changed = gitPaths(root, ["diff", "--name-only", "-z", "--no-renames", ...range]);
@@ -680,17 +687,17 @@ function changedBetween(
   if (changed === null || untracked === null) {
     return null;
   }
-  return scoredPaths(root, [...new Set([...changed, ...untracked])].sort());
+  return scoredPaths(root, [...new Set([...changed, ...untracked])].toSorted());
 }
 
-function renamedBetween(root: string, beforeRef: string, after: string | "worktree"): Renames {
+function renamedBetween(root: string, beforeRef: string, after: string): Renames {
   const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
   const fields = gitPaths(root, ["diff", "--name-status", "-z", "-M", ...range]);
   const renames = new Map<string, string>();
   if (fields === null) {
     return renames;
   }
-  for (let i = 0; i < fields.length; ) {
+  for (let i = 0; i < fields.length;) {
     const status = fields[i] ?? "";
     if (/^[RC]\d*$/.test(status)) {
       const from = fields[i + 1];
@@ -783,9 +790,12 @@ async function probeAll(
 ): Promise<ReadonlyMap<string, Probe>> {
   const binaries = [...new Set(selected.map((spec) => spec.binary))];
   const probes = await Promise.all(
-    binaries.map((binary) => probeBinary(resolveBinary(root, binary), 10_000)),
+    binaries.map(async (binary): Promise<[string, Probe]> => [
+      binary,
+      await probeBinary(resolveBinary(root, binary), 10_000),
+    ]),
   );
-  return new Map(binaries.map((binary, i) => [binary, probes[i] as Probe]));
+  return new Map(probes);
 }
 
 /**
@@ -795,7 +805,7 @@ async function probeAll(
 function resolveChanged(
   root: string,
   beforeRef: string | null,
-  after: string | "worktree",
+  after: string,
   options: CompareOptions,
 ): string[] {
   if (options.only !== undefined) {
@@ -878,7 +888,7 @@ function missingPrerequisiteVerdicts(
 function resolveGiven(
   root: string,
   beforeRef: string | null,
-  after: string | "worktree",
+  after: string,
   options: CompareOptions,
 ): string[] {
   const listed = [
@@ -889,6 +899,8 @@ function resolveGiven(
   const { only } = options;
   return only === undefined ? given : given.filter((path) => only.includes(path));
 }
+
+const proForm = (spec: CheckSpec): boolean => spec.prePush?.pro !== undefined;
 
 /** The selected checkers as they run at the run's enforcement point under
  * its semgrep engine, the warning a login that did not get the Pro engine
@@ -902,7 +914,6 @@ function engage(
 ): { engaged: CheckSpec[]; warnings: string[]; community: Map<string, CheckSpec> } {
   const point = options.at ?? "pre-commit";
   const community = new Map<string, CheckSpec>();
-  const proForm = (spec: CheckSpec) => spec.prePush?.pro !== undefined;
   if (point === "pre-commit" || !selected.some(proForm)) {
     const engaged = selected.map((spec) => asRunAt(spec, point, "community"));
     return { engaged, warnings: [], community };
@@ -945,7 +956,7 @@ async function setsFor(
       typeof spec.fileSet === "string" ? [] : [spec.fileSet.changedPlus],
     ),
   );
-  for (const n of [...depths].sort((a, b) => a - b)) {
+  for (const n of [...depths].toSorted((a, b) => a - b)) {
     const plus = await changedPlusSet(base.root, trees, base.changed, n);
     const { only } = base;
     const files = only === undefined ? plus.files : plus.files.filter((f) => only.includes(f));
@@ -1155,7 +1166,7 @@ async function verdictOnEngine(
 export async function compareTrees(
   root: string,
   beforeRef: string | null,
-  after: string | "worktree",
+  after: string,
   options: CompareOptions = {},
 ): Promise<{
   changed: string[];
@@ -1277,7 +1288,7 @@ function withPacks<T>(
 function withBeforeAndAfter<T>(
   root: string,
   beforeRef: string | null,
-  after: string | "worktree",
+  after: string,
   fn: (before: Side | null, after: Side) => Promise<T>,
 ): Promise<T> {
   if (beforeRef === null) {
@@ -1300,12 +1311,10 @@ export async function doctorRows(specs: readonly CheckSpec[] = REGISTRY): Promis
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
   const present = new Map(
     await Promise.all(
-      binaries.map(
-        async (binary): Promise<[string, boolean]> => [
-          binary,
-          (await probeBinary(binary, 10_000)).present,
-        ],
-      ),
+      binaries.map(async (binary): Promise<[string, boolean]> => [
+        binary,
+        (await probeBinary(binary, 10_000)).present,
+      ]),
     ),
   );
   return specs.map(({ name, binary, install }) => ({

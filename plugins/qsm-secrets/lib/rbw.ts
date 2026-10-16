@@ -62,7 +62,7 @@ function read(namespace: string, key: string): Uint8Array | null {
  * passed in, `tee` is that editor: it copies rbw's stdin, our pipe, into the file.
  */
 function store(namespace: string, key: string, value?: Uint8Array): void {
-  if (value?.includes(NEWLINE)) {
+  if (value !== undefined && value.includes(NEWLINE)) {
     fail(`${BIN} stores one line; the value has several`, "use libsecret for a multi-line secret");
   }
   const added = spawnSync(BIN, ["add", ...folderArgs(namespace), key, WRAPPER_MARK], {

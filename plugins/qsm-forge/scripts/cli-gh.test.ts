@@ -4,11 +4,14 @@
 // here reaches GitHub, and the working directory is a scratch dir with no
 // origin remote, so repository detection is what the test says it is and
 // not what the developer's checkout happens to be.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { parseJson } from "../lib/exec.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -58,9 +61,9 @@ const GRAPHQL = {
 let sandbox = "";
 let cwd = "";
 
-beforeAll(() => {
-  sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-gh-"));
-  cwd = mkdtempSync(join(tmpdir(), "qsm-forge-gh-cwd-"));
+beforeEach(() => {
+  sandbox = sandboxDir("qsm-forge-gh-");
+  cwd = sandboxDir("qsm-forge-gh-cwd-");
   writeFileSync(join(sandbox, "graphql.json"), JSON.stringify(GRAPHQL));
   const fake = join(sandbox, "gh");
   writeFileSync(
@@ -74,14 +77,6 @@ esac
 `,
   );
   chmodSync(fake, 0o755);
-});
-
-afterAll(() => {
-  for (const dir of [sandbox, cwd]) {
-    if (dir !== "") {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
 });
 
 interface Run {
@@ -99,12 +94,20 @@ function cli(args: readonly string[], env: Record<string, string> = {}): Run {
   return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 }
 
-function envelope(run: Run): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(run.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
-  };
+interface Envelope {
+  readonly code: string;
+  readonly exit: number;
+  readonly data: Record<string, unknown> | null;
+}
+
+const isEnvelope = objectOf<Envelope>({ code: isString, exit: isNumber, data: orNull(isRecord) });
+
+function envelope(run: Run): Envelope {
+  const parsed = parseJson(run.stdout, "qsm-forge");
+  if (!isEnvelope(parsed)) {
+    throw new Error(`not an envelope: ${run.stdout}`);
+  }
+  return parsed;
 }
 
 describe("qsm-forge gh through the shared base", () => {

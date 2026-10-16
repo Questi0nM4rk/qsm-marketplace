@@ -4,10 +4,17 @@ import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { type Call, type Handler, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  type Handler,
+  optionalString,
+  requiredString,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import type { QsmManifest } from "../../../lib/qsm-manifest.ts";
+import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { formatDoctor, runDoctor } from "../lib/doctor.ts";
+import { parsePackage } from "../lib/manifest.ts";
 import {
   ambiguousBareName,
   buildFetchResult,
@@ -24,7 +31,7 @@ import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as browserboxHandlers } from "./browserbox.ts";
 import { handlers as searxngHandlers } from "./searxng.ts";
 
-const manifest = manifestJson as QsmManifest;
+const manifest = parseManifest(manifestJson, "qsm-web/qsm.json");
 
 /** A failure that already knows its outcome code. Thrown from the helpers
  * below so one guard turns it into the handler's outcome. */
@@ -65,7 +72,7 @@ function runResolver(target: string, projectDir: string | undefined): string {
   if (r.status !== 0) {
     throw new FetchError("failed", `the resolver failed for "${target}" (exit ${r.status})`);
   }
-  const cached = (r.stdout ?? "").trim().split(/\r?\n/).filter(Boolean).pop() ?? "";
+  const cached = (r.stdout ?? "").trim().split(/\r?\n/).findLast(Boolean) ?? "";
   if (cached.length === 0 || !existsSync(cached)) {
     throw new FetchError("failed", `the resolver returned no usable path for "${target}"`);
   }
@@ -112,15 +119,15 @@ function acquireAddress(target: string, into: string, warnings: string[]): Fetch
 
 function projectPackage(dir: string): ProjectPackage | null {
   try {
-    return JSON.parse(readFileSync(resolve(dir, "package.json"), "utf8"));
+    return parsePackage(JSON.parse(readFileSync(resolve(dir, "package.json"), "utf8")));
   } catch {
     return null;
   }
 }
 
 function get(call: Call): Outcome {
-  const target = call.args.target as string;
-  const project = call.args.project as string | undefined;
+  const target = requiredString(call, "target");
+  const project = optionalString(call, "project");
   const projectDir = project === undefined ? undefined : resolve(project);
   const into = libDir(target, sourceRoot(process.env, homedir()));
   mkdirSync(resolve(into, ".."), { recursive: true });

@@ -1,5 +1,7 @@
 // The ledger's data: one record per session, names, sizes and counts only.
 
+import { isPlainObject } from "../lib/toon-scalar.ts";
+
 export interface TurnUsage {
   model: string;
   input_tokens: number;
@@ -93,20 +95,116 @@ export function newSession(id: string, at: number): SessionRecord {
   };
 }
 
+const isNum = (value: unknown): value is number => typeof value === "number";
+const isStr = (value: unknown): value is string => typeof value === "string";
+const isNumOrNull = (value: unknown): value is number | null => value === null || isNum(value);
+const isStrOrNull = (value: unknown): value is string | null => value === null || isStr(value);
+
+function everyRow(value: unknown, row: (item: Record<string, unknown>) => boolean): boolean {
+  return Array.isArray(value) && value.every((item: unknown) => isPlainObject(item) && row(item));
+}
+
+function isCounts(value: unknown): boolean {
+  return isPlainObject(value) && Object.values(value).every((count) => isNum(count));
+}
+
+function isBreakdown(value: unknown): boolean {
+  return (
+    isPlainObject(value) &&
+    isNum(value.at) &&
+    isNumOrNull(value.tokens) &&
+    isNum(value.window) &&
+    everyRow(value.categories, (c) => isStr(c.name) && isNum(c.tokens) && isStr(c.kind)) &&
+    everyRow(value.mcpServers, (m) => isStr(m.server) && isNum(m.tokens) && isNum(m.tools)) &&
+    everyRow(value.memoryFiles, (f) => isStr(f.path) && isNum(f.tokens)) &&
+    everyRow(value.skills, (s) => isStr(s.name) && isStrOrNull(s.plugin) && isNum(s.tokens)) &&
+    everyRow(value.agents, (a) => isStr(a.name) && isNum(a.tokens))
+  );
+}
+
+const isBreakdownOrNull = (value: unknown): boolean => value === null || isBreakdown(value);
+
+function isTurnUsage(usage: unknown): boolean {
+  return (
+    isPlainObject(usage) &&
+    isStr(usage.model) &&
+    isNum(usage.input_tokens) &&
+    isNum(usage.output_tokens) &&
+    isNum(usage.cache_read_input_tokens) &&
+    isNum(usage.cache_creation_input_tokens)
+  );
+}
+
+function isTurn(turn: Record<string, unknown>): boolean {
+  return (
+    isNum(turn.at) &&
+    isNum(turn.durationMs) &&
+    isStr(turn.reason) &&
+    isStrOrNull(turn.agentId) &&
+    isNumOrNull(turn.costUsd) &&
+    (turn.usage === null || isTurnUsage(turn.usage))
+  );
+}
+
+const isInjectionSource = (value: unknown): value is InjectionSource =>
+  value === "prompt.attachment" || value === "tool.describe" || value === "skill.prompt";
+
+function isInjection(row: Record<string, unknown>): boolean {
+  return (
+    isInjectionSource(row.source) &&
+    isStr(row.name) &&
+    isNum(row.count) &&
+    isNum(row.chars) &&
+    isNum(row.lastChars)
+  );
+}
+
+function isSaving(row: Record<string, unknown>): boolean {
+  return isStr(row.pattern) && isNum(row.count) && isNum(row.fromTokens) && isNum(row.toTokens);
+}
+
+/** The use counts, one count map per kind. */
+function isUses(uses: unknown): boolean {
+  return (
+    isPlainObject(uses) &&
+    isCounts(uses.skills) &&
+    isCounts(uses.commands) &&
+    isCounts(uses.agents) &&
+    isCounts(uses.tools)
+  );
+}
+
+/** Checks every field the ledger reads from a stored record, down to the rows. */
+function isSessionRecord(value: unknown): value is SessionRecord {
+  return (
+    isPlainObject(value) &&
+    isStr(value.id) &&
+    isNum(value.startedAt) &&
+    isBreakdownOrNull(value.start) &&
+    everyRow(value.turns, isTurn) &&
+    isNumOrNull(value.costUsd) &&
+    everyRow(value.injected, isInjection) &&
+    isUses(value.uses) &&
+    everyRow(value.toon, isSaving) &&
+    isNum(value.toolMessagesSeen)
+  );
+}
+
 /** A stored value read back: a record this module wrote, or null. */
 export function asSession(value: unknown): SessionRecord | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  const rec = value as Partial<SessionRecord>;
-  if (typeof rec.id !== "string" || !Array.isArray(rec.turns)) {
+  if (!isPlainObject(value) || typeof value.id !== "string" || !Array.isArray(value.turns)) {
     return null;
   }
   // Older records carried a per-turn breakdown nothing read; it goes when the record is next written.
-  const turns = rec.turns.map(
-    ({ after: _after, ...turn }: TurnRecord & { after?: unknown }) => turn,
-  );
-  return { ...rec, turns } as SessionRecord;
+  const turns: unknown[] = value.turns.map((turn: unknown) => {
+    if (!isPlainObject(turn)) {
+      return turn;
+    }
+    const { after: _after, ...kept } = turn;
+    return kept;
+  });
+  const record = { ...value, turns };
+  return isSessionRecord(record) ? record : null;
 }
 
 export function breakdownOf(context: ContextUsage, at: number): Breakdown {
@@ -193,7 +291,7 @@ export function addToon(
  * lands on the turn that just ended, once, and on the session always. */
 export function addCost(rec: SessionRecord, usd: number): void {
   rec.costUsd = usd;
-  const last = [...rec.turns].reverse().find((t) => t.agentId === null);
+  const last = rec.turns.toReversed().find((t) => t.agentId === null);
   if (last !== undefined && last.costUsd === null) {
     last.costUsd = usd;
   }

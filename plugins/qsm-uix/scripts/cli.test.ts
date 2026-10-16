@@ -3,27 +3,13 @@
 // failure never puts a result on stdout, and that each cause of failure has
 // its own outcome code, so a script can branch on it without reading prose.
 
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-uix-cli-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterAll(() => {
-  for (const dir of sandboxes) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 interface Said {
   readonly stdout: string;
@@ -36,7 +22,10 @@ interface Said {
  * anything. An empty PATH string is not the same thing: the loader falls
  * back to a system default when it sees one. */
 function callCli(args: string[], options: { path?: string } = {}): Said {
-  const env: Record<string, string | undefined> = { ...process.env, QSM_UIX_DIR: sandbox() };
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    QSM_UIX_DIR: sandboxDir("qsm-uix-cli-"),
+  };
   if (options.path !== undefined) {
     env.PATH = options.path;
   }
@@ -44,12 +33,9 @@ function callCli(args: string[], options: { path?: string } = {}): Said {
   return { stdout: done.stdout ?? "", stderr: done.stderr ?? "", code: done.status ?? 1 };
 }
 
-function envelope(said: Said): { code: string; exit: number; data: Record<string, unknown> } {
-  return JSON.parse(said.stdout) as {
-    code: string;
-    exit: number;
-    data: Record<string, unknown>;
-  };
+function envelope(said: Said): unknown {
+  const parsed: unknown = JSON.parse(said.stdout);
+  return parsed;
 }
 
 describe("an unrecognized verb", () => {
@@ -72,7 +58,7 @@ describe("an unrecognized verb", () => {
 });
 
 describe("a missing external tool", () => {
-  const said = callCli(["screenshot", "--output", "DP-1"], { path: sandbox() });
+  const said = callCli(["screenshot", "--output", "DP-1"], { path: sandboxDir("qsm-uix-cli-") });
 
   test("is missing, exit 4, distinct from a call written wrong", () => {
     expect(said.code).toBe(4);
@@ -133,7 +119,7 @@ describe("--help", () => {
 
 describe("a verb that succeeds", () => {
   test("prints its numbers in text mode and the whole result under --json", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-uix-cli-");
     const image = join(dir, "pair.png");
     spawnSync("magick", ["xc:#000000", "xc:#FFFFFF", "+append", image]);
 
@@ -154,7 +140,7 @@ describe("a verb that succeeds", () => {
 
 describe("a verb that fails on the image itself", () => {
   test("is failed, exit 1", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-uix-cli-");
     const said = callCli(["pixel-sample", join(dir, "absent.png"), "--at", "0,0"]);
     expect(said.code).toBe(1);
     expect(said.stdout).toBe("");
@@ -164,7 +150,7 @@ describe("a verb that fails on the image itself", () => {
 /** A directory holding a stub for each named tool, to stand in for PATH. `gdbus` gets a script
  * that answers like AT-SPI: the bus address, the registry root, and a small tree. */
 function pathWith(...tools: string[]): string {
-  const dir = sandbox();
+  const dir = sandboxDir("qsm-uix-cli-");
   for (const tool of tools) {
     const stub = join(dir, tool);
     writeFileSync(stub, tool === "gdbus" ? GDBUS_STUB : "#!/bin/sh\n");
@@ -240,9 +226,7 @@ describe("a11y-tree", () => {
       path: pathWith("gdbus"),
     });
     expect(said.code).toBe(0);
-    const tree = envelope(said).data.tree as { name: string; children: unknown[] }[];
-    expect(tree).toHaveLength(1);
-    expect(tree[0]?.children).toHaveLength(0);
+    expect(envelope(said)).toMatchObject({ data: { tree: [{ children: [] }] } });
   });
 
   test("an app that is not on the bus is failed, exit 1, and nothing on stdout", () => {

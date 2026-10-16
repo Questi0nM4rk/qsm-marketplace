@@ -22,6 +22,22 @@ describe("the archive database", () => {
   });
 });
 
+describe("a skip record of a session that is saved", () => {
+  test("is deleted on open, once", () => {
+    const path = join(sandboxDir("qsm-memory-skip-"), "memory.db");
+    const db = openDb(path);
+    db.run("INSERT INTO sessions VALUES ('s1', '/w', '/w', 't', 'a', 'b', '/gone', 'c', 1)");
+    db.run("INSERT INTO turns VALUES ('s1', 1, 'u1', 'user', 't', 'hello')");
+    db.run("INSERT INTO skipped VALUES ('s1', '/gone', 1, 'no human turn')");
+    db.run("INSERT INTO skipped VALUES ('s2', '/gone2', 1, 'no human turn')");
+    db.close();
+
+    const again = openDb(path);
+
+    expect(again.query("SELECT id FROM skipped").all()).toEqual([{ id: "s2" }]);
+  });
+});
+
 describe("a session made only of slash commands", () => {
   test("is dropped on open, once, and a session with a typed prompt stays", () => {
     const path = join(sandboxDir("qsm-memory-cmd-"), "memory.db");

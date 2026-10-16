@@ -3,11 +3,11 @@
 // real git trees, scored by a fake sentrux on PATH that counts what it was
 // handed, so nothing here needs the real checker installed.
 
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   compareStructure,
   isDownwardEdge,
@@ -179,8 +179,6 @@ c='{"score":0.5}'
 printf '{"quality":%d,"cross_module_edges":[%s],"root_causes":{"modularity":%s,"equality":%s,"redundancy":%s,"depth":%s,"acyclicity":%s}}' $((1000 - files)) "$edges" "$c" "$c" "$c" "$c" "$c"
 `;
 
-const sandboxes: string[] = [];
-
 function git(root: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   if (result.status !== 0) {
@@ -205,8 +203,7 @@ function commit(root: string): string {
 /** A repository whose base commit already carries a test importing the
  * shared helper, so the reference side has a test to leave out too. */
 function repo(): { root: string; base: string } {
-  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-structure-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-langdev-structure-");
   git(root, ["init", "-q", "-b", "main"]);
   git(root, ["config", "user.email", "test@example.invalid"]);
   git(root, ["config", "user.name", "qsm test"]);
@@ -226,31 +223,26 @@ const TESTS_ONLY = {
   "lib/fixtures/sample.ts": 'import { helper } from "../helper.ts";\n',
 };
 
-/** Puts the fake sentrux first on PATH; the returned function restores PATH
- * and removes the fake's directory. */
+/** Puts the fake sentrux first on PATH; the returned function restores PATH.
+ * The fake's directory is a sandbox, removed after the test. */
 function installFakeSentrux(): () => void {
   const originalPath = process.env.PATH;
-  const bin = mkdtempSync(join(tmpdir(), "qsm-langdev-structure-bin-"));
+  const bin = sandboxDir("qsm-langdev-structure-bin-");
   writeFileSync(join(bin, "sentrux"), FAKE_SENTRUX);
   chmodSync(join(bin, "sentrux"), 0o755);
   process.env.PATH = `${bin}:${originalPath ?? ""}`;
   return () => {
     process.env.PATH = originalPath;
-    rmSync(bin, { recursive: true, force: true });
   };
 }
 
 describe("compareStructure leaves test files out of both trees", () => {
   let restorePath = (): void => undefined;
-  beforeAll(() => {
+  beforeEach(() => {
     restorePath = installFakeSentrux();
   });
-  afterAll(() => restorePath());
-
   afterEach(() => {
-    while (sandboxes.length > 0) {
-      rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-    }
+    restorePath();
   });
 
   test("A change that touches only tests", async () => {

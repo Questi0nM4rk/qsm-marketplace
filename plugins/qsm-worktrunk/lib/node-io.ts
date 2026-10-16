@@ -12,7 +12,7 @@ import type { CommandResult, Runner } from "./wt.ts";
  */
 function resultOf(result: SpawnSyncReturns<string>): CommandResult {
   if (result.error !== undefined) {
-    return { exitCode: 1, stdout: "", stderr: String(result.error.message) };
+    return { exitCode: 1, stdout: "", stderr: result.error.message };
   }
   return { exitCode: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }

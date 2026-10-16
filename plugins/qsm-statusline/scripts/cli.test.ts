@@ -3,34 +3,17 @@
 // promise the plugin makes is about that process: it prints its rows and exits
 // 0, whatever the machine around it is doing.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isRecord } from "../../../lib/outcome.ts";
 import { writeCache } from "../lib/cache.ts";
 import { gitCacheName } from "../lib/gitcache.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = join(import.meta.dir, "cli.ts");
 const ESCAPE = "\u001B";
-
-// Every sandbox this file makes is removed after the test that made it,
-// passing or failing: a `finally` inside one test would leave the rest. A
-// sealed sandbox is unsealed first, or its own removal is denied too.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-statusline-cli-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    chmodSync(dir, 0o700);
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 const PAYLOAD = JSON.stringify({
   model: { display_name: "Opus" },
@@ -52,7 +35,7 @@ function run(
 
 describe("help", () => {
   test("lists the three verbs qsm.json declares", () => {
-    const result = run(["--help"], sandbox());
+    const result = run(["--help"], sandboxDir("qsm-statusline-cli-"));
     expect(result.status).toBe(0);
     for (const verb of ["render", "refresh", "doctor"]) {
       expect(result.stdout).toContain(`  ${verb}`);
@@ -64,9 +47,10 @@ describe("render", () => {
   test("a cache directory nobody may write still prints the frame and exits 0", () => {
     // A full temporary directory, a read-only one, or one another account
     // owns. The git segment is the only casualty.
-    const parent = sandbox();
+    const parent = sandboxDir("qsm-statusline-cli-");
     chmodSync(parent, 0o500);
     const result = run(["render", "--no-color"], join(parent, "cache"));
+    chmodSync(parent, 0o700);
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     const lines = result.stdout.trimEnd().split("\n");
@@ -76,7 +60,7 @@ describe("render", () => {
   });
 
   test("Nothing blocks the render", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cli-");
     writeCache(
       dir,
       gitCacheName("/home/user/project"),
@@ -89,7 +73,7 @@ describe("render", () => {
   });
 
   test("--json is read by a program, so it carries no escape sequences", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cli-");
     writeCache(
       dir,
       gitCacheName("/home/user/project"),
@@ -99,34 +83,27 @@ describe("render", () => {
     const result = run(["render", "--json"], dir);
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain(ESCAPE);
-    const envelope = JSON.parse(result.stdout) as {
-      code: string;
-      exit: number;
-      data: { lines: string[] };
-    };
+    const envelope: unknown = JSON.parse(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
-    expect(envelope.data.lines[1]).toContain("git main: clean");
+    const lines = isRecord(envelope) && isRecord(envelope.data) ? envelope.data.lines : undefined;
+    expect(Array.isArray(lines) ? String(lines[1]) : "").toContain("git main: clean");
   });
 });
 
 describe("doctor", () => {
   test("reports and never gates: an unreadable settings file is still exit 0", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cli-");
     const settings = join(dir, "settings.json");
     writeFileSync(settings, "{ not json\n");
     const result = run(["doctor", "--settings", settings, "--json"], dir);
     expect(result.status).toBe(0);
-    const envelope = JSON.parse(result.stdout) as {
-      code: string;
-      data: { state: { kind: string }; entry: unknown };
-    };
-    expect(envelope.code).toBe("ok");
-    expect(envelope.data.state.kind).toBe("unreadable");
-    expect(envelope.data.entry).toBeDefined();
+    const envelope: unknown = JSON.parse(result.stdout);
+    expect(envelope).toMatchObject({ code: "ok", data: { state: { kind: "unreadable" } } });
+    expect(envelope).toHaveProperty("data.entry");
   });
 
   test("settings that already run the renderer report wired and exit 0", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cli-");
     const settings = join(dir, "settings.json");
     writeFileSync(
       settings,
@@ -142,7 +119,7 @@ describe("doctor", () => {
 
 describe("a broken call", () => {
   test("is exit 2 on one line, which a blank status line never is", () => {
-    const result = run(["render", "--nonsense"], sandbox());
+    const result = run(["render", "--nonsense"], sandboxDir("qsm-statusline-cli-"));
     expect(result.status).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("usage:");

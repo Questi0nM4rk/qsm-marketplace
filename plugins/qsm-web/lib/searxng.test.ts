@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   buildSearchUrl,
   configPath,
@@ -15,20 +15,6 @@ import {
   writeConfig,
 } from "./searxng.ts";
 
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-web-searxng-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
-
 describe("configPath", () => {
   test("the override wins, otherwise it sits under the home config directory", () => {
     expect(configPath("/tmp/one.json", "/home/one")).toBe("/tmp/one.json");
@@ -38,20 +24,20 @@ describe("configPath", () => {
 
 describe("loadConfig", () => {
   test("a missing file warns and falls back to the defaults", () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     const { config, warnings } = loadConfig(path);
     expect(config).toEqual(DEFAULT_CONFIG);
     expect(warnings[0]).toContain(path);
   });
 
   test("a written config round-trips", () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     writeConfig({ ...DEFAULT_CONFIG, instance: "https://search.test" }, path);
     expect(loadConfig(path).config.instance).toBe("https://search.test");
   });
 
   test("a broken file warns instead of throwing", () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     writeFileSync(path, "{not json");
     const { config, warnings } = loadConfig(path);
     expect(config.instance).toBe("");
@@ -66,11 +52,11 @@ describe("resolveInstance", () => {
       "https://flag.test",
     );
     expect(resolveInstance(config, undefined, "https://env.test")).toBe("https://env.test");
-    expect(resolveInstance(config, undefined, undefined)).toBe("https://file.test");
+    expect(resolveInstance(config)).toBe("https://file.test");
   });
 
   test("nothing configured anywhere is the empty string", () => {
-    expect(resolveInstance(DEFAULT_CONFIG, undefined, undefined)).toBe("");
+    expect(resolveInstance(DEFAULT_CONFIG)).toBe("");
   });
 });
 
@@ -168,17 +154,19 @@ function scripted(answers: string[]): {
 
 describe("runSetup", () => {
   test("no config yet: the answers are written with no confirmation asked", async () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     const { io, prompts } = scripted(["https://search.test", "duckduckgo, mojeek"]);
     expect(await runSetup(path, io)).toBe(0);
     expect(prompts.some((p) => p.includes("Replace"))).toBe(false);
-    const written = JSON.parse(readFileSync(path, "utf8"));
-    expect(written.instance).toBe("https://search.test");
-    expect(written.defaultEngines).toEqual(["duckduckgo", "mojeek"]);
+    const written: unknown = JSON.parse(readFileSync(path, "utf8"));
+    expect(written).toMatchObject({
+      instance: "https://search.test",
+      defaultEngines: ["duckduckgo", "mojeek"],
+    });
   });
 
   test("a config that is present but names no instance is still guarded", async () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     writeFileSync(path, JSON.stringify({ defaultNumResults: 25 }));
     const before = readFileSync(path, "utf8");
     const { io, prompts } = scripted(["n"]);
@@ -188,7 +176,7 @@ describe("runSetup", () => {
   });
 
   test("Setup run with an existing config", async () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     writeConfig({ ...DEFAULT_CONFIG, instance: "https://old.test" }, path);
     const before = readFileSync(path, "utf8");
     const { io, notes } = scripted(["", "https://new.test"]);
@@ -198,18 +186,20 @@ describe("runSetup", () => {
   });
 
   test("accepting replaces the instance and keeps the rest of the config", async () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     writeConfig({ ...DEFAULT_CONFIG, instance: "https://old.test", timeoutMs: 42 }, path);
     const { io } = scripted(["y", "https://new.test", ""]);
     expect(await runSetup(path, io)).toBe(0);
-    const written = JSON.parse(readFileSync(path, "utf8"));
-    expect(written.instance).toBe("https://new.test");
-    expect(written.timeoutMs).toBe(42);
-    expect(written.defaultEngines).toEqual([...DEFAULT_CONFIG.defaultEngines]);
+    const written: unknown = JSON.parse(readFileSync(path, "utf8"));
+    expect(written).toMatchObject({
+      instance: "https://new.test",
+      timeoutMs: 42,
+      defaultEngines: [...DEFAULT_CONFIG.defaultEngines],
+    });
   });
 
   test("no instance given and none on file writes nothing and exits non-zero", async () => {
-    const path = join(sandbox(), "config.json");
+    const path = join(sandboxDir("qsm-web-searxng-"), "config.json");
     const { io } = scripted([""]);
     expect(await runSetup(path, io)).toBe(EXIT.noInstance);
     expect(existsSync(path)).toBe(false);

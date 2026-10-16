@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.qsm.json",
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
@@ -15,7 +15,7 @@
   // hooks/tsconfig.json includes (plugin-authoring skill; CLAUDEMODS.md
   // section 10). The root config has no such include, so it cannot resolve
   // that module: excluded here, typechecked instead through each hooks
-  // module's own tsconfig (`bunx tsc -p plugins/<name>/hooks`).
+  // module's own tsconfig (`bun check -p plugins/<name>/hooks`).
   "exclude": [
     "node_modules",
     "**/dist/**",

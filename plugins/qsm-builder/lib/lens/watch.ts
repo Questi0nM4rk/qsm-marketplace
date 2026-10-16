@@ -36,7 +36,7 @@ export function watchMarketplace(root: string, onChange: () => void, delayMs = 1
     let w: FSWatcher;
     try {
       w = watch(dir, (_event, file) => {
-        const name = file === null ? "" : String(file);
+        const name = file ?? "";
         if (name === "" || ignored(dir, name)) {
           return;
         }

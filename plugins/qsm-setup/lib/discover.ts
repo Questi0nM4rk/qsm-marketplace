@@ -2,7 +2,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { CommandArg, CommandDecl } from "../../../lib/qsm-manifest.ts";
+import { isRecord } from "../../../lib/outcome.ts";
+import { type CommandDecl, parseManifest } from "../../../lib/qsm-manifest.ts";
 
 export interface PluginNode {
   readonly name: string;
@@ -20,27 +21,19 @@ export interface PluginNode {
   readonly doctor: string | null;
 }
 
-interface QsmFile {
-  readonly qsm?: {
-    readonly bin?: Record<string, string>;
-    readonly commands?: Record<string, { description: string; args?: CommandArg[] }>;
-    readonly doctor?: string;
-  };
-}
-
 function readQsm(dir: string): Pick<PluginNode, "bins" | "commands" | "doctor"> {
   const path = join(dir, "qsm.json");
   if (!existsSync(path)) {
     return { bins: {}, commands: {}, doctor: null };
   }
-  const raw = JSON.parse(readFileSync(path, "utf8")) as QsmFile;
+  const { qsm } = parseManifest(JSON.parse(readFileSync(path, "utf8")), path);
   const commands = Object.fromEntries(
-    Object.entries(raw.qsm?.commands ?? {}).map(([key, value]): [string, CommandDecl] => [
+    Object.entries(qsm.commands).map(([key, value]): [string, CommandDecl] => [
       key,
       { description: value.description, args: value.args ?? [] },
     ]),
   );
-  return { bins: raw.qsm?.bin ?? {}, commands, doctor: raw.qsm?.doctor ?? null };
+  return { bins: qsm.bin ?? {}, commands, doctor: qsm.doctor ?? null };
 }
 
 export function discoverPlugins(root: string): PluginNode[] {
@@ -58,10 +51,11 @@ export function discoverPlugins(root: string): PluginNode[] {
     if (!existsSync(manifestPath)) {
       continue;
     }
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { dependencies?: unknown };
-    const dependencies = Array.isArray(manifest.dependencies)
-      ? manifest.dependencies.filter((x): x is string => typeof x === "string")
-      : [];
+    const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const dependencies =
+      isRecord(manifest) && Array.isArray(manifest.dependencies)
+        ? manifest.dependencies.filter((x): x is string => typeof x === "string")
+        : [];
     const installerPath = join(dir, "scripts", "install.ts");
     const activationPath = join(dir, "scripts", "activate.ts");
     nodes.push({
@@ -73,5 +67,5 @@ export function discoverPlugins(root: string): PluginNode[] {
       ...readQsm(dir),
     });
   }
-  return nodes.sort((a, b) => a.name.localeCompare(b.name));
+  return nodes.toSorted((a, b) => a.name.localeCompare(b.name));
 }

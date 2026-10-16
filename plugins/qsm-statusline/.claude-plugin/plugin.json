@@ -1,6 +1,5 @@
 {
   "name": "qsm-statusline",
-  "version": "0.1.0",
   "description": "The session's cost in the one line that is always on screen: a compiled renderer that reads the harness payload and prints the model, the context window, the subscription rate limits, and the repository's git state, with every segment degrading on its own and nothing blocking the frame.",
   "types": "./types/index.d.ts",
   "keywords": [

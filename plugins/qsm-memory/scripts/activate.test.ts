@@ -8,7 +8,7 @@ function context(claudeHome: string, memory = "qsm", dryRun = false) {
   return { dryRun, env: { CLAUDE_CONFIG_DIR: claudeHome }, choices: { memory } };
 }
 /** The activation answers synchronously; the contract allows a promise, so await it. */
-const activate = async (ctx: ReturnType<typeof context>) => await activation.activate(ctx);
+const activate = (ctx: ReturnType<typeof context>) => activation.activate(ctx);
 
 function sandbox(settings?: string): { claudeHome: string; settings: string } {
   const claudeHome = sandboxDir("qsm-claude-");

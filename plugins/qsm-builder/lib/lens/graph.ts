@@ -29,14 +29,20 @@ const PAD = 10;
 const CHAR = 8;
 
 export const esc = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 
 const clip = (s: string): string => (s.length > 28 ? `${s.slice(0, 27)}…` : s);
 
 /** The mean row of a node's neighbours in `col`, or `null` when it has none there. */
 function meanRow(n: Vertex, col: readonly Vertex[], edges: readonly Link[]): number | null {
-  const near = edges.flatMap((e) => [e.from === n.id ? e.to : "", e.to === n.id ? e.from : ""]);
-  const at = col.map((b, i) => (near.includes(b.id) ? i : -1)).filter((i) => i >= 0);
+  const near = new Set(
+    edges.flatMap((e) => [e.from === n.id ? e.to : "", e.to === n.id ? e.from : ""]),
+  );
+  const at = col.map((b, i) => (near.has(b.id) ? i : -1)).filter((i) => i >= 0);
   return at.length === 0 ? null : at.reduce((a, b) => a + b, 0) / at.length;
 }
 
@@ -44,7 +50,7 @@ function meanRow(n: Vertex, col: readonly Vertex[], edges: readonly Link[]): num
 function sortBy(col: readonly Vertex[], by: readonly Vertex[], edges: readonly Link[]): Vertex[] {
   return col
     .map((n, i) => ({ n, i, k: meanRow(n, by, edges) ?? Number.POSITIVE_INFINITY }))
-    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .toSorted((a, b) => a.k - b.k || a.i - b.i)
     .map((x) => x.n);
 }
 
@@ -117,7 +123,7 @@ function waypoints(a: Placed, b: Placed, columns: readonly Column[]): [number, n
   const between = columns.filter((c) =>
     forward ? c.x > a.x && c.x < b.x : c.x < a.x && c.x > b.x,
   );
-  const lanes = (forward ? between : [...between].reverse()).flatMap((c): [number, number][] => {
+  const lanes = (forward ? between : between.toReversed()).flatMap((c): [number, number][] => {
     const t = (c.x + c.w / 2 - start[0]) / (end[0] - start[0]);
     const want = start[1] + t * (end[1] - start[1]);
     const y = c.gaps.reduce((best, g) => (Math.abs(g - want) < Math.abs(best - want) ? g : best));

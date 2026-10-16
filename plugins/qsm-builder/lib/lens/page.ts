@@ -19,12 +19,12 @@ import {
   type Plugin,
 } from "./model.ts";
 import { newItemSpecs, searchIndex } from "./newitem.ts";
-import type { Reference, RefKind } from "./refs.ts";
+import { type Reference, type RefKind, REF_KINDS } from "./refs.ts";
 import type { Field, Spec } from "./spec.ts";
 import { CSS, FONTS, PEN_CSS, SCRIPT, WAIT_CSS } from "./style.ts";
 import type { Task } from "./tasks.ts";
 
-const slug = (name: string): string => name.replace(/[^a-zA-Z0-9-]/g, "-");
+const slug = (name: string): string => name.replaceAll(/[^a-zA-Z0-9-]/g, "-");
 const pluginRoute = (p: Plugin): string => slug(p.name);
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
@@ -96,7 +96,7 @@ function itemRoute(p: Plugin, i: Item): string {
 }
 
 /** Escaped text with `code` spans. */
-const inline = (s: string): string => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+const inline = (s: string): string => esc(s).replaceAll(/`([^`]+)`/g, "<code>$1</code>");
 
 /** Paragraphs of a markdown text, headings dropped. */
 function prose(text: string): string {
@@ -104,7 +104,7 @@ function prose(text: string): string {
     .split(/\r?\n\s*\r?\n/)
     .map((p) => p.trim())
     .filter((p) => p !== "" && !p.startsWith("#"))
-    .map((p) => `<p>${inline(p.replace(/\s*\r?\n\s*/g, " "))}</p>`)
+    .map((p) => `<p>${inline(p.replaceAll(/\s*\r?\n\s*/g, " "))}</p>`)
     .join("");
 }
 
@@ -180,8 +180,7 @@ const KIND_CLASS: Record<RefKind, "node" | "tool" | "web" | "mcp"> = {
 };
 
 const legendOf = (refs: readonly Reference[]): string =>
-  (Object.keys(KIND_LABEL) as RefKind[])
-    .filter((k) => refs.some((r) => r.kind === k))
+  REF_KINDS.filter((k) => refs.some((r) => r.kind === k))
     .map((k) => `<span class="tag k-${KIND_CLASS[k]}">${esc(KIND_LABEL[k])}</span>`)
     .join("");
 
@@ -351,6 +350,9 @@ function graderBlock(g: Grader, c: Case, ctx: Ctx, where: string): string {
 
 const percent = (pass: number, total: number): number => Math.round((pass / total) * 100);
 
+const stat = (name: string, value: string): string =>
+  `<span class="stat"><small>${name}</small><b>${esc(value)}</b></span>`;
+
 /** The last result: its own read-only block, never a field. */
 function resultBlock(c: Case): string {
   const r: CaseResult | null = c.result;
@@ -359,8 +361,6 @@ function resultBlock(c: Case): string {
     return `<div class="result none">${label}<p>${esc(c.noResult.charAt(0).toUpperCase() + c.noResult.slice(1))}.</p></div>`;
   }
   const met = meetsBar(r);
-  const stat = (name: string, value: string) =>
-    `<span class="stat"><small>${name}</small><b>${esc(value)}</b></span>`;
   const without = r.withoutPass === null ? "not run" : `${r.withoutPass}/${r.withoutTotal}`;
   const delta =
     r.withoutPass === null || r.withoutTotal === 0
@@ -513,13 +513,14 @@ function bar(p: Plugin, current: string): string {
   return `<nav class="tabs sub" role="tablist" aria-label="${esc(p.name)} sections">${[tab(pluginRoute(p), "Plugin overview", ""), ...items].join("")}</nav>`;
 }
 
+const li = (cls: string, text: string, n: number): string =>
+  `<li class="s${cls}" style="animation-delay:${(n * 0.4).toFixed(1)}s">${esc(text)}</li>`;
+
 function flow(i: Item): string {
   const steps = i.headings.slice(0, 8);
   if (steps.length === 0) {
     return "";
   }
-  const li = (cls: string, text: string, n: number) =>
-    `<li class="s${cls}" style="animation-delay:${(n * 0.4).toFixed(1)}s">${esc(text)}</li>`;
   const parts = [
     li(" end", "Trigger", 0),
     ...steps.map((s, n) => li("", s, n + 1)),
@@ -689,6 +690,8 @@ ${card("Developer", "", dev)}
 
 const CAP: Record<RefKind, number> = { plugin: 24, tool: 12, mcp: 8, web: 10 };
 
+const id = (r: Reference): string => `${r.kind}:${r.name}`;
+
 /** The graph of one level (a plugin, a skill, an agent) and the names found in that level's files. */
 function referenceGraph(
   subject: string,
@@ -702,7 +705,6 @@ function referenceGraph(
   if (refs.length === 0) {
     return `<p class="dim">No other plugin, tool, MCP server or web host is named in ${esc(where)}.</p>`;
   }
-  const id = (r: Reference) => `${r.kind}:${r.name}`;
   const nodes: Vertex[] = [
     { id: "self", label: subject, cls: "hl", layer: 0 },
     ...shown.map((r): Vertex => ({ id: id(r), label: r.name, cls: KIND_CLASS[r.kind], layer: 1 })),
@@ -722,7 +724,7 @@ function shownNames(held: ReadonlyMap<string, readonly Reference[]>): Reference[
       count.set(`${r.kind}:${r.name}`, { ref: r, n: at.n + 1 });
     }
   }
-  const sorted = [...count.values()].sort(
+  const sorted = [...count.values()].toSorted(
     (a, b) => b.n - a.n || a.ref.name.localeCompare(b.ref.name),
   );
   return (["tool", "mcp", "web"] as const).flatMap((k) =>
@@ -733,15 +735,16 @@ function shownNames(held: ReadonlyMap<string, readonly Reference[]>): Reference[
   );
 }
 
+const part = (key: string, label: string, href?: string): Vertex => ({
+  id: key,
+  label,
+  cls: "part",
+  layer: 1,
+  ...(href === undefined ? {} : { href }),
+});
+
 /** The plugin graph: the plugin, its parts, and the names each part refers to. */
 function pluginGraph(p: Plugin): string {
-  const part = (key: string, label: string, href?: string): Vertex => ({
-    id: key,
-    label,
-    cls: "part",
-    layer: 1,
-    ...(href === undefined ? {} : { href }),
-  });
   const parts: Vertex[] = p.items.map((i) => part(`${i.kind}:${i.name}`, i.name, itemRoute(p, i)));
   if (p.hooks.length > 0) {
     parts.push(part("hooks", plural(p.hooks.length, "hook")));
@@ -756,7 +759,6 @@ function pluginGraph(p: Plugin): string {
   ]);
   const own = new Map([...held].map(([k, v]) => [k, v.filter((r) => r.kind !== "plugin")]));
   const shown = shownNames(own);
-  const id = (r: Reference) => `${r.kind}:${r.name}`;
   const plugins = p.references.filter((r) => r.kind === "plugin");
   const nodes: Vertex[] = [
     { id: "self", label: p.name, cls: "hl", layer: 0 },
@@ -947,9 +949,10 @@ export function renderDocument(m: Marketplace, opts: PageOptions = {}): string {
   return `<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n${renderPage(m, opts)}`;
 }
 
+const top = (route: string, label: string): string =>
+  `<a role="tab" href="#${route}" data-route="${route}" data-top="1" aria-selected="false">${esc(label)}</a>`;
+
 export function renderPage(m: Marketplace, opts: PageOptions = {}): string {
-  const top = (route: string, label: string) =>
-    `<a role="tab" href="#${route}" data-route="${route}" data-top="1" aria-selected="false">${esc(label)}</a>`;
   const tabs = [
     top("overview", "Overview"),
     ...m.plugins.map((p) => top(pluginRoute(p), p.name)),

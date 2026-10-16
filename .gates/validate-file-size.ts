@@ -10,7 +10,7 @@ const findings: string[] = [];
 for (const dir of pluginDirs()) {
   for (const path of walk(dir)) {
     const r = rel(path);
-    if (/\/references\//.test(r)) {
+    if (r.includes("/references/")) {
       findings.push(`${r}: no references/ in pass 1; fold it into the skill or cut it`);
       continue;
     }

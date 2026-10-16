@@ -1,0 +1,56 @@
+# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this
+# file. Every rule ruff ships is on except the ones named below, and each of
+# those carries why. A finding may be a defect or a smell, and both are worth
+# an error.
+#
+# Four kinds are named: rules for a framework this profile cannot know a
+# repository uses, rules another checker in this registry already owns, rules
+# the formatter would fight, and pairs where ruff ships both halves of a
+# contradiction so one has to win.
+#
+# Preview rules stay off. `select = ["ALL"]` does not reach them without
+# `preview = true`, and ruff calls them unstable: measured on a 69-file corpus
+# of real Python, not one preview rule fired.
+#
+# ruff has no warning level — every finding fails, which is the no-warnings
+# floor already. A rule worth suppressing at a call site was the wrong rule to
+# enable: drop it here with the reason, never a noqa comment in the code.
+
+[lint]
+preview = false
+select = ["ALL"]
+ignore = [
+  # A framework this profile cannot know the repository uses. A wrong-framework
+  # rule does not stay quiet, it invents findings.
+  "AIR",     # Airflow
+  "PD",      # pandas
+  "NPY",     # numpy
+  "DJ",      # Django
+  "FAST",    # FastAPI
+
+  # Another checker in this registry already owns the finding, and two owners
+  # means one defect reported twice.
+  "S",       # flake8-bandit — bandit and semgrep p/python own security
+  "C901",    # mccabe complexity — lizard gates CCN across every language
+
+  # The formatter would fight it: `ruff format` decides quotes, indentation and
+  # trailing commas, so a finding here is churn. Measured on the corpus:
+  # Q000 1359 findings, E501 440, W293 352, COM812 242, none of them a defect.
+  "W191", "E111", "E114", "E117", "D206", "D300",
+  "Q000", "Q001", "Q002", "Q003",
+  "COM812", "COM819",
+  "ISC001", "ISC002",
+  "E501",
+
+  # ruff ships both halves of a contradiction; the other half is on.
+  "D203",    # blank line before class — D211, no blank line, wins
+  "D213",    # summary on the second line — D212, first line, wins
+
+  # Decided against, with the reason.
+  "CPY001",  # copyright header — this repository has no header policy
+  "TD002",   # TODO author — a task belongs in the tracker, not in a comment
+  "TD003",   # TODO link — same
+]
+
+[format]
+docstring-code-format = true

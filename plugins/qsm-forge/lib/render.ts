@@ -10,7 +10,7 @@ const ELLIPSIS = "…";
 /** One line, at most `width` wide, newlines folded away: a review comment
  * is a paragraph and a table cell is not. */
 export function oneLine(text: string, width: number): string {
-  const flat = text.replace(/\s+/g, " ").trim();
+  const flat = text.replaceAll(/\s+/g, " ").trim();
   return flat.length <= width ? flat : `${flat.slice(0, width - 1)}${ELLIPSIS}`;
 }
 

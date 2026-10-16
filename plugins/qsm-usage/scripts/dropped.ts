@@ -1,13 +1,13 @@
 // `qsm-usage drop` and `qsm-usage dropped`: the findings a person dropped, kept so a later review
 // does not offer them again.
 
-import type { Handler } from "../../../lib/cli-base.ts";
+import { type Handler, requiredString } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
 import { addDropped, droppedPath, readDropped } from "../lib/dropped.ts";
 import { messageOf } from "../lib/formats.ts";
 
 export const drop: Handler = (call) => {
-  const key = (call.args.key as string).trim();
+  const key = requiredString(call, "key").trim();
   if (!/^[a-z-]+:.+/.test(key)) {
     return fail("usage", `key "${key}" is not <topic>:<target>`);
   }

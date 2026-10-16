@@ -30,14 +30,13 @@ export function detectFormat(path: string): DataFormat | null {
 /** YAML and TOML come from the runtime, so the plugin carries no parser
  * dependency of its own. */
 export function parseData(text: string, format: DataFormat): unknown {
-  switch (format) {
-    case "yaml":
-      return YAML.parse(text);
-    case "toml":
-      return TOML.parse(text);
-    default:
-      return JSON.parse(text) as unknown;
+  if (format === "yaml") {
+    return YAML.parse(text);
   }
+  if (format === "toml") {
+    return TOML.parse(text);
+  }
+  return JSON.parse(text) as unknown;
 }
 
 /** Parses a data file's text by its extension, or throws an `InputError`
@@ -58,8 +57,15 @@ export function readData(path: string, text: string): unknown {
   }
 }
 
+/** The `code` of a thrown system error, when it carries a string one. */
+export function codeOf(error: unknown): string | undefined {
+  return error instanceof Error && "code" in error && typeof error.code === "string"
+    ? error.code
+    : undefined;
+}
+
 /** Whether a read failed because nothing is at the path. */
 export function absent(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null)?.code;
+  const code = codeOf(error);
   return code === "ENOENT" || code === "ENOTDIR";
 }

@@ -1,5 +1,6 @@
 // The contract between a checker's output parser and the tree comparison that consumes it.
 
+import { arrayOf, num, recordOf, recordsOf, str, type Rec } from "./json.ts";
 import { ruleIdOf } from "./rule-packs.ts";
 
 /** Where a finding sits, as the tool printed it. */
@@ -62,27 +63,21 @@ function tallyOf(findings: readonly Finding[], statedTotal?: number): Tally {
   return { total, byPath, findings };
 }
 
-const str = (value: unknown): string => (typeof value === "string" ? value : "");
-const num = (value: unknown): number | undefined => (typeof value === "number" ? value : undefined);
-
-function jsonArray(text: string): unknown[] | null {
+function parseJson(text: string): unknown {
   try {
-    const parsed = JSON.parse(text) as unknown;
-    return Array.isArray(parsed) ? parsed : null;
+    const parsed: unknown = JSON.parse(text);
+    return parsed;
   } catch {
     return null;
   }
 }
 
-function jsonObject(text: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
+function jsonArray(text: string): readonly unknown[] | null {
+  return arrayOf(parseJson(text));
+}
+
+function jsonObject(text: string): Rec | null {
+  return recordOf(parseJson(text));
 }
 
 /**
@@ -99,7 +94,9 @@ function tallyLines(
   for (const line of output.split("\n")) {
     const m = line.match(pattern);
     if (m) {
-      findings.push(at(str(m[4]).trim(), m[1], Number(m[2]), m[3] ? Number(m[3]) : undefined));
+      findings.push(
+        at(str(m[4]).trim(), m[1], Number(m[2]), m[3] === undefined ? undefined : Number(m[3])),
+      );
     }
   }
   if (findings.length === 0 && !cleanExits.includes(exitCode)) {
@@ -108,47 +105,32 @@ function tallyLines(
   return tallyOf(findings);
 }
 
-/**
- * biome categories that are biome talking about its own configuration, not about the code;
- * counting one would put a number in the ratchet that nothing the author touched can move.
- */
-const BIOME_CONFIG_CATEGORIES = new Set(["deserialize", "configuration"]);
-
-interface BiomeDiagnostic {
-  category?: unknown;
-  location?: { path?: unknown };
-}
-
-function biomePath(diagnostic: BiomeDiagnostic): string {
-  const path = diagnostic.location?.path;
-  return typeof path === "string" ? path : str((path as { file?: unknown } | undefined)?.file);
-}
-
-export function countBiome(stdout: string): Tally | null {
-  const parsed = jsonObject(stdout);
-  if (!Array.isArray(parsed?.diagnostics)) {
+/** `oxlint --format json`: `{ diagnostics: [{ code, filename, labels: [{ span: { line, column } }] }] }`. */
+export function countOxlint(stdout: string): Tally | null {
+  const diagnostics = recordsOf(jsonObject(stdout)?.diagnostics);
+  if (diagnostics === null) {
     return null;
   }
-  const code = (parsed.diagnostics as BiomeDiagnostic[]).filter(
-    (d) => typeof d?.category !== "string" || !BIOME_CONFIG_CATEGORIES.has(d.category),
+  return tallyOf(
+    diagnostics.map((d) => {
+      const span = recordOf(recordsOf(d.labels)?.[0]?.span);
+      return at(str(d.code), d.filename, num(span?.line), num(span?.column));
+    }),
   );
-  return tallyOf(code.map((d) => at(str(d?.category), biomePath(d ?? {}))));
 }
 
-type Rec = Record<string, unknown>;
-
 function tallyJsonArray(stdout: string, toFinding: (item: Rec) => Finding): Tally | null {
-  const parsed = jsonArray(stdout);
+  const parsed = recordsOf(parseJson(stdout));
   if (parsed === null) {
     return null;
   }
-  return tallyOf(parsed.map((item) => toFinding((item ?? {}) as Rec)));
+  return tallyOf(parsed.map((item) => toFinding(item)));
 }
 
 /** ruff --output-format json: code, message, filename, location.row/column. */
 export function countRuff(stdout: string): Tally | null {
   return tallyJsonArray(stdout, (r) => {
-    const loc = (r.location ?? {}) as Rec;
+    const loc = recordOf(r.location) ?? {};
     return at(`${str(r.code)} ${str(r.message)}`.trim(), r.filename, num(loc.row), num(loc.column));
   });
 }
@@ -202,7 +184,7 @@ export function countDiagnosticLines(output: string, exitCode: number): Tally | 
 export function countShellMetrics(output: string, threshold: number): number | null {
   const lines = output.split("\n");
   const header = lines.find((line) => /\bCCN\b/i.test(line));
-  if (!header) {
+  if (header === undefined) {
     return null;
   }
   const ccnIndex = header
@@ -305,19 +287,19 @@ export function countDotnetFormatReport(
   _stderr: string,
   _exitCode: number,
 ): Tally | null {
-  const parsed = jsonArray(report);
+  const parsed = recordsOf(parseJson(report));
   if (parsed === null) {
     return null;
   }
   const findings: Finding[] = [];
-  for (const entry of parsed as (Rec | null)[]) {
-    const path = entry?.FilePath;
-    const changes = entry?.FileChanges;
-    if (!Array.isArray(changes) || changes.length === 0) {
+  for (const entry of parsed) {
+    const path = entry.FilePath;
+    const changes = recordsOf(entry.FileChanges);
+    if (changes === null || changes.length === 0) {
       findings.push(at(UNFORMATTED, path));
       continue;
     }
-    for (const change of changes as Rec[]) {
+    for (const change of changes) {
       const identity = `${str(change.DiagnosticId)} ${str(change.FormatDescription)}`.trim();
       findings.push(
         at(identity || UNFORMATTED, path, num(change.LineNumber), num(change.CharNumber)),
@@ -327,35 +309,23 @@ export function countDotnetFormatReport(
   return tallyOf(findings);
 }
 
-interface SarifResult {
-  ruleId?: unknown;
-  message?: { text?: unknown };
-  locations?: {
-    physicalLocation?: {
-      artifactLocation?: { uri?: unknown };
-      region?: { startLine?: unknown; startColumn?: unknown };
-    };
-  }[];
-}
-
-function sarifFinding(result: SarifResult): Finding {
-  const physical = result.locations?.[0]?.physicalLocation;
-  const uri = str(physical?.artifactLocation?.uri).replace(/^file:\/\//, "");
-  const identity = `${str(result.ruleId)} ${str(result.message?.text)}`.trim();
-  return at(identity, uri, num(physical?.region?.startLine), num(physical?.region?.startColumn));
+function sarifFinding(result: Rec): Finding {
+  const physical = recordOf(recordsOf(result.locations)?.[0]?.physicalLocation);
+  const uri = str(recordOf(physical?.artifactLocation)?.uri).replace(/^file:\/\//, "");
+  const identity = `${str(result.ruleId)} ${str(recordOf(result.message)?.text)}`.trim();
+  const region = recordOf(physical?.region);
+  return at(identity, uri, num(region?.startLine), num(region?.startColumn));
 }
 
 /** SARIF 2.x: `runs[].results`. */
 export function countSarif(stdout: string, _stderr: string, _exitCode: number): Tally | null {
-  const parsed = jsonObject(stdout);
-  if (!Array.isArray(parsed?.runs)) {
+  const runs = recordsOf(jsonObject(stdout)?.runs);
+  if (runs === null) {
     return null;
   }
   const findings: Finding[] = [];
-  for (const run of parsed.runs as ({ results?: SarifResult[] } | null)[]) {
-    if (Array.isArray(run?.results)) {
-      findings.push(...run.results.map(sarifFinding));
-    }
+  for (const run of runs) {
+    findings.push(...(recordsOf(run.results)?.map((r) => sarifFinding(r)) ?? []));
   }
   return tallyOf(findings);
 }
@@ -373,18 +343,18 @@ export function countTsc(stdout: string, stderr: string, exitCode: number): Tall
 
 /** pyright --outputjson: `generalDiagnostics`, zero-based range. */
 export function countPyright(stdout: string, _stderr: string, _exitCode: number): Tally | null {
-  const parsed = jsonObject(stdout);
-  if (!Array.isArray(parsed?.generalDiagnostics)) {
+  const diagnostics = recordsOf(jsonObject(stdout)?.generalDiagnostics);
+  if (diagnostics === null) {
     return null;
   }
   return tallyOf(
-    (parsed.generalDiagnostics as Rec[]).map((d) => {
-      const start = ((d?.range as Rec | undefined)?.start ?? {}) as Rec;
+    diagnostics.map((d) => {
+      const start = recordOf(recordOf(d.range)?.start) ?? {};
       const line = num(start.line);
       const column = num(start.character);
       return at(
-        `${str(d?.rule)} ${str(d?.message)}`.trim(),
-        d?.file,
+        `${str(d.rule)} ${str(d.message)}`.trim(),
+        d.file,
         line === undefined ? undefined : line + 1,
         column === undefined ? undefined : column + 1,
       );
@@ -394,13 +364,13 @@ export function countPyright(stdout: string, _stderr: string, _exitCode: number)
 
 /** bandit -f json: `results` with test_id, issue_text, filename, line_number. */
 export function countBanditJson(stdout: string, _stderr: string, _exitCode: number): Tally | null {
-  const parsed = jsonObject(stdout);
-  if (!Array.isArray(parsed?.results)) {
+  const results = recordsOf(jsonObject(stdout)?.results);
+  if (results === null) {
     return null;
   }
   return tallyOf(
-    (parsed.results as Rec[]).map((r) =>
-      at(`${str(r?.test_id)} ${str(r?.issue_text)}`.trim(), r?.filename, num(r?.line_number)),
+    results.map((r) =>
+      at(`${str(r.test_id)} ${str(r.issue_text)}`.trim(), r.filename, num(r.line_number)),
     ),
   );
 }
@@ -408,18 +378,18 @@ export function countBanditJson(stdout: string, _stderr: string, _exitCode: numb
 /** semgrep --json: `results` with check_id, path, start.line/col. */
 export function countSemgrep(stdout: string, _stderr: string, _exitCode: number): Tally | null {
   const parsed = jsonObject(stdout);
-  if (!Array.isArray(parsed?.results)) {
+  const results = recordsOf(parsed?.results);
+  if (results === null) {
     return null;
   }
-  const errors = Array.isArray(parsed.errors) ? (parsed.errors as { level?: unknown }[]) : [];
-  const failures = errors.filter((error) => error?.level !== "warn");
-  if (parsed.results.length === 0 && failures.length > 0) {
+  const failures = (recordsOf(parsed?.errors) ?? []).filter((error) => error.level !== "warn");
+  if (results.length === 0 && failures.length > 0) {
     return null;
   }
   return tallyOf(
-    (parsed.results as Rec[]).map((r) => {
-      const start = (r?.start ?? {}) as Rec;
-      return at(ruleIdOf(str(r?.check_id)), r?.path, num(start.line), num(start.col));
+    results.map((r) => {
+      const start = recordOf(r.start) ?? {};
+      return at(ruleIdOf(str(r.check_id)), r.path, num(start.line), num(start.col));
     }),
   );
 }
@@ -429,14 +399,14 @@ export function countSemgrep(stdout: string, _stderr: string, _exitCode: number)
  * names the cause in its JSON `errors` (an HTTP 401 for a rejected token, measured on 1.153.1).
  */
 export function semgrepFailure(stdout: string): string | undefined {
-  const errors = jsonObject(stdout)?.errors;
-  if (!Array.isArray(errors)) {
-    return;
+  const errors = recordsOf(jsonObject(stdout)?.errors);
+  if (errors === null) {
+    return undefined;
   }
-  const failure = (errors as ({ level?: unknown; message?: unknown } | null)[]).find(
-    (error) => error?.level !== "warn" && str(error?.message).trim() !== "",
+  const failure = errors.find(
+    (error) => error.level !== "warn" && str(error.message).trim() !== "",
   );
-  return failure === undefined ? undefined : str(failure?.message).trim();
+  return failure === undefined ? undefined : str(failure.message).trim();
 }
 
 /** devskim output is version-dependent: SARIF, or a bare findings array
@@ -452,42 +422,32 @@ export function countDevskim(stdout: string, stderr: string, exitCode: number): 
 
 // --- knip, depcruise, jscpd --------------------------------------------------
 
-interface KnipItem {
-  name?: unknown;
-  line?: unknown;
-  col?: unknown;
-}
-type KnipIssue = { file?: unknown } & Record<string, unknown>;
-
 const UNUSED_FILE = "unused file";
 
-function knipIssue(issue: KnipIssue, findings: Finding[]): void {
+function knipIssue(issue: Rec, findings: Finding[]): void {
   const file = str(issue.file);
   for (const [type, value] of Object.entries(issue)) {
-    if (!Array.isArray(value)) {
-      continue;
-    }
-    for (const item of value as (KnipItem | null)[]) {
-      const name = str(item?.name);
+    for (const item of recordsOf(value) ?? []) {
+      const name = str(item.name);
       if (type === "files") {
         findings.push(at(UNUSED_FILE, name));
       } else {
-        findings.push(at(`${type} ${name}`.trimEnd(), file, num(item?.line), num(item?.col)));
+        findings.push(at(`${type} ${name}`.trimEnd(), file, num(item.line), num(item.col)));
       }
     }
   }
 }
 
 function knipUnusedFile(file: unknown): Finding {
-  return at(UNUSED_FILE, typeof file === "string" ? file : str((file as KnipItem | null)?.name));
+  return at(UNUSED_FILE, typeof file === "string" ? file : str(recordOf(file)?.name));
 }
 
 /** knip --reporter json: top-level `files` are unused files; `issues` entries
  * carry arrays per issue type, one item per finding. */
 export function countKnip(stdout: string, _stderr: string, _exitCode: number): Tally | null {
   const parsed = jsonObject(stdout);
-  const files = Array.isArray(parsed?.files) ? (parsed.files as unknown[]) : null;
-  const issues = Array.isArray(parsed?.issues) ? (parsed.issues as KnipIssue[]) : null;
+  const files = arrayOf(parsed?.files);
+  const issues = recordsOf(parsed?.issues);
   if (files === null && issues === null) {
     return null;
   }
@@ -496,11 +456,6 @@ export function countKnip(stdout: string, _stderr: string, _exitCode: number): T
     knipIssue(issue, findings);
   }
   return tallyOf(findings);
-}
-
-interface DepcruiseViolation {
-  from?: unknown;
-  rule?: { name?: unknown; severity?: unknown };
 }
 
 /**
@@ -517,19 +472,20 @@ function scanReadTheTree(summary: Rec): boolean {
 }
 
 export function countDepcruise(stdout: string, _stderr: string, _exitCode: number): Tally | null {
-  const summary = jsonObject(stdout)?.summary as Rec | undefined;
-  if (typeof summary?.error !== "number") {
+  const summary = recordOf(jsonObject(stdout)?.summary);
+  if (summary === null || typeof summary.error !== "number") {
     return null;
   }
   if (!scanReadTheTree(summary)) {
     return null;
   }
   const total = summary.error + (num(summary.warn) ?? 0);
-  const violations = Array.isArray(summary.violations)
-    ? (summary.violations as DepcruiseViolation[])
-    : [];
+  const violations = (recordsOf(summary.violations) ?? []).map((v) => ({
+    from: v.from,
+    rule: recordOf(v.rule),
+  }));
   const counted = violations.filter(
-    (v) => v?.rule?.severity === "error" || v?.rule?.severity === "warn",
+    (v) => v.rule?.severity === "error" || v.rule?.severity === "warn",
   );
   return tallyOf(
     counted.map((v) => at(str(v.rule?.name), v.from)),
@@ -541,8 +497,8 @@ export function countDepcruise(stdout: string, _stderr: string, _exitCode: numbe
  * verdict: a clone has no identity that survives a rename or a move, so a tree that holds no more
  * clones than the reference is no worse. */
 export function countJscpd(report: string, _stderr: string, _exitCode: number): Tally | null {
-  const statistics = (jsonObject(report)?.statistics ?? {}) as Rec;
-  const clones = num(((statistics.total ?? {}) as Rec).clones);
+  const total = recordOf(recordOf(jsonObject(report)?.statistics)?.total);
+  const clones = num(total?.clones);
   return clones === undefined ? null : { total: clones };
 }
 
@@ -552,7 +508,8 @@ export function countJscpd(report: string, _stderr: string, _exitCode: number): 
  */
 export function countVulnerable(stdout: string, _stderr: string, _exitCode: number): number | null {
   try {
-    return sumVulnerabilities(JSON.parse(stdout) as unknown);
+    const parsed: unknown = JSON.parse(stdout);
+    return sumVulnerabilities(parsed);
   } catch {
     return null;
   }
@@ -620,37 +577,26 @@ export function countDotnetDiagnostics(output: string): Tally {
   return tallyOf([...seen.values()]);
 }
 
-interface CargoSpan {
-  is_primary?: boolean;
-  file_name?: unknown;
-  line_start?: unknown;
-  column_start?: unknown;
-}
-interface CargoRecord {
-  reason?: string;
-  message?: { level?: string; message?: unknown; code?: { code?: string }; spans?: CargoSpan[] };
-}
-
 /**
  * Warnings count whatever their source; at error level only clippy-coded records count, since an
  * E-coded compile error is a broken build, not a finding.
  */
-function isClippyFinding(record: CargoRecord): boolean {
+function isClippyFinding(record: Rec, message: Rec | null): boolean {
   if (record.reason !== "compiler-message") {
     return false;
   }
-  const level = record.message?.level;
-  const code = record.message?.code?.code;
+  const level = message?.level;
+  const code = recordOf(message?.code)?.code;
   if (level === "warning") {
     return code !== undefined;
   }
-  return level === "error" && code !== undefined && code.startsWith("clippy::");
+  return level === "error" && typeof code === "string" && code.startsWith("clippy::");
 }
 
-function clippyFinding(record: CargoRecord): Finding {
-  const spans = record.message?.spans ?? [];
-  const span = spans.find((s) => s.is_primary) ?? spans[0];
-  const identity = `${record.message?.code?.code ?? ""} ${str(record.message?.message)}`.trim();
+function clippyFinding(message: Rec | null): Finding {
+  const spans = recordsOf(message?.spans) ?? [];
+  const span = spans.find((s) => s.is_primary === true) ?? spans[0];
+  const identity = `${str(recordOf(message?.code)?.code)} ${str(message?.message)}`.trim();
   return at(identity, span?.file_name, num(span?.line_start), num(span?.column_start));
 }
 
@@ -663,9 +609,10 @@ export function countClippy(stdout: string, exitCode = 0): Tally | null {
       continue;
     }
     try {
-      const record = JSON.parse(line) as CargoRecord;
-      if (isClippyFinding(record)) {
-        findings.push(clippyFinding(record));
+      const record = jsonObject(line);
+      const message = recordOf(record?.message);
+      if (record !== null && isClippyFinding(record, message)) {
+        findings.push(clippyFinding(message));
       }
     } catch {
       // Non-JSON noise between records.
@@ -720,7 +667,12 @@ function markdownlintFinding(line: string): Finding | null {
     return null;
   }
   const description = (m[5] ?? "").replace(/\s*\[Context:.*$/, "").trim();
-  return at(`${m[4]} ${description}`, m[1], Number(m[2]), m[3] ? Number(m[3]) : undefined);
+  return at(
+    `${m[4]} ${description}`,
+    m[1],
+    Number(m[2]),
+    m[3] === undefined ? undefined : Number(m[3]),
+  );
 }
 
 /** markdownlint-cli2: `Summary: N issues in M files` is the count; no

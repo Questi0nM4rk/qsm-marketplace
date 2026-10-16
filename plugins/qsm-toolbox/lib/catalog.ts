@@ -315,5 +315,5 @@ export const QSM_BINS: readonly QsmBin[] = [
 
 /** The environment variable that skips one tool: `QSM_AST_GREP_SKIP=1`. */
 export function skipKey(bin: string): string {
-  return `QSM_${bin.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_SKIP`;
+  return `QSM_${bin.toUpperCase().replaceAll(/[^A-Z0-9]/g, "_")}_SKIP`;
 }

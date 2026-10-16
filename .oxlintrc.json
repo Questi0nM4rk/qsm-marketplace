@@ -1,0 +1,131 @@
+// qsm-marketplace lint config: the qsm-langdev strict profile, plus the
+// decisions this repository made, each with its reason beside it.
+//
+// On: correctness, suspicious, pedantic and perf, with type information, so a
+// floating promise, an unsafe `any` or a `||` that should be `??` is a finding.
+// Type-aware rules run through tsgolint (the oxlint-tsgolint package) on
+// TypeScript 7.
+//
+// Off, each with why:
+// - style: ESLint's preference set. It holds rules that contradict each other
+//   (import/no-named-export against import/prefer-default-export, one-var
+//   against itself in either setting), and the layout part is the formatter's
+//   job. Measured on a 600-file tree: 23,154 findings, led by one-var,
+//   no-magic-numbers, sort-keys and id-length.
+// - restriction: not a quality set. It bans language features outright
+//   (no-ternary, no-null), the reason clippy's restriction group is off too.
+// - nursery: oxlint itself calls it unstable.
+// - Framework plugins (react, vue, nextjs, jsx-a11y, jest, vitest) are not
+//   listed in `plugins`. A rule for a framework the repository does not use
+//   does not stay quiet, it invents findings.
+// - The named rules below.
+//
+// A finding worth suppressing at a call site is evidence the rule was the wrong
+// rule to enable, so it comes out here instead. The one exception is where the
+// engine's own declarations are wrong: its tool names list no Grep or Glob, so
+// qsm-secrets casts those names under a disable comment that says so.
+//
+// Target: node. `node:` imports and `process` are the runtime, not a mistake.
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
+  "env": { "node": true, "es2026": true },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "options": { "typeAware": true },
+  "rules": {
+    // Restriction is off as a set, but `any` turns the type checker off for
+    // every value it touches, so the written-out one is a finding.
+    "typescript/no-explicit-any": "error",
+    // Base rules whose type-aware twin is on: the twin reads the types and
+    // reports the same place, so the base rule would count every finding twice.
+    "eslint/no-implied-eval": "off",
+    "eslint/require-await": "off",
+    "eslint/prefer-promise-reject-errors": "off",
+    "eslint/no-throw-literal": "off",
+    // A `u` flag changes what an escape means (`/[\-]/u` is a syntax error),
+    // so adding it to every regular expression is a behaviour change that
+    // finds no defect. Measured: 410 findings on a 600-file tree.
+    "eslint/require-unicode-regexp": "off",
+    // Length and nesting are proxies for complexity. lizard gates cyclomatic
+    // complexity per function on the same files, which is the thing itself.
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "eslint/max-depth": "off",
+    "import/max-dependencies": "off",
+    // It asks for deep readonly on every parameter type, a library's own
+    // types included, which the code cannot change. Measured: 1,592 findings on
+    // a 600-file tree, half of all it reported.
+    "typescript/prefer-readonly-parameter-types": "off",
+    // Every loop it flags runs ordered work that stops at the first failure:
+    // the gate runner must not start a gate after one has already failed.
+    // Running them together would change what the program does.
+    "eslint/no-await-in-loop": "off",
+    // It guards a callback that receives arguments it did not expect, as
+    // `["1", "7"].map(parseInt)` passes the index as the radix. Every flagged
+    // call passes a function written for that callback, so wrapping each in an
+    // arrow adds noise and finds nothing.
+    "unicorn/no-array-callback-reference": "off",
+    // It asks for mutation instead of a spread copy inside `map`. The copy is
+    // the intent: the input stays unchanged, and the arrays are small.
+    "oxc/no-map-spread": "off",
+    // The MCP SDK's transport exposes `onclose` as a property and has no
+    // addEventListener, so the rule's fix does not exist there.
+    "unicorn/prefer-add-event-listener": "off",
+    // parseFloat reads the number at the start of a text ("0.93 SSIM" -> 0.93);
+    // Number() of the same text is NaN. The difference is the point.
+    "unicorn/prefer-number-coercion": "off",
+    // It reads every `.length` as a count, so `!part.length` on shell-ast's
+    // boolean `${#NAME}` flag is a finding. A number in a condition is already
+    // a finding of typescript/strict-boolean-expressions, which reads the type.
+    "unicorn/explicit-length-check": "off"
+  },
+  "overrides": [
+    {
+      // bun-types declares `expect(p).rejects` as returning matchers whose
+      // methods return void, so `await expect(p).rejects.toThrow()` reads as
+      // awaiting a non-promise. At run time it is a promise, and without the
+      // await the assertion runs after the test has passed.
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "typescript/await-thenable": "off",
+        // A test helper stays inside the describe it serves, next to the
+        // tests that read it, even when it captures nothing.
+        "unicorn/consistent-function-scoping": "off"
+      }
+    },
+    {
+      // A function-hooks module is typed against the generated claude-code
+      // declarations, and two type-aware rules take 30 s or more per file on
+      // them (measured: no-misused-promises 40 s on one 6 KB noun.generated.ts,
+      // strict-void-return 6 s), against 0.2 s for any other file. Off there
+      // only; bun check still checks every hooks module through its own
+      // tsconfig. The engine's error chain is `.catch(($, e, next) => next(e))`,
+      // a callback the promise rule takes for a Node-style one.
+      "files": ["plugins/*/hooks/**"],
+      "rules": {
+        "typescript/no-misused-promises": "off",
+        "typescript/strict-void-return": "off",
+        "promise/no-callback-in-promise": "off"
+      }
+    }
+  ],
+  // The two generated files are derived from qsm.json by lib/generate-noun.ts
+  // and proven fresh by the generated gate, so the linter does not read them.
+  // QML's JavaScript opens with `.pragma library`, which is not ECMAScript.
+  "ignorePatterns": [
+    ".claude/**",
+    "plugins/*/qml/**/*.js",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/hooks/noun.generated.ts",
+    "**/types/index.d.ts"
+  ]
+}
