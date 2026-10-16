@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { stateDir } from "../../../lib/paths.ts";
 import { recordOf } from "./json.ts";
 
 /** Who edited: the session, and the agent within it. The orchestrator has no
@@ -30,20 +31,13 @@ export interface EditedTree {
   start: string;
 }
 
-/**
- * Per-user, never a shared /tmp path: a second user's write to a shared path would EACCES and the
- * gate would silently disarm for everyone but the first user.
- */
-function stateDir(): string {
+/** Per-user, never a shared /tmp path: a second user's write to a shared path would EACCES and the
+ * gate would silently disarm for everyone but the first user. */
+function sessionStateDir(): string {
   const override = process.env.QSM_LANGDEV_STATE_DIR;
-  if (override !== undefined && override !== "") {
-    return override;
-  }
-  const runtime = process.env.XDG_RUNTIME_DIR;
-  if (runtime !== undefined && runtime !== "") {
-    return join(runtime, "qsm-langdev-hook");
-  }
-  return `/tmp/qsm-langdev-hook-${process.getuid?.() ?? "nouid"}`;
+  return override !== undefined && override !== ""
+    ? override
+    : join(stateDir(process.env), "langdev-hook");
 }
 
 function sessionKey(sessionId: string): string {
@@ -51,7 +45,7 @@ function sessionKey(sessionId: string): string {
 }
 
 function editorDir(kind: string, editor: Editor): string {
-  return join(stateDir(), kind, sessionKey(editor.sessionId), sessionKey(editor.agentId));
+  return join(sessionStateDir(), kind, sessionKey(editor.sessionId), sessionKey(editor.agentId));
 }
 
 function startPointPath(editor: Editor, root: string): string {
@@ -143,7 +137,7 @@ export function clearBlocks(gate: string, editor: Editor): void {
 /** Writes the durable "stop allowed, regression stands" record a gate
  * leaves once its block cap is reached; returns its path. */
 export function writeHalt(gate: string, editor: Editor, record: object): string {
-  const dir = join(stateDir(), "halts");
+  const dir = join(sessionStateDir(), "halts");
   mkdirSync(dir, { recursive: true });
   const path = join(
     dir,

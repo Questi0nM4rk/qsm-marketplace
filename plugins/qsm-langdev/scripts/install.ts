@@ -1,20 +1,22 @@
 #!/usr/bin/env bun
 // The shared install base compiles this plugin's binary into the user's bin directory and its
 // classic stop gate hook into dist/.
-import { resolve } from "node:path";
+import { join } from "node:path";
 import { installScript } from "../../../lib/install-base.ts";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { home } from "../../../lib/paths.ts";
 import { type StructuralCheckerStatus, structuralCheckerStatus } from "../lib/compare.ts";
 import { type SemgrepLogin, semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
+import { installPatched } from "./build-sentrux.ts";
 
-const BUILD_ARGS = [resolve(import.meta.dir, "build-sentrux.ts"), "install"];
-const BUILD_COMMAND = ["bun", ...BUILD_ARGS].join(" ");
-const CARGO_HINT = `install Rust (https://rustup.rs), then run ${BUILD_COMMAND}`;
+const CARGO_HINT = "install Rust (https://rustup.rs), then run the install again";
 
-/** `checker` is the probe of the sentrux on PATH; a test hands in its own. */
+/** `checker` is the probe of the sentrux on PATH and `build` the cargo build; a test hands in its own. */
 export async function structuralChecker(
   ctx: InstallContext,
   checker: () => Promise<StructuralCheckerStatus> = structuralCheckerStatus,
+  build: (cacheRoot: string) => void = installPatched,
 ): Promise<Step> {
   const name = "structural checker";
   if ((await checker()).patched) {
@@ -29,13 +31,15 @@ export async function structuralChecker(
     return {
       name,
       status: "skipped",
-      detail: `would build the qsm-patched sentrux: ${BUILD_COMMAND}`,
+      detail: "would build the qsm-patched sentrux with cargo",
     };
   }
-  const exit = ctx.run("bun", BUILD_ARGS);
-  return exit === 0
-    ? { name, status: "installed", detail: `built the qsm-patched sentrux: ${BUILD_COMMAND}` }
-    : { name, status: "error", detail: `${BUILD_COMMAND} exited ${exit}; run it yourself` };
+  try {
+    build(join(home(ctx.env), ".cache"));
+    return { name, status: "installed", detail: "built the qsm-patched sentrux with cargo" };
+  } catch (error) {
+    return { name, status: "error", detail: `the sentrux build failed: ${messageOf(error)}` };
+  }
 }
 
 /**
@@ -56,9 +60,10 @@ export async function extraSteps(
   ctx: InstallContext,
   checker?: () => Promise<StructuralCheckerStatus>,
   login?: () => SemgrepLogin,
+  build?: (cacheRoot: string) => void,
 ): Promise<Step[]> {
   const loginStep = semgrepLoginStep(ctx, login);
-  const checkerStep = await structuralChecker(ctx, checker);
+  const checkerStep = await structuralChecker(ctx, checker, build);
   return loginStep === null ? [checkerStep] : [checkerStep, loginStep];
 }
 

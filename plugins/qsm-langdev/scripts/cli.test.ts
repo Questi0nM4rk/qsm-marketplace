@@ -1,12 +1,13 @@
 // qsm-langdev through its real surface: the binary's argv, stdout, stderr,
 // exit. Every outcome code the plugin uses appears once here.
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { type Rec, recordOf, recordsOf, str } from "../lib/json.ts";
-import { defined } from "../lib/test-support.ts";
+import { recordOf, recordsOf, str } from "../lib/json.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -16,11 +17,6 @@ function sandbox(): string {
   const home = sandboxDir("qsm-langdev-cli-");
   mkdirSync(join(home, "work"), { recursive: true });
   return home;
-}
-
-/** The envelope a `--json` run printed. */
-function envelopeOf(stdout: string): Rec {
-  return defined(recordOf(JSON.parse(stdout)), "a JSON envelope on stdout");
 }
 
 /** The `check` of every verdict a `check --json` run printed. */
@@ -35,18 +31,12 @@ function run(
 ) {
   const home = opts.home ?? sandbox();
   const path = process.env.PATH ?? "";
-  const r = spawnSync("bun", [CLI, ...argv], {
-    encoding: "utf8",
-    cwd: opts.cwd ?? join(home, "work"),
-    env: {
-      PATH: opts.pathFirst === undefined ? path : `${opts.pathFirst}:${path}`,
-      HOME: home,
-      XDG_CONFIG_HOME: join(home, "c"),
-      // the run's own temp root: semgrep makes its own semgrep-mcp directory there
-      TMPDIR: sandboxDir("qsm-langdev-cli-tmp-"),
-    },
+  const env = isolatedEnv(home, {
+    ...(opts.pathFirst === undefined ? {} : { PATH: `${opts.pathFirst}:${path}` }),
+    // the run's own temp root: semgrep makes its own semgrep-mcp directory there
+    TMPDIR: sandboxDir("qsm-langdev-cli-tmp-"),
   });
-  return { exit: r.status, stdout: r.stdout, stderr: r.stderr };
+  return runBin(CLI, argv, { env, cwd: opts.cwd ?? join(home, "work") });
 }
 
 /** A git repository with one committed shell file, opted into `shell` in its
@@ -56,19 +46,14 @@ function run(
 function repoWithShellFile(): string {
   const home = sandbox();
   const root = join(home, "work");
-  const git = (...args: string[]) =>
-    spawnSync("git", args, { cwd: root, encoding: "utf8", env: { ...process.env, HOME: home } });
-  git("init", "-q");
-  git("config", "user.email", "t@example.com");
-  git("config", "user.name", "t");
+  git(root, "init", "-q");
   mkdirSync(join(root, ".qsm-langdev"), { recursive: true });
   writeFileSync(
     join(root, ".qsm-langdev", "gates.json"),
     `${JSON.stringify({ hooks: { "pre-commit": [], "pre-push": [] }, languages: ["shell"] })}\n`,
   );
   writeFileSync(join(root, "a.sh"), "#!/bin/sh\necho hi\n");
-  git("add", "-A");
-  git("commit", "-qm", "first");
+  commit(root, "first");
   writeFileSync(join(root, "a.sh"), "#!/bin/sh\necho hi\necho there\n");
   return home;
 }
@@ -78,14 +63,9 @@ function repoWithShellFile(): string {
 function plainRepo(): string {
   const home = sandbox();
   const root = join(home, "work");
-  const git = (...args: string[]) =>
-    spawnSync("git", args, { cwd: root, encoding: "utf8", env: { ...process.env, HOME: home } });
-  git("init", "-q");
-  git("config", "user.email", "t@example.com");
-  git("config", "user.name", "t");
+  git(root, "init", "-q");
   writeFileSync(join(root, "a.ts"), "const a = 1;\n");
-  git("add", "-A");
-  git("commit", "-qm", "first");
+  commit(root, "first");
   return home;
 }
 
@@ -94,9 +74,7 @@ function plainRepo(): string {
 function fakeSemgrep(home: string, identity: number): string {
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
-  const path = join(bin, "semgrep");
-  writeFileSync(path, `#!/bin/sh\nif [ "$1" = show ]; then exit ${identity}; fi\necho 1.153.1\n`);
-  chmodSync(path, 0o755);
+  fakeBin(bin, "semgrep", `if [ "$1" = show ]; then exit ${identity}; fi\necho 1.153.1`);
   return bin;
 }
 
@@ -239,11 +217,7 @@ describe("qsm-langdev list", () => {
 function repoWithTsAndPy(languages: readonly string[]): string {
   const home = sandbox();
   const root = join(home, "work");
-  const git = (...args: string[]) =>
-    spawnSync("git", args, { cwd: root, encoding: "utf8", env: { ...process.env, HOME: home } });
-  git("init", "-q");
-  git("config", "user.email", "t@example.com");
-  git("config", "user.name", "t");
+  git(root, "init", "-q");
   mkdirSync(join(root, ".qsm-langdev"), { recursive: true });
   writeFileSync(
     join(root, ".qsm-langdev", "gates.json"),
@@ -251,8 +225,7 @@ function repoWithTsAndPy(languages: readonly string[]): string {
   );
   writeFileSync(join(root, "a.ts"), "const a = 1;\n");
   writeFileSync(join(root, "a.py"), "a = 1\n");
-  git("add", "-A");
-  git("commit", "-qm", "first");
+  commit(root, "first");
   writeFileSync(join(root, "a.ts"), "const a = 2;\n");
   writeFileSync(join(root, "a.py"), "a = 2\n");
   return home;

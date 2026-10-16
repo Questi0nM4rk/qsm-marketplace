@@ -10,7 +10,8 @@ import {
   runCli,
   stringList,
 } from "../../../lib/cli-base.ts";
-import { fail, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, ok } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   compareTrees,
@@ -42,7 +43,6 @@ import {
   uninstallHooks,
 } from "../lib/git-hooks.ts";
 import { resolveRef } from "../lib/gitref.ts";
-import { errorMessage } from "../lib/errors.ts";
 import { profileGaps, type ScaffoldAction, scaffoldProfile } from "../lib/profiles.ts";
 import {
   ENFORCEMENT_POINTS,
@@ -54,7 +54,7 @@ import {
 } from "../lib/registry.ts";
 import { semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
-import { dirOf, err, guarded, optOneOf, refuse, required, requireRepo } from "./call.ts";
+import { dirOf, err, optOneOf, required, requireRepo } from "./call.ts";
 import { handlers as judgeHandlers } from "./cli-judge.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-langdev/qsm.json");
@@ -64,7 +64,10 @@ function parseLanguages(csv: string): Language[] {
   const resolved = named.map((f) => resolveLanguage(f));
   const unknown = named.filter((_, i) => resolved[i] === null);
   if (unknown.length > 0) {
-    refuse("usage", `unknown language: ${unknown.join(", ")} (known: ${LANGUAGES.join(", ")})`);
+    throw new QsmError(
+      "usage",
+      `unknown language: ${unknown.join(", ")} (known: ${LANGUAGES.join(", ")})`,
+    );
   }
   return [...new Set(resolved.filter((language): language is Language => language !== null))];
 }
@@ -93,16 +96,16 @@ function printVerdicts(verdicts: readonly Verdict[], changedCount: number): void
 function resolveAgainst(root: string, against: string, explicit: boolean): string | null {
   const beforeRef = resolveRef(root, against);
   if (beforeRef === null && explicit) {
-    refuse("usage", `unknown commit '${against}'`);
+    throw new QsmError("usage", `unknown commit '${against}'`);
   }
   return beforeRef;
 }
 
-const check: Handler = guarded(async (call) => {
+const check: Handler = async (call) => {
   const at = optOneOf(call, "at", ENFORCEMENT_POINTS) ?? "pre-commit";
   const root = requireRepo(dirOf(call));
   if (!isLangdevRepo(root)) {
-    refuse("missing", `qsm-langdev is not set up in ${root}: run qsm-langdev init`);
+    throw new QsmError("missing", `qsm-langdev is not set up in ${root}: run qsm-langdev init`);
   }
   const config = readGatesConfig(root);
   const named = optionalString(call, "against");
@@ -137,7 +140,7 @@ const check: Handler = guarded(async (call) => {
   };
   const { code, deciding } = runOutcome(verdicts, beforeRef !== null);
   return code === "ok" ? ok(data) : fail(code, deciding.map((v) => v.summary).join("; "), data);
-});
+};
 
 const list: Handler = () => {
   const rows = REGISTRY.map((spec) => ({
@@ -172,16 +175,16 @@ function describeStructuralCheck(structural: StructuralCheckerStatus): string {
   if (structural.present) {
     return (
       "MISSING  structural checker (sentrux on PATH is unpatched upstream, not ready) — install: " +
-      "bun plugins/qsm-langdev/scripts/build-sentrux.ts install"
+      "bun plugins/qsm-langdev/scripts/install.ts"
     );
   }
   return (
     "MISSING  structural checker (sentrux not on PATH) — install: " +
-    "bun plugins/qsm-langdev/scripts/build-sentrux.ts install"
+    "bun plugins/qsm-langdev/scripts/install.ts"
   );
 }
 
-const doctor: Handler = guarded(async (call) => {
+const doctor: Handler = async (call) => {
   const target = dirOf(call);
   const root = requireRepo(target);
   const config = readGatesConfig(root);
@@ -201,7 +204,7 @@ const doctor: Handler = guarded(async (call) => {
   // a gate binary that is absent fails the hook, so it is the verdict, not a row
   const gone = rows.some((row) => !row.present) || !structural.patched;
   return { ...(gone ? fail("missing", text, data) : ok(data, text)), warnings };
-});
+};
 
 const LANGUAGES_ACTIONS = ["list", "add", "remove"] as const;
 type LanguagesAction = (typeof LANGUAGES_ACTIONS)[number];
@@ -218,7 +221,10 @@ function applyLanguagesEdit(
   }
   const one = name === undefined ? null : resolveLanguage(name);
   if (one === null) {
-    refuse("usage", `unknown language '${name ?? ""}' (known: ${LANGUAGES.join(", ")})`);
+    throw new QsmError(
+      "usage",
+      `unknown language '${name ?? ""}' (known: ${LANGUAGES.join(", ")})`,
+    );
   }
   const selected =
     action === "add"
@@ -228,7 +234,7 @@ function applyLanguagesEdit(
   return selected;
 }
 
-const languages: Handler = guarded((call) => {
+const languages: Handler = (call) => {
   const action = optOneOf(call, "action", LANGUAGES_ACTIONS) ?? "list";
   const root = requireRepo(".");
   const config = readGatesConfig(root);
@@ -238,7 +244,7 @@ const languages: Handler = guarded((call) => {
       ? "(none — tree-derived mode: every language with matching files runs)"
       : selected.join("\n");
   return ok({ languages: selected }, text);
-});
+};
 
 /** One scaffold action as the words the reader acts on. */
 function describeScaffold(action: ScaffoldAction): string {
@@ -254,7 +260,7 @@ function parseTargets(raw: readonly string[]): Record<string, string> {
   for (const pair of raw) {
     const sep = pair.indexOf("=");
     if (sep < 1) {
-      refuse(
+      throw new QsmError(
         "usage",
         `--target takes <language>=<target>, e.g. --target ts=browser (got '${pair}')`,
       );
@@ -275,7 +281,7 @@ function seedProfile(
   try {
     actions = scaffoldProfile(root, profile, detected, targets);
   } catch (error) {
-    refuse("usage", errorMessage(error));
+    throw new QsmError("usage", messageOf(error));
   }
   for (const action of actions) {
     err(`  ${action.file}: ${describeScaffold(action)}`);
@@ -302,11 +308,11 @@ function widenLanguages(
   return { languages: [...recorded, ...added], added };
 }
 
-const init: Handler = guarded((call) => {
+const init: Handler = (call) => {
   const root = requireRepo(dirOf(call));
   const detected = detectLanguages(root);
   if (detected === null) {
-    refuse("failed", `git could not list the files of ${root}`);
+    throw new QsmError("failed", `git could not list the files of ${root}`);
   }
   err(`[qsm-langdev] detected: ${detected.join(", ")}`);
   const config = readGatesConfig(root);
@@ -322,7 +328,7 @@ const init: Handler = guarded((call) => {
   }
   err(`[qsm-langdev] profile '${profile}' recorded in ${root}/.qsm-langdev/gates.json`);
   return ok({ profile, languages: widened, added, actions });
-});
+};
 
 /** One installed-hook action as the line it prints, or nothing for a kind
  * `installGitHooks` doesn't report (uninstall-only kinds). */
@@ -351,7 +357,7 @@ function describeInstallAction(action: HookAction): string | null {
   return null;
 }
 
-const installGitHooks: Handler = guarded((call) => {
+const installGitHooks: Handler = (call) => {
   const lang = optOneOf(call, "lang", HOOK_LANGS) ?? "sh";
   const root = requireRepo(dirOf(call));
   const actions = installHooks(root, HOOK_NAMES, lang);
@@ -363,7 +369,7 @@ const installGitHooks: Handler = guarded((call) => {
       `${root}/.qsm-langdev/gates.json`,
   ];
   return ok({ root, lang, actions, hooks: config.hooks }, lines.join("\n"));
-});
+};
 
 function describeUninstallAction(action: HookAction): string {
   if (action.kind === "removed") {
@@ -381,11 +387,11 @@ function describeUninstallAction(action: HookAction): string {
   return `nothing installed at ${action.path}`;
 }
 
-const uninstallGitHooks: Handler = guarded((call) => {
+const uninstallGitHooks: Handler = (call) => {
   const root = requireRepo(dirOf(call));
   const actions = uninstallHooks(root);
   return ok({ root, actions }, actions.map(describeUninstallAction).join("\n"));
-});
+};
 
 /** Git's pre-push payload, read once and handed to every gate that wants it. */
 function pushedRefs(): string {
@@ -418,7 +424,7 @@ function reportGateOutcomes(name: HookName, outcomes: readonly GateOutcome[]): v
   }
 }
 
-const hook: Handler = guarded(async (call) => {
+const hook: Handler = async (call) => {
   const name = required(optOneOf(call, "name", HOOK_NAMES), "name");
   const root = requireRepo(".");
   if (!isLangdevRepo(root)) {
@@ -437,7 +443,7 @@ const hook: Handler = guarded(async (call) => {
   }
   const deciding = outcomes.filter((outcome) => outcome.status === code);
   return fail(code, deciding.map((outcome) => outcome.gate).join(", "), data);
-});
+};
 
 if (import.meta.main) {
   process.exit(

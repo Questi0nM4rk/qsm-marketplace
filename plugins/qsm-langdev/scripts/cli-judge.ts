@@ -3,6 +3,7 @@
 
 import { type Handler, optionalString, requiredString } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { editFindings } from "../lib/edit-findings.ts";
 import { resolveRef } from "../lib/gitref.ts";
 import { type Editor, editedTrees, MAIN_AGENT, readStartPoint } from "../lib/state.ts";
@@ -12,7 +13,7 @@ import {
   type StructureVerdict,
   verdict,
 } from "../lib/structure.ts";
-import { err, guarded, refuse, requireRepo } from "./call.ts";
+import { err, requireRepo } from "./call.ts";
 
 interface StructureTree {
   root: string;
@@ -58,12 +59,12 @@ function structureTreesToJudge(
     const named = namedCommit(root, values.against, values.session, values.agent);
     const start = resolveRef(root, named);
     if (start === null) {
-      refuse("usage", `unknown commit '${named}'`);
+      throw new QsmError("usage", `unknown commit '${named}'`);
     }
     return [{ root, start }];
   }
   if (values.session === undefined) {
-    refuse("usage", "--agent names an agent of a session; pass --session too");
+    throw new QsmError("usage", "--agent names an agent of a session; pass --session too");
   }
   return editedTrees({ sessionId: values.session, agentId: values.agent });
 }
@@ -95,7 +96,7 @@ async function structureJudgeAll(trees: StructureTree[]): Promise<
   );
 }
 
-const structure: Handler = guarded(async (call) => {
+const structure: Handler = async (call) => {
   const against = optionalString(call, "against");
   const session = optionalString(call, "session");
   const agent = optionalString(call, "agent");
@@ -124,15 +125,15 @@ const structure: Handler = guarded(async (call) => {
     result: report.result,
   };
   return report.pass ? ok(data) : fail("worse", report.summary, data);
-});
+};
 
-const edited: Handler = guarded(async (call) => {
+const edited: Handler = async (call) => {
   const editor: Editor = {
     sessionId: requiredString(call, "session"),
     agentId: optionalString(call, "agent") ?? MAIN_AGENT,
   };
   const text = await editFindings(editor, requiredString(call, "file"));
   return ok({ text }, text ?? "");
-});
+};
 
 export const handlers: Readonly<Record<string, Handler>> = { structure, edited };
