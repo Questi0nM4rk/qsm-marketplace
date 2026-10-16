@@ -89,7 +89,8 @@ loaded.
 ### Requirement: An observer never blocks
 
 Every hook on `tool.call` and `agent.spawn` SHALL pass the call on when it fails, because a display
-that refuses a tool call or an agent breaks the work it only watches.
+that refuses a tool call or an agent breaks the work it only watches. Each such failure, and the
+one of the prompt hook, SHALL first toast `qsm-cockpit ERROR: <event>: <reason>`.
 
 #### Scenario: The state write fails
 
@@ -107,5 +108,18 @@ reason:
 #### Scenario: The task port is missing
 
 - **WHEN** the task tool is not on PATH or the directory has no tracker
-- **THEN** the Tasks card keeps what it had and the plugin logs the failed call with its exit
-  code
+- **THEN** the Tasks card keeps what it had and the plugin toasts `qsm-cockpit ERROR: tasks:` with
+  the cause and logs it
+
+### Requirement: One verb answers the claimed tasks
+
+The plugin SHALL ship the binary `qsm-cockpit` with the verb `tasks`, which runs the task tool's
+list of in-progress tasks in the working directory and answers each task's `id` and `title`; the
+hooks module SHALL read the Tasks card through `$.cockpit.tasks()` and never run the task tool
+itself. A task tool that cannot run SHALL be `missing` naming `qsm-tasks`, and one that exits
+non-zero SHALL be `failed` with its exit code.
+
+#### Scenario: A directory without a tracker
+
+- **WHEN** `qsm-cockpit tasks` runs where the task tool exits non-zero
+- **THEN** it exits with the `failed` code and the message holds the task tool's exit code

@@ -5,6 +5,7 @@
     "register.tsx",
     "register.test.tsx",
     "../lib/cockpit.ts",
-    "../types/index.d.ts"
+    "noun.generated.ts",
+    "../types"
   ]
 }

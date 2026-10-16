@@ -1,0 +1,17 @@
+{
+  "name": "qsm-cockpit",
+  "qsm": {
+    "bin": {
+      "qsm-cockpit": "scripts/cli.ts"
+    },
+    "noun": "cockpit",
+    "commands": {
+      "qsm-cockpit doctor": {
+        "description": "Report whether the task tool the Tasks card reads is on PATH"
+      },
+      "qsm-cockpit tasks": {
+        "description": "List the in-progress tasks of the working directory's tracker, each with its id and title"
+      }
+    }
+  }
+}

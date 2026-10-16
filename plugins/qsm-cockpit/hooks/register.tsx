@@ -10,16 +10,17 @@ import {
   doingOf,
   guideText,
   isStage,
-  parseIssues,
   OUTCOME_WORD,
   offsetOf,
   reminderText,
   STAGES,
   seconds,
   TIER_COLOR,
+  tasksOf,
   tierOf,
 } from "../lib/cockpit.ts";
-import type { AgentRun, Stage, StageStep } from "../types/index.d.ts";
+import type { AgentRun, Stage, StageStep } from "../types/state.d.ts";
+import { failure, registerNoun } from "./noun.generated.ts";
 
 const PANE = "qsm-cockpit";
 const STAGE_TOOL = "mcp__qsm-cockpit__stage";
@@ -36,6 +37,7 @@ const isShowingDone = atom({ plugin: "qsm-cockpit", key: "isShowingDone" } as co
 type Elements = ReturnType<EngineInterface["ui"]["resolve"]>;
 
 export const register: Register = (on) => {
+  registerNoun(on);
   registerStage(on);
   registerRecords(on);
   registerAgents(on);
@@ -57,22 +59,17 @@ async function enter($: EngineInterface, stage: Stage, why: string): Promise<voi
 }
 
 async function refreshTasks($: EngineInterface): Promise<void> {
-  const cwd = await $.session.cwd();
-  const run = await $.process.run(["br", "list", "-s", "in_progress", "--json"], {
-    cwd,
-    timeoutMs: 5000,
-  });
-  if (run.exitCode !== 0) {
-    $.ui.log(`br list failed (${run.exitCode}): ${run.stderr.trim().slice(0, 200)}`);
-    return;
-  }
-  const list = parseIssues(run.stdout);
+  const list = tasksOf(await $.cockpit.tasks());
   await update($, tasks, () => list);
 }
 
 function refreshLater($: EngineInterface): void {
   refreshTasks($).catch((error) => {
-    $.ui.log(`tasks: ${String(error)}`);
+    failure($, "tasks", {
+      kind: "throw",
+      budget: 0,
+      message: error instanceof Error ? error.message : String(error),
+    });
   });
 }
 
@@ -131,7 +128,10 @@ function registerStage(on: On): void {
     return next({ ...e, context: [...(e.context ?? []), line] });
   })
     // a reminder that fails never holds the prompt
-    .catch((_$, e, next) => next(e));
+    .catch(($, e, next) => {
+      failure($, "prompt.submit", next.error);
+      return next(e);
+    });
 }
 
 /** What an agent runs now: set before its call, back to thinking after it. */
@@ -174,7 +174,10 @@ function registerRecords(on: On): void {
     return result;
   })
     // an observer never blocks a call
-    .catch((_$, e, next) => next(e));
+    .catch(($, e, next) => {
+      failure($, "tool.call", next.error);
+      return next(e);
+    });
 }
 
 /** Every agent the session starts, and how and when its turn ends; the main chat's turn too. */
@@ -198,7 +201,10 @@ function registerAgents(on: On): void {
     };
     await update($, agents, (list) => [...list, run].slice(-100));
     return started;
-  }).catch((_$, e, next) => next(e));
+  }).catch(($, e, next) => {
+    failure($, "agent.spawn", next.error);
+    return next(e);
+  });
 
   on("turn.start", async ($, e, next) => {
     // Only the main chat's turn starts from a prompt.

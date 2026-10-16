@@ -1,5 +1,6 @@
 // Generates a plugin's `$.<noun>` contract and wrapper from its qsm.json.
 
+import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import {
   type CommandArg,
@@ -264,6 +265,13 @@ export function registerNoun(on: On): void {
 `;
 }
 
+/** A plugin that keeps session state declares it in `types/state.d.ts`; the engine reads the one
+ * types file plugin.json names, so the generated file carries that text after the noun. */
+function stateTypes(pluginDir: string): string {
+  const path = `${pluginDir}/types/state.d.ts`;
+  return existsSync(path) ? `\n${readFileSync(path, "utf8")}` : "";
+}
+
 export interface GenerateResult {
   readonly typesPath: string;
   readonly typesContent: string;
@@ -284,7 +292,7 @@ export function generateNoun(manifest: QsmManifest, pluginDir: string): Generate
   }
   return {
     typesPath: `${pluginDir}/types/index.d.ts`,
-    typesContent: generateTypes(manifest, noun),
+    typesContent: generateTypes(manifest, noun) + stateTypes(pluginDir),
     hooksPath: `${pluginDir}/hooks/noun.generated.ts`,
     hooksContent: generateHooks(manifest, noun, binName),
   };
@@ -361,7 +369,6 @@ async function regenerateStaged(): Promise<void> {
 }
 
 async function regenerateOne(pluginDir: string, check: boolean): Promise<number> {
-  const { existsSync, readFileSync } = await import("node:fs");
   const { resolve } = await import("node:path");
   const dir = resolve(pluginDir);
   const manifest = parseManifest(JSON.parse(readFileSync(resolve(dir, "qsm.json"), "utf8")));
