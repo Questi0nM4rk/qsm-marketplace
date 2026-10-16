@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { detectFormat, InputError, readData } from "./formats.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
+import { detectFormat, readData } from "./formats.ts";
 
 describe("format detection", () => {
   test("the four supported extensions", () => {
@@ -24,7 +25,7 @@ describe("reading a data file", () => {
   });
 
   test("an unsupported extension is an error naming what is supported", () => {
-    expect(() => readData("a.md", "text")).toThrow(InputError);
+    expect(() => readData("a.md", "text")).toThrow(QsmError);
     expect(() => readData("a.md", "text")).toThrow(/\.json/);
   });
 

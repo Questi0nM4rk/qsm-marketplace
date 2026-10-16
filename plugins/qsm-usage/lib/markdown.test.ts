@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InputError } from "./formats.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import {
   extractFrontmatter,
   extractTable,
@@ -41,11 +41,11 @@ describe("frontmatter", () => {
   });
 
   test("no leading delimiter is an error", () => {
-    expect(() => extractFrontmatter("# Title\n")).toThrow(InputError);
+    expect(() => extractFrontmatter("# Title\n")).toThrow(QsmError);
   });
 
   test("a malformed block is an error, not an empty result", () => {
-    expect(() => extractFrontmatter("---\na: [unclosed\n---\n")).toThrow(InputError);
+    expect(() => extractFrontmatter("---\na: [unclosed\n---\n")).toThrow(QsmError);
   });
 });
 
@@ -77,7 +77,7 @@ describe("table under a heading", () => {
   });
 
   test("raw text of a heading that is not there is an error", () => {
-    expect(() => tableText(DOC, "Nope")).toThrow(InputError);
+    expect(() => tableText(DOC, "Nope")).toThrow(QsmError);
   });
 
   test("headings are listed without their hashes", () => {
