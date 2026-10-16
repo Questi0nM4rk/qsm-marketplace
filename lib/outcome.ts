@@ -185,6 +185,8 @@ export function onPath(cmd: string, env?: Env): boolean {
  * has this shape, so a plugin hands doctor the same rows it installs from. */
 export interface RequiredTool {
   readonly cmd: string;
+  /** present when any of these is on PATH; `cmd` then only names the row */
+  readonly anyOf?: readonly string[];
   readonly hint: string;
   /** absent is a warning, never the verdict */
   readonly optional?: true;
@@ -193,7 +195,7 @@ export interface RequiredTool {
 export function checkTools(tools: readonly RequiredTool[], probe: OnPath = onPath): ToolCheck[] {
   return tools.map((tool) => ({
     cmd: tool.cmd,
-    present: probe(tool.cmd),
+    present: (tool.anyOf ?? [tool.cmd]).some((c) => probe(c)),
     optional: tool.optional === true,
     hint: tool.hint,
   }));
