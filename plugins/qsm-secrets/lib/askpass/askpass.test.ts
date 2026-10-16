@@ -4,7 +4,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -12,13 +11,14 @@ import {
   rmSync,
   statSync,
   symlinkSync,
-  writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { sleep, spawn } from "bun";
+import { fakeBin } from "../../../../lib/fixtures/bin.ts";
+import { isolatedEnv } from "../../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../../lib/fixtures/sandbox.ts";
 import { ask } from "./ask.ts";
-import { FAKE_QS } from "./fake-qs.ts";
+import { fakeQs } from "./fake-qs.ts";
 import { providerOf } from "./index.ts";
 import { argvFor, envLines, linkedKinds } from "./link.ts";
 import { openReplySocket, parseReply } from "./socket.ts";
@@ -40,18 +40,17 @@ beforeEach(() => {
   log = join(root, "qs.log");
   mkdirSync(bin);
   mkdirSync(runtime, { mode: 0o700 });
-  writeFileSync(join(bin, "qs"), FAKE_QS);
-  chmodSync(join(bin, "qs"), 0o755);
+  fakeQs(bin);
 });
 
-const env = (extra: Record<string, string> = {}): Record<string, string | undefined> => ({
-  ...process.env,
-  PATH: `${bin}:${process.env.PATH ?? ""}`,
-  XDG_RUNTIME_DIR: runtime,
-  QSM_ASKPASS_QML: QML,
-  FAKE_QS_LOG: log,
-  ...extra,
-});
+const env = (extra: Record<string, string> = {}): Record<string, string> =>
+  isolatedEnv(root, {
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    XDG_RUNTIME_DIR: runtime,
+    QSM_ASKPASS_QML: QML,
+    FAKE_QS_LOG: log,
+    ...extra,
+  });
 
 /** The message the promise rejected with; the test fails when it resolved. */
 async function rejection(promise: Promise<unknown>): Promise<string> {
@@ -323,13 +322,11 @@ describe("a consumer that runs $SUDO_ASKPASS", () => {
     );
     expect(built.status).toBe(0);
     symlinkSync("qsm-secrets", join(out, "qsm-askpass-sudo"));
-    const fakeSudo = join(root, "fake-sudo");
-    writeFileSync(fakeSudo, '#!/bin/sh\nexec "$SUDO_ASKPASS" "[sudo] password for me: "\n');
-    chmodSync(fakeSudo, 0o755);
+    const fakeSudo = fakeBin(root, "fake-sudo", 'exec "$SUDO_ASKPASS" "[sudo] password for me: "');
     const run = (extra: Record<string, string>) =>
       spawnSync(fakeSudo, [], {
         encoding: "utf8",
-        env: { ...env(extra), SUDO_ASKPASS: join(out, "qsm-askpass-sudo") },
+        env: env({ ...extra, SUDO_ASKPASS: join(out, "qsm-askpass-sudo") }),
       });
     const allowed = run({ FAKE_ACTION: "allow", FAKE_VALUE: TYPED });
     expect(allowed.status).toBe(0);

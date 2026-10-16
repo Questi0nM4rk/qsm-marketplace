@@ -2,7 +2,11 @@
 // the request's reply socket as the person would. FAKE_ACTION is allow, deny, cancel, or none (no
 // answer at all); FAKE_VALUE is the typed text; FAKE_QS_LOG names the file the argv lines go to.
 
-export const FAKE_QS = `#!/usr/bin/env bun
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { cliShim } from "../../../../lib/fixtures/bin.ts";
+
+const FAKE_QS = `
 import { appendFileSync } from "node:fs";
 import { connect } from "node:net";
 const args = process.argv.slice(2);
@@ -31,3 +35,10 @@ if (args[0] === "ipc" && at !== -1) {
   socket.on("error", () => process.exit(1));
 }
 `;
+
+/** Puts the fake `qs` first-class in `bin`: a shim that runs the script with this runtime. */
+export function fakeQs(bin: string): void {
+  const script = join(bin, "qs.ts");
+  writeFileSync(script, FAKE_QS);
+  cliShim(bin, "qs", script);
+}

@@ -4,7 +4,7 @@
 
 import { spawnSync } from "node:child_process";
 import { type Call, requiredString, runCli } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { validateFile } from "../lib/note.ts";
 import { doctorReport, NOTEBOOK_BIN } from "../lib/notebook.ts";
@@ -24,13 +24,11 @@ function validate(call: Call): Outcome {
 
 /** The two live probes doctor reports on. */
 function probeNotebook(): { onPath: boolean; answersHelp: boolean } {
-  const onPath =
-    spawnSync("command", ["-v", NOTEBOOK_BIN], { shell: true, stdio: "ignore" }).status === 0;
-  if (!onPath) {
-    return { onPath, answersHelp: false };
+  if (!onPath(NOTEBOOK_BIN)) {
+    return { onPath: false, answersHelp: false };
   }
   return {
-    onPath,
+    onPath: true,
     answersHelp: spawnSync(NOTEBOOK_BIN, ["--help"], { stdio: "ignore" }).status === 0,
   };
 }
