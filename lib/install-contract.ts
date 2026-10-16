@@ -75,7 +75,6 @@ function outcomeOf(r: InstallResult): Outcome<InstallResult> {
 }
 
 /** An installer's own flags, declared as a manifest so parseCall reads them like any qsm CLI's. */
-const VERB = "run";
 const flag = (name: string, description: string): CommandArg => ({
   name,
   type: "boolean",
@@ -86,9 +85,9 @@ const DRY_RUN = flag("dryRun", "plan the work, change nothing");
 /** The call, or the usage message: an unknown flag or a missing value is never ignored. */
 function parseArgv(args: readonly CommandArg[], argv: readonly string[]): Call | string {
   const manifest: QsmManifest = {
-    qsm: { commands: { [`install ${VERB}`]: { description: "installer", args } } },
+    qsm: { commands: { "install run": { description: "installer", args } } },
   };
-  const parsed = parseCall(manifest, "install", [VERB, ...argv]);
+  const parsed = parseCall(manifest, "install", ["run", ...argv]);
   if (parsed.ok) {
     return parsed.call;
   }
