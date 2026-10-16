@@ -7,13 +7,12 @@
 // values are checked never to appear in the output of a verb that must not
 // print one, which is the discipline the whole plugin exists to keep.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -21,8 +20,8 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { FAKE_QS } from "../lib/askpass/fake-qs.ts";
@@ -45,13 +44,9 @@ function writeScript(path: string, body: string): void {
   chmodSync(path, 0o755);
 }
 
-beforeAll(() => {
-  runtimeOnlyDir = mkdtempSync(join(tmpdir(), "qsm-secrets-runtime-"));
+beforeEach(() => {
+  runtimeOnlyDir = sandboxDir("qsm-secrets-runtime-");
   symlinkSync(process.execPath, join(runtimeOnlyDir, "bun"));
-});
-
-afterAll(() => {
-  rmSync(runtimeOnlyDir, { recursive: true, force: true });
 });
 
 interface Run {
@@ -305,20 +300,16 @@ describe("the shared CLI base", () => {
   });
 
   test("mask --all with no backend chosen returns every string unchanged", () => {
-    const home = mkdtempSync(join(tmpdir(), "qsm-secrets-nochoice-"));
-    try {
-      const rows = ["tok=hunter2", "plain"];
-      const run = spawned(
-        "bun",
-        [CLI, "mask", "--all", "--json"],
-        { PATH: pathWith(null), HOME: home, XDG_CONFIG_HOME: home },
-        JSON.stringify(rows),
-      );
-      expect(run.code).toBe(0);
-      expect(envelope(run).data.texts).toEqual(rows);
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
+    const home = sandboxDir("qsm-secrets-nochoice-");
+    const rows = ["tok=hunter2", "plain"];
+    const run = spawned(
+      "bun",
+      [CLI, "mask", "--all", "--json"],
+      { PATH: pathWith(null), HOME: home, XDG_CONFIG_HOME: home },
+      JSON.stringify(rows),
+    );
+    expect(run.code).toBe(0);
+    expect(envelope(run).data.texts).toEqual(rows);
   });
 
   test("clean without a runtime directory is ok and removes nothing", () => {
@@ -365,11 +356,11 @@ for (const flavor of FLAVORS) {
     /** For the cases that need a real shell: a descriptor the caller opens, or leaves closed. */
     const shell = (script: string): Run => spawned("sh", ["-c", script], environment({ CLI }));
 
-    beforeAll(() => {
-      bin = mkdtempSync(join(tmpdir(), "qsm-secrets-bin-"));
-      store = mkdtempSync(join(tmpdir(), "qsm-secrets-store-"));
-      home = mkdtempSync(join(tmpdir(), "qsm-secrets-home-"));
-      runtime = mkdtempSync(join(tmpdir(), "qsm-secrets-run-"));
+    beforeEach(() => {
+      bin = sandboxDir("qsm-secrets-bin-");
+      store = sandboxDir("qsm-secrets-store-");
+      home = sandboxDir("qsm-secrets-home-");
+      runtime = sandboxDir("qsm-secrets-run-");
       if (flavor.name === "libsecret") {
         writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
         writeScript(join(bin, "secret-tool"), flavor.fake(store));
@@ -380,19 +371,6 @@ for (const flavor of FLAVORS) {
       const project = join(home, ".claude", "projects", "p");
       mkdirSync(project, { recursive: true });
       writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
-    });
-
-    afterAll(() => {
-      for (const directory of [bin, store, home, runtime]) {
-        rmSync(directory, { recursive: true, force: true });
-      }
-    });
-
-    beforeEach(() => {
-      for (const name of readdirSync(store)) {
-        rmSync(join(store, name), { force: true });
-      }
-      rmSync(join(runtime, "qsm-secrets"), { recursive: true, force: true });
       put("qsm", "github-token", VALUE);
       put("qsm", "npm-token", NPM_VALUE);
       put("work", "work-token", WORK_VALUE);
@@ -972,14 +950,10 @@ for (const flavor of FLAVORS) {
       });
 
       test("with no transcript to check refuses", () => {
-        const empty = mkdtempSync(join(tmpdir(), "qsm-secrets-vb-empty-"));
-        try {
-          const refused = cli(["prune"], { env: { HOME: empty } });
-          expect(refused.code).toBe(4);
-          expect(refused.stderr).toContain("no transcript");
-        } finally {
-          rmSync(empty, { recursive: true, force: true });
-        }
+        const empty = sandboxDir("qsm-secrets-vb-empty-");
+        const refused = cli(["prune"], { env: { HOME: empty } });
+        expect(refused.code).toBe(4);
+        expect(refused.stderr).toContain("no transcript");
       });
     });
 
@@ -1100,18 +1074,13 @@ describe("rbw: an entry another tool stored", () => {
   let bin = "";
   let store = "";
 
-  beforeAll(() => {
-    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-rbw-bin-"));
-    store = mkdtempSync(join(tmpdir(), "qsm-secrets-rbw-store-"));
+  beforeEach(() => {
+    bin = sandboxDir("qsm-secrets-rbw-bin-");
+    store = sandboxDir("qsm-secrets-rbw-store-");
     writeScript(join(bin, "rbw"), fakeRbw(store));
     writeFileSync(join(store, "qsm__github-token"), VALUE);
     writeFileSync(join(store, "qsm__legacy-key"), "legacy-value");
     writeFileSync(join(store, "qsm__legacy-key.user"), "alice");
-  });
-
-  afterAll(() => {
-    rmSync(bin, { recursive: true, force: true });
-    rmSync(store, { recursive: true, force: true });
   });
 
   test("is not listed as ours, and inspect shows it as stored by another", () => {
@@ -1136,19 +1105,14 @@ describe("libsecret: the shape of secret-tool's output", () => {
   let bin = "";
   let store = "";
 
-  beforeAll(() => {
-    bin = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-bin-"));
-    store = mkdtempSync(join(tmpdir(), "qsm-secrets-ls-store-"));
+  beforeEach(() => {
+    bin = sandboxDir("qsm-secrets-ls-bin-");
+    store = sandboxDir("qsm-secrets-ls-store-");
     writeScript(join(bin, "busctl"), "#!/bin/sh\nexit 0\n");
     writeScript(join(bin, "secret-tool"), fakeSecretTool(store));
     writeFileSync(join(store, "capture__cap_x"), "hunter2");
     writeFileSync(join(store, "capture__cap_trap"), TRAP);
     writeFileSync(join(store, "qsm__npm-token"), "npm-value");
-  });
-
-  afterAll(() => {
-    rmSync(bin, { recursive: true, force: true });
-    rmSync(store, { recursive: true, force: true });
   });
 
   const run = (args: string[], input?: string): Run =>
@@ -1265,16 +1229,12 @@ describe("guard", () => {
   let data = "";
   let runtime = "";
 
-  beforeAll(() => {
-    data = mkdtempSync(join(tmpdir(), "qsm-guard-data-"));
-    runtime = mkdtempSync(join(tmpdir(), "qsm-guard-run-"));
+  beforeEach(() => {
+    data = sandboxDir("qsm-guard-data-");
+    runtime = sandboxDir("qsm-guard-run-");
     mkdirSync(join(data, "keyrings"));
     writeFileSync(join(data, "keyrings", "login.keyring"), "x");
     symlinkSync(join(data, "keyrings", "login.keyring"), join(data, "harmless-name"));
-  });
-  afterAll(() => {
-    rmSync(data, { recursive: true, force: true });
-    rmSync(runtime, { recursive: true, force: true });
   });
 
   /** The verdict on a command: its refusal code, or null when it may run. */

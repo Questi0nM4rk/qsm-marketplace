@@ -1,32 +1,11 @@
-import { afterEach, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { purge } from "./purge.ts";
 
-const dirs: string[] = [];
-afterEach(() => {
-  for (const d of dirs.splice(0)) {
-    rmSync(d, { recursive: true, force: true });
-  }
-});
-
-function fakeHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "qsm-purge-"));
-  dirs.push(home);
-  return home;
-}
-
 test("purge removes every older artifact once, keeps the rest, and a second run finds nothing", () => {
-  const home = fakeHome();
+  const home = sandboxDir("qsm-purge-");
   mkdirSync(join(home, ".local/share/qsm/bin"), { recursive: true });
   symlinkSync("/nonexistent", join(home, ".local/share/qsm/bin/qsm-doctor"));
   writeFileSync(
@@ -53,7 +32,7 @@ test("purge removes every older artifact once, keeps the rest, and a second run 
 });
 
 test("a regular file in the legacy farm is left alone and reported as blocked", () => {
-  const home = fakeHome();
+  const home = sandboxDir("qsm-purge-");
   mkdirSync(join(home, ".local/share/qsm/bin"), { recursive: true });
   writeFileSync(join(home, ".local/share/qsm/bin/mine"), "");
   const r = purge({
