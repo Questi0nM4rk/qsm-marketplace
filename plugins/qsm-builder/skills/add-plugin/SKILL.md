@@ -1,6 +1,6 @@
 ---
 name: add-plugin
-description: "Use when adding anything to this marketplace (the checklist: search for an existing home, why it exists, spec, build, proof in a fresh session): a new plugin for a capability that has none, or content placed inside a plugin that already exists (a skill, an agent, a command, a hook, a CLI verb, a document). Triggers: add a plugin, new plugin, scaffold a plugin, add a skill, add a hook, add a command, where does this go, kam to patri, extend the marketplace, pridej plugin. Owns the order and the file contract; the quality bar for a prompt is the skill-standards skill."
+description: "Use when adding anything to this marketplace (the checklist: search for an existing home, why it exists, spec, build, proof in a fresh session): a new plugin for a capability that has none, or content placed inside a plugin that already exists (a skill, an agent, a command, a hook, a CLI verb, a document). Triggers: add a plugin, new plugin, scaffold a plugin, add a skill, add a hook, add a command, where does this go, kam to patri, extend the marketplace, pridej plugin. Owns the order and the file contract; the quality bar for a prompt is the skill-standards skill, and building a CLI verb is the add-tool skill."
 ---
 
 # Add Plugin
