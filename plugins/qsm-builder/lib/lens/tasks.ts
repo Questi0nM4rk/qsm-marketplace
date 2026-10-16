@@ -39,16 +39,25 @@ export interface Issue {
   readonly labels?: readonly string[];
 }
 
+/** An optional field: absent, or a string. */
+function isOptionalText(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+/** An optional field: absent, or a list of strings. */
+function isOptionalTexts(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((l) => typeof l === "string"));
+}
+
 function isIssue(value: unknown): value is Issue {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.title === "string" &&
     typeof value.status === "string" &&
-    (value.issue_type === undefined || typeof value.issue_type === "string") &&
-    (value.description === undefined || typeof value.description === "string") &&
-    (value.labels === undefined ||
-      (Array.isArray(value.labels) && value.labels.every((l) => typeof l === "string")))
+    isOptionalText(value.issue_type) &&
+    isOptionalText(value.description) &&
+    isOptionalTexts(value.labels)
   );
 }
 

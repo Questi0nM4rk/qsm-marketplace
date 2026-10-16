@@ -48,6 +48,17 @@ interface PluginView {
 const isStrings = (v: unknown): boolean => listOf(v).every((x) => typeof x === "string");
 const isTextOrNull = (v: unknown): boolean => v === null || typeof v === "string";
 
+function isMarketPlugin(p: unknown): p is MarketView["plugins"][number] {
+  return (
+    isRecord(p) &&
+    typeof p.name === "string" &&
+    isTextOrNull(p.line) &&
+    Array.isArray(p.dependencies) &&
+    isStrings(p.dependencies) &&
+    (p.openTasks === null || typeof p.openTasks === "number")
+  );
+}
+
 function isMarketView(v: unknown): v is MarketView {
   return (
     isRecord(v) &&
@@ -55,15 +66,7 @@ function isMarketView(v: unknown): v is MarketView {
     isTextOrNull(v.why) &&
     typeof v.tasksNote === "string" &&
     Array.isArray(v.plugins) &&
-    v.plugins.every(
-      (p: unknown) =>
-        isRecord(p) &&
-        typeof p.name === "string" &&
-        isTextOrNull(p.line) &&
-        Array.isArray(p.dependencies) &&
-        isStrings(p.dependencies) &&
-        (p.openTasks === null || typeof p.openTasks === "number"),
-    )
+    v.plugins.every(isMarketPlugin)
   );
 }
 
