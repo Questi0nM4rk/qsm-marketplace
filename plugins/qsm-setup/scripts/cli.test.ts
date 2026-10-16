@@ -1,27 +1,18 @@
 // qsm-setup through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, test } from "bun:test";
-import { execSync, spawnSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { dataOf, envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { readRelinkOutput } from "../hooks/relink-output.ts";
 import { isRecord } from "../../../lib/outcome.ts";
-import { parseEnvelope } from "../lib/json.ts";
 import setupManifest from "../qsm.json" with { type: "json" };
 
 interface CheckRow {
   readonly name: string;
   readonly status: string;
   readonly output: string;
-}
-
-/** The --json envelope a verb printed; the test fails when stdout is not one. */
-function envelopeOf(stdout: string) {
-  const envelope = parseEnvelope(stdout);
-  if (envelope === null) {
-    throw new Error(`stdout is not an envelope: ${stdout}`);
-  }
-  return envelope;
 }
 
 /** The doctor report's check rows, read from its envelope. */
@@ -43,17 +34,9 @@ const ROOT = resolve(import.meta.dir, "../../..");
 
 function run(argv: readonly string[], env: Record<string, string> = {}) {
   const home = sandboxDir("qsm-setup-cli-");
-  const r = spawnSync("bun", [CLI, ...argv], {
-    encoding: "utf8",
-    env: {
-      PATH: process.env.PATH ?? "",
-      HOME: home,
-      XDG_CONFIG_HOME: join(home, "c"),
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-      ...env,
-    },
+  return runBin(CLI, argv, {
+    env: isolatedEnv(home, { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", ...env }),
   });
-  return { exit: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
 /** bun's own dir, sh's dir (the doctor probe shells out), and the given bin
@@ -200,22 +183,10 @@ function gitMarketplace(): string {
   const base = sandboxDir("qsm-setup-tools-");
   const origin = join(base, "origin.git");
   const root = join(base, "checkout");
-  const git = (...args: string[]): void => {
-    execSync(["git", "-C", root, ...args].map((a) => JSON.stringify(a)).join(" "), {
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        GIT_AUTHOR_NAME: "t",
-        GIT_AUTHOR_EMAIL: "t@t",
-        GIT_COMMITTER_NAME: "t",
-        GIT_COMMITTER_EMAIL: "t@t",
-      },
-    });
-  };
-  execSync(`git init -q --bare -b main ${JSON.stringify(origin)}`);
+  git(base, "init", "-q", "--bare", "-b", "main", origin);
   mkdirSync(join(root, "plugins", "x", ".claude-plugin"), { recursive: true });
-  execSync(`git init -q -b main ${JSON.stringify(root)}`);
-  git("remote", "add", "origin", origin);
+  git(root, "init", "-q", "-b", "main");
+  git(root, "remote", "add", "origin", origin);
   const manifest = (verbs: string[]) => {
     const commands = Object.fromEntries(
       verbs.map((v) => [`qsm-x ${v}`, { description: `${v} it` }]),
@@ -230,10 +201,9 @@ function gitMarketplace(): string {
     JSON.stringify({ name: "x" }),
   );
   manifest(["run", "tail"]);
-  git("add", "-A");
-  git("commit", "-qm", "main");
-  git("push", "-q", "origin", "main");
-  git("update-ref", "-d", "refs/remotes/origin/main");
+  commit(root, "main");
+  git(root, "push", "-q", "origin", "main");
+  git(root, "update-ref", "-d", "refs/remotes/origin/main");
   manifest(["run"]);
   return root;
 }
@@ -261,17 +231,10 @@ describe("tools over a real local git remote", () => {
   });
 });
 
-describe("relink --auto --json feeds readRelinkOutput the seam it reads", () => {
-  test("A machine that has not opted in", () => {
+describe("relink --auto --json", () => {
+  test("a machine that has not opted in answers what the session hook reads", () => {
     const r = run(["relink", "--auto", "--json"]);
-    expect(readRelinkOutput(r.stdout ?? "")).toEqual({ kind: "skipped", reason: "not opted in" });
-  });
-
-  test("the bare shape the hook used to read is unreadable, not a false positive", () => {
-    expect(readRelinkOutput('{"relinked":true}')).toEqual({
-      kind: "unreadable",
-      reason: "not an outcome envelope: no data field",
-    });
+    expect(dataOf(r.stdout)).toEqual({ relinked: false, reason: "not opted in" });
   });
 });
 

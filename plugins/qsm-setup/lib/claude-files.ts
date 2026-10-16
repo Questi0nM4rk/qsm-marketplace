@@ -9,9 +9,9 @@ import { jsonErrorAt } from "./json-position.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 
 export interface ClaudePaths {
-  /** `CLAUDE_CONFIG_DIR`, else `~/.claude` */
+  /** Claude Code's home directory */
   readonly configDir: string;
-  /** `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json` */
+  /** the account file: inside a relocated home, else beside `~/.claude` */
   readonly claudeJson: string;
   /** the project the session runs in */
   readonly cwd: string;

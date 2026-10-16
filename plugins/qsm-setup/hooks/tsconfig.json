@@ -4,7 +4,6 @@
     "../../../.claude/types",
     "register.tsx",
     "register.test.ts",
-    "relink-output.ts",
     "noun.generated.ts",
     "../types"
   ]
