@@ -107,6 +107,17 @@ describe("doctor's Claude group: config files", () => {
     expect(config).toHaveLength(1);
     expect(config[0]?.detail).toContain(file);
   });
+  test("CLAUDE_CONFIG_DIR set to ~/.claude still moves .claude.json into it", async () => {
+    const w = world();
+    const dir = join(w.home, ".claude");
+    const moved = w.write(join(dir, ".claude.json"), "{");
+    w.write(join(w.home, ".claude.json"), "{}");
+    const config = named(
+      await claudeChecks(probes(w, { env: { CLAUDE_CONFIG_DIR: dir } })),
+      "claude config",
+    );
+    expect(config[0]?.detail).toContain(moved);
+  });
 });
 
 describe("doctor's Claude group: agents and skills", () => {

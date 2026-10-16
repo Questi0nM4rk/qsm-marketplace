@@ -12,7 +12,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { binDir, type Env, home } from "../../../lib/paths.ts";
+import {
+  binDir,
+  claudeDir,
+  dataDir,
+  type Env,
+  fishCompletionDir,
+  home,
+} from "../../../lib/paths.ts";
 
 export interface PurgeReport {
   /** removed, or with `check` what would be removed: one sentence each */
@@ -39,8 +46,8 @@ function isLink(path: string): boolean {
 }
 
 /** The bin farm of the retired layout: `<data>/qsm/bin`, symlinks only. */
-function purgeFarm(dataDir: string, o: PurgeOptions, r: { found: string[]; blocked: string[] }) {
-  const farm = join(dataDir, "qsm", "bin");
+function purgeFarm(dataHome: string, o: PurgeOptions, r: { found: string[]; blocked: string[] }) {
+  const farm = join(dataHome, "qsm", "bin");
   if (!existsSync(farm)) {
     return;
   }
@@ -49,11 +56,11 @@ function purgeFarm(dataDir: string, o: PurgeOptions, r: { found: string[]; block
     r.blocked.push(`${farm} holds files that are not links: ${foreign.join(", ")}; remove them`);
     return;
   }
-  r.found.push(`legacy bin farm ${join(dataDir, "qsm")}`);
+  r.found.push(`legacy bin farm ${join(dataHome, "qsm")}`);
   if (!o.check) {
     rmSync(farm, { recursive: true });
     try {
-      rmdirSync(join(dataDir, "qsm"));
+      rmdirSync(join(dataHome, "qsm"));
     } catch {
       // other content stays; only the farm was ours
     }
@@ -134,8 +141,8 @@ function purgeLinks(bins: string, o: PurgeOptions, found: string[]) {
 }
 
 /** Claude Code makes `plugins/data/<plugin>-<marketplace>` and never removes it. */
-function purgeDataDirs(claudeDir: string, o: PurgeOptions, found: string[]) {
-  const data = join(claudeDir, "plugins", "data");
+function purgeDataDirs(claudeHome: string, o: PurgeOptions, found: string[]) {
+  const data = join(claudeHome, "plugins", "data");
   if (!existsSync(data)) {
     return;
   }
@@ -156,16 +163,16 @@ function purgeDataDirs(claudeDir: string, o: PurgeOptions, found: string[]) {
 export function purge(o: PurgeOptions): PurgeReport {
   const h = home(o.env);
   const r = { found: [] as string[], blocked: [] as string[] };
-  const confDir = join(o.env.XDG_CONFIG_HOME ?? join(h, ".config"), "fish", "conf.d");
+  const confDir = join(dirname(fishCompletionDir(o.env)), "conf.d");
   const fishFiles = existsSync(confDir)
     ? readdirSync(confDir)
         .filter((n) => n.endsWith(".fish"))
         .map((n) => join(confDir, n))
     : [];
   const zdot = o.env.ZDOTDIR ?? h;
-  purgeFarm(o.env.XDG_DATA_HOME ?? join(h, ".local", "share"), o, r);
+  purgeFarm(dataDir(o.env), o, r);
   purgeRcBlocks([...fishFiles, join(zdot, ".zshenv"), join(zdot, ".zshrc")], o, r.found);
   purgeLinks(binDir(o.env), o, r.found);
-  purgeDataDirs(o.env.CLAUDE_CONFIG_DIR ?? join(h, ".claude"), o, r.found);
+  purgeDataDirs(claudeDir(o.env), o, r.found);
   return r;
 }

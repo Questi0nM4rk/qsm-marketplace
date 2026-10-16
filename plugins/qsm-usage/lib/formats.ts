@@ -2,16 +2,12 @@
 
 import { extname } from "node:path";
 import { TOML, YAML } from "bun";
+import { messageOf } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 export type DataFormat = "json" | "yaml" | "toml";
 
 const SUPPORTED_EXTENSIONS = [".json", ".yaml", ".yml", ".toml"] as const;
-
-export class InputError extends Error {}
-
-export function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function detectFormat(path: string): DataFormat | null {
   switch (extname(path).toLowerCase()) {
@@ -39,19 +35,20 @@ export function parseData(text: string, format: DataFormat): unknown {
   return JSON.parse(text) as unknown;
 }
 
-/** Parses a data file's text by its extension, or throws an `InputError`
+/** Parses a data file's text by its extension, or throws a `failed` `QsmError`
  * naming which of the two things went wrong. */
 export function readData(path: string, text: string): unknown {
   const format = detectFormat(path);
   if (format === null) {
-    throw new InputError(
+    throw new QsmError(
+      "failed",
       `unsupported extension: ${path} (expected ${SUPPORTED_EXTENSIONS.join(", ")})`,
     );
   }
   try {
     return parseData(text, format);
   } catch (error) {
-    throw new InputError(`cannot parse ${path} as ${format}: ${messageOf(error)}`, {
+    throw new QsmError("failed", `cannot parse ${path} as ${format}: ${messageOf(error)}`, {
       cause: error,
     });
   }

@@ -3,9 +3,9 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { type Handler, requiredString } from "../../../lib/cli-base.ts";
-import { fail, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, ok } from "../../../lib/outcome.ts";
 import { describeFailure, validateFindings } from "../lib/findings.ts";
-import { absent, messageOf } from "../lib/formats.ts";
+import { absent } from "../lib/formats.ts";
 import { renderReport } from "../lib/report.ts";
 
 export const report: Handler = (call) => {

@@ -1,4 +1,5 @@
 // Narrowing for values whose shape is not known until they are read.
+// differs: hooks sandbox (the hooks module imports no root lib, so it keeps its own isRecord)
 
 /** A JSON object: not null, not an array. */
 export function isRecord(value: unknown): value is Record<string, unknown> {

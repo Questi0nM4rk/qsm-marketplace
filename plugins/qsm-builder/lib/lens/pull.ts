@@ -5,8 +5,8 @@
 
 import { which } from "bun";
 import { isRecord } from "../../../../lib/outcome.ts";
+import { QsmError } from "../../../../lib/qsm-error.ts";
 import { createEditTask, EditError, parseEdit, run } from "./edits.ts";
-import { ModelError } from "./model.ts";
 
 export interface EditRow {
   readonly id: string;
@@ -63,7 +63,7 @@ export async function pullEdits(root: string, url: string, rows: EditRows): Prom
 /** Runs one `claude -p` turn that may use only ArtifactData; haiku, because the flow is given. */
 async function ask(prompt: string): Promise<string> {
   if (which("claude") === null) {
-    throw new ModelError(
+    throw new QsmError(
       "missing",
       "claude is not on PATH: pull reads the artifact database through it",
     );
@@ -79,7 +79,7 @@ async function ask(prompt: string): Promise<string> {
     prompt,
   ]);
   if (code !== 0) {
-    throw new ModelError("failed", `claude -p failed (${code}): ${err.trim() || out.trim()}`);
+    throw new QsmError("failed", `claude -p failed (${code}): ${err.trim() || out.trim()}`);
   }
   return out.trim();
 }
@@ -118,7 +118,7 @@ export const artifactRows: EditRows = {
     );
     const rows = parseRows(text);
     if (rows === null) {
-      throw new ModelError(
+      throw new QsmError(
         "failed",
         `the artifact rows did not come back as a JSON array: ${text.slice(0, 200)}`,
       );

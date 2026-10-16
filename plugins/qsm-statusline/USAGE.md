@@ -18,4 +18,4 @@ Delete the cache directory to force a reread.
 | Variable | Effect |
 | --- | --- |
 | `QSM_STATUSLINE_CACHE_DIR` | where the git cache lives |
-| `QSM_STATUSLINE_SETTINGS` | the settings file `doctor` reads |
+| `CLAUDE_CONFIG_DIR` | Claude Code's home; `doctor` reads the `settings.json` in it, else `~/.claude` |

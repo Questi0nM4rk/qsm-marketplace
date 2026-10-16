@@ -2,10 +2,9 @@
 // on stdout, exit 0 whether the TOON form or the original wins.
 
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { envelopeOf, runBin } from "../../../lib/fixtures/cli.ts";
 import { isPlainObject } from "../lib/toon-scalar.ts";
-import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -33,7 +32,7 @@ function isWrap(value: unknown): value is Wrap {
 }
 
 function wrap(stdin: string, args = ["--stdin", "--json"]) {
-  return spawnSync("bun", [CLI, "toon", "wrap", ...args], { encoding: "utf8", input: stdin });
+  return runBin(CLI, ["toon", "wrap", ...args], { input: stdin });
 }
 
 /** The envelope's data; an exit other than 0 or an envelope other than ok
@@ -42,12 +41,12 @@ function wrapData(stdin: string): Wrap {
   const result = wrap(stdin);
   const envelope = envelopeOf(result.stdout);
   if (
-    result.status !== 0 ||
+    result.exit !== 0 ||
     envelope.code !== "ok" ||
     envelope.exit !== 0 ||
     !isWrap(envelope.data)
   ) {
-    throw new Error(`toon wrap exited ${result.status}: ${result.stdout}${result.stderr}`);
+    throw new Error(`toon wrap exited ${result.exit}: ${result.stdout}${result.stderr}`);
   }
   return envelope.data;
 }
@@ -124,6 +123,6 @@ describe("qsm-usage toon wrap", () => {
   });
 
   test("Without --stdin the call is usage, exit 2", () => {
-    expect(wrap("[]", ["--json"]).status).toBe(2);
+    expect(wrap("[]", ["--json"]).exit).toBe(2);
   });
 });

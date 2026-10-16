@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
+import { git, repoWith } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { onPath } from "../../../lib/outcome.ts";
 import {
   createWorkspace,
   createWorkspaceArgv,
@@ -67,10 +71,10 @@ function fakeWt(switchHelp = "Options:\n  -c, --create\n  -b, --base <BASE>\n"):
 } {
   const dir = sandboxDir("qsm-worktrunk-");
   const log = join(dir, "calls.log");
-  writeFileSync(
-    join(dir, "wt"),
+  fakeBin(
+    dir,
+    "wt",
     [
-      "#!/usr/bin/env bash",
       `printf 'wt %s\\n' "$*" >> ${JSON.stringify(log)}`,
       `if [ "$1" = "switch" ] && [ "$2" = "--help" ]; then printf '%s' ${JSON.stringify(switchHelp)}; exit 0; fi`,
       'if [ "$1" = "switch" ]; then printf \'✓ Created branch %s and worktree @ /repo/.claude/worktrees/%s\\n\' "$3" "$3" >&2; fi',
@@ -78,24 +82,22 @@ function fakeWt(switchHelp = "Options:\n  -c, --create\n  -b, --base <BASE>\n"):
       "exit 0",
     ].join("\n"),
   );
-  writeFileSync(
-    join(dir, "git"),
+  fakeBin(
+    dir,
+    "git",
     [
-      "#!/usr/bin/env bash",
       `printf 'git %s\\n' "$*" >> ${JSON.stringify(log)}`,
       `if [ "$1" = "worktree" ]; then printf '%b\\n' ${JSON.stringify(PORCELAIN)}; exit 0; fi`,
       'if [ "$1" = "symbolic-ref" ]; then printf \'main\\n\'; exit 0; fi',
       "exit 0",
     ].join("\n"),
   );
-  chmodSync(join(dir, "wt"), 0o755);
-  chmodSync(join(dir, "git"), 0o755);
   const run: Runner = (argv, cwd) => {
     const [command, ...args] = argv;
     const result = spawnSync(command ?? "", args, {
       cwd,
       encoding: "utf8",
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` },
+      env: isolatedEnv(dir, { PATH: `${dir}:${process.env.PATH ?? ""}` }),
     });
     return Promise.resolve(resultOf(result));
   };
@@ -269,54 +271,39 @@ describe("with no wt on PATH", () => {
   });
 });
 
-const REAL_WT = spawnSync("sh", ["-c", "command -v wt"], { encoding: "utf8" }).status === 0;
+const REAL_WT = onPath("wt");
 
 /** A fresh repository with one commit and a worktrunk config that puts
  * workspaces under <repo>/.wt, with HOME and XDG dirs inside the sandbox so
  * the real wt never touches this machine's state. */
-function throwawayRepo(): { repo: string; run: Runner; env: NodeJS.ProcessEnv } {
-  const home = sandboxDir("qsm-worktrunk-");
-  const repo = join(home, "repo");
+function throwawayRepo(): { repo: string; run: Runner } {
+  const { root: home, repo } = repoWith("qsm-worktrunk-", { "a.txt": "a\n" });
   mkdirSync(join(home, "config", "worktrunk"), { recursive: true });
   writeFileSync(
     join(home, "config", "worktrunk", "config.toml"),
     'worktree-path = "{{ repo_path }}/.wt/{{ branch | sanitize }}"\n',
   );
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    HOME: home,
-    XDG_CONFIG_HOME: join(home, "config"),
-    XDG_STATE_HOME: join(home, "state"),
-    GIT_AUTHOR_NAME: "t",
-    GIT_AUTHOR_EMAIL: "t@example.com",
-    GIT_COMMITTER_NAME: "t",
-    GIT_COMMITTER_EMAIL: "t@example.com",
-  };
-  execFileSync("git", ["init", "-q", "-b", "main", repo], { env });
-  writeFileSync(join(repo, "a.txt"), "a\n");
-  execFileSync("git", ["add", "a.txt"], { cwd: repo, env });
-  execFileSync("git", ["commit", "-q", "-m", "one"], { cwd: repo, env });
+  const env = isolatedEnv(home, { XDG_STATE_HOME: join(home, "state") });
   const run: Runner = (argv, cwd) => {
     const [command, ...args] = argv;
     return Promise.resolve(
       resultOf(spawnSync(command ?? "", args, { cwd: cwd ?? repo, encoding: "utf8", env })),
     );
   };
-  return { repo, run, env };
+  return { repo, run };
 }
 
 describe.skipIf(!REAL_WT)("against the real wt, in a throwaway repository", () => {
   test("create puts the worktree where git lists it, remove takes the worktree and a merged branch away", async () => {
-    const { repo, run, env } = throwawayRepo();
-    const git = (args: string[]) => execFileSync("git", args, { cwd: repo, env, encoding: "utf8" });
+    const { repo, run } = throwawayRepo();
 
     const path = await createWorkspace(run, "feature-x", repo);
     expect(path).toBe(join(repo, ".wt", "feature-x"));
     expect(existsSync(join(path, "a.txt"))).toBe(true);
-    expect(git(["worktree", "list", "--porcelain"])).toContain("branch refs/heads/feature-x");
+    expect(git(repo, "worktree", "list", "--porcelain")).toContain("branch refs/heads/feature-x");
 
     await removeWorkspace(run, path, repo);
     expect(existsSync(path)).toBe(false);
-    expect(git(["branch", "--list", "feature-x"]).trim()).toBe("");
+    expect(git(repo, "branch", "--list", "feature-x")).toBe("");
   }, 60_000);
 });

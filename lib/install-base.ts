@@ -30,9 +30,8 @@ import { binDir, buildRecordPath, type Env, fishCompletionDir } from "./paths.ts
 import { loadManifest, type QsmManifest } from "./qsm-manifest.ts";
 
 export interface UpstreamTool {
-  /** what `command -v` must find; a function reads it from the install env (a tool whose name
-   * the user's settings choose) */
-  readonly cmd: string | ((env: InstallContext["env"]) => string);
+  /** what `command -v` must find */
+  readonly cmd: string;
   /** present when any of these is on PATH, instead of `cmd`, which then only names the step: a
    * plugin that works with either of two tools */
   readonly anyOf?: readonly string[];
@@ -48,7 +47,9 @@ export interface UpstreamTool {
 
 export interface InstallBaseConfig {
   readonly pluginRoot: string;
-  readonly upstream?: readonly UpstreamTool[];
+  /** a function builds its row from the install env: a tool the user's settings name, whose
+   * install command and hint change with that name */
+  readonly upstream?: readonly (UpstreamTool | ((env: InstallContext["env"]) => UpstreamTool))[];
   /**
    * the plugin-specific steps, one or several, run last in the order returned: a download or a
    * link the plugin needs at run time, never an edit to a file the user owns
@@ -324,16 +325,15 @@ function pruneSteps(pluginRoot: string): Step[] {
 
 type Missing = Pick<Step, "status" | "detail">;
 
-function cmdOf(tool: UpstreamTool, env: InstallContext["env"]): string {
-  return typeof tool.cmd === "string" ? tool.cmd : tool.cmd(env);
+function upstreamRows(config: InstallBaseConfig, env: InstallContext["env"]): UpstreamTool[] {
+  return (config.upstream ?? []).map((row) => (typeof row === "function" ? row(env) : row));
 }
 
 /** An upstream tool's step: already when probed on PATH, else what `whenMissing` says. */
 function upstreamStep(ctx: InstallContext, tool: UpstreamTool, whenMissing: () => Missing): Step {
-  const cmd = cmdOf(tool, ctx.env);
-  const name = `upstream ${cmd}`;
-  return (tool.anyOf ?? [cmd]).some((c) => ctx.probe(c))
-    ? { name, status: "already", detail: `${cmd} on PATH` }
+  const name = `upstream ${tool.cmd}`;
+  return (tool.anyOf ?? [tool.cmd]).some((c) => ctx.probe(c))
+    ? { name, status: "already", detail: `${tool.cmd} on PATH` }
     : { name, ...whenMissing() };
 }
 
@@ -344,7 +344,7 @@ function installUpstream(ctx: InstallContext, tool: UpstreamTool): Step {
     const optional = tool.optional === true;
     if (cmd === undefined) {
       const status = optional ? "suggested" : "missing-prereq";
-      return { status, detail: `${cmdOf(tool, ctx.env)} is not on PATH: ${tool.hint}` };
+      return { status, detail: `${tool.cmd} is not on PATH: ${tool.hint}` };
     }
     const exit = ctx.run(cmd, args);
     if (exit === 0) {
@@ -362,7 +362,7 @@ function planUpstream(ctx: InstallContext, tool: UpstreamTool): Step {
     status: tool.optional === true ? "suggested" : "missing-prereq",
     detail:
       tool.install === undefined
-        ? `would need ${cmdOf(tool, ctx.env)}: ${tool.hint}`
+        ? `would need ${tool.cmd}: ${tool.hint}`
         : `would run ${tool.install.join(" ")}`,
   }));
 }
@@ -395,7 +395,7 @@ function plan(config: InstallBaseConfig, manifest: QsmManifest, ctx: InstallCont
   );
   return [
     ...lines.map(planStep),
-    ...(config.upstream ?? []).map((t) => planUpstream(ctx, t)),
+    ...upstreamRows(config, ctx.env).map((t) => planUpstream(ctx, t)),
     ...completions.map(planStep),
   ];
 }
@@ -437,7 +437,7 @@ async function run(
     ...(deps === null ? [] : [deps]),
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
-    ...(config.upstream ?? []).map((t) => installUpstream(ctx, t)),
+    ...upstreamRows(config, ctx.env).map((t) => installUpstream(ctx, t)),
     ...Object.keys(manifest.qsm.bin ?? {}).map((bin) =>
       completionStep(completionDir, bin, manifest),
     ),

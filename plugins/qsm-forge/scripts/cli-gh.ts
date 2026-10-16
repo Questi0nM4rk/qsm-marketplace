@@ -8,10 +8,10 @@ import {
   flagArg,
   type Handler,
   optionalString,
+  readStdin,
   requiredNumber,
 } from "../../../lib/cli-base.ts";
 import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
-import { UsageError } from "../lib/errors.ts";
 import { runCommand } from "../lib/exec.ts";
 import {
   dismissStaleReviews,
@@ -23,7 +23,6 @@ import {
   resolveAllThreads,
   resolveThread,
 } from "../lib/github.ts";
-import { MissingError } from "../lib/missing-error.ts";
 import { type GithubRepo, resolveGithubRepo } from "../lib/remote.ts";
 import { oneLine, place, table } from "../lib/render.ts";
 import { parseReviewPayload, readPayloadFile } from "../lib/review-payload.ts";
@@ -45,17 +44,6 @@ function said(value: unknown, lines: readonly string[]): Outcome {
 
 function pr(call: Call): number {
   return requiredNumber(call, "pr");
-}
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    return "";
-  }
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-  }
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 async function status({ forge, at, call }: At): Promise<Outcome> {
@@ -234,26 +222,15 @@ async function submitReview({ forge, at, call }: At): Promise<Outcome> {
 
 type Verb = (at: At) => Promise<Outcome>;
 
-/** Resolves the repository, builds the forge, runs the verb, and turns the
- * three failure kinds into their outcome codes. */
+/** Resolves the repository, builds the forge, and runs the verb. */
 function handler(verb: Verb): Handler {
   return async (call) => {
-    try {
-      const repo: GithubRepo = await resolveGithubRepo(
-        runCommand,
-        optionalString(call, "repo") ?? null,
-      );
-      const at = `${repo.owner}/${repo.repo}#${String(pr(call))}`;
-      return await verb({ forge: githubForge(runCommand, repo), at, call });
-    } catch (error) {
-      if (error instanceof MissingError) {
-        return fail("missing", error.message);
-      }
-      if (error instanceof UsageError) {
-        return fail("usage", error.message);
-      }
-      throw error;
-    }
+    const repo: GithubRepo = await resolveGithubRepo(
+      runCommand,
+      optionalString(call, "repo") ?? null,
+    );
+    const at = `${repo.owner}/${repo.repo}#${String(pr(call))}`;
+    return verb({ forge: githubForge(runCommand, repo), at, call });
   };
 }
 

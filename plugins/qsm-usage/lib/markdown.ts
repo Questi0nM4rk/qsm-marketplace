@@ -2,7 +2,8 @@
 // under a named heading.
 
 import { YAML } from "bun";
-import { InputError, messageOf } from "./formats.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 const HEADING = /^#+\s/;
@@ -11,14 +12,21 @@ const HEADING = /^#+\s/;
 export function extractFrontmatter(source: string): unknown {
   const block = FRONTMATTER.exec(source)?.[1];
   if (block === undefined) {
-    throw new InputError("no YAML frontmatter block found (expected --- delimiters at file start)");
+    throw new QsmError(
+      "failed",
+      "no YAML frontmatter block found (expected --- delimiters at file start)",
+    );
   }
   try {
     return YAML.parse(block);
   } catch (error) {
-    throw new InputError(`cannot parse the frontmatter block as YAML: ${messageOf(error)}`, {
-      cause: error,
-    });
+    throw new QsmError(
+      "failed",
+      `cannot parse the frontmatter block as YAML: ${messageOf(error)}`,
+      {
+        cause: error,
+      },
+    );
   }
 }
 
@@ -56,7 +64,8 @@ function tableLines(source: string, heading: string): string[] {
   );
   if (start === -1) {
     const available = headings(source);
-    throw new InputError(
+    throw new QsmError(
+      "failed",
       `heading "${heading}" not found. Headings in this file: ${available.join(", ") || "(none)"}`,
     );
   }
@@ -73,7 +82,7 @@ function tableLines(source: string, heading: string): string[] {
     }
   }
   if (table.length < 2) {
-    throw new InputError(`no pipe table under heading "${heading}"`);
+    throw new QsmError("failed", `no pipe table under heading "${heading}"`);
   }
   return table;
 }

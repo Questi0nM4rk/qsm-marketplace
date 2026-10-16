@@ -50,7 +50,7 @@ export type ActivationReader = (activation: string) => ActivationReport | string
 
 export const bunActivationReader: ActivationReader = (activation) => {
   // Bun's spawnSync without `env` passes the environment the process started with, not
-  // process.env as it is now; a caller that set CLAUDE_CONFIG_DIR would read the wrong home.
+  // process.env as it is now; a caller that changed its environment would read the wrong home.
   const r = spawnSync("bun", [activation, "--status", "--json"], {
     encoding: "utf8",
     env: process.env,

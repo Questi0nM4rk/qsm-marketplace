@@ -4,12 +4,12 @@
 // Bash call breaks every command in a session.
 
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { FILTER_HOOK_ARGS, isFilterAnswer } from "../lib/filter.ts";
-import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -17,13 +17,12 @@ const CLI = resolve(import.meta.dir, "cli.ts");
  * `stderr`, and answers with the exit code the test wants back. */
 function stubFilter(exitCode: number, stdout = "", stderr = ""): { bin: string; capture: string } {
   const dir = sandboxDir("qsm-usage-filter-");
-  const bin = join(dir, "stub-filter");
   const capture = join(dir, "stdin.txt");
-  writeFileSync(
-    bin,
-    `#!/usr/bin/env bash\ncat > '${capture}'\nprintf '%s' '${stdout}'\nprintf '%s' '${stderr}' >&2\nexit ${exitCode}\n`,
+  const bin = fakeBin(
+    dir,
+    "stub-filter",
+    `cat > '${capture}'\nprintf '%s' '${stdout}'\nprintf '%s' '${stderr}' >&2\nexit ${exitCode}`,
   );
-  chmodSync(bin, 0o755);
   return { bin, capture };
 }
 
@@ -34,9 +33,8 @@ interface Answer {
 
 function ask(filterBin: string, command: string, subagent = false): Answer {
   const args = ["filter", "--command", command, ...(subagent ? ["--subagent"] : []), "--json"];
-  const ran = spawnSync("bun", [CLI, ...args], {
-    encoding: "utf8",
-    env: { ...process.env, QSM_FILTER_BIN: filterBin },
+  const ran = runBin(CLI, args, {
+    env: isolatedEnv(sandboxDir("qsm-usage-home-"), { QSM_FILTER_BIN: filterBin }),
   });
   const envelope = envelopeOf(ran.stdout);
   if (envelope.code !== "ok" || !isFilterAnswer(envelope.data)) {
@@ -77,13 +75,12 @@ describe("qsm-usage filter", () => {
 
   test("calls the filter with its own contract args, nothing guessed", () => {
     const dir = sandboxDir("qsm-usage-filter-");
-    const bin = join(dir, "stub-filter-args");
     const argsFile = join(dir, "args.txt");
-    writeFileSync(
-      bin,
-      `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > '${argsFile}'\ncat > /dev/null\nexit 0\n`,
+    const bin = fakeBin(
+      dir,
+      "stub-filter-args",
+      `printf '%s\\n' "$@" > '${argsFile}'\ncat > /dev/null`,
     );
-    chmodSync(bin, 0o755);
 
     ask(bin, "echo hello");
 

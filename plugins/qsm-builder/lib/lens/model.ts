@@ -6,6 +6,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { YAML } from "bun";
 import { type CommandDecl, toCamel, verbsOf } from "../../../../lib/qsm-manifest.ts";
 import { isRecord } from "../../../../lib/outcome.ts";
+import { QsmError } from "../../../../lib/qsm-error.ts";
 import { listOf } from "../guards.ts";
 import { commandHook, functionHooks, type Hook, type Methods } from "./hooks.ts";
 import {
@@ -19,14 +20,6 @@ import {
   textFiles,
 } from "./refs.ts";
 import { names, readTasks, type Task, tasksOf } from "./tasks.ts";
-
-export class ModelError extends Error {
-  readonly code: "missing" | "failed";
-  constructor(code: "missing" | "failed", message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.code = code;
-  }
-}
 
 export interface Case {
   readonly name: string;
@@ -151,8 +144,8 @@ const dirs = (path: string): string[] =>
         .toSorted()
     : [];
 
-const parseFailure = (label: string, cause: unknown): ModelError =>
-  new ModelError(
+const parseFailure = (label: string, cause: unknown): QsmError =>
+  new QsmError(
     "failed",
     `${label} does not parse: ${cause instanceof Error ? cause.message : String(cause)}`,
     { cause },
@@ -169,7 +162,7 @@ function parse(label: string, text: string, parser: (t: string) => unknown): unk
 function json(label: string, text: string): Record<string, unknown> {
   const value = parse(label, text, (t) => JSON.parse(t));
   if (!isRecord(value)) {
-    throw new ModelError("failed", `${label} does not parse: not a JSON object`);
+    throw new QsmError("failed", `${label} does not parse: not a JSON object`);
   }
   return value;
 }
@@ -680,7 +673,7 @@ export function readMarketplace(dir: string): Marketplace {
   const file = join(dir, ".claude-plugin", "marketplace.json");
   const text = read(file);
   if (text === null) {
-    throw new ModelError("missing", `${file} is missing: ${dir} is not a marketplace`);
+    throw new QsmError("missing", `${file} is missing: ${dir} is not a marketplace`);
   }
   const mp = json(file, text);
   const entries = listOf(mp.plugins).map((e) => ({
@@ -694,7 +687,7 @@ export function readMarketplace(dir: string): Marketplace {
     const name = e.name;
     const pdir = join(dir, e.source || `plugins/${name}`);
     if (!existsSync(pdir)) {
-      throw new ModelError("missing", `${pdir} is missing: marketplace.json lists ${name}`);
+      throw new QsmError("missing", `${pdir} is missing: marketplace.json lists ${name}`);
     }
     const p = pluginOf(name, pdir, dir, { known, searched });
     const list = tasksOf(name, tasks.open);

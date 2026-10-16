@@ -15,6 +15,13 @@ export function claudeDir(env: Env): string {
   return set === undefined || set === "" ? join(home(env), ".claude") : set;
 }
 
+/** Claude Code's global config, read as join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json"):
+ * any non-empty `CLAUDE_CONFIG_DIR`, `~/.claude` included, moves it out of the home directory. */
+export function claudeJsonPath(env: Env): string {
+  const set = env.CLAUDE_CONFIG_DIR;
+  return join(set === undefined || set === "" ? home(env) : set, ".claude.json");
+}
+
 /** Compiled binaries land here; `QSM_BIN_DIR` overrides. */
 export function binDir(env: Env): string {
   return env.QSM_BIN_DIR ?? join(home(env), ".local", "bin");

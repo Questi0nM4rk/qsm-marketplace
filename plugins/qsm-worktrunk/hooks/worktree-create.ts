@@ -20,11 +20,11 @@
 // fails the harness's request instead of silently falling back.
 
 import { readHookEvent } from "../../../lib/hooks-kit.ts";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../lib/outcome.ts";
 import { nodeRunner, nodeStoreIo } from "../lib/node-io.ts";
 import { writeRedirect } from "../lib/task-store.ts";
 import { gitReader, readMainCheckout } from "../lib/workspace.ts";
-import { createWorkspace, WtError } from "../lib/wt.ts";
+import { createWorkspace } from "../lib/wt.ts";
 
 function eventOf(): { readonly name: string; readonly cwd: string } {
   const event = readHookEvent();
@@ -51,8 +51,6 @@ try {
   await createAndAnnounce();
   process.exit(0);
 } catch (error) {
-  const message =
-    error instanceof WtError || error instanceof Error ? error.message : String(error);
-  process.stderr.write(`qsm-worktrunk: ${message}. Run /qsm-worktrunk.\n`);
+  process.stderr.write(`qsm-worktrunk: ${messageOf(error)}. Run /qsm-worktrunk.\n`);
   process.exit(1);
 }

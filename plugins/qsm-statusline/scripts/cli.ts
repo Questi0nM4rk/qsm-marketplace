@@ -3,11 +3,17 @@
 // qsm-statusline: the renderer the harness calls once per frame, plus the two verbs that keep it
 // honest.
 
-import { spawn, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { basename } from "node:path";
-import { type Call, flagArg, type Handler, optionalString, runCli } from "../../../lib/cli-base.ts";
-import { checkTools, doctorVerdict, type Outcome, ok } from "../../../lib/outcome.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  readStdin,
+  runCli,
+} from "../../../lib/cli-base.ts";
+import { checkTools, doctorVerdict, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { cacheDir } from "../lib/cache.ts";
 import { gitState } from "../lib/git.ts";
@@ -65,25 +71,10 @@ function startRefresh(dir: string, cwd: string, now: number): void {
   }
 }
 
-/**
- * Nothing on stdin is a normal call: a terminal, or a harness that started the renderer with no
- * payload.
- */
-function readStdin(): string {
-  if (process.stdin.isTTY) {
-    return "";
-  }
-  try {
-    return readFileSync(0, "utf8");
-  } catch {
-    return "";
-  }
-}
-
 /** The render never fails: every source it reads is allowed to be absent, so
  * there is nothing for it to report but the rows it drew. */
-const renderVerb: Handler = (call: Call): Outcome => {
-  const snapshot = parsePayload(readStdin());
+const renderVerb: Handler = async (call: Call): Promise<Outcome> => {
+  const snapshot = parsePayload(await readStdin());
   const nowMs = Date.now();
   const cwd = optionalString(call, "cwd") ?? snapshot.cwd ?? process.cwd();
   const dir = cacheDir(process.env);
@@ -116,18 +107,12 @@ const refreshVerb: Handler = (call: Call): Outcome => {
 
 const INSTALL_HINT = "run qsm-setup install qsm-statusline";
 
-function onPath(): boolean {
-  return (
-    spawnSync("command", ["-v", "qsm-statusline"], { shell: true, stdio: "ignore" }).status === 0
-  );
-}
-
 /** doctor is `missing` when the binary the status line runs is not on PATH; an unwired
  * settings entry is only reported, so a status line nobody has wired yet never fails. */
 const doctorVerb: Handler = (call: Call): Outcome => {
   const path = optionalString(call, "settings") ?? settingsPath(process.env);
   const state = readStatusLine(path);
-  const binary = onPath();
+  const binary = onPath("qsm-statusline");
   const lines = [`settings: ${path}`, `state: ${describe(state)}`];
   if (state.kind !== "wired") {
     lines.push(`entry: "statusLine": ${JSON.stringify(STATUS_LINE_ENTRY)}`);

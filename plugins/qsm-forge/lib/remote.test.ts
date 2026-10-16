@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { UsageError } from "./errors.ts";
+import { UsageError } from "../../../lib/outcome.ts";
 import { expectRejection } from "./rejection.ts";
 import type { Run } from "./exec.ts";
-import { MissingError } from "./missing-error.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import {
   githubRepo,
   gitlabProject,
@@ -69,12 +69,12 @@ describe("Repository resolution", () => {
   });
 
   test("No repository detectable", async () => {
-    await expectRejection(resolveGithubRepo(NO_CHECKOUT, null), MissingError);
+    await expectRejection(resolveGithubRepo(NO_CHECKOUT, null), QsmError);
     await expectRejection(resolveGithubRepo(NO_CHECKOUT, null), /--repo owner\/name/);
   });
 
   test("a remote that is not a repository is not guessed at", async () => {
-    await expectRejection(resolveGithubRepo(remote("git@github.com:owner"), null), MissingError);
+    await expectRejection(resolveGithubRepo(remote("git@github.com:owner"), null), QsmError);
   });
 
   test("a malformed option is refused rather than rewritten", async () => {
