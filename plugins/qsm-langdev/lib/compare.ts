@@ -68,11 +68,6 @@ interface Side {
   files: readonly string[];
 }
 
-// A path the materialized tree does not hold (`export-ignore` keeps a
-// generated file out of `git archive`) is not the checker's to score.
-const held = (dir: string, listed: readonly string[]): string[] =>
-  listed.filter((path) => existsSync(join(dir, path)));
-
 /** Hands `fn` the tree at `ref`: a scratch materialization of the working
  * tree (never the live directory itself — an ignored path such as
  * node_modules/ or dist/ must never enter a score just because it sits on
@@ -84,9 +79,9 @@ function withSide<T>(root: string, ref: string, fn: (side: Side) => Promise<T>):
     throw new Error(`git could not list the tree at ${ref}`);
   }
   if (ref === "worktree") {
-    return withWorktreeTree(root, (dir) => fn({ root: dir, files: held(dir, files) }));
+    return withWorktreeTree(root, (dir) => fn({ root: dir, files }));
   }
-  return withCommitTree(root, ref, (dir) => fn({ root: dir, files: held(dir, files) }));
+  return withCommitTree(root, ref, (dir) => fn({ root: dir, files }));
 }
 
 /** Every path the tree at `ref` holds, or null when git could not list it. */
@@ -669,8 +664,8 @@ function compared(
 }
 
 /**
- * The paths a comparison may score: a path marked `export-ignore` never reaches a materialized
- * tree (`git archive` leaves it out), so it is a generated file a checker would only find missing.
+ * The paths a comparison may score: a path marked `export-ignore` is a generated file, left out
+ * of every checker's set, the safety checkers' too; it stays on disk for what imports it.
  */
 function scoredPaths(root: string, paths: readonly string[]): string[] {
   if (paths.length === 0) {

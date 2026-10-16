@@ -12,7 +12,13 @@ structural checker, behind a single CLI.
 `check` SHALL score every selected checker against two sides: the reference,
 which is the last commit (`HEAD`), and the shipped side, which is the working
 tree with everything not yet committed (staged, unstaged, and untracked files
-git does not ignore). A checker SHALL pass only when the shipped side's total
+git does not ignore). Each side SHALL be scored in a scratch tree that holds
+the inputs the repository's own commands read, so a checker measures there
+what it measures in the live checkout: every dependency directory the live
+checkout installed (`node_modules`, `.venv`) at any depth, and every ignored
+path a tsconfig's `include` or `files` names, linked in from the live
+checkout. A generated file stays on disk for the code that imports it; the
+file sets leave it unscored. A checker SHALL pass only when the shipped side's total
 is no higher than the reference side's; where the checker names files, no file
 SHALL carry more findings than before, a moved file compared under its old
 name; and where the checker reports individual findings, no finding SHALL
@@ -34,6 +40,14 @@ content, against a stored result").
   reference tree
 - **THEN** `check` SHALL fail, name the checker, both totals, and the new
   finding's location
+
+#### Scenario: A side reads the same inputs as the live checkout
+
+- **WHEN** a package imports a dependency installed only in its own
+  `node_modules`, or a generated declaration file its tsconfig names and git
+  ignores, or a generated file marked `export-ignore`
+- **THEN** a type-aware checker SHALL resolve it on either side and report
+  what it reports when run directly in the live checkout
 
 #### Scenario: A fix does not offset a new finding elsewhere
 

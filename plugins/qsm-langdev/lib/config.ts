@@ -139,9 +139,13 @@ export function pathsWithAttr(
 }
 
 /** The paths among `paths` that `.gitattributes` marks generated: the one definition of
- * "generated" here, the `linguist-generated` attribute the repository already carries. */
+ * "generated" here, the `linguist-generated` or `export-ignore` attribute the repository already
+ * carries. */
 export function generatedPaths(root: string, paths: readonly string[]): Set<string> {
-  return pathsWithAttr(root, "linguist-generated", ["set", "true"], paths);
+  return new Set([
+    ...pathsWithAttr(root, "linguist-generated", ["set", "true"], paths),
+    ...pathsWithAttr(root, "export-ignore", ["set"], paths),
+  ]);
 }
 
 /**
