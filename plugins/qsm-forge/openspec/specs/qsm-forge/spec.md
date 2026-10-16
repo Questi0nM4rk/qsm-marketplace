@@ -199,19 +199,19 @@ current git checkout.
 
 ### Requirement: Doctor reports whether a forge CLI is there
 
-`qsm-forge doctor` SHALL report `gh` and `glab` against PATH. Each alone is
-optional; the verdict SHALL be `missing` only when neither is present.
+`qsm-forge doctor` and `install` SHALL check `gh` and `glab` against PATH as one
+row, "gh or glab". Either alone satisfies it; the verdict SHALL be `missing`
+only when neither is present.
 
 #### Scenario: Only one forge CLI installed
 
 - **WHEN** `gh` is on PATH and `glab` is not
-- **THEN** the verdict SHALL be `ok` with a warning naming how to install
-  `glab`
+- **THEN** the verdict SHALL be `ok`
 
 #### Scenario: No forge CLI installed
 
 - **WHEN** neither `gh` nor `glab` is on PATH
-- **THEN** the verdict SHALL be `missing`, exit 4, naming both
+- **THEN** the verdict SHALL be `missing`, exit 4, in one line naming both
 
 ### Requirement: Review-thread operations are forced through the wrapper
 

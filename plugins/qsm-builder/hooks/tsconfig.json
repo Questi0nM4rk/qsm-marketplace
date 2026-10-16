@@ -8,6 +8,7 @@
     "noun.generated.ts",
     "../types",
     "../lib/brief-path.ts",
+    "../lib/guards.ts",
     "../lib/manifest-check.ts"
   ]
 }

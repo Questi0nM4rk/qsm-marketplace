@@ -5,12 +5,13 @@
 // origin remote, so repository detection is what the test says it is and
 // not what the developer's checkout happens to be.
 import { beforeEach, describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
-import { chmodSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseJson } from "../lib/exec.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { fakeBin } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -65,18 +66,15 @@ beforeEach(() => {
   sandbox = sandboxDir("qsm-forge-gh-");
   cwd = sandboxDir("qsm-forge-gh-cwd-");
   writeFileSync(join(sandbox, "graphql.json"), JSON.stringify(GRAPHQL));
-  const fake = join(sandbox, "gh");
-  writeFileSync(
-    fake,
-    `#!/bin/sh
-if [ -n "$GH_FAKE_FAILS" ]; then echo 'gh: HTTP 404 Not Found' >&2; exit 1; fi
+  fakeBin(
+    sandbox,
+    "gh",
+    `if [ -n "$GH_FAKE_FAILS" ]; then echo 'gh: HTTP 404 Not Found' >&2; exit 1; fi
 case "$*" in
   *graphql*) cat '${join(sandbox, "graphql.json")}' ;;
   *) printf '%s\\n' '{"id":77,"html_url":"https://example.test/r/1","state":"COMMENTED"}' ;;
-esac
-`,
+esac`,
   );
-  chmodSync(fake, 0o755);
 });
 
 interface Run {
@@ -86,12 +84,11 @@ interface Run {
 }
 
 function cli(args: readonly string[], env: Record<string, string> = {}): Run {
-  const r = spawnSync("bun", [CLI, ...args], {
-    encoding: "utf8",
+  const r = runBin(CLI, args, {
     cwd,
-    env: { PATH: `${sandbox}:${process.env.PATH ?? ""}`, HOME: sandbox, ...env },
+    env: isolatedEnv(sandbox, { PATH: `${sandbox}:${process.env.PATH ?? ""}`, ...env }),
   });
-  return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+  return { code: r.exit, stdout: r.stdout, stderr: r.stderr };
 }
 
 interface Envelope {

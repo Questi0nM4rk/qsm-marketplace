@@ -3,8 +3,9 @@
 // 127.0.0.1 only.
 
 import { serve } from "bun";
+import { QsmError } from "../../../../lib/qsm-error.ts";
 import { createEditTask, EditError, parseEdit } from "./edits.ts";
-import { ModelError, readMarketplace } from "./model.ts";
+import { readMarketplace } from "./model.ts";
 import { renderDocument } from "./page.ts";
 import { sha256Of } from "./tasks.ts";
 import { watchMarketplace } from "./watch.ts";
@@ -82,7 +83,7 @@ function page(root: string): Response {
       },
     );
   } catch (error) {
-    if (error instanceof ModelError) {
+    if (error instanceof QsmError) {
       return new Response(`${error.code}: ${error.message}\n`, { status: 500 });
     }
     throw error;
@@ -138,13 +139,9 @@ function listen(
     return serve({ hostname: "127.0.0.1", port, idleTimeout: 0, fetch });
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "EADDRINUSE") {
-      return new ModelError(
-        "failed",
-        `port ${port} is taken; choose another with --port <number>`,
-        {
-          cause: error,
-        },
-      );
+      return new QsmError("failed", `port ${port} is taken; choose another with --port <number>`, {
+        cause: error,
+      });
     }
     throw error;
   }
@@ -169,7 +166,7 @@ function route(
   return handle === undefined ? new Response("not found\n", { status: 404 }) : handle();
 }
 
-/** Starts the server; throws `ModelError` `failed` naming the port when it cannot listen there. */
+/** Starts the server; throws a `failed` QsmError naming the port when it cannot listen there. */
 export function serveLens(root: string, port: number): Served {
   const streams = eventStreams();
   // The real port is known only after listen; a `--port 0` server learns it here.

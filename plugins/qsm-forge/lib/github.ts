@@ -1,7 +1,7 @@
 // GitHub, in three separable pieces: what a call looks like (the arg builders), what an answer
 // means (the mappers), and the forge that runs one and maps the other.
 
-import { UsageError } from "./errors.ts";
+import { UsageError } from "../../../lib/outcome.ts";
 import { parseAs, type Run } from "./exec.ts";
 import type { GithubRepo } from "./remote.ts";
 import type { ReviewPayload } from "./review-payload.ts";

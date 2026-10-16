@@ -1,24 +1,29 @@
 // gh and glab are alternatives: `qsm-forge gh` needs one, `qsm-forge gl` the other, and a person
-// uses the forge they work on.
+// uses the forge they work on. One row names both, so install and doctor report one `missing`.
+import type { UpstreamTool } from "../../../lib/install-base.ts";
 import {
-  checkTools,
   type DoctorData,
   doctorVerdict,
   type OnPath,
   type Outcome,
   onPath,
-  type RequiredTool,
 } from "../../../lib/outcome.ts";
 
-export const UPSTREAM: readonly RequiredTool[] = [
-  { cmd: "gh", hint: "install the GitHub CLI and run gh auth login", optional: true },
-  { cmd: "glab", hint: "install the GitLab CLI and run glab auth login", optional: true },
-];
+const FORGE_CLIS = ["gh", "glab"];
+
+export const UPSTREAM: UpstreamTool = {
+  cmd: "gh or glab",
+  anyOf: FORGE_CLIS,
+  hint: "install the GitHub CLI and run gh auth login, or the GitLab CLI and run glab auth login",
+};
 
 export function forgeDoctor(probe: OnPath = onPath): Outcome<DoctorData> {
-  const checks = checkTools(UPSTREAM, probe);
-  const findings = checks.some((c) => c.present)
-    ? []
-    : [`neither gh nor glab is on PATH: ${UPSTREAM.map((t) => t.hint).join(", or ")}`];
-  return doctorVerdict("qsm-forge", checks, findings);
+  return doctorVerdict("qsm-forge", [
+    {
+      cmd: "gh or glab",
+      present: FORGE_CLIS.some(probe),
+      optional: false,
+      hint: UPSTREAM.hint,
+    },
+  ]);
 }

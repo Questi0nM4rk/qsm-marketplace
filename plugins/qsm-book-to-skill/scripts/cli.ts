@@ -14,9 +14,10 @@ import {
   stringList,
 } from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { skillFile, sourcesFile, structureFile } from "../lib/artifacts.ts";
-import { onPath, UPSTREAM } from "../lib/converters.ts";
+import { UPSTREAM } from "../lib/converters.ts";
 import { extractSources, systemDeps } from "../lib/extract.ts";
 import { assembleSkill, draftSkill, skillContents } from "../lib/generate.ts";
 import { resolveName, titleHint } from "../lib/naming.ts";
@@ -26,22 +27,6 @@ import { analyzeText } from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 
 const manifest = parseManifest(manifestJson, "qsm-book-to-skill/qsm.json");
-
-/** A stage that cannot go on: the file it reads is not there, or it is
- * there and unreadable. Thrown so every reader can stay a plain function. */
-interface StageOptions extends ErrorOptions {
-  readonly code: "missing" | "failed";
-}
-
-class StageError extends Error {
-  readonly code: "missing" | "failed";
-
-  constructor(message: string, options: StageOptions) {
-    super(message, options);
-    this.name = "StageError";
-    this.code = options.code;
-  }
-}
 
 /** Every stage's files sit together, so a run is one directory a caller can
  * inspect, archive, or delete. */
@@ -60,33 +45,27 @@ function artifact(call: Call, named: string | undefined, fallback: string): stri
 
 function readJson<T>(path: string, what: string, schema: z.ZodType<T>): T {
   if (!existsSync(path)) {
-    throw new StageError(
+    throw new QsmError(
+      "missing",
       `${what} is not at ${path}; run the stage before this one or pass the path`,
-      {
-        code: "missing",
-      },
     );
   }
   try {
     return schema.parse(JSON.parse(readFileSync(path, "utf8")));
   } catch (cause) {
-    throw new StageError(
+    throw new QsmError(
+      "failed",
       `${path} is not readable JSON: ${cause instanceof Error ? cause.message : ""}`,
-      {
-        code: "failed",
-        cause,
-      },
+      { cause },
     );
   }
 }
 
 function readText(path: string, what: string): string {
   if (!existsSync(path)) {
-    throw new StageError(
+    throw new QsmError(
+      "missing",
       `${what} is not at ${path}; run the stage before this one or pass the path`,
-      {
-        code: "missing",
-      },
     );
   }
   return readFileSync(path, "utf8");
@@ -245,43 +224,18 @@ const scan: Handler = (call) => {
   return said(data, [`clean: ${dir}`, `bytes: ${data.contents.bytes}`]);
 };
 
-const doctor: Handler = () =>
-  doctorVerdict(
-    "qsm-book-to-skill",
-    checkTools(UPSTREAM, (cmd) => onPath(cmd, process.env.PATH ?? "")),
-  );
-
-/** A StageError carries the outcome code its own reader chose; anything
- * else is a bug and keeps travelling. */
-function staged(handler: Handler): Handler {
-  return (call) => {
-    try {
-      return handler(call);
-    } catch (error) {
-      if (error instanceof StageError) {
-        return fail(error.code, error.message);
-      }
-      throw error;
-    }
-  };
-}
+const doctor: Handler = () => doctorVerdict("qsm-book-to-skill", checkTools(UPSTREAM));
 
 if (import.meta.main) {
   process.exit(
-    await runCli(
-      manifest,
-      "qsm-book-to-skill",
-      Object.fromEntries(
-        Object.entries({
-          validate,
-          extract,
-          analyze,
-          draft,
-          assemble,
-          scan,
-          doctor,
-        }).map(([verb, handler]) => [verb, staged(handler)]),
-      ),
-    ),
+    await runCli(manifest, "qsm-book-to-skill", {
+      validate,
+      extract,
+      analyze,
+      draft,
+      assemble,
+      scan,
+      doctor,
+    }),
   );
 }
