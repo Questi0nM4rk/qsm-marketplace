@@ -371,9 +371,6 @@ for (const flavor of FLAVORS) {
       const project = join(home, ".claude", "projects", "p");
       mkdirSync(project, { recursive: true });
       writeFileSync(join(project, "s.jsonl"), `{"text":"${placeholderOf("cap_used")}"}\n`);
-    });
-
-    beforeEach(() => {
       put("qsm", "github-token", VALUE);
       put("qsm", "npm-token", NPM_VALUE);
       put("work", "work-token", WORK_VALUE);
@@ -1239,6 +1236,7 @@ describe("guard", () => {
     writeFileSync(join(data, "keyrings", "login.keyring"), "x");
     symlinkSync(join(data, "keyrings", "login.keyring"), join(data, "harmless-name"));
   });
+
   /** The verdict on a command: its refusal code, or null when it may run. */
   function verdict(command: string): string | null {
     const result = spawnSync("bun", [CLI, "guard", "--json"], {
