@@ -137,6 +137,8 @@ mise exec -- bun run test:hooks
   `test:hooks` runs those and skips visibly without `claude` on PATH.
 - `bun run plugin-types` regenerates the engine types the hooks typecheck against.
 - `bun run eval <plugin>` after a change to a skill or agent.
+  Note: the maintainer is reviewing the existing eval cases; until a case is reviewed, its
+  result is a signal to read, not a verdict.
 - One agent, one tree: an implementer works in its own worktree, and the orchestrator reviews,
   merges and deletes it, because the stop gate scores a whole tree.
 - The langdev guard blocks `--no-verify`; a person lets a measured regression pass once with

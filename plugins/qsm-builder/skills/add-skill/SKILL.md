@@ -54,6 +54,9 @@ Every command exits 0, as `mise exec -- ...`:
 - `bun run eval <plugin>`: every `fire` case loads the skill, the behaviour case passes with the
   plugin (3 of 3) and at most once without, the `negative` case stays quiet
 
+A skill's behaviour is defined through its evals. Note: the maintainer is reviewing the existing
+cases; until a case is reviewed, its result is a signal to read, not a verdict.
+
 Then hand the diff to the `strict-reviewer` agent of qsm-review with the hard rules as the
 checklist, and add-plugin's four reasons for every new file. Done means no finding is left.
 
