@@ -2,6 +2,7 @@
 // supports, every outcome a handler can return. Run: bun lib/fixtures/cli-fixture.ts <verb> ...
 import { runCli } from "../cli-base.ts";
 import { fail, OUTCOME_CODES, type OutcomeCode, ok } from "../outcome.ts";
+import { QsmError } from "../qsm-error.ts";
 import type { QsmManifest } from "../qsm-manifest.ts";
 
 /** A one-binary manifest with multi-word verbs: a group of three words deep,
@@ -73,6 +74,7 @@ export const manifest: QsmManifest = {
         passthrough: true,
         args: [{ name: "shell", type: "string", description: "which shell" }],
       },
+      "qsm-fix refuse": { description: "throw a QsmError with a next step" },
       "qsm-fix outcome": {
         description: "return the named outcome",
         args: [
@@ -99,6 +101,9 @@ if (import.meta.main) {
       echo: (call) => ok(call.args),
       files: (call) => ok(call.args),
       run: (call) => ok({ shell: call.args.shell, rest: call.rest }),
+      refuse: () => {
+        throw new QsmError("missing", "tool x is absent", { next: "install tool x" });
+      },
       outcome: (call) => {
         const code = call.args.code;
         if (typeof code !== "string") {

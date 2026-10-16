@@ -12,7 +12,7 @@ describe("fishCompletion", () => {
     expect(text.startsWith(`# ${MARKER}\ncomplete -c qsm-fix -e\n`)).toBe(true);
     expect(text).toContain("-n __fish_use_subcommand -a 'echo' -d 'print the parsed call back'");
     expect(text).toContain("-a 'files' -d 'many positionals'");
-    expect(text.match(/__fish_use_subcommand/g)).toHaveLength(4);
+    expect(text.match(/__fish_use_subcommand/g)).toHaveLength(5);
   });
 
   test("flags: value-taking ones require an argument, booleans do not, choices are offered", () => {

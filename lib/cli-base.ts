@@ -1,5 +1,14 @@
 // The one argument parser for every qsm binary.
-import { exitOf, fail, type Outcome, renderJson, renderText, UsageError } from "./outcome.ts";
+import {
+  exitOf,
+  fail,
+  messageOf,
+  type Outcome,
+  renderJson,
+  renderText,
+  UsageError,
+} from "./outcome.ts";
+import { QsmError } from "./qsm-error.ts";
 import {
   type CommandArg,
   type CommandDecl,
@@ -400,6 +409,14 @@ export function ask(
     : fail("usage", `${flag} must be one of ${choices.join(", ")}`);
 }
 
+/** Everything piped to stdin; empty on a terminal, where nothing is piped. */
+export async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    return "";
+  }
+  return Bun.stdin.text();
+}
+
 interface CliIo {
   readonly stdout: (text: string) => void;
   readonly stderr: (text: string) => void;
@@ -470,8 +487,10 @@ async function callHandler(handler: Handler, call: Call): Promise<Outcome> {
   try {
     return await handler(call);
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return fail(e instanceof UsageError ? "usage" : "failed", message);
+    if (e instanceof QsmError) {
+      return fail(e.code, e.message, e.next === undefined ? undefined : { next: e.next });
+    }
+    return fail(e instanceof UsageError ? "usage" : "failed", messageOf(e));
   }
 }
 
