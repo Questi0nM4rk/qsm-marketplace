@@ -3,7 +3,7 @@
 // a plugin imports only what its own package.json declares; root lib/ imports no package at all.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { isRecord, readJson, rel, report, root, walk } from "./walk.ts";
+import { isRecord, isSource, readJson, rel, report, root, walk } from "./walk.ts";
 
 const SECTIONS = ["dependencies", "devDependencies"] as const;
 const EXACT = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -56,7 +56,7 @@ export function pinFindings(dir: string): string[] {
 }
 
 /** The npm package a bare import names, or null for node:, bun:, the harness and relative paths. */
-export function packageOf(specifier: string): string | null {
+function packageOf(specifier: string): string | null {
   if (
     specifier.startsWith(".") ||
     specifier.startsWith("/") ||
@@ -81,8 +81,6 @@ function importsOf(file: string): string[] {
     .flatMap((i) => packageOf(i.path) ?? [])
     .filter((name) => name !== "react" || written);
 }
-
-const isSource = (f: string): boolean => /\.tsx?$/.test(f) && !f.endsWith(".d.ts");
 
 /** A bare import in root lib/, and a plugin import its package.json does not declare. */
 export function importFindings(dir: string): string[] {

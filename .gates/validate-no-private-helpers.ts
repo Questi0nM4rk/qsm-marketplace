@@ -4,7 +4,7 @@
 // in the engine sandbox, which imports no root lib, so it may hold its own copy and is skipped.
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { isRecord, rel, report, root, walk } from "./walk.ts";
+import { isRecord, isSource, rel, report, root, walk } from "./walk.ts";
 
 // Flip to false when Phase 1 has landed: findings then fail the gate instead of printing.
 const ALLOWED_TO_FAIL = true;
@@ -22,7 +22,6 @@ const DEFINES = new RegExp(`\\b(?:function|const|let)\\s+(${HELPERS.join("|")})\
 const SPREAD = new RegExp(String.raw`\.\.\.\s*process` + String.raw`\.env\b`);
 const BY_NAME = /\b(?:CLAUDE_CONFIG_DIR|XDG_[A-Z_]+)\b/;
 
-const isSource = (f: string): boolean => /\.tsx?$/.test(f) && !f.endsWith(".d.ts");
 const isTest = (f: string): boolean => /\.test\.tsx?$/.test(f);
 
 /** Paths (files or directories) the hooks/tsconfig.json files under dir include. */
