@@ -1,13 +1,11 @@
 #!/usr/bin/env bun
-// A plugin does not define a helper root lib/ exports, reads no HOME-like variable by name, and a
-// test never spreads the whole environment into a child. A file a hooks/tsconfig.json includes runs
-// in the engine sandbox, which imports no root lib, so it may hold its own copy and is skipped.
+// A plugin does not define a helper root lib/ exports, reads HOME, CLAUDE_CONFIG_DIR and XDG_*
+// only through lib/paths.ts, and a test never spreads the whole environment into a child. A file
+// a hooks/tsconfig.json includes runs in the engine sandbox, which imports no root lib, so it may
+// hold its own copy and is skipped.
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { isRecord, isSource, rel, report, root, walk } from "./walk.ts";
-
-// Flip to false when Phase 1 has landed: findings then fail the gate instead of printing.
-const ALLOWED_TO_FAIL = true;
 
 const HELPERS = [
   "isRecord",
@@ -20,7 +18,7 @@ const HELPERS = [
 ];
 const DEFINES = new RegExp(`\\b(?:function|const|let)\\s+(${HELPERS.join("|")})\\b`, "g");
 const SPREAD = new RegExp(String.raw`\.\.\.\s*process` + String.raw`\.env\b`);
-const BY_NAME = /\b(?:CLAUDE_CONFIG_DIR|XDG_[A-Z_]+)\b/;
+const BY_NAME = /\b(?:CLAUDE_CONFIG_DIR|XDG_[A-Z_]+)\b|\bhomedir\(|\benv\.HOME\b/;
 
 // A fixture is test code: it builds the child environment a test hands to a CLI.
 const isTest = (f: string): boolean => /\.test\.tsx?$/.test(f) || f.includes("/lib/fixtures/");
@@ -57,7 +55,9 @@ function fileFindings(dir: string, file: string): string[] {
   }
   const byName = inPlugin || file.startsWith(`${resolve(dir, "lib")}/`);
   if (byName && !isTest(file) && file !== resolve(dir, "lib/paths.ts") && BY_NAME.test(src)) {
-    findings.push(`${rel(file)}: names CLAUDE_CONFIG_DIR or XDG_*; read it through lib/paths.ts`);
+    findings.push(
+      `${rel(file)}: reads HOME, CLAUDE_CONFIG_DIR or XDG_* by name; read it through lib/paths.ts`,
+    );
   }
   return findings;
 }
@@ -72,6 +72,5 @@ export function helperFindings(dir: string): string[] {
 }
 
 if (import.meta.main) {
-  const findings = helperFindings(root);
-  report("no-private-helpers", ALLOWED_TO_FAIL ? [] : findings, ALLOWED_TO_FAIL ? findings : []);
+  report("no-private-helpers", helperFindings(root));
 }
