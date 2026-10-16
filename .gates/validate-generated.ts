@@ -87,31 +87,31 @@ function namingFindings(name: string, bins: readonly string[], noun: string | un
   return findings;
 }
 
-if (import.meta.main) {
-  const findings: string[] = [];
-  for (const dir of pluginDirs()) {
-    const manifest = readJson(join(dir, "qsm.json"));
-    if (manifest === null) {
-      continue;
-    }
-    let parsed: QsmManifest;
-    try {
-      parsed = parseManifest(manifest, rel(join(dir, "qsm.json")));
-    } catch (error) {
-      if (error instanceof ManifestError) {
-        findings.push(error.message);
-        continue;
-      }
-      throw error;
-    }
-    findings.push(
-      ...generatedFindings(dir, {
-        manifest: parsed,
-        pluginJson: pluginJsonOf(readJson(join(dir, ".claude-plugin", "plugin.json"))),
-        readFile: (p) => (existsSync(p) ? readFileSync(p, "utf8") : null),
-      }),
-    );
+/** Findings for the plugin at dir: its qsm.json's own parse error, or what its generated files
+ * disagree on; none when it has no qsm.json. */
+function pluginFindings(dir: string): string[] {
+  const manifest = readJson(join(dir, "qsm.json"));
+  if (manifest === null) {
+    return [];
   }
+  let parsed: QsmManifest;
+  try {
+    parsed = parseManifest(manifest, rel(join(dir, "qsm.json")));
+  } catch (error) {
+    if (error instanceof ManifestError) {
+      return [error.message];
+    }
+    throw error;
+  }
+  return generatedFindings(dir, {
+    manifest: parsed,
+    pluginJson: pluginJsonOf(readJson(join(dir, ".claude-plugin", "plugin.json"))),
+    readFile: (p) => (existsSync(p) ? readFileSync(p, "utf8") : null),
+  });
+}
+
+if (import.meta.main) {
+  const findings = pluginDirs().flatMap(pluginFindings);
   // The verb is the one writer; a gate never imports a plugin's code.
   const readme = spawnSync(
     "bun",
