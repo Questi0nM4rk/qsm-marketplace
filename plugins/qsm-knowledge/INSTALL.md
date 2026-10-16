@@ -8,7 +8,8 @@ bun plugins/qsm-knowledge/scripts/install.ts
 Compiles `qsm-knowledge` into `$QSM_BIN_DIR` (default `~/.local/bin`, must be on `PATH`). If `nlm`
 is missing it runs `go install github.com/tmc/nlm/cmd/nlm@latest` (needs Go; keep the `cmd/`) and
 symlinks it from the Go bin directory. A prebuilt `nlm` already on `PATH` is left alone.
-`--dry-run` prints the plan.
+`--dry-run` prints the plan. A link already holding the name that points elsewhere is not replaced
+unless you pass `--force`.
 
 Then:
 

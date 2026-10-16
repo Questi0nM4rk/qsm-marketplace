@@ -66,8 +66,10 @@ system package manager (acli, comby, hurl, usql), and `br`, which qsm-tasks inst
 suggested with its command, never run, and when the package manager that command assumes is not on
 PATH the suggestion SHALL carry the row's alternative routes. `QSM_<TOOL>_SKIP=1` SHALL skip one
 tool. A tool already present SHALL be reported as already installed. A tool installed by
-`go install` SHALL be linked from the Go bin directory into the user's bin directory, replacing
-whatever holds that name. The installer SHALL continue past one tool's failure and report every
+`go install` SHALL be linked from the Go bin directory into the user's bin directory. A link
+there that points into the Go bin directory is replaced; anything else holding that name SHALL fail
+the tool's step, naming what is there and saying to run the install again with `--force`, which
+replaces it. The installer SHALL continue past one tool's failure and report every
 result at the end.
 
 #### Scenario: One failure among many
@@ -75,6 +77,13 @@ result at the end.
 - **WHEN** `go` is missing and every other prerequisite is present
 - **THEN** mlr, scc and yq SHALL be reported as missing-prereq with the
   prerequisite named, the rest SHALL install, and the exit code SHALL be non-zero
+
+#### Scenario: A link that is not ours
+
+- **WHEN** a tool is built by `go install` and the user's bin directory holds a link of that name
+  to somewhere else
+- **THEN** its step SHALL fail naming the link's target and `--force`, the link SHALL stay, and
+  with `--force` it SHALL be replaced and the step SHALL say so
 
 #### Scenario: A suggestion on another system
 

@@ -31,6 +31,8 @@ export interface InstallResult {
 
 export interface InstallContext {
   readonly dryRun: boolean;
+  /** replace a link in the bin directory that is not ours, instead of failing; absent is false */
+  readonly force?: boolean;
   readonly env: Record<string, string | undefined>;
   /** `command -v <cmd>` */
   readonly probe: (cmd: string) => boolean;
@@ -53,8 +55,8 @@ function realProbe(cmd: string): boolean {
 function realRun(cmd: string, args: string[]): number {
   return spawnSync(cmd, args, { stdio: ["ignore", 2, 2] }).status ?? 1;
 }
-function realContext(opts: { dryRun?: boolean } = {}): InstallContext {
-  return { dryRun: opts.dryRun ?? false, env: process.env, probe: realProbe, run: realRun };
+function realContext(opts: { dryRun: boolean; force: boolean }): InstallContext {
+  return { ...opts, env: process.env, probe: realProbe, run: realRun };
 }
 
 /**
@@ -81,6 +83,7 @@ const flag = (name: string, description: string): CommandArg => ({
   description,
 });
 const DRY_RUN = flag("dryRun", "plan the work, change nothing");
+const FORCE = flag("force", "replace a link in the bin directory that is not ours");
 
 /** The call, or the usage message: an unknown flag or a missing value is never ignored. */
 function parseArgv(args: readonly CommandArg[], argv: readonly string[]): Call | string {
@@ -108,16 +111,17 @@ function usage(message: string, json: boolean): number {
 }
 
 /** One-line CLI entry: `if (import.meta.main) process.exit(await cliMain(install));`
- * Flags: --dry-run, --json (the outcome envelope, steps as data). */
+ * Flags: --dry-run, --force, --json (the outcome envelope, steps as data). */
 export async function cliMain(
   install: InstallFn,
   argv: readonly string[] = process.argv.slice(2),
 ): Promise<number> {
-  const call = parseArgv([DRY_RUN], argv);
+  const call = parseArgv([DRY_RUN, FORCE], argv);
   if (typeof call === "string") {
     return usage(call, argv.includes("--json"));
   }
-  return report(await install(realContext({ dryRun: flagArg(call, "dryRun") })), call.json);
+  const ctx = realContext({ dryRun: flagArg(call, "dryRun"), force: flagArg(call, "force") });
+  return report(await install(ctx), call.json);
 }
 
 /** An install or activation result: the envelope under --json, else lines on stderr. */

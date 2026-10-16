@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
   cliMain,
@@ -73,28 +73,42 @@ function isStepList(extra: ExtraSteps): extra is readonly Step[] {
   return Array.isArray(extra);
 }
 
-/** Links `name` in the user's bin directory to `source`. A link there is replaced; anything else
- * is the user's and stays, as an error. */
+/** What holds `target`: its link's destination, "" for a file that is not a link, undefined for
+ * nothing. lstat, not exists: a dangling link from an earlier install is still there. */
+function holder(target: string): string | undefined {
+  const at = lstatSync(target, { throwIfNoEntry: false });
+  if (at === undefined) {
+    return undefined;
+  }
+  return at.isSymbolicLink() ? readlinkSync(target) : "";
+}
+
+/** Links `name` in the user's bin directory to `source`. A link into `source`'s own directory is
+ * ours and is replaced; a link elsewhere, or a file, is the user's and stays as an error, unless
+ * ctx.force replaces it. */
 export function linkBin(ctx: InstallContext, name: string, source: string): Step {
   const step = `link ${name}`;
   const target = join(binDir(ctx.env), name);
-  // lstat, not exists: a dangling link from an earlier install is still there
-  const at = lstatSync(target, { throwIfNoEntry: false });
-  if (at !== undefined && !at.isSymbolicLink()) {
-    return { name: step, status: "error", detail: `${target} exists and is not a link; remove it` };
-  }
-  if (at !== undefined && readlinkSync(target) === source) {
+  const there = holder(target);
+  if (there === source) {
     return { name: step, status: "already", detail: `${target} unchanged` };
+  }
+  const foreign = there !== undefined && (there === "" || dirname(there) !== dirname(source));
+  const what = there === "" ? "a file that is not a link" : `a link to ${there}`;
+  if (foreign && ctx.force !== true) {
+    const detail = `${target} is ${what}, not ours; run the install again with --force to replace it`;
+    return { name: step, status: "error", detail };
   }
   if (ctx.dryRun) {
     return { name: step, status: "skipped", detail: `would link ${target} to ${source}` };
   }
   mkdirSync(binDir(ctx.env), { recursive: true });
-  if (at !== undefined) {
-    unlinkSync(target);
+  if (there !== undefined) {
+    rmSync(target);
   }
   symlinkSync(source, target);
-  return { name: step, status: "installed", detail: `linked ${target} to ${source}` };
+  const forced = foreign ? ` (--force replaced ${what})` : "";
+  return { name: step, status: "installed", detail: `linked ${target} to ${source}${forced}` };
 }
 
 /** Removes the links in the bin directory that start with `prefix`, point at `source`, and are no

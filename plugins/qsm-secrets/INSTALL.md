@@ -8,9 +8,10 @@ bun plugins/qsm-secrets/scripts/install.ts
 Compiles `qsm-secrets`, links `qsm-askpass-sudo`, `-ssh`, `-git` and `-decide` to it in the bin
 directory, copies the askpass pane to `$XDG_DATA_HOME/qsm/askpass/qml` (default
 `~/.local/share/qsm/askpass/qml`), writes the default qsm palette to
-`$XDG_CONFIG_HOME/qsm-marketplace/colors.json` when that file is absent, writes the fish completion, and runs
-`cargo install rbw` when rbw is missing. `--dry-run` previews. Put `$QSM_BIN_DIR` (default
-`~/.local/bin`) on `PATH`.
+`$XDG_CONFIG_HOME/qsm-marketplace/colors.json` when that file is absent, writes the fish completion,
+and runs `cargo install rbw` when rbw is missing. `--dry-run` previews; `--force` replaces a
+`qsm-askpass-<kind>` link that points elsewhere, which install refuses otherwise. Put `$QSM_BIN_DIR`
+(default `~/.local/bin`) on `PATH`.
 
 Then choose the backend; nothing works until you do (it asks at a terminal, and
 `QSM_SECRETS_BACKEND=bitwarden|libsecret` overrides the stored choice):
