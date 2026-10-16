@@ -1,17 +1,11 @@
 // The verbs.
 
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-  writeSync,
-} from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { home } from "../../../lib/paths.ts";
+import { readStdin } from "../../../lib/cli-base.ts";
+import { writeAtomic } from "../../../lib/fs.ts";
+import { claudeDir } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
 import {
@@ -74,7 +68,7 @@ export function resolve(namespace: string, key: string): Uint8Array {
  * `capture`: the text comes piped on stdin. The backend is resolved on the first secret, so a
  * prompt without one needs no backend at all.
  */
-export function runCapture(): Capture {
+export async function runCapture(): Promise<Capture> {
   if (process.stdin.isTTY) {
     fail("capture reads its text from stdin", "pipe the text in", "usage");
   }
@@ -83,7 +77,7 @@ export function runCapture(): Capture {
     backend ??= activeBackend();
     return backend;
   };
-  return captureSecrets(readFileSync(0, "utf8"), {
+  return captureSecrets(await readStdin(), {
     store: (namespace, key, value) => {
       active().store(namespace, key, new TextEncoder().encode(value));
     },
@@ -101,7 +95,7 @@ function readToMask(backend: Backend, namespace: string, key: string): Uint8Arra
 }
 
 /** `mask`: the text piped on stdin with each named id's stored value swapped for its placeholder. */
-export function runMask(ids: readonly string[]): { text: string } {
+export async function runMask(ids: readonly string[]): Promise<{ text: string }> {
   const backend = activeBackend();
   const rows = backend.entries();
   const values = ids.map((id) => {
@@ -115,7 +109,7 @@ export function runMask(ids: readonly string[]): { text: string } {
       placeholder: `{{secret:${id}}}`,
     };
   });
-  return { text: swapIn(readFileSync(0, "utf8"), values) };
+  return { text: swapIn(await readStdin(), values) };
 }
 
 /** A stored value and what replaces it. */
@@ -159,8 +153,8 @@ function storedValues(): Swap[] {
  * `mask --all`: stdin is a JSON array of strings; each comes back with every stored value of every
  * namespace swapped for its placeholder. The backend is read once, however many strings there are.
  */
-export function runMaskAll(): { texts: string[] } {
-  const parsed: unknown = JSON.parse(readFileSync(0, "utf8"));
+export async function runMaskAll(): Promise<{ texts: string[] }> {
+  const parsed: unknown = JSON.parse(await readStdin());
   if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
@@ -168,7 +162,7 @@ export function runMaskAll(): { texts: string[] } {
   return { texts: parsed.map((text: string) => swapIn(text, values)) };
 }
 
-const projectsDir = (): string => join(home(process.env), ".claude", "projects");
+const projectsDir = (): string => join(claudeDir(process.env), "projects");
 
 /** The transcript a session id names: `~/.claude/projects/<dir>/<id>.jsonl`, wherever `<dir>` is. */
 function locateTranscript(sessionId: string): string {
@@ -249,7 +243,6 @@ function scrubLine(line: string, values: Swap[]): string {
  * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
  * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
- * ponytail: temp-then-rename is local on purpose: it keeps the file's mode, and the shared copy lives in a plugin.
  */
 export function runScrub(target: string): { path: string; scrubbed: number } {
   const path = target.includes("/") ? target : locateTranscript(target);
@@ -261,9 +254,7 @@ export function runScrub(target: string): { path: string; scrubbed: number } {
     const changed = swapped.filter((out, i) => out !== lines[i]).length;
     scrubbed += changed;
     if (changed > 0) {
-      const temp = join(dirname(file), `.${process.pid}.scrub`);
-      writeFileSync(temp, swapped.join("\n"), { mode: statSync(file).mode });
-      renameSync(temp, file);
+      writeAtomic(file, swapped.join("\n"), statSync(file).mode);
     }
   }
   return { path, scrubbed };

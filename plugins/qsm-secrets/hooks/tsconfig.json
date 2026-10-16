@@ -4,6 +4,7 @@
     "../../../.claude/types",
     "register.tsx",
     "register.test.ts",
+    "../lib/protected.ts",
     "noun.generated.ts",
     "../types"
   ]

@@ -7,7 +7,7 @@
 import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
 import { substitute } from "../lib/substitute.ts";
-import { argvOf, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
+import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
 
 // The guard runs before every Bash call, so a parse that hangs must not hold the call for long.
 const GUARD_TIMEOUT_MS = 5000;
@@ -26,6 +26,7 @@ function cause(error: { readonly kind: string; readonly message?: string }): str
   return `${error.kind}: ${(error.message ?? "no message").slice(0, 400)}`;
 }
 
+// differs: hooks sandbox, which imports no root lib
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -151,13 +152,13 @@ function registerGuard(on: On): void {
     $.ui.log(`refused a Bash command: ${reason.slice(0, 80)}`);
     return { deny: reason };
   }).catch(($, e, next) => {
+    failure($, "tool.call", next.error);
     const reason = cause(next.error);
-    $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
     if (RECOVERY.test((e as { command?: string }).command ?? "")) {
-      $.ui.log(`the credential guard failed (${reason}); a recovery command was let through`);
+      $.ui.log("the credential guard failed; a recovery command was let through");
       return next(e);
     }
-    $.ui.log(`the credential guard failed (${reason}); the call was denied`);
+    $.ui.log("the credential guard failed; the call was denied");
     return { deny: `qsm-secrets: the credential guard failed (${reason}); the call was not run` };
   });
 }
@@ -216,9 +217,9 @@ function registerFileGuard(on: On): void {
         deny: `[qsm-secrets keyring-files] ${tool} of ${target} would put stored credentials, or the names of the store's files, in this tool result. Use \`qsm-secrets pipe <key> -- <cmd>\` or \`qsm-secrets env <key>=<VAR> -- <cmd>\`; for a rendered config, read its template, which holds placeholders.`,
       };
     }).catch(($, _e, next) => {
+      failure($, "tool.call", next.error);
       const reason = cause(next.error);
-      $.ui.toast(`qsm-secrets ERROR: tool.call: ${reason}`);
-      $.ui.log(`the file guard failed (${reason}); the call was denied`);
+      $.ui.log("the file guard failed; the call was denied");
       return { deny: `qsm-secrets: the file guard failed (${reason}); the call was not run` };
     });
   }
@@ -231,8 +232,8 @@ function registerSubstitution(on: On): void {
     const { command, ids } = substitute(e.command);
     return ids.length === 0 ? next(e) : next({ ...e, command });
   }).catch(($, _e, next) => {
-    $.ui.toast(`qsm-secrets ERROR: tool.call: ${next.error.kind}`);
-    $.ui.log(`the id substitution failed (${cause(next.error)}); the call was denied`);
+    failure($, "tool.call", next.error, next.error.kind);
+    $.ui.log("the id substitution failed; the call was denied");
     return {
       deny: `qsm-secrets: the id substitution failed (${cause(next.error)}); the call was not run`,
     };
@@ -302,8 +303,8 @@ function registerMask(on: On): void {
     );
   }).catch(($, e, next) => {
     // Fails closed: a row that could not be masked may hold a value, so its text is replaced.
-    $.ui.toast("qsm-secrets ERROR: session.append: a row could not be masked and was withheld");
-    $.ui.log(`the mask failed (${cause(next.error)}); the row's text was withheld`);
+    failure($, "session.append", next.error, "a row could not be masked and was withheld");
+    $.ui.log("the mask failed; the row's text was withheld");
     const notice = withheld(cause(next.error));
     return next(
       rewritten(
@@ -338,13 +339,12 @@ function registerScrub(on: On): void {
       }
     }
     if (failed.length > 0) {
-      $.ui.toast("qsm-secrets ERROR: session.end: the cleanup or the scrub did not finish");
-      $.ui.log(`the session-end cleanup failed (${failed.join("; ")}); the session ended`);
+      throw new Error(failed.join("; "));
     }
     return next(e);
   }).catch(($, e, next) => {
-    $.ui.toast("qsm-secrets ERROR: session.end: the cleanup or the scrub did not finish");
-    $.ui.log(`the session-end cleanup failed (${cause(next.error)}); the session ended`);
+    failure($, "session.end", next.error, "the cleanup or the scrub did not finish");
+    $.ui.log("the session-end cleanup failed; the session ended");
     return next(e);
   });
 }
@@ -377,9 +377,9 @@ export function register(on: On): void {
   }).catch(($, e, next) => {
     // Fails closed: a prompt that could not be checked may hold a value, so it is not sent. The
     // log names the cause, never the text.
+    failure($, "prompt.submit", next.error, "capture failed, the prompt was not sent");
     const reason = cause(next.error);
-    $.ui.toast("qsm-secrets ERROR: prompt.submit: capture failed, the prompt was not sent");
-    $.ui.log(`capture failed (${reason}); the prompt was dropped`);
+    $.ui.log("capture failed; the prompt was dropped");
     return next.called
       ? next(e)
       : {

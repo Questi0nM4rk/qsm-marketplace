@@ -53,7 +53,7 @@ describe("the whole installer", () => {
     });
     expect(log).toContain(NOTEBOOK_INSTALL_COMMAND);
     expect(r.steps.find((s) => s.name === `upstream ${NOTEBOOK_BIN}`)?.status).toBe("installed");
-    expect(r.steps.find((s) => s.name === `notebook ${NOTEBOOK_BIN}`)?.status).toBe("installed");
+    expect(r.steps.find((s) => s.name === `link ${NOTEBOOK_BIN}`)?.status).toBe("installed");
   }, 60_000);
 });
 
@@ -75,11 +75,11 @@ describe("the notebook step", () => {
     expect(step.detail).toContain(source);
   });
 
-  test("a second run replaces the link rather than failing on it", () => {
+  test("a second run finds the link in place and changes nothing", () => {
     const where = sandbox();
     goInstalled(where.gobin);
     expect(notebook(context(where)).status).toBe("installed");
-    expect(notebook(context(where)).status).toBe("installed");
+    expect(notebook(context(where)).status).toBe("already");
   });
 
   test("a dangling link from an earlier install is replaced", () => {

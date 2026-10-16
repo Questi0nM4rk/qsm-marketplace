@@ -20,9 +20,19 @@ export function binDir(env: Env): string {
   return env.QSM_BIN_DIR ?? join(home(env), ".local", "bin");
 }
 
+/** The XDG config home: `XDG_CONFIG_HOME`, else `~/.config`. */
+export function configDir(env: Env): string {
+  return env.XDG_CONFIG_HOME ?? join(home(env), ".config");
+}
+
+/** The login session's private tmpfs, or undefined when no session set `XDG_RUNTIME_DIR`. */
+export function runtimeDir(env: Env): string | undefined {
+  const set = env.XDG_RUNTIME_DIR;
+  return set === undefined || set === "" ? undefined : set;
+}
+
 export function fishCompletionDir(env: Env): string {
-  const base = env.XDG_CONFIG_HOME ?? join(home(env), ".config");
-  return join(base, "fish", "completions");
+  return join(configDir(env), "fish", "completions");
 }
 
 /** The machine's setup.json: qsm-setup's settings and the choices an activation stored. */
@@ -30,8 +40,7 @@ export function setupConfigPath(env: Env): string {
   if (env.QSM_SETUP_CONFIG !== undefined) {
     return env.QSM_SETUP_CONFIG;
   }
-  const base = env.XDG_CONFIG_HOME ?? join(home(env), ".config");
-  return join(base, "qsm", "setup.json");
+  return join(configDir(env), "qsm", "setup.json");
 }
 
 /** The XDG data home: `XDG_DATA_HOME`, else `~/.local/share`. */
@@ -53,6 +62,5 @@ export function buildRecordPath(env: Env): string {
 /** The machine-local gitleaks rules for names that must never be committed to a public repo;
  * generated per device by the content-denylist skill and never committed. */
 export function contentDenylistPath(env: Env): string {
-  const base = env.XDG_CONFIG_HOME ?? join(home(env), ".config");
-  return join(base, "qsm", "content-denylist.toml");
+  return join(configDir(env), "qsm", "content-denylist.toml");
 }

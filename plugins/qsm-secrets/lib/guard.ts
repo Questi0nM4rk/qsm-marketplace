@@ -28,6 +28,7 @@ import {
   mentioned,
   normalizePath,
   type PathEnv,
+  PATH_VARIABLES,
   protectedRoots,
   type Root,
   reaches,
@@ -290,9 +291,6 @@ function innerStarts(name: string, args: readonly Word[]): number[] {
 type WordPart = Word["parts"][number];
 type ParamPart = Extract<WordPart, { type: "ParamExp" }>;
 
-/** The variables the guard resolves into a protected path; the same set `expand` substitutes. */
-const PATH_VARIABLES = new Set(["HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR", "PASSWORD_STORE_DIR"]);
-
 /** `${NAME}` with no operator, index, slice or replacement: the same value as `$NAME`. */
 function plainBraced(part: ParamPart): boolean {
   return (
@@ -335,7 +333,7 @@ function textOf(word: Word | null | undefined): string {
   return word.parts.map((part) => partText(part, word)).join("");
 }
 
-/** A path variable with an operator (`${XDG_DATA_HOME:-x}`, `${HOME#/}`, `${!HOME}`) has a value the
+/** A path variable with an operator (`${HOME:-x}`, `${HOME#/}`, `${!HOME}`) has a value the
  * guard cannot know without running the shell, so it cannot tell where the command points. */
 function judgeParameters(ast: ShellFile): Refusal | null {
   for (const part of findAll(ast, "ParamExp")) {

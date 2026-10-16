@@ -2,7 +2,8 @@
 // Secret Service daemon on the session bus, never to a network, and never to rbw.
 
 import { spawnSync } from "node:child_process";
-import { binCheck, binPath } from "./bin.ts";
+import { onPath } from "../../../lib/outcome.ts";
+import { binCheck } from "./bin.ts";
 import type { Check } from "./doctor.ts";
 import type { Entry } from "./entries.ts";
 import { fail } from "./errors.ts";
@@ -28,27 +29,26 @@ function attributes(namespace: string, key?: string): string[] {
 
 /** Whether something owns the Secret Service name on the session bus, in one process. */
 function daemonOwned(): boolean {
-  const asked =
-    binPath(BUS_CLI) === null
-      ? spawnSync(
-          BUS_SEND,
-          [
-            "--session",
-            "--print-reply",
-            "--dest=org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus.NameHasOwner",
-            `string:${SERVICE}`,
-          ],
-          { encoding: "utf8" },
-        )
-      : spawnSync(BUS_CLI, ["--user", "status", SERVICE], { encoding: "utf8" });
+  const asked = onPath(BUS_CLI)
+    ? spawnSync(BUS_CLI, ["--user", "status", SERVICE], { encoding: "utf8" })
+    : spawnSync(
+        BUS_SEND,
+        [
+          "--session",
+          "--print-reply",
+          "--dest=org.freedesktop.DBus",
+          "/org/freedesktop/DBus",
+          "org.freedesktop.DBus.NameHasOwner",
+          `string:${SERVICE}`,
+        ],
+        { encoding: "utf8" },
+      );
   return asked.status === 0 && !asked.stdout.includes("boolean false");
 }
 
 /** Every operation starts here: nothing runs, and nothing falls back, without the tool and a daemon. */
 function ready(): void {
-  if (binPath(BIN) === null) {
+  if (!onPath(BIN)) {
     fail(`${BIN} is not on PATH`, INSTALL_FIX, "missing");
   }
   if (!daemonOwned()) {
