@@ -2,26 +2,12 @@
 // Every repository is a sandbox under the system temp directory, removed
 // after each test whether the test passed or failed.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { hasScaffoldedConfig, scaffoldProfile } from "./profiles.ts";
 import { PROFILE_DATA } from "./profiles-data.ts";
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-langdev-profiles-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 const SHELL_CONFIG = ".shellcheckrc";
 
@@ -35,7 +21,7 @@ function shipped(profile: string): string {
 
 describe("scaffoldProfile", () => {
   test("A fresh repository", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
 
     const actions = scaffoldProfile(root, "general", ["shell"]);
 
@@ -44,7 +30,7 @@ describe("scaffoldProfile", () => {
   });
 
   test("a second run reports the file as already the profile's own", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
     scaffoldProfile(root, "general", ["shell"]);
 
     const actions = scaffoldProfile(root, "general", ["shell"]);
@@ -53,7 +39,7 @@ describe("scaffoldProfile", () => {
   });
 
   test("A repository with its own config", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
     const ours = "# our own rules\ndisable=SC2086\n";
     writeFileSync(join(root, SHELL_CONFIG), ours);
 
@@ -64,7 +50,7 @@ describe("scaffoldProfile", () => {
   });
 
   test("a config another profile seeded is kept, and named as that profile's", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
     writeFileSync(join(root, SHELL_CONFIG), shipped("strict"));
 
     const actions = scaffoldProfile(root, "general", ["shell"]);
@@ -75,7 +61,7 @@ describe("scaffoldProfile", () => {
   });
 
   test("an unknown profile fails and lists the known ones", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
 
     expect(() => scaffoldProfile(root, "nonesuch", ["shell"])).toThrow(/known: general, strict/);
   });
@@ -83,7 +69,7 @@ describe("scaffoldProfile", () => {
 
 describe("hasScaffoldedConfig", () => {
   test("false until the language's config is in the repository, true after", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-profiles-");
 
     expect(hasScaffoldedConfig(root, "shell")).toBe(false);
     scaffoldProfile(root, "general", ["shell"]);
@@ -91,6 +77,6 @@ describe("hasScaffoldedConfig", () => {
   });
 
   test("a configless language has nothing to scaffold and always passes", () => {
-    expect(hasScaffoldedConfig(sandbox(), "fish")).toBe(true);
+    expect(hasScaffoldedConfig(sandboxDir("qsm-langdev-profiles-"), "fish")).toBe(true);
   });
 });

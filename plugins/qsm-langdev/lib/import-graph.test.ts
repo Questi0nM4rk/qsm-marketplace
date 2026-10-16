@@ -2,24 +2,15 @@
 // sandbox under the system temp directory, removed after each test whether
 // the test passed or failed; the graph's cache lives inside the sandbox.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { buildGraph, type ImportGraph, within } from "./import-graph.ts";
-
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 /** A sandbox holding `files`, and its root. */
 function treeWith(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-graph-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-langdev-graph-");
   write(root, files);
   return root;
 }

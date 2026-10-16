@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -12,6 +13,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
@@ -140,11 +142,15 @@ function dependencyStep(pluginRoot: string): Step | null {
     return null;
   }
   const name = "dependencies";
+  // bun install leaves an empty hidden file in its temp directory, so it gets one of its own.
+  const scratch = mkdtempSync(join(tmpdir(), "qsm-bun-install-"));
   const done = spawnSync("bun", ["install", "--frozen-lockfile"], {
     cwd: pluginRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, TMPDIR: scratch },
   });
+  rmSync(scratch, { recursive: true, force: true });
   if (done.status !== 0) {
     const detail = `bun install failed in ${pluginRoot}: ${lastLine(done.stderr)}; run \`bun install\` in the plugin and commit its bun.lock`;
     return { name, status: "error", detail };

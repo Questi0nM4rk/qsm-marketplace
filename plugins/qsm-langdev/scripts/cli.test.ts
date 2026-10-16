@@ -1,21 +1,19 @@
 // qsm-langdev through its real surface: the binary's argv, stdout, stderr,
 // exit. Every outcome code the plugin uses appears once here.
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { type Rec, recordOf, recordsOf, str } from "../lib/json.ts";
 import { defined } from "../lib/test-support.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
-const sandboxes: string[] = [];
 
 /** A home under the system temp directory, removed after each test whether
  * the test passed or failed. */
 function sandbox(): string {
-  const home = mkdtempSync(join(tmpdir(), "qsm-langdev-cli-"));
-  sandboxes.push(home);
+  const home = sandboxDir("qsm-langdev-cli-");
   mkdirSync(join(home, "work"), { recursive: true });
   return home;
 }
@@ -31,12 +29,6 @@ function verdictChecks(stdout: string): string[] {
   return verdicts.map((verdict) => str(verdict.check));
 }
 
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
-
 function run(
   argv: readonly string[],
   opts: { cwd?: string; home?: string; pathFirst?: string } = {},
@@ -50,8 +42,8 @@ function run(
       PATH: opts.pathFirst === undefined ? path : `${opts.pathFirst}:${path}`,
       HOME: home,
       XDG_CONFIG_HOME: join(home, "c"),
-      // the run's own temp root, so a temp dir the binary leaves is counted
-      ...(process.env.TMPDIR === undefined ? {} : { TMPDIR: process.env.TMPDIR }),
+      // the run's own temp root: semgrep makes its own semgrep-mcp directory there
+      TMPDIR: sandboxDir("qsm-langdev-cli-tmp-"),
     },
   });
   return { exit: r.status, stdout: r.stdout, stderr: r.stderr };

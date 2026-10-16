@@ -1,19 +1,18 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   accessSync,
   constants,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { MARKER } from "./completions.ts";
+import { sandboxDir } from "./fixtures/sandbox.ts";
 import { installBase, installScript } from "./install-base.ts";
 import type { InstallContext, InstallResult } from "./install-contract.ts";
 import { isRecord } from "./outcome.ts";
@@ -26,23 +25,10 @@ interface Fake {
   readonly home: string;
 }
 
-// Every sandbox holds compiled binaries of ~90MB each; they go when the file does.
-const sandboxes: string[] = [];
-afterAll(() => {
-  for (const dir of sandboxes.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-function sandbox(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  sandboxes.push(dir);
-  return dir;
-}
-
 function fake(
   opts: { present?: readonly string[]; dryRun?: boolean; runExit?: number } = {},
 ): Fake {
-  const home = sandbox("qsm-install-");
+  const home = sandboxDir("qsm-install-");
   const present = new Set(opts.present ?? ["bun"]);
   const runs: string[][] = [];
   const ctx: InstallContext = {
@@ -87,9 +73,8 @@ const install = installBase({
 });
 
 describe("install-base over the fixture plugin", () => {
-  const f = fake({ present: ["bun", "fakeup"] });
-
-  test("A plugin with two binaries and no upstream", async () => {
+  test("A plugin with two binaries and no upstream, then nothing changed since the last run", async () => {
+    const f = fake({ present: ["bun", "fakeup"] });
     rmSync(join(FIXTURE, "dist"), { recursive: true, force: true });
     const r = await install(f.ctx);
     expect(r.tool).toBe("qsm-fixture");
@@ -110,13 +95,11 @@ describe("install-base over the fixture plugin", () => {
     expect(step(r, "upstream fakeup").status).toBe("already");
     const out = spawnSync(join(f.home, "bin/qsm-fix-a"), ["ping", "--json"], { encoding: "utf8" });
     expect(JSON.parse(out.stdout)).toMatchObject({ code: "ok", data: { pong: "a" } });
-  }, 60_000);
 
-  test("Nothing changed since the last run", async () => {
-    const r = await install(f.ctx);
-    expect(r.status).toBe("already");
-    expect(r.steps.map((s) => s.status)).not.toContain("installed");
-  }, 60_000);
+    const again = await install(f.ctx);
+    expect(again.status).toBe("already");
+    expect(again.steps.map((s) => s.status)).not.toContain("installed");
+  }, 120_000);
 });
 
 describe("install-base dry run", () => {
@@ -178,14 +161,14 @@ describe("install-base dry run with extra steps", () => {
 
   test("a plugin with nothing to do says so instead of an empty detail", async () => {
     const bare = fake({ present: ["bun"] });
-    const emptyRoot = sandbox("qsm-empty-plugin-");
+    const emptyRoot = sandboxDir("qsm-empty-plugin-");
     const r = await installBase({ pluginRoot: emptyRoot })(bare.ctx);
     expect(r).toMatchObject({ status: "already", detail: "nothing to install", steps: [] });
   });
 
   test("dry run over a plugin with nothing to plan answers the same line", async () => {
     const bare = fake({ dryRun: true, present: ["bun"] });
-    const r = await installBase({ pluginRoot: sandbox("qsm-empty-plugin-") })(bare.ctx);
+    const r = await installBase({ pluginRoot: sandboxDir("qsm-empty-plugin-") })(bare.ctx);
     expect(r).toMatchObject({ status: "already", detail: "nothing to install", steps: [] });
   });
 });
@@ -194,14 +177,17 @@ describe("install-base plugin dependencies", () => {
   // A plugin root with a lockfile and local file: dependencies, so no network is needed. A
   // second dependency added after the lock makes the lockfile stale.
   function depPlugin(stale: boolean): string {
-    const root = sandbox("qsm-dep-plugin-");
+    const root = sandboxDir("qsm-dep-plugin-");
     for (const name of ["dep", "dep2"]) {
       mkdirSync(join(root, name));
       writeFileSync(join(root, name, "package.json"), `{"name":"${name}","version":"1.0.0"}`);
     }
     const manifest = (deps: string) => `{"name":"p","private":true,"dependencies":{${deps}}}`;
     writeFileSync(join(root, "package.json"), manifest('"dep":"file:./dep"'));
-    spawnSync("bun", ["install"], { cwd: root });
+    spawnSync("bun", ["install"], {
+      cwd: root,
+      env: { ...process.env, TMPDIR: sandboxDir("qsm-bun-install-") },
+    });
     if (stale) {
       writeFileSync(
         join(root, "package.json"),
@@ -241,7 +227,7 @@ describe("install-base run twice, each run its own process", () => {
   // makes a re-install cheap only ever fails when the second run is a new
   // process, which is how every real install runs.
   test("the second install compiles nothing again", () => {
-    const home = sandbox("qsm-install-twice-");
+    const home = sandboxDir("qsm-install-twice-");
     const env = {
       PATH: process.env.PATH ?? "",
       HOME: home,
@@ -374,7 +360,7 @@ describe("an installer's child processes never reach stdout", () => {
   // install command that prints there (a package manager's progress, a
   // browser download's warnings) would make that envelope unreadable.
   test("--json stdout is exactly the envelope while a child prints", () => {
-    const dir = sandbox("qsm-install-noise-");
+    const dir = sandboxDir("qsm-install-noise-");
     const script = join(dir, "install.ts");
     const contract = resolve(import.meta.dir, "install-contract.ts");
     writeFileSync(
@@ -396,7 +382,7 @@ process.exit(await cliMain(install));
 
 describe("an activation takes every choice it declares, or refuses", () => {
   function activation(): string {
-    const dir = sandbox("qsm-activate-");
+    const dir = sandboxDir("qsm-activate-");
     const script = join(dir, "activate.ts");
     const contract = resolve(import.meta.dir, "install-contract.ts");
     writeFileSync(

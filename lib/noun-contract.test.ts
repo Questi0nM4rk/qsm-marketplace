@@ -6,9 +6,9 @@
 // called with an unknown verb, and check it reads the envelope loud.
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { sandboxDir } from "./fixtures/sandbox.ts";
 import { parseManifest } from "./qsm-manifest.ts";
 
 const root = resolve(import.meta.dir, "..");
@@ -73,12 +73,11 @@ function sandboxEnv(home: string): Record<string, string> {
  * returns its real stdout: the outcome envelope the binary actually prints,
  * not a fixture standing in for one. */
 function unknownVerbStdout(candidate: Candidate): string {
-  const home = mkdtempSync(join(tmpdir(), "qsm-noun-contract-"));
+  const home = sandboxDir("qsm-noun-contract-");
   const r = spawnSync("bun", [resolve(candidate.dir, candidate.script), "no-such-verb", "--json"], {
     encoding: "utf8",
     env: sandboxEnv(home),
   });
-  rmSync(home, { recursive: true, force: true });
   return r.stdout ?? "";
 }
 

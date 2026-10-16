@@ -4,10 +4,10 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { which } from "bun";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { readOwnRules } from "../scripts/generate-rules-data.ts";
 import { recordOf } from "./json.ts";
 import { OWN_RULES } from "./rules-data.ts";
@@ -29,14 +29,10 @@ test("rules-data.ts is what rules/*.yaml generates; run scripts/generate-rules-d
 });
 
 test("an empty rules file is refused, never shipped for semgrep to run with no rules", () => {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-langdev-own-rules-"));
-  try {
-    writeFileSync(join(dir, "bash.yaml"), "# nothing yet\n---\nrules: []\n");
+  const dir = sandboxDir("qsm-langdev-own-rules-");
+  writeFileSync(join(dir, "bash.yaml"), "# nothing yet\n---\nrules: []\n");
 
-    expect(() => readOwnRules(dir)).toThrow("bash.yaml holds no rule");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  expect(() => readOwnRules(dir)).toThrow("bash.yaml holds no rule");
 });
 
 describe.each(Object.keys(OWN_RULES))("own %s rules", (language) => {
@@ -66,6 +62,8 @@ describe.each(Object.keys(OWN_RULES))("own %s rules", (language) => {
         const run = spawnSync(semgrepPath(), ["--test", "--json", "--config", rulesFile, fixture], {
           encoding: "utf8",
           timeout: SEMGREP_LIMIT_MS,
+          // semgrep makes its own semgrep-mcp directory in its temp root, so it gets a sandbox
+          env: { ...process.env, TMPDIR: sandboxDir("qsm-langdev-semgrep-tmp-") },
         });
         expect(run.error?.message, run.stderr).toBeUndefined();
         const results = recordOf(recordOf(JSON.parse(run.stdout))?.results) ?? {};

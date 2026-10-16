@@ -4,22 +4,20 @@
 // being installed. Every tree is a sandbox under the system temp directory,
 // removed after each test whether the test passed or failed.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
-  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   type CompareOptions,
   compareTrees,
@@ -34,14 +32,6 @@ import { type CheckSpec, REGISTRY } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
 import { defined } from "./test-support.ts";
 
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
-
 function git(root: string, args: string[]): string {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   if (result.status !== 0) {
@@ -53,8 +43,7 @@ function git(root: string, args: string[]): string {
 /** A sandbox git repository with one commit holding `files`, and that
  * commit's id. */
 function repoWith(files: Record<string, string>): { root: string; head: string } {
-  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-compare-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-langdev-compare-");
   git(root, ["init", "-q", "-b", "main"]);
   git(root, ["config", "user.email", "test@example.invalid"]);
   git(root, ["config", "user.name", "qsm test"]);
@@ -998,8 +987,7 @@ const REJECTED = "Failed to download configuration from https://semgrep.dev/c/p/
  * engine the argv asks for. A directory target is searched through, as
  * semgrep scans one. */
 function fakeSemgrep(engines: { pro?: FakeEngine; community?: FakeEngine } = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-langdev-fake-semgrep-"));
-  sandboxes.push(dir);
+  const dir = sandboxDir("qsm-langdev-fake-semgrep-");
   const binary = join(dir, "semgrep");
   const failure = JSON.stringify({
     results: [],
@@ -1120,7 +1108,7 @@ test("A push, logged in with the Pro engine", async () => {
   expect(calls.every((call) => call[0] === "--pro")).toBe(true);
   expect(calls.map((call) => targets(call).length)).toEqual([1, 1, 1, 1]);
   // Each target is the side's scratch tree, one directory, never a file of it.
-  const tree = new RegExp(`^${tmpdir()}/qsm-langdev-tree-[^/]+$`);
+  const tree = /\/qsm-langdev-tree-[^/]+$/;
   expect(calls.every((call) => tree.test(targets(call)[0] ?? ""))).toBe(true);
   expect(scored(calls)).toEqual([[], [], [], []]);
   expect(asked).toBe(1);
