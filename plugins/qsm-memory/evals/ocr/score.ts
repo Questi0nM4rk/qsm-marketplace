@@ -60,18 +60,20 @@ function jaccard(a: string, b: string): number {
   const inter = [...x].filter((w) => y.has(w)).length;
   return x.size + y.size === 0 ? 1 : inter / (x.size + y.size - inter);
 }
+/** One cell of the edit-distance row; every index lev reads is inside the row. */
+const cell = (row: readonly number[], at: number): number => row[at] ?? 0;
 function lev(a: string, b: string): number {
   const d = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i += 1) {
-    let prev = d[0] ?? 0;
+    let prev = cell(d, 0);
     d[0] = i;
     for (let j = 1; j <= b.length; j += 1) {
-      const t = d[j] ?? 0;
-      d[j] = Math.min(t + 1, (d[j - 1] ?? 0) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      const t = cell(d, j);
+      d[j] = Math.min(t + 1, cell(d, j - 1) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
       prev = t;
     }
   }
-  return d[b.length] ?? 0;
+  return cell(d, b.length);
 }
 /** Ids, codes and numbers that must survive character for character. */
 const ids = (s: string) =>
