@@ -268,6 +268,7 @@ export function registerView(on: On): void {
     try {
       loaded = await (views.get(id) ?? load($, id));
     } catch (error) {
+      // differs: hooks sandbox, root lib's messageOf
       const why = error instanceof Error ? error.message : String(error);
       return <els.Text color="red">{cut(`lens view failed: ${why}`, room * 3)}</els.Text>;
     }

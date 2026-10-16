@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { YAML } from "bun";
 import { type CommandDecl, toCamel, verbsOf } from "../../../../lib/qsm-manifest.ts";
-import { isRecord } from "../../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../../lib/outcome.ts";
 import { QsmError } from "../../../../lib/qsm-error.ts";
 import { listOf } from "../guards.ts";
 import { commandHook, functionHooks, type Hook, type Methods } from "./hooks.ts";
@@ -145,11 +145,7 @@ const dirs = (path: string): string[] =>
     : [];
 
 const parseFailure = (label: string, cause: unknown): QsmError =>
-  new QsmError(
-    "failed",
-    `${label} does not parse: ${cause instanceof Error ? cause.message : String(cause)}`,
-    { cause },
-  );
+  new QsmError("failed", `${label} does not parse: ${messageOf(cause)}`, { cause });
 
 function parse(label: string, text: string, parser: (t: string) => unknown): unknown {
   try {

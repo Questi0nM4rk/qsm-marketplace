@@ -4,8 +4,8 @@ import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { sleep, spawn, spawnSync, which } from "bun";
-import { isRecord } from "../../../../lib/outcome.ts";
+import { sleep, spawn, spawnSync } from "bun";
+import { isRecord, onPath } from "../../../../lib/outcome.ts";
 import { listOf } from "../guards.ts";
 import { sandboxDir, writeIn as write } from "../../../../lib/fixtures/sandbox.ts";
 import { type Issue, issuesOf } from "./tasks.ts";
@@ -254,7 +254,7 @@ async function penOf(url: string, key: string): Promise<Pen> {
 
 // A temporary marketplace with its own task store: nothing here touches this repository's .beads.
 test("saving an edit makes one task and writes no plugin file; the task is stale once its file changes", async () => {
-  if (which("br") === null) {
+  if (!onPath("br")) {
     process.stderr.write("skipped: br is not on PATH\n");
     return;
   }
@@ -362,7 +362,7 @@ test("a new skill is saved as one task of kind new and refused without an eval c
   });
   expect(textField(await taken.json(), "error")).toContain("already exists");
 
-  if (which("br") === null) {
+  if (!onPath("br")) {
     process.stderr.write("skipped the task part: br is not on PATH\n");
     return;
   }

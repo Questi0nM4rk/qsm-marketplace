@@ -1,12 +1,13 @@
 // `lens pull` against a fake artifact database: a temporary marketplace with its own task
 // store, nothing published and the real tracker untouched.
 import { expect, test } from "bun:test";
-import { spawnSync, which } from "bun";
+import { spawnSync } from "bun";
 import { sandboxDir, writeIn as write } from "../../../../lib/fixtures/sandbox.ts";
 import { readMarketplace } from "./model.ts";
 import { renderDocument } from "./page.ts";
 import { type EditRow, type EditRows, pullEdits } from "./pull.ts";
 import { type Issue, issuesOf } from "./tasks.ts";
+import { onPath } from "../../../../lib/outcome.ts";
 
 const sha = "0".repeat(64);
 const edit = (what: string): Record<string, unknown> => ({
@@ -51,7 +52,7 @@ const tasks = (root: string): Issue[] =>
   issuesOf(spawnSync(["br", "list", "--json"], { cwd: root }).stdout.toString());
 
 test("pull makes one task per untaken row, marks it taken, and a second pull makes none", async () => {
-  if (which("br") === null) {
+  if (!onPath("br")) {
     process.stderr.write("skipped: br is not on PATH\n");
     return;
   }
@@ -84,7 +85,7 @@ test("pull makes one task per untaken row, marks it taken, and a second pull mak
 });
 
 test("a failed mark is reported with its row, so the repeat is never silent", async () => {
-  if (which("br") === null) {
+  if (!onPath("br")) {
     return;
   }
   const root = marketplace();

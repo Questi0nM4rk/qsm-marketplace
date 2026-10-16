@@ -333,6 +333,7 @@ function registerScrub(on: On): void {
         failed.push(
           cause({
             kind: "failed",
+            // differs: hooks sandbox, root lib's messageOf
             message: error instanceof Error ? error.message : String(error),
           }),
         );

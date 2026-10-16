@@ -17,13 +17,15 @@ const HELPERS = [
   "writeAtomic",
 ];
 const DEFINES = new RegExp(`\\b(?:function|const|let)\\s+(${HELPERS.join("|")})\\b`, "g");
+// root lib's messageOf body, written inline
+const INLINE_MESSAGE_OF = /\b(\w+) instanceof Error \? \1\.message : String\(\1\)/;
 const SPREAD = new RegExp(String.raw`\.\.\.\s*process` + String.raw`\.env\b`);
 const BY_NAME = /\b(?:CLAUDE_CONFIG_DIR|XDG_[A-Z_]+)\b|\bhomedir\(|\benv\.HOME\b/;
 
 // A fixture is test code: it builds the child environment a test hands to a CLI.
 const isTest = (f: string): boolean => /\.test\.tsx?$/.test(f) || f.includes("/lib/fixtures/");
 
-/** Paths (files or directories) the hooks/tsconfig.json files under dir include. */
+/** Paths (files or directories) the hooks/tsconfig.json files under dir include, globs expanded. */
 function hooksIncludes(dir: string): string[] {
   const out: string[] = [];
   for (const file of walk(resolve(dir, "plugins"))) {
@@ -35,7 +37,11 @@ function hooksIncludes(dir: string): string[] {
     out.push(
       ...include
         .filter((p): p is string => typeof p === "string")
-        .map((p) => resolve(dirname(file), p)),
+        .flatMap((p) =>
+          p.includes("*")
+            ? [...new Bun.Glob(p).scanSync({ cwd: dirname(file), absolute: true })]
+            : [resolve(dirname(file), p)],
+        ),
     );
   }
   return out;
@@ -44,22 +50,26 @@ function hooksIncludes(dir: string): string[] {
 function fileFindings(dir: string, file: string): string[] {
   const src = readFileSync(file, "utf8");
   const inPlugin = file.startsWith(`${resolve(dir, "plugins")}/`);
-  const findings: string[] = [];
-  if (inPlugin) {
-    for (const m of src.matchAll(DEFINES)) {
-      findings.push(`${rel(file)}: defines ${m[1]}, which root lib/ exports; import it`);
-    }
-  }
-  if (isTest(file) && SPREAD.test(src)) {
-    findings.push(`${rel(file)}: spreads the whole environment into a test; use isolatedEnv`);
-  }
-  const byName = inPlugin || file.startsWith(`${resolve(dir, "lib")}/`);
-  if (byName && !isTest(file) && file !== resolve(dir, "lib/paths.ts") && BY_NAME.test(src)) {
-    findings.push(
-      `${rel(file)}: reads HOME, CLAUDE_CONFIG_DIR or XDG_* by name; read it through lib/paths.ts`,
-    );
-  }
-  return findings;
+  const inCode = inPlugin || file.startsWith(`${resolve(dir, "lib")}/`);
+  const checks: [boolean, RegExp, string][] = [
+    [
+      inCode && file !== resolve(dir, "lib/outcome.ts"),
+      INLINE_MESSAGE_OF,
+      "writes messageOf's body inline; import messageOf",
+    ],
+    [isTest(file), SPREAD, "spreads the whole environment into a test; use isolatedEnv"],
+    [
+      inCode && !isTest(file) && file !== resolve(dir, "lib/paths.ts"),
+      BY_NAME,
+      "reads HOME, CLAUDE_CONFIG_DIR or XDG_* by name; read it through lib/paths.ts",
+    ],
+  ];
+  return [
+    ...(inPlugin ? [...src.matchAll(DEFINES)] : []).map(
+      (m) => `${rel(file)}: defines ${m[1]}, which root lib/ exports; import it`,
+    ),
+    ...checks.filter(([on, re]) => on && re.test(src)).map(([, , msg]) => `${rel(file)}: ${msg}`),
+  ];
 }
 
 export function helperFindings(dir: string): string[] {

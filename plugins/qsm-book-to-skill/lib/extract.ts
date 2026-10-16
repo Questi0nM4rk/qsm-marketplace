@@ -8,6 +8,7 @@ import { basename, join } from "node:path";
 import { missingConverter } from "./converters.ts";
 import type { Reader, Source } from "./sources.ts";
 import { analyzeText, countWords, estimateTokens } from "./structure.ts";
+import { messageOf } from "../../../lib/outcome.ts";
 
 export interface RunResult {
   readonly status: number;
@@ -111,7 +112,7 @@ function viaFile(deps: ExtractDeps, source: Source): { text: string } | { reason
     }
     return { text: deps.readFile(out) };
   } catch (cause) {
-    return { reason: cause instanceof Error ? cause.message : String(cause) };
+    return { reason: messageOf(cause) };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -136,7 +137,7 @@ function readSource(source: Source, deps: ExtractDeps): { text: string } | { rea
   try {
     return CONVERT[source.reader](source, deps);
   } catch (cause) {
-    return { reason: cause instanceof Error ? cause.message : String(cause) };
+    return { reason: messageOf(cause) };
   }
 }
 

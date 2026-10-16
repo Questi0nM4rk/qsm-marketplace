@@ -1,4 +1,5 @@
 // Where a JSON text stops being JSON.
+import { messageOf } from "../../../lib/outcome.ts";
 
 export interface JsonError {
   readonly line: number;
@@ -158,7 +159,7 @@ export function jsonErrorAt(text: string): JsonError | null {
   try {
     scanner.document();
   } catch (e) {
-    return { ...lineColumn(text, scanner.i), reason: e instanceof Error ? e.message : String(e) };
+    return { ...lineColumn(text, scanner.i), reason: messageOf(e) };
   }
   return { line: 1, column: 1, reason: "rejected by the JSON parser" };
 }

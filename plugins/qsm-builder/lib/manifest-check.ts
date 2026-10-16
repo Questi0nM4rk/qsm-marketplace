@@ -84,6 +84,7 @@ export function checkManifest(text: string): string[] {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
+    // differs: hooks sandbox, root lib's messageOf
     return [`not valid JSON: ${error instanceof Error ? error.message : String(error)}`];
   }
   if (!isRecord(parsed)) {

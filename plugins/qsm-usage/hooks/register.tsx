@@ -36,6 +36,7 @@ const sessionKey = (id: string) => `session:${id}`;
 let current: SessionRecord | null = null;
 let hasLogged = false;
 
+// differs: hooks sandbox, root lib's messageOf
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

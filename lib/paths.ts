@@ -9,17 +9,20 @@ export function home(env: Env): string {
   return env.HOME ?? homedir();
 }
 
+/** A variable's value, with an empty one counted as unset. */
+function nonEmpty(value: string | undefined): string | undefined {
+  return value === "" ? undefined : value;
+}
+
 /** Claude Code's home: a non-empty `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
 export function claudeDir(env: Env): string {
-  const set = env.CLAUDE_CONFIG_DIR;
-  return set === undefined || set === "" ? join(home(env), ".claude") : set;
+  return nonEmpty(env.CLAUDE_CONFIG_DIR) ?? join(home(env), ".claude");
 }
 
 /** Claude Code's global config, read as join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json"):
  * any non-empty `CLAUDE_CONFIG_DIR`, `~/.claude` included, moves it out of the home directory. */
 export function claudeJsonPath(env: Env): string {
-  const set = env.CLAUDE_CONFIG_DIR;
-  return join(set === undefined || set === "" ? home(env) : set, ".claude.json");
+  return join(nonEmpty(env.CLAUDE_CONFIG_DIR) ?? home(env), ".claude.json");
 }
 
 /** Compiled binaries land here; `QSM_BIN_DIR` overrides. */
@@ -34,8 +37,7 @@ export function configDir(env: Env): string {
 
 /** The login session's private tmpfs, or undefined when no session set `XDG_RUNTIME_DIR`. */
 export function runtimeDir(env: Env): string | undefined {
-  const set = env.XDG_RUNTIME_DIR;
-  return set === undefined || set === "" ? undefined : set;
+  return nonEmpty(env.XDG_RUNTIME_DIR);
 }
 
 export function fishCompletionDir(env: Env): string {

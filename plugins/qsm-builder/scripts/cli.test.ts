@@ -3,10 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { which } from "bun";
 import { runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir, writeIn as write } from "../../../lib/fixtures/sandbox.ts";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, onPath } from "../../../lib/outcome.ts";
 import { listOf } from "../lib/guards.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
@@ -170,7 +169,7 @@ describe("qsm-builder lens brief", () => {
   const brief = (file: string) => envelope(run(["lens", "brief", file, "--json"]).text);
 
   test("tells a plugin's open feedback, and nothing for other files", () => {
-    if (which("br") === null) {
+    if (!onPath("br")) {
       process.stderr.write("skipped: br is not on PATH\n");
       return;
     }

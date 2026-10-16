@@ -6,7 +6,6 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { which } from "bun";
 import {
   flagArg,
   type Handler,
@@ -14,7 +13,7 @@ import {
   optionalString,
   runCli,
 } from "../../../lib/cli-base.ts";
-import { fail, ok } from "../../../lib/outcome.ts";
+import { fail, ok, onPath } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { briefOf } from "../lib/lens/brief.ts";
 import { readMarketplace } from "../lib/lens/model.ts";
@@ -175,12 +174,12 @@ const lensServe: Handler = async (call) => {
 };
 
 const doctor: Handler = () =>
-  which("br") === null
-    ? fail(
+  onPath("br")
+    ? ok({ br: true }, "qsm-builder runs; br is on PATH, so the lens reads and makes tasks")
+    : fail(
         "missing",
         "br is not on PATH: install qsm-tasks, which the lens needs to read tasks and to save an edit as one",
-      )
-    : ok({ br: true }, "qsm-builder runs; br is on PATH, so the lens reads and makes tasks");
+      );
 
 if (import.meta.main) {
   process.exit(

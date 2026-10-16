@@ -4,8 +4,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, normalize } from "node:path";
-import { spawn, which } from "bun";
-import { isRecord } from "../../../../lib/outcome.ts";
+import { spawn } from "bun";
+import { isRecord, onPath } from "../../../../lib/outcome.ts";
 import { isSha, sha256Of } from "./tasks.ts";
 
 /** Runs one command to its end and returns what it printed and its exit code. */
@@ -199,7 +199,7 @@ export async function createEditTask(
   root: string,
   edit: EditRequest,
 ): Promise<{ id: string; title: string }> {
-  if (which("br") === null) {
+  if (!onPath("br")) {
     throw new EditError(500, "br is not on PATH, so the edit cannot become a task");
   }
   const title = titleOf(edit);

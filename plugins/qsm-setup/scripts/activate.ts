@@ -13,7 +13,7 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../lib/outcome.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 
 const NAME = "instructions";
@@ -197,7 +197,7 @@ function targets(
       );
       return { path, content: text, kept, frontReplaced };
     } catch (e) {
-      throw new Error(`${path}: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+      throw new Error(`${path}: ${messageOf(e)}`, { cause: e });
     }
   });
   const settings = resolve(home, "settings.json");
@@ -249,7 +249,7 @@ function completedGitignore(current: string | null): string | null {
 }
 
 function failed(name: string, e: unknown): Step {
-  return { name, status: "error", detail: e instanceof Error ? e.message : String(e) };
+  return { name, status: "error", detail: messageOf(e) };
 }
 
 /** First step: the Claude home is a local repository with its .gitignore and a clean tree. */

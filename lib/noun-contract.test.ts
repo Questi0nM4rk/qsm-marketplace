@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { isolatedEnv, runBin } from "./fixtures/cli.ts";
 import { sandboxDir } from "./fixtures/sandbox.ts";
+import { messageOf } from "./outcome.ts";
 import { parseManifest } from "./qsm-manifest.ts";
 
 const root = resolve(import.meta.dir, "..");
@@ -82,7 +83,7 @@ describe.each(candidates())("$plugin noun contract", (candidate) => {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(Error);
-    const message = thrown instanceof Error ? thrown.message : String(thrown);
+    const message = messageOf(thrown);
     expect(message).toContain("usage");
     expect(message).toContain("no-such-verb");
   });

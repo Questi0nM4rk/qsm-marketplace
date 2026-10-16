@@ -3,8 +3,7 @@
 // through a port, so the flow is proved against a fake one; the real adapter asks `claude -p`
 // to use its ArtifactData tool, since the database has no other door for a command line.
 
-import { which } from "bun";
-import { isRecord } from "../../../../lib/outcome.ts";
+import { isRecord, messageOf, onPath } from "../../../../lib/outcome.ts";
 import { QsmError } from "../../../../lib/qsm-error.ts";
 import { createEditTask, EditError, parseEdit, run } from "./edits.ts";
 
@@ -51,7 +50,7 @@ export async function pullEdits(root: string, url: string, rows: EditRows): Prom
     }
     const marked = await rows.markTaken(url, row.id).then(
       () => null,
-      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      (error: unknown) => messageOf(error),
     );
     if (marked !== null) {
       unmarked.push({ row: row.id, reason: marked });
@@ -62,7 +61,7 @@ export async function pullEdits(root: string, url: string, rows: EditRows): Prom
 
 /** Runs one `claude -p` turn that may use only ArtifactData; haiku, because the flow is given. */
 async function ask(prompt: string): Promise<string> {
-  if (which("claude") === null) {
+  if (!onPath("claude")) {
     throw new QsmError(
       "missing",
       "claude is not on PATH: pull reads the artifact database through it",
