@@ -60,8 +60,8 @@ describe("readStatusLine", () => {
 });
 
 describe("settingsPath", () => {
-  test("the QSM override wins, and an empty one falls back to the user's file", () => {
-    expect(settingsPath({ QSM_STATUSLINE_SETTINGS: "/tmp/other.json" })).toBe("/tmp/other.json");
-    expect(settingsPath({})).toContain(join(".claude", "settings.json"));
+  test("lives under CLAUDE_CONFIG_DIR, else under ~/.claude", () => {
+    expect(settingsPath({ CLAUDE_CONFIG_DIR: "/tmp/other" })).toBe("/tmp/other/settings.json");
+    expect(settingsPath({ HOME: "/home/x" })).toBe("/home/x/.claude/settings.json");
   });
 });

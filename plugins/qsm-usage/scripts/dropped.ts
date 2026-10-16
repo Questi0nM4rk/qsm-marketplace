@@ -4,26 +4,17 @@
 import { type Handler, requiredString } from "../../../lib/cli-base.ts";
 import { fail, ok } from "../../../lib/outcome.ts";
 import { addDropped, droppedPath, readDropped } from "../lib/dropped.ts";
-import { messageOf } from "../lib/formats.ts";
 
 export const drop: Handler = (call) => {
   const key = requiredString(call, "key").trim();
   if (!/^[a-z-]+:.+/.test(key)) {
     return fail("usage", `key "${key}" is not <topic>:<target>`);
   }
-  try {
-    const list = addDropped(droppedPath(process.env), key, new Date());
-    return ok({ key, dropped: list.length }, `dropped ${key}`);
-  } catch (error) {
-    return fail("failed", messageOf(error));
-  }
+  const list = addDropped(droppedPath(process.env), key, new Date());
+  return ok({ key, dropped: list.length }, `dropped ${key}`);
 };
 
 export const dropped: Handler = () => {
-  try {
-    const list = readDropped(droppedPath(process.env));
-    return ok(list, list.map((d) => d.key).join("\n"));
-  } catch (error) {
-    return fail("failed", messageOf(error));
-  }
+  const list = readDropped(droppedPath(process.env));
+  return ok(list, list.map((d) => d.key).join("\n"));
 };

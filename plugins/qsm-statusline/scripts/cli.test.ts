@@ -4,13 +4,14 @@
 // 0, whatever the machine around it is doing.
 
 import { describe, expect, test } from "bun:test";
-import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { cliShim } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { writeCache } from "../lib/cache.ts";
 import { gitCacheName } from "../lib/gitcache.ts";
-import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = join(import.meta.dir, "cli.ts");
 const ESCAPE = "\u001B";
@@ -21,22 +22,25 @@ const PAYLOAD = JSON.stringify({
   workspace: { current_dir: "/home/user/project" },
 });
 
-function run(
-  argv: string[],
-  cacheDir: string,
-  env: Record<string, string> = {},
-): SpawnSyncReturns<string> {
-  return spawnSync("bun", [CLI, ...argv], {
-    encoding: "utf8",
+function run(argv: string[], cacheDir: string, env: Record<string, string> = {}) {
+  const home = sandboxDir("qsm-statusline-home-");
+  return runBin(CLI, argv, {
     input: PAYLOAD,
-    env: { ...process.env, QSM_STATUSLINE_CACHE_DIR: cacheDir, ...env },
+    env: isolatedEnv(home, { QSM_STATUSLINE_CACHE_DIR: cacheDir, ...env }),
   });
+}
+
+/** The installed binary doctor looks for, as a shim in front of PATH. */
+function withBinary(): Record<string, string> {
+  const bin = sandboxDir("qsm-statusline-bin-");
+  cliShim(bin, "qsm-statusline", CLI);
+  return { PATH: `${bin}:${process.env.PATH ?? ""}` };
 }
 
 describe("help", () => {
   test("lists the three verbs qsm.json declares", () => {
     const result = run(["--help"], sandboxDir("qsm-statusline-cli-"));
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     for (const verb of ["render", "refresh", "doctor"]) {
       expect(result.stdout).toContain(`  ${verb}`);
     }
@@ -51,7 +55,7 @@ describe("render", () => {
     chmodSync(parent, 0o500);
     const result = run(["render", "--no-color"], join(parent, "cache"));
     chmodSync(parent, 0o700);
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     expect(result.stderr).toBe("");
     const lines = result.stdout.trimEnd().split("\n");
     expect(lines[0]).toContain("Opus");
@@ -68,7 +72,7 @@ describe("render", () => {
       Date.now(),
     );
     const result = run(["render", "--no-color"], dir);
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     expect(result.stdout).toContain("git main: +1 ?2");
   });
 
@@ -81,7 +85,7 @@ describe("render", () => {
       Date.now(),
     );
     const result = run(["render", "--json"], dir);
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     expect(result.stdout).not.toContain(ESCAPE);
     const envelope: unknown = JSON.parse(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", exit: 0 });
@@ -95,8 +99,8 @@ describe("doctor", () => {
     const dir = sandboxDir("qsm-statusline-cli-");
     const settings = join(dir, "settings.json");
     writeFileSync(settings, "{ not json\n");
-    const result = run(["doctor", "--settings", settings, "--json"], dir);
-    expect(result.status).toBe(0);
+    const result = run(["doctor", "--settings", settings, "--json"], dir, withBinary());
+    expect(result.exit).toBe(0);
     const envelope: unknown = JSON.parse(result.stdout);
     expect(envelope).toMatchObject({ code: "ok", data: { state: { kind: "unreadable" } } });
     expect(envelope).toHaveProperty("data.entry");
@@ -111,8 +115,20 @@ describe("doctor", () => {
         statusLine: { type: "command", command: "qsm-statusline render", padding: 1 },
       }),
     );
-    const result = run(["doctor", "--settings", settings], dir);
-    expect(result.status).toBe(0);
+    const result = run(["doctor", "--settings", settings], dir, withBinary());
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toContain("the settings run qsm-statusline render");
+  });
+
+  test("reads the settings.json under CLAUDE_CONFIG_DIR", () => {
+    const dir = sandboxDir("qsm-statusline-cli-");
+    writeFileSync(
+      join(dir, "settings.json"),
+      JSON.stringify({ statusLine: { type: "command", command: "qsm-statusline render" } }),
+    );
+    const result = run(["doctor"], dir, { ...withBinary(), CLAUDE_CONFIG_DIR: dir });
+    expect(result.exit).toBe(0);
+    expect(result.stdout).toContain(`settings: ${join(dir, "settings.json")}`);
     expect(result.stdout).toContain("the settings run qsm-statusline render");
   });
 });
@@ -120,7 +136,7 @@ describe("doctor", () => {
 describe("a broken call", () => {
   test("is exit 2 on one line, which a blank status line never is", () => {
     const result = run(["render", "--nonsense"], sandboxDir("qsm-statusline-cli-"));
-    expect(result.status).toBe(2);
+    expect(result.exit).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("usage:");
   });

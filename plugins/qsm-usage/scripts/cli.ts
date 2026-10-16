@@ -11,7 +11,8 @@ import {
   requiredString,
   runCli,
 } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, ok, UsageError } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   type Answer,
@@ -20,7 +21,7 @@ import {
   formatDoctorReport,
   probeList,
 } from "../lib/doctor.ts";
-import { InputError, messageOf, readData } from "../lib/formats.ts";
+import { readData } from "../lib/formats.ts";
 import { extractFrontmatter, extractTable, frontmatterText, tableText } from "../lib/markdown.ts";
 import { formatSizeReport, sizeReport } from "../lib/size.ts";
 import { decode } from "../lib/toon-decode.ts";
@@ -34,47 +35,11 @@ import { wrap } from "./wrap.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-usage/qsm.json");
 
-/**
- * A refusal raised from a helper: `usage` for a broken call, `failed` for a call that was fine and
- * an input that was not.
- */
-class Refuse extends Error {
-  readonly outcome: Outcome;
-  constructor(outcome: Outcome) {
-    super(outcome.message ?? "");
-    this.outcome = outcome;
-  }
-}
-
-function badCall(message: string): never {
-  throw new Refuse(fail("usage", message));
-}
-
-function inputError(message: string): never {
-  throw new Refuse(fail("failed", message));
-}
-
-function guarded(handler: Handler): Handler {
-  return (call) => {
-    try {
-      return handler(call);
-    } catch (error) {
-      if (error instanceof Refuse) {
-        return error.outcome;
-      }
-      if (error instanceof InputError) {
-        return fail("failed", error.message);
-      }
-      return fail("failed", messageOf(error));
-    }
-  };
-}
-
 function read(path: string): string {
   try {
     return readFileSync(path, "utf8");
   } catch (error) {
-    return inputError(`cannot read ${path}: ${messageOf(error)}`);
+    throw new QsmError("failed", `cannot read ${path}: ${messageOf(error)}`, { cause: error });
   }
 }
 
@@ -91,7 +56,7 @@ function select(call: Call): Selection {
   const section = optionalString(call, "section");
   const source = read(file);
   if (flagArg(call, "frontmatter") && flagArg(call, "table")) {
-    badCall("--frontmatter and --table name two different things; pass one");
+    throw new UsageError("--frontmatter and --table name two different things; pass one");
   }
   if (flagArg(call, "frontmatter")) {
     return {
@@ -102,7 +67,7 @@ function select(call: Call): Selection {
   }
   if (flagArg(call, "table")) {
     if (section === undefined || section.length === 0) {
-      badCall("--table needs --section <heading>");
+      throw new UsageError("--table needs --section <heading>");
     }
     return {
       label: `${file} (table under ${section})`,
@@ -122,21 +87,21 @@ const answer: Answer = (bin, args) => {
   return line === undefined || line.length === 0 ? null : line;
 };
 
-const encodeVerb: Handler = guarded((call) => {
+const encodeVerb: Handler = (call) => {
   const toon = encode(select(call).value);
   return ok({ toon }, toon);
-});
+};
 
-const decodeVerb: Handler = guarded((call) => {
+const decodeVerb: Handler = (call) => {
   const value = decode(read(requiredString(call, "file")));
   return ok(value, JSON.stringify(value));
-});
+};
 
-const sizeVerb: Handler = guarded((call) => {
+const sizeVerb: Handler = (call) => {
   const chosen = select(call);
   const report = sizeReport(chosen.label, chosen.original, encode(chosen.value));
   return ok(report, formatSizeReport(report));
-});
+};
 
 const doctorVerb: Handler = () => {
   const report: DoctorReport = checkBins(probeList(process.env), answer);
