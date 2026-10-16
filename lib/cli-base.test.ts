@@ -135,11 +135,11 @@ describe("help text", () => {
   test("Help lists every declared verb", () => {
     const text = renderHelp(manifest, "qsm-fix");
     expect(text).toContain("usage: qsm-fix <verb> [args] [--json] [--no-input]");
-    for (const verb of ["echo", "files", "run", "outcome"]) {
+    for (const verb of ["echo", "files", "run", "refuse", "outcome"]) {
       expect(text).toContain(`  ${verb}`);
     }
     expect(text).toContain("print the parsed call back");
-    expect(text.match(/^ {2}\S/gm)).toHaveLength(4);
+    expect(text.match(/^ {2}\S/gm)).toHaveLength(5);
   });
 
   test("verb help shows positionals, flags with types, choices, repeatable, passthrough", () => {
@@ -179,6 +179,21 @@ describe("through the real surface", () => {
     const j = run("outcome", "worse", "--json", "--warn", "w1");
     expect(j.exit).toBe(3);
     expect(JSON.parse(j.stdout)).toMatchObject({ code: "worse", exit: 3, warnings: ["w1"] });
+  });
+
+  test("a thrown QsmError keeps its code, and its next step prints once and rides in data.next", () => {
+    const text = run("refuse");
+    expect(text).toEqual({
+      exit: 4,
+      stdout: "",
+      stderr: "missing: tool x is absent\nnext: install tool x\n",
+    });
+    const json = run("refuse", "--json");
+    expect(json.exit).toBe(4);
+    expect(JSON.parse(json.stdout)).toMatchObject({
+      code: "missing",
+      data: { next: "install tool x" },
+    });
   });
 });
 

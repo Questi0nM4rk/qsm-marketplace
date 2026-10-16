@@ -1,5 +1,6 @@
 // One outcome system for every qsm binary.
 import { which } from "bun";
+import type { Env } from "./paths.ts";
 
 export const OUTCOME_CODES = [
   "ok",
@@ -80,6 +81,11 @@ export interface Envelope<T = unknown> {
 /** A call that is wrong in a way the parser could not see; runCli turns it into the usage outcome. */
 export class UsageError extends Error {}
 
+/** The message of a caught value. */
+export function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** A JSON object: not null, not an array. Narrows the input of a reader that then checks each field
  * it uses. */
 export function isRecord(v: unknown): v is Record<string, unknown> {
@@ -137,12 +143,16 @@ export function renderText(outcome: Outcome): TextRender {
     return { stdout, stderr: `${partial}${warnings}` };
   }
   const message = outcome.message ?? OUTCOMES[outcome.code].reason;
+  const next =
+    isRecord(outcome.data) && typeof outcome.data.next === "string"
+      ? `next: ${outcome.data.next}\n`
+      : "";
   // A report of several lines stays whole; the code then gets its own line,
   // never glued onto the report's first one.
   const text = message.includes("\n")
     ? `${message}\n${outcome.code}: ${OUTCOMES[outcome.code].reason}`
     : `${outcome.code}: ${message}`;
-  return { stdout: "", stderr: `${text}\n${warnings}` };
+  return { stdout: "", stderr: `${text}\n${next}${warnings}` };
 }
 
 // The doctor of a plugin whose health is its upstream tools: is each one on PATH.
@@ -162,7 +172,14 @@ export interface DoctorData {
 /** `command -v <cmd>` */
 export type OnPath = (cmd: string) => boolean;
 
-export const onPath: OnPath = (cmd) => which(cmd) !== null;
+/** Where `cmd` resolves on the PATH of `env` (the process's own when omitted), or null. */
+export function binPath(cmd: string, env?: Env): string | null {
+  return env === undefined ? which(cmd) : which(cmd, { PATH: env.PATH ?? "" });
+}
+
+export function onPath(cmd: string, env?: Env): boolean {
+  return binPath(cmd, env) !== null;
+}
 
 /** An upstream tool as a plugin names it. The installer's `UpstreamTool`
  * has this shape, so a plugin hands doctor the same rows it installs from. */

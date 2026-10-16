@@ -9,6 +9,12 @@ export function home(env: Env): string {
   return env.HOME ?? homedir();
 }
 
+/** Claude Code's home: a non-empty `CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export function claudeDir(env: Env): string {
+  const set = env.CLAUDE_CONFIG_DIR;
+  return set === undefined || set === "" ? join(home(env), ".claude") : set;
+}
+
 /** Compiled binaries land here; `QSM_BIN_DIR` overrides. */
 export function binDir(env: Env): string {
   return env.QSM_BIN_DIR ?? join(home(env), ".local", "bin");
