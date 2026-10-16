@@ -15,7 +15,7 @@ export function run(cmd: Command): RunResult {
   const [program, ...args] = cmd;
   const done = spawnSync(program, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (done.error !== undefined) {
-    if ((done.error as NodeJS.ErrnoException).code === "ENOENT") {
+    if ("code" in done.error && done.error.code === "ENOENT") {
       throw new QsmError("missing", `required tool not found on PATH: ${program}`);
     }
     throw new QsmError("failed", `${program} could not be run: ${done.error.message}`);
