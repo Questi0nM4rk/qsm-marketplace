@@ -3,33 +3,17 @@
 // its exit. `bun test` ignores plugins/*/hooks/**, so this lives beside the
 // CLI test and spawns the hook's own source, never dist/, which may be stale.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { findRepoRoot } from "../lib/config.ts";
 import { recordStartPoint } from "../lib/state.ts";
 import { defined } from "../lib/test-support.ts";
 
 const GATE_HOOK = resolve(import.meta.dir, "../hooks/gate-hook.ts");
 const GIT = "/usr/bin/git";
-
-const sandboxes: string[] = [];
-
-/** A directory under the system temp directory, removed after each test
- * whether the test passed or failed, with whatever the hook wrote into it. */
-function sandbox(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 function git(root: string, args: string[]): void {
   const r = spawnSync(GIT, args, { cwd: root, encoding: "utf8" });
@@ -50,7 +34,7 @@ function initGates(root: string, languages: readonly string[]): void {
 
 /** A sandbox git repository with one commit holding one tracked file. */
 function repoWithFile(fileName: string, content: string): string {
-  const root = sandbox("qsm-langdev-gate-hook-repo-");
+  const root = sandboxDir("qsm-langdev-gate-hook-repo-");
   git(root, ["init", "-q"]);
   writeFileSync(join(root, fileName), content);
   git(root, ["add", "-A"]);
@@ -85,7 +69,7 @@ function runGateHook(stateDir: string, sessionId: string, agentId: string) {
 
 describe("qsm-langdev gate hook", () => {
   test("An agent with no recorded edit", () => {
-    const stateDir = sandbox("qsm-langdev-gate-hook-state-");
+    const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
 
     const r = runGateHook(stateDir, "s1", "a1");
 
@@ -95,7 +79,7 @@ describe("qsm-langdev gate hook", () => {
   });
 
   test("The stop gate in an un-init'd repository", () => {
-    const stateDir = sandbox("qsm-langdev-gate-hook-state-");
+    const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
     const root = repoWithFile("a.fish", "echo alpha\n");
 
     // A genuine fish syntax regression — `if` with no matching `end` — but
@@ -111,7 +95,7 @@ describe("qsm-langdev gate hook", () => {
   });
 
   test("a tree back to its start commit never blocks the stop", () => {
-    const stateDir = sandbox("qsm-langdev-gate-hook-state-");
+    const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
     const root = repoWithFile("notes.txt", "alpha\n");
 
     // The edited verb records the start point (this commit) while the file
@@ -134,7 +118,7 @@ describe("qsm-langdev gate hook", () => {
 /** `fish` and `fish_indent` stand-ins in a fresh bin directory: each names
  * a version, and otherwise sleeps far past any budget the test sets. */
 function slowFish(): string {
-  const bin = sandbox("qsm-langdev-gate-hook-bin-");
+  const bin = sandboxDir("qsm-langdev-gate-hook-bin-");
   for (const name of ["fish", "fish_indent"]) {
     const path = join(bin, name);
     writeFileSync(
@@ -148,7 +132,7 @@ function slowFish(): string {
 
 describe("qsm-langdev gate hook and a checker past its time", () => {
   test("a checker that is not measured warns and never holds the agent", () => {
-    const stateDir = sandbox("qsm-langdev-gate-hook-state-");
+    const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
     const root = repoWithFile("a.fish", "echo alpha\n");
     initGates(root, ["fish"]);
     const bin = slowFish();

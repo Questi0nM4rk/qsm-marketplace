@@ -3,24 +3,15 @@
 // temp directory, removed after each test whether the test passed or
 // failed.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { installHooks, uninstallHooks } from "./git-hooks.ts";
 
-const sandboxes: string[] = [];
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
-
 function repo(): string {
-  const root = mkdtempSync(join(tmpdir(), "qsm-langdev-hooks-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-langdev-hooks-");
   const init = spawnSync("git", ["init", "-q", "-b", "main"], { cwd: root, encoding: "utf8" });
   if (init.status !== 0) {
     throw new Error(`git init failed: ${init.stderr}`);

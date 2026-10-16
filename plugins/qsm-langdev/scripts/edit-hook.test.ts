@@ -1,32 +1,16 @@
 // The `edited` verb the edit hook calls after a file edit, spawned as the noun spawns it: argv in,
 // the --json envelope out. Its text is what the hook hands the model as context.
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { recordOf } from "../lib/json.ts";
 import { defined } from "../lib/test-support.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 const GIT = "/usr/bin/git";
-
-const sandboxes: string[] = [];
-
-/** A directory under the system temp directory, removed after each test
- * whether the test passed or failed, with whatever the hook wrote into it. */
-function sandbox(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 function git(root: string, args: string[]): void {
   const r = spawnSync(GIT, args, { cwd: root, encoding: "utf8" });
@@ -38,7 +22,7 @@ function git(root: string, args: string[]): void {
 /** A sandbox git repository with one commit holding one tracked file, and
  * that commit's id. */
 function repoWithFile(fileName: string, content: string): { root: string; head: string } {
-  const root = sandbox("qsm-langdev-edit-hook-repo-");
+  const root = sandboxDir("qsm-langdev-edit-hook-repo-");
   git(root, ["init", "-q"]);
   writeFileSync(join(root, fileName), content);
   git(root, ["add", "-A"]);
@@ -64,12 +48,18 @@ function editMarkdown(content: string) {
   return { root, r: runEdited(join(root, "notes.md")) };
 }
 
+/** The environment of a spawned binary: semgrep makes its own semgrep-mcp directory in the temp
+ * root, so the binary gets a sandbox as its root. */
+function tmpEnv(): Record<string, string | undefined> {
+  return { ...process.env, TMPDIR: sandboxDir("qsm-langdev-edit-hook-tmp-") };
+}
+
 /** The verb's exit and its envelope's findings text (null when it had nothing to say). */
-function runEdited(file: string, stateDir = sandbox("qsm-langdev-edit-hook-state-")) {
+function runEdited(file: string, stateDir = sandboxDir("qsm-langdev-edit-hook-state-")) {
   const argv = ["edited", file, "--session", "s1", "--agent", "a1", "--json"];
   const r = spawnSync("bun", [CLI, ...argv], {
     encoding: "utf8",
-    env: { ...process.env, QSM_LANGDEV_STATE_DIR: stateDir },
+    env: { ...tmpEnv(), QSM_LANGDEV_STATE_DIR: stateDir },
   });
   const data = defined(recordOf(recordOf(JSON.parse(r.stdout))?.data), "the verb's data");
   return { status: r.status, text: typeof data.text === "string" ? data.text : null };
@@ -93,7 +83,7 @@ function readStartPoint(
 
 describe("qsm-langdev edit hook", () => {
   test("a file outside any git repo prints nothing", () => {
-    const plainDir = sandbox("qsm-langdev-edit-hook-plain-");
+    const plainDir = sandboxDir("qsm-langdev-edit-hook-plain-");
     const filePath = join(plainDir, "notes.txt");
     writeFileSync(filePath, "hello\n");
     const r = runEdited(filePath);
@@ -105,7 +95,7 @@ describe("qsm-langdev edit hook", () => {
   test("an edited tracked file records the agent's start point and never blocks", () => {
     const { root, head } = repoWithFile("notes.txt", "alpha\n");
     writeFileSync(join(root, "notes.txt"), "alpha\nedited\n");
-    const stateDir = sandbox("qsm-langdev-edit-hook-state-");
+    const stateDir = sandboxDir("qsm-langdev-edit-hook-state-");
 
     const r = runEdited(join(root, "notes.txt"), stateDir);
 
@@ -151,13 +141,16 @@ describe("qsm-langdev edit hook: markdown line length", () => {
 describe("qsm-langdev pre-commit hook: markdown line length", () => {
   test("a staged long prose line is rewrapped and re-staged, the hook passes", () => {
     const { root } = repoWithFile("seed.txt", "x\n");
-    spawnSync("bun", [CLI, "init", root, "--profile", "general"], { encoding: "utf8" });
+    spawnSync("bun", [CLI, "init", root, "--profile", "general"], {
+      encoding: "utf8",
+      env: tmpEnv(),
+    });
     const long = `${"word ".repeat(32)}end`;
     writeFileSync(join(root, "a.md"), `# A\n\n${long}\n`);
     git(root, ["add", "-A"]);
 
     const argv = [CLI, "hook", "pre-commit"];
-    const hook = spawnSync("bun", argv, { cwd: root, encoding: "utf8" });
+    const hook = spawnSync("bun", argv, { cwd: root, encoding: "utf8", env: tmpEnv() });
 
     const staged = spawnSync(GIT, ["show", ":a.md"], { cwd: root, encoding: "utf8" }).stdout;
     expect(hook.status).toBe(0);
@@ -170,10 +163,14 @@ describe("qsm-langdev pre-commit hook: static fixers", () => {
   const staged = (root: string, path: string) =>
     spawnSync(GIT, ["show", `:${path}`], { cwd: root, encoding: "utf8" }).stdout;
   const hookArgv = [CLI, "hook", "pre-commit"];
-  const preCommit = (root: string) => spawnSync("bun", hookArgv, { cwd: root, encoding: "utf8" });
+  const preCommit = (root: string) =>
+    spawnSync("bun", hookArgv, { cwd: root, encoding: "utf8", env: tmpEnv() });
   const initRepo = () => {
     const { root } = repoWithFile("seed.ts", "export {};\n");
-    spawnSync("bun", [CLI, "init", root, "--profile", "general"], { encoding: "utf8" });
+    spawnSync("bun", [CLI, "init", root, "--profile", "general"], {
+      encoding: "utf8",
+      env: tmpEnv(),
+    });
     return root;
   };
 

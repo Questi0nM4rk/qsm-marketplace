@@ -4,33 +4,19 @@
 // sandbox under the system temp directory, removed after each test whether
 // the test passed or failed.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { isLangdevRepo, languageEnabled } from "./config.ts";
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-langdev-config-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    rmSync(sandboxes.pop() ?? "", { recursive: true, force: true });
-  }
-});
 
 describe("isLangdevRepo", () => {
   test("false when the repository never wrote .qsm-langdev/gates.json", () => {
-    expect(isLangdevRepo(sandbox())).toBe(false);
+    expect(isLangdevRepo(sandboxDir("qsm-langdev-config-"))).toBe(false);
   });
 
   test("true once gates.json is on disk, whatever it holds", () => {
-    const root = sandbox();
+    const root = sandboxDir("qsm-langdev-config-");
     mkdirSync(join(root, ".qsm-langdev"), { recursive: true });
     writeFileSync(join(root, ".qsm-langdev", "gates.json"), "{}\n");
 
