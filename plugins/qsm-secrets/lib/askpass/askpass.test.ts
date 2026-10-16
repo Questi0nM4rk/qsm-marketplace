@@ -120,7 +120,7 @@ describe("the reply socket", () => {
   });
 
   test("without a runtime directory it is missing", () => {
-    expect(() => openReplySocket({})).toThrow("XDG_RUNTIME_DIR");
+    expect(() => openReplySocket({})).toThrow("runtime directory");
   });
 });
 

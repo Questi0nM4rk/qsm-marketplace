@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, rmdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { listen } from "bun";
 import { isRecord } from "../../../../lib/outcome.ts";
-import type { Env } from "../../../../lib/paths.ts";
+import { type Env, runtimeDir } from "../../../../lib/paths.ts";
 import { fail } from "../errors.ts";
 import type { Action, Reply } from "./types.ts";
 
@@ -40,14 +40,13 @@ export function parseReply(line: string, nonce: string): Reply | null {
 }
 
 export function openReplySocket(env: Env): ReplySocket {
-  const runtime = env.XDG_RUNTIME_DIR;
-  if (runtime === undefined || runtime === "") {
+  const runtime =
+    runtimeDir(env) ??
     fail(
-      "XDG_RUNTIME_DIR is not set, so there is no private place for the reply socket",
+      "the runtime directory is not set, so there is no private place for the reply socket",
       "run it from a login session",
       "missing",
     );
-  }
   const nonce = randomBytes(16).toString("hex");
   const dir = join(runtime, "qsm-askpass", nonce);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
