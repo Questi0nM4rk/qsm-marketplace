@@ -21,7 +21,7 @@ export function isolatedEnv(
   };
 }
 
-export interface BinRun {
+interface BinRun {
   readonly exit: number;
   readonly stdout: string;
   readonly stderr: string;
