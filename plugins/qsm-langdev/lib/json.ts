@@ -26,11 +26,3 @@ export function str(value: unknown): string {
 export function num(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
-
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function isErrno(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}

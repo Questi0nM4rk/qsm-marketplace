@@ -5,7 +5,7 @@
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { errorMessage } from "./json.ts";
+import { errorMessage } from "./errors.ts";
 import { OWN_RULES } from "./rules-data.ts";
 
 /** The scratch directory a run fetches its packs into is named with this,

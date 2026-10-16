@@ -8,7 +8,8 @@ import { Glob } from "bun";
 import { cacheDir, writeAtomic } from "./cache-dir.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { isRecord } from "../../../lib/outcome.ts";
-import { isErrno, recordOf } from "./json.ts";
+import { isErrno } from "./errors.ts";
+import { recordOf } from "./json.ts";
 import type { EnforcementPoint } from "./registry.ts";
 
 /**

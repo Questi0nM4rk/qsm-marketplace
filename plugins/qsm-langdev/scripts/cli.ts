@@ -46,7 +46,7 @@ import {
   uninstallHooks,
 } from "../lib/git-hooks.ts";
 import { resolveRef } from "../lib/gitref.ts";
-import { errorMessage } from "../lib/json.ts";
+import { errorMessage } from "../lib/errors.ts";
 import { profileGaps, type ScaffoldAction, scaffoldProfile } from "../lib/profiles.ts";
 import {
   ENFORCEMENT_POINTS,

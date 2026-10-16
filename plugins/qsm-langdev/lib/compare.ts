@@ -15,7 +15,7 @@ import {
 } from "./config.ts";
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
-import { isErrno } from "./json.ts";
+import { isErrno } from "./errors.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
 import {
   asRunAt,

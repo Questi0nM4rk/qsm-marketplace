@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { errorMessage } from "../lib/json.ts";
+import { errorMessage } from "../lib/errors.ts";
 
 export const UPSTREAM_REPO = "https://github.com/sentrux/sentrux";
 // pragma: allowlist nextline secret
