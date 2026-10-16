@@ -2,16 +2,13 @@
 
 import { extname } from "node:path";
 import { TOML, YAML } from "bun";
+import { messageOf } from "../../../lib/outcome.ts";
 
 export type DataFormat = "json" | "yaml" | "toml";
 
 const SUPPORTED_EXTENSIONS = [".json", ".yaml", ".yml", ".toml"] as const;
 
 export class InputError extends Error {}
-
-export function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function detectFormat(path: string): DataFormat | null {
   switch (extname(path).toLowerCase()) {

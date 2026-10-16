@@ -1,9 +1,9 @@
 // Reading the harness settings file, and nothing else.
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../lib/outcome.ts";
+import { claudeDir, type Env } from "../../../lib/paths.ts";
 
 /** What the settings entry has to run. */
 export const STATUS_LINE_COMMAND = "qsm-statusline render";
@@ -20,13 +20,9 @@ export type SettingsState =
   | { readonly kind: "other"; readonly command: string }
   | { readonly kind: "unreadable"; readonly reason: string };
 
-/** `QSM_STATUSLINE_SETTINGS` points the report at another file, which is what a test uses. */
-export function settingsPath(env: Record<string, string | undefined>): string {
-  const override = env.QSM_STATUSLINE_SETTINGS;
-  if (override !== undefined && override.length > 0) {
-    return override;
-  }
-  return join(homedir(), ".claude", "settings.json");
+/** The harness settings file, under Claude Code's home. */
+export function settingsPath(env: Env): string {
+  return join(claudeDir(env), "settings.json");
 }
 
 function errorCode(cause: unknown): string | null {
@@ -34,10 +30,6 @@ function errorCode(cause: unknown): string | null {
     return null;
   }
   return typeof cause.code === "string" ? cause.code : null;
-}
-
-function message(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
 }
 
 function unreadable(reason: string): SettingsState {
@@ -66,12 +58,12 @@ export function readStatusLine(path: string): SettingsState {
   try {
     raw = readFileSync(path, "utf8");
   } catch (cause) {
-    return errorCode(cause) === "ENOENT" ? { kind: "absent" } : unreadable(message(cause));
+    return errorCode(cause) === "ENOENT" ? { kind: "absent" } : unreadable(messageOf(cause));
   }
   try {
     return classify(JSON.parse(raw));
   } catch (cause) {
-    return unreadable(message(cause));
+    return unreadable(messageOf(cause));
   }
 }
 

@@ -1,9 +1,10 @@
 // Nothing blocks a frame.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeAtomic } from "../../../lib/fs.ts";
 
 export interface CacheEntry {
   readonly ageMs: number;
@@ -61,14 +62,7 @@ export function readCache(dir: string, name: string, now: number): CacheEntry | 
 /** Written to a sibling and renamed, so a frame never reads half a body. */
 export function writeCache(dir: string, name: string, body: string, now: number): void {
   mkdirSync(dir, { recursive: true });
-  const target = join(dir, name);
-  const temporary = `${target}.${process.pid}.tmp`;
-  try {
-    writeFileSync(temporary, `${now}\n${body}`);
-    renameSync(temporary, target);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
+  writeAtomic(join(dir, name), `${now}\n${body}`);
 }
 
 export function isFresh(entry: CacheEntry, maxAgeMs: number): boolean {

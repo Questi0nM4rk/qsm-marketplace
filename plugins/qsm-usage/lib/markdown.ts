@@ -2,7 +2,8 @@
 // under a named heading.
 
 import { YAML } from "bun";
-import { InputError, messageOf } from "./formats.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { InputError } from "./formats.ts";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/;
 const HEADING = /^#+\s/;

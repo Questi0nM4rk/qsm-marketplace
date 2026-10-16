@@ -2,12 +2,11 @@
 // and the HTML file it does or does not write.
 
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { envelopeOf, runBin } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { firstFinding } from "../lib/findings-fixture.ts";
-import { envelopeOf } from "./envelope.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -18,7 +17,7 @@ function sandboxFile(dir: string, name: string, content: string): string {
 }
 
 function run(args: string[]) {
-  return spawnSync("bun", [CLI, ...args], { encoding: "utf8" });
+  return runBin(CLI, args);
 }
 
 function fiveTopicFindings(): Record<string, unknown> {
@@ -54,14 +53,14 @@ function fiveTopicFindings(): Record<string, unknown> {
 describe("qsm-usage report: the call", () => {
   test("--help lists the report verb", () => {
     const result = run(["--help"]);
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     expect(result.stdout).toContain("  report");
   });
 
   test("--out is required", () => {
     const dir = sandboxDir("qsm-usage-report-test-");
     const input = sandboxFile(dir, "findings.json", JSON.stringify(fiveTopicFindings()));
-    expect(run(["report", input]).status).toBe(2);
+    expect(run(["report", input]).exit).toBe(2);
   });
 
   // A missing input file
@@ -69,7 +68,7 @@ describe("qsm-usage report: the call", () => {
     const dir = sandboxDir("qsm-usage-report-test-");
     const out = join(dir, "report.html");
     const result = run(["report", join(dir, "nonexistent.json"), "--out", out, "--json"]);
-    expect(result.status).toBe(4);
+    expect(result.exit).toBe(4);
     const envelope = envelopeOf(result.stdout);
     expect(envelope.code).toBe("missing");
     expect(envelope.message).toContain("nonexistent.json");
@@ -84,7 +83,7 @@ describe("qsm-usage report: validation and rendering", () => {
     const input = sandboxFile(dir, "findings.json", JSON.stringify(fiveTopicFindings()));
     const out = join(dir, "report.html");
     const result = run(["report", input, "--out", out]);
-    expect(result.status).toBe(0);
+    expect(result.exit).toBe(0);
     expect(existsSync(out)).toBe(true);
     const html = readFileSync(out, "utf8");
     expect(html).not.toContain("<script");
@@ -110,7 +109,7 @@ describe("qsm-usage report: validation and rendering", () => {
     const input = sandboxFile(dir, "findings.json", JSON.stringify(doc));
     const out = join(dir, "report.html");
     const result = run(["report", input, "--out", out]);
-    expect(result.status).toBe(1);
+    expect(result.exit).toBe(1);
     expect(result.stderr).toContain("topics[0].findings[0].savingTokens: required");
     expect(existsSync(out)).toBe(false);
   });
