@@ -22,7 +22,8 @@ const DEFINES = new RegExp(`\\b(?:function|const|let)\\s+(${HELPERS.join("|")})\
 const SPREAD = new RegExp(String.raw`\.\.\.\s*process` + String.raw`\.env\b`);
 const BY_NAME = /\b(?:CLAUDE_CONFIG_DIR|XDG_[A-Z_]+)\b/;
 
-const isTest = (f: string): boolean => /\.test\.tsx?$/.test(f);
+// A fixture is test code: it builds the child environment a test hands to a CLI.
+const isTest = (f: string): boolean => /\.test\.tsx?$/.test(f) || f.includes("/lib/fixtures/");
 
 /** Paths (files or directories) the hooks/tsconfig.json files under dir include. */
 function hooksIncludes(dir: string): string[] {
