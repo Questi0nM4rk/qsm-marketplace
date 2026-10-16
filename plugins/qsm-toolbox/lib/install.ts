@@ -1,7 +1,8 @@
 // Install walks the same table the skill shows.
 
-import { existsSync, lstatSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { linkBin } from "../../../lib/install-base.ts";
 import type { InstallContext, InstallStatus } from "../../../lib/install-contract.ts";
 import { binDir, home } from "../../../lib/paths.ts";
 import { GO_PREREQ, skipKey, TOOLS, type Tool } from "./catalog.ts";
@@ -21,19 +22,13 @@ function goBinSource(env: InstallContext["env"], bin: string): string {
 }
 
 /** Returns an error message, or null when the link is in place. */
-function linkFromGoBin(env: InstallContext["env"], bin: string): string | null {
-  const source = goBinSource(env, bin);
+function linkFromGoBin(ctx: InstallContext, bin: string): string | null {
+  const source = goBinSource(ctx.env, bin);
   if (!existsSync(source)) {
     return `go install reported success but ${source} is not there`;
   }
-  const dir = binDir(env);
-  mkdirSync(dir, { recursive: true });
-  const target = join(dir, bin);
-  if (lstatSync(target, { throwIfNoEntry: false }) !== undefined) {
-    rmSync(target);
-  }
-  symlinkSync(source, target);
-  return null;
+  const step = linkBin(ctx, bin, source);
+  return step.status === "error" ? step.detail : null;
 }
 
 /** The line a person types for a row we refuse to run. */
@@ -85,7 +80,7 @@ export function installOne(tool: Tool, ctx: InstallContext): ToolOutcome {
   if (tool.prereq !== GO_PREREQ) {
     return { bin: tool.bin, status: "installed", detail: tool.install };
   }
-  const failure = linkFromGoBin(ctx.env, tool.bin);
+  const failure = linkFromGoBin(ctx, tool.bin);
   return failure === null
     ? {
         bin: tool.bin,

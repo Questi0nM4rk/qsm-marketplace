@@ -10,46 +10,25 @@
 // answer well.
 
 import { describe, expect, test } from "bun:test";
-import { type SpawnSyncReturns, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { bareRuntimePath } from "../../../lib/fixtures/bin.ts";
+import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
+import { git, repoWith } from "../../../lib/fixtures/git.ts";
 
 const HOOKS = resolve(import.meta.dir, "../hooks");
 
 interface Sandbox {
   readonly repo: string;
-  readonly env: NodeJS.ProcessEnv;
-}
-
-function git(cwd: string, env: NodeJS.ProcessEnv, args: readonly string[]): void {
-  const r = spawnSync("git", args, { cwd, env, encoding: "utf8" });
-  if (r.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${r.stderr}`);
-  }
+  readonly env: Record<string, string>;
 }
 
 /** A real git repository with one commit on `main`, and a `HOME` of its own. */
 function sandbox(): Sandbox {
-  const root = sandboxDir("qsm-worktrunk-hooks-");
-  const repo = join(root, "repo");
-  const home = join(root, "home");
-  mkdirSync(repo, { recursive: true });
-  mkdirSync(home, { recursive: true });
-  const env: NodeJS.ProcessEnv = {
-    PATH: process.env.PATH ?? "",
-    HOME: home,
-    XDG_CONFIG_HOME: join(home, ".config"),
-    XDG_DATA_HOME: join(home, ".local", "share"),
-  };
-  git(repo, env, ["init", "-q"]);
-  git(repo, env, ["config", "user.email", "test@example.com"]);
-  git(repo, env, ["config", "user.name", "Test"]);
-  writeFileSync(join(repo, "README.md"), "hello\n");
-  git(repo, env, ["add", "README.md"]);
-  git(repo, env, ["commit", "-qm", "init"]);
-  git(repo, env, ["branch", "-M", "main"]);
-  return { repo, env };
+  const { root, repo } = repoWith("qsm-worktrunk-hooks-", { "README.md": "hello\n" });
+  git(repo, "branch", "-M", "main");
+  return { repo, env: isolatedEnv(root) };
 }
 
 /** `wt switch --create <branch> --base main`, for the tests that need an
@@ -65,17 +44,11 @@ function createBranch(s: Sandbox, branch: string): void {
   }
 }
 
-function runHook(
-  name: string,
-  s: Sandbox,
-  cwd: string,
-  event: Record<string, unknown>,
-): SpawnSyncReturns<string> {
-  return spawnSync("bun", [join(HOOKS, `${name}.ts`)], {
+function runHook(name: string, s: Sandbox, cwd: string, event: Record<string, unknown>) {
+  return runBin(join(HOOKS, `${name}.ts`), [], {
     cwd,
     env: s.env,
     input: JSON.stringify({ session_id: "s1", transcript_path: "/tmp/t", cwd, ...event }),
-    encoding: "utf8",
   });
 }
 
@@ -87,16 +60,11 @@ describe("worktree-create", () => {
 
     const r = runHook("worktree-create", s, s.repo, { name: "feature" });
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     // A command hook answers WorktreeCreate with the bare path on stdout.
     const path = r.stdout.trim();
     expect(path.startsWith("/")).toBe(true);
-    const list = spawnSync("git", ["worktree", "list", "--porcelain"], {
-      cwd: s.repo,
-      env: s.env,
-      encoding: "utf8",
-    });
-    expect(list.stdout).toContain(`worktree ${path}`);
+    expect(git(s.repo, "worktree", "list", "--porcelain")).toContain(`worktree ${path}`);
     expect(readFileSync(join(path, ".beads", "redirect"), "utf8").trim()).toBe(
       join(s.repo, ".beads"),
     );
@@ -107,10 +75,29 @@ describe("worktree-create", () => {
 
     const r = runHook("worktree-create", s, s.repo, { name: "main" });
 
-    expect(r.status).toBe(1);
+    expect(r.exit).toBe(1);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("qsm-worktrunk:");
     expect(r.stderr).toContain("Run /qsm-worktrunk.");
+  });
+});
+
+describe("worktree-create without wt", () => {
+  test("exits 1 and names the plugin on stderr", () => {
+    const s = sandbox();
+
+    const r = runHook(
+      "worktree-create",
+      { ...s, env: { ...s.env, PATH: bareRuntimePath() } },
+      s.repo,
+      {
+        name: "feature",
+      },
+    );
+
+    expect(r.exit).toBe(1);
+    expect(r.stdout).toBe("");
+    expect(r.stderr).toContain("qsm-worktrunk:");
   });
 });
 
@@ -122,7 +109,7 @@ describe("worktree-remove", () => {
 
     const r = runHook("worktree-remove", s, s.repo, { worktree_path: path });
 
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
     expect(existsSync(path)).toBe(false);
   });
 });
@@ -134,6 +121,6 @@ describe("notification-marker", () => {
       message: "waiting on you",
       notification_type: "idle",
     });
-    expect(r.status).toBe(0);
+    expect(r.exit).toBe(0);
   });
 });
