@@ -85,5 +85,5 @@ function answered(argv: string[]): string[] {
 }
 
 if (import.meta.main) {
-  process.exit(await activationMain(activation, answered(process.argv)));
+  process.exit(await activationMain(activation, answered(process.argv.slice(2))));
 }
