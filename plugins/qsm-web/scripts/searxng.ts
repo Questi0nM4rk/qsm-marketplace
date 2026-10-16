@@ -7,7 +7,7 @@ import {
   optionalString,
   stringList,
 } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
 import {
   configPath,
   EXIT,
@@ -73,8 +73,7 @@ async function searchVerb(call: Call): Promise<Outcome> {
     // Every way a search can end badly, unreachable instance, an HTTP status, a body that is not
     // JSON, is the same answer to the caller: the search did not succeed, and the message says
     // which it was.
-    const message = err instanceof Error ? err.message : String(err);
-    return { ...fail("failed", message), warnings };
+    return { ...fail("failed", messageOf(err)), warnings };
   }
 }
 

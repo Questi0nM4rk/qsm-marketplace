@@ -3,6 +3,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { messageOf } from "../../../lib/outcome.ts";
 import { type CommandArg, parseManifest } from "../../../lib/qsm-manifest.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import type { Env } from "./paths.ts";
@@ -35,7 +36,7 @@ function guarded(run: () => ToolOutcome): ToolText {
   try {
     return reply(run());
   } catch (cause) {
-    return reply({ ok: false, text: cause instanceof Error ? cause.message : String(cause) });
+    return reply({ ok: false, text: messageOf(cause) });
   }
 }
 

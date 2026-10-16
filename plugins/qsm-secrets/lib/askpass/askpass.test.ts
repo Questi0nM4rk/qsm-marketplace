@@ -17,6 +17,7 @@ import { sleep, spawn } from "bun";
 import { fakeBin } from "../../../../lib/fixtures/bin.ts";
 import { isolatedEnv } from "../../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../../lib/fixtures/sandbox.ts";
+import { messageOf } from "../../../../lib/outcome.ts";
 import { ask } from "./ask.ts";
 import { fakeQs } from "./fake-qs.ts";
 import { providerOf } from "./index.ts";
@@ -57,7 +58,7 @@ async function rejection(promise: Promise<unknown>): Promise<string> {
   try {
     await promise;
   } catch (error) {
-    return error instanceof Error ? error.message : String(error);
+    return messageOf(error);
   }
   throw new Error("expected the promise to reject");
 }

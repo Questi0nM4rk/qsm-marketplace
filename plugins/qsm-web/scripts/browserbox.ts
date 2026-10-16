@@ -1,7 +1,7 @@
 // qsm-web browserbox: the last rung.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { home } from "../../../lib/paths.ts";
 import { join } from "node:path";
 import {
   type Call,
@@ -175,7 +175,7 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
     throw new QsmError("failed", "every live-view port in the block is taken");
   }
   const name = instanceName(port);
-  const where = out ?? outDir(process.env, homedir(), name);
+  const where = out ?? outDir(process.env, home(process.env), name);
   if (!box.dryRun) {
     mkdirSync(where, { recursive: true });
   }

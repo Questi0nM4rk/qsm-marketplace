@@ -1,8 +1,10 @@
 // The search rung: one instance, one query, one JSON array on stdout.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { messageOf } from "../../../lib/outcome.ts";
+import { home } from "../../../lib/paths.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 
 export interface SearchResult {
   readonly url: string;
@@ -34,14 +36,8 @@ export interface SearchOptions {
   readonly safesearch?: number;
 }
 
-/** Exit codes the bin uses; a caller can branch on the cause. */
-export const EXIT = {
-  parse: 1,
-  noInstance: 2,
-  network: 3,
-  http: 4,
-  badJson: 5,
-} as const;
+/** What `runSetup` returns when no instance URL was given. */
+export const EXIT = { noInstance: 2 } as const;
 
 export const DEFAULT_CONFIG: SearxngConfig = {
   instance: "",
@@ -61,7 +57,7 @@ const CONFIG_FILE = z.object({
   defaultSafesearch: z.number().exactOptional(),
 });
 
-export function configPath(overridePath?: string, homeDir: string = homedir()): string {
+export function configPath(overridePath?: string, homeDir: string = home(process.env)): string {
   if (overridePath !== undefined && overridePath.length > 0) {
     return overridePath;
   }
@@ -85,8 +81,10 @@ export function loadConfig(path: string): LoadedConfig {
     const parsed = CONFIG_FILE.parse(JSON.parse(readFileSync(path, "utf8")));
     return { config: { ...DEFAULT_CONFIG, ...parsed }, warnings: [] };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { config: DEFAULT_CONFIG, warnings: [`config at ${path} is not readable JSON: ${msg}`] };
+    return {
+      config: DEFAULT_CONFIG,
+      warnings: [`config at ${path} is not readable JSON: ${messageOf(err)}`],
+    };
   }
 }
 
@@ -187,20 +185,6 @@ const RESPONSE = z.object({
 type RawResult = z.infer<typeof RAW_RESULT>;
 export type SearxngResponse = z.infer<typeof RESPONSE>;
 
-class SearchFailure extends Error {
-  readonly exitCode: number;
-  constructor(message: string, exitCode: number, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "SearchFailure";
-    this.exitCode = exitCode;
-  }
-
-  /** A failure that keeps the error it came from. */
-  static because(cause: unknown, message: string, exitCode: number): SearchFailure {
-    return new SearchFailure(message, exitCode, { cause });
-  }
-}
-
 export interface SearchOutcome {
   readonly results: readonly SearchResult[];
   readonly warnings: readonly string[];
@@ -248,21 +232,18 @@ export async function search(
   try {
     resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw SearchFailure.because(err, `could not reach ${instance}: ${msg}`, EXIT.network);
+    throw new QsmError("failed", `could not reach ${instance}: ${messageOf(err)}`, { cause: err });
   }
   if (!resp.ok) {
-    throw new SearchFailure(`${instance} answered HTTP ${resp.status}`, EXIT.http);
+    throw new QsmError("failed", `${instance} answered HTTP ${resp.status}`);
   }
   let body: SearxngResponse;
   try {
     body = RESPONSE.parse(await resp.json());
   } catch (err: unknown) {
-    throw SearchFailure.because(
-      err,
-      `${instance} answered with text that is not JSON`,
-      EXIT.badJson,
-    );
+    throw new QsmError("failed", `${instance} answered with text that is not JSON`, {
+      cause: err,
+    });
   }
   return readResponse(body, opts.numResults);
 }

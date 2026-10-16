@@ -2,7 +2,7 @@
 // qsm-web: the one binary for the whole web tier.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { home } from "../../../lib/paths.ts";
 import { resolve } from "node:path";
 import {
   type Call,
@@ -118,7 +118,7 @@ function get(call: Call): Outcome {
   const target = requiredString(call, "target");
   const project = optionalString(call, "project");
   const projectDir = project === undefined ? undefined : resolve(project);
-  const into = libDir(target, sourceRoot(process.env, homedir()));
+  const into = libDir(target, sourceRoot(process.env, home(process.env)));
   mkdirSync(resolve(into, ".."), { recursive: true });
 
   // Read once: the same declarations decide whether a bare name is

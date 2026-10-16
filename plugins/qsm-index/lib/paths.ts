@@ -1,14 +1,14 @@
 // Where a repository's index lands: one cache directory per repository path.
 
 import { createHash } from "node:crypto";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { home } from "../../../lib/paths.ts";
 
 export type Env = Record<string, string | undefined>;
 
 /** The cache every index lands under. */
 export function cacheRoot(env: Env): string {
-  return env.QSM_INDEX_CACHE_DIR ?? join(env.HOME ?? homedir(), ".cache", "qsm-index");
+  return env.QSM_INDEX_CACHE_DIR ?? join(home(env), ".cache", "qsm-index");
 }
 
 /** Stable 12-hex-character digest of an absolute path. */
