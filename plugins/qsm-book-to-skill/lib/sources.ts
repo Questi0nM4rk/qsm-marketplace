@@ -38,6 +38,8 @@ export interface SourceScan {
 }
 
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "dist", "build", ".git"]);
+/** An input holding one of these is a glob pattern, not a path. */
+const GLOB_CHARACTERS = ["*", "?", "["];
 
 function* filesUnder(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -92,7 +94,7 @@ function expandGlob(pattern: string, cwd: string): string[] {
 }
 
 function resolveInput(input: string, cwd: string): { files: string[]; rejected: Rejected[] } {
-  if (/[*?[]/.test(input)) {
+  if (GLOB_CHARACTERS.some((char) => input.includes(char))) {
     const files = expandGlob(input, cwd);
     return files.length === 0
       ? { files, rejected: [{ path: input, reason: "matched no file" }] }
