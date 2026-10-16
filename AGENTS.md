@@ -126,6 +126,10 @@ touching its users (Cockburn, ports and adapters).
 - **Evals over unit tests.** A change is proved by the least work that runs the real path end to
   end; a unit test only for logic an eval cannot reach. A skill's or agent's eval is
   `bun run eval <plugin>` (`evals/` in the plugin). Single user, personal tools: no test count goal.
+- **A test leaves no temp behind.** The `bun test` preload `lib/fixtures/sandbox.ts` points TMPDIR
+  at one dir per run, removes each `sandboxDir` after its test, and fails the run naming every
+  leftover and its maker; `validate-test-temp` fails on `mkdtemp`, `mkdtempSync` or `tmpdir()` in
+  any test file or test-only helper, so a test's temp dir is `sandboxDir`.
 - **Every seam proves itself, or the gate fails loud** (spec: hooks prove seams and behaviour, fail
   loud). One reader per seam in `hooks/`: `bun test` feeds binary output, `claude plugin test` feeds
   shapes; a stub alone is never proof. A `.catch` toasts `<plugin> ERROR: <event>: <reason>`, logs,
