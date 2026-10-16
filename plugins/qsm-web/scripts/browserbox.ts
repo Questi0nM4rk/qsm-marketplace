@@ -320,6 +320,23 @@ function runScript(call: Call, box: Box): Outcome {
     : fail("failed", "the script did not finish", result);
 }
 
+/** Polls the armed wait until the human cleared the wall (true), or it timed out or the caller's
+ * timeout passed (false). */
+function cleared(box: Box, name: string, tab: number, timeoutMs: number): boolean {
+  const deadline = Date.now() + timeoutMs + POLL_PAUSE_MS;
+  while (Date.now() < deadline) {
+    pause(POLL_PAUSE_MS);
+    const status = box.send(name, { cmd: "wait_status", tab }, true);
+    if (status.state === "cleared") {
+      return true;
+    }
+    if (status.state === "timeout") {
+      return false;
+    }
+  }
+  return false;
+}
+
 /**
  * Hand one tab to a human: arm the wait, name the page to open, and poll until the wall is gone or
  * the caller's timeout passes.
@@ -345,17 +362,8 @@ function takeover(call: Call, box: Box): Outcome {
   if (flagArg(call, "open")) {
     spawnSync("xdg-open", [view], { stdio: "ignore" });
   }
-  const deadline = Date.now() + timeoutMs + POLL_PAUSE_MS;
-  while (Date.now() < deadline) {
-    pause(POLL_PAUSE_MS);
-    const status = box.send(name, { cmd: "wait_status", tab }, true);
-    if (status.state === "cleared") {
-      const cleared = { resumed: true, liveView: view };
-      return ok(cleared, `${name} tab ${tab} was cleared`);
-    }
-    if (status.state === "timeout") {
-      break;
-    }
+  if (cleared(box, name, tab, timeoutMs)) {
+    return ok({ resumed: true, liveView: view }, `${name} tab ${tab} was cleared`);
   }
   return fail("failed", `nobody cleared ${name} tab ${tab} in time`, {
     resumed: false,
