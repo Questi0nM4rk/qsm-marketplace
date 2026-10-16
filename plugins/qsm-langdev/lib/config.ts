@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -88,6 +89,11 @@ export function matchingFiles(
   names?: RegExp,
 ): string[] {
   return files.filter((file) => {
+    // A tracked symlink is no source of its own: its target is matched under its own path, and
+    // a checker handed the link (semgrep) refuses it as a scan root.
+    if (lstatSync(join(root, file), { throwIfNoEntry: false })?.isSymbolicLink() === true) {
+      return false;
+    }
     if (extensions.some((suffix) => file.endsWith(suffix))) {
       return true;
     }
