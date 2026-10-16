@@ -3,7 +3,7 @@
 // trails its channel.
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { claudeDir, type Env, home } from "../../../lib/paths.ts";
+import { claudeDir, claudeJsonPath, type Env, home } from "../../../lib/paths.ts";
 import { agentChecks, type ClaudePaths, configChecks, skillChecks } from "./claude-files.ts";
 import type { Check } from "./doctor.ts";
 import { isRecord } from "../../../lib/outcome.ts";
@@ -50,9 +50,7 @@ function layout(p: ClaudeProbes): Layout {
   const configDir = claudeDir(p.env);
   return {
     configDir,
-    // Claude Code reads join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json"): any non-empty value,
-    // ~/.claude included, moves it
-    claudeJson: join((p.env.CLAUDE_CONFIG_DIR ?? "") === "" ? h : configDir, ".claude.json"),
+    claudeJson: claudeJsonPath(p.env),
     cwd: p.cwd,
     launcher: join(h, ".local", "bin", "claude"),
     nativeData: join(h, ".local", "share", "claude"),
