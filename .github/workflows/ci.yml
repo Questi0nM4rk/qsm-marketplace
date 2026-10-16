@@ -58,7 +58,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          bun test 2>&1 | tee "$RUNNER_TEMP/test.log"
+          bun test ./ ./.gates 2>&1 | tee "$RUNNER_TEMP/test.log"
       - name: Publish badges
         # Force-pushes one commit to the badges branch; shields.io reads it from there.
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'

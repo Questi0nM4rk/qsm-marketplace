@@ -144,8 +144,9 @@ touching its users (Cockburn, ports and adapters).
   (link, PATH block, data dir, backup) before it writes and names each removal; a second run
   removes nothing. Anything that creates a temp directory writes the full cleanup; a `finally` is
   not it. Spec: `qsm-setup`, install purge.
-- `bun run validate`, `bun run lint`, `bun run typecheck`, `bun test` before a commit. `bun test`
-  skips `plugins/*/hooks/*.test.ts` (they import `claude-code/testing`); `bun run test:hooks` runs
-  those and `claude plugin validate` over every plugin, and skips visibly without `claude` on PATH.
+- `bun run validate`, `bun run lint`, `bun run typecheck`, `bun test ./ ./.gates` before a commit
+  (bun skips a dot directory unless it is named). `bun test` skips `plugins/*/hooks/*.test.ts` (they
+  import `claude-code/testing`); `bun run test:hooks` runs those and `claude plugin validate` over
+  every plugin, and skips visibly without `claude` on PATH.
 - The langdev guard blocks `--no-verify`; a person lets a measured regression pass once with
   `QSM_LANGDEV_ALLOW="<why>"` before the command, which always asks.
