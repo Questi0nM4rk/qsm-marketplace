@@ -65,9 +65,9 @@ test("session.start toasts and still reaches the bottom when process.run has no 
   expect(toasts[0]).toMatch(/^qsm-setup ERROR: session\.start:/);
 });
 
-test("session.start toasts the relink's own exit code when it fails", async ($, on) => {
+test("session.start toasts the relink's own exit code and stderr when it fails", async ($, on) => {
   const { toasts } = await start($, on, ran(1, "", "boom"));
-  expect(toasts[0]).toMatch(/^qsm-setup ERROR: session\.start: relink exited 1/);
+  expect(toasts[0]).toMatch(/^qsm-setup ERROR: session\.start: .*\(exit 1\): boom/);
 });
 
 test("session.start toasts once when the envelope's data.relinked is true", async ($, on) => {

@@ -224,20 +224,20 @@ function pathChecks(
   if (opts.path === undefined) {
     return [];
   }
-  const onPath = qsmBinsIn(opts.path.split(":"));
+  const pathBins = qsmBinsIn(opts.path.split(":"));
   const record = readRecord(recordPath);
   const everyBin = new Set([
     ...declaredBins(nodes).map((b) => b.bin),
     ...Object.keys(record?.bins ?? {}),
   ]);
   const shadowed = [...everyBin].flatMap((bin) => {
-    const first = onPath.get(bin)?.[0];
+    const first = pathBins.get(bin)?.[0];
     const ours = join(opts.binDir, bin);
     return first === undefined || same(first, ours)
       ? []
       : [`${bin} resolves to ${first}, not ${ours}; remove it or put ${opts.binDir} first on PATH`];
   });
-  const stray = [...onPath].filter(([name]) => !everyBin.has(name)).flatMap(([, paths]) => paths);
+  const stray = [...pathBins].filter(([name]) => !everyBin.has(name)).flatMap(([, paths]) => paths);
   return [
     shadowed.length === 0
       ? {

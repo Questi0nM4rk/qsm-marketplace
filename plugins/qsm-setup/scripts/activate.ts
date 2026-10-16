@@ -4,7 +4,6 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import {
   type Activation,
@@ -15,6 +14,7 @@ import {
   type Step,
 } from "../../../lib/install-contract.ts";
 import { isRecord } from "../../../lib/outcome.ts";
+import { claudeDir } from "../../../lib/paths.ts";
 
 const NAME = "instructions";
 const SRC = resolve(import.meta.dir, "../instructions");
@@ -42,10 +42,6 @@ const GENERATED = [
   "rules/git.md",
   "output-styles/qsm.md",
 ];
-
-function claudeHome(env: ActivationContext["env"]): string {
-  return env.CLAUDE_CONFIG_DIR ?? resolve(env.HOME ?? homedir(), ".claude");
-}
 
 const INSTRUCTIONS_CHOICES = ["replace", "overwrite", "skip"] as const;
 export type InstructionsChoice = (typeof INSTRUCTIONS_CHOICES)[number];
@@ -258,7 +254,7 @@ function failed(name: string, e: unknown): Step {
 
 /** First step: the Claude home is a local repository with its .gitignore and a clean tree. */
 export function gitBeforeStep(ctx: ActivationContext): Step {
-  const home = claudeHome(ctx.env);
+  const home = claudeDir(ctx.env);
   const ignorePath = resolve(home, ".gitignore");
   const isRepo = existsSync(resolve(home, ".git"));
   const ignore = completedGitignore(
@@ -334,7 +330,7 @@ export function instructionsStep(ctx: ActivationContext): Step {
 }
 
 function writeInstructions(ctx: ActivationContext): { step: Step; written: string[] } {
-  const home = claudeHome(ctx.env);
+  const home = claudeDir(ctx.env);
   const choice = ctx.choices.instructions;
   if (!isInstructionsChoice(choice)) {
     throw new Error(`--instructions must be one of ${INSTRUCTIONS_CHOICES.join(", ")}`);
@@ -401,7 +397,7 @@ function writeInstructions(ctx: ActivationContext): { step: Step; written: strin
  * Throws, naming the file, on broken markers: the status call reports that cause.
  */
 function instructionsState(env: ActivationContext["env"]): ActivationState {
-  const home = claudeHome(env);
+  const home = claudeDir(env);
   if (!existsSync(resolve(home, "rules/implementation.md"))) {
     return "absent";
   }
@@ -422,7 +418,7 @@ export const activation: Activation = {
     },
   ],
   activate: (ctx): InstallResult => {
-    const home = claudeHome(ctx.env);
+    const home = claudeDir(ctx.env);
     if (ctx.choices.instructions === "skip") {
       const { step } = writeInstructions(ctx);
       return { tool: "qsm-setup", status: step.status, detail: step.detail, steps: [step] };
