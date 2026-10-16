@@ -38,4 +38,12 @@ describe("the command output filter row", () => {
       status: "already",
     });
   });
+
+  test("a named filter that is missing is the user's to install, never a build of ours", async () => {
+    expect(await upstream([], "other-filter")).toMatchObject({
+      name: "upstream other-filter",
+      status: "suggested",
+      detail: `would need other-filter: install other-filter yourself (named by ${FILTER_BIN_ENV})`,
+    });
+  });
 });
