@@ -2,6 +2,7 @@
 // run its body so that it never crashes and never blocks the caller.
 
 import { readFileSync } from "node:fs";
+import { messageOf } from "./outcome.ts";
 
 /** The stdin payload, or null when it is missing or not JSON; the caller checks every field it reads. */
 export function readHookEvent(): unknown {
@@ -17,7 +18,7 @@ async function runHook(main: () => Promise<void>, log: (msg: string) => void): P
   try {
     await main();
   } catch (error) {
-    log(`unexpected error: ${error instanceof Error ? error.message : String(error)}`);
+    log(`unexpected error: ${messageOf(error)}`);
   }
   process.exit(0);
 }

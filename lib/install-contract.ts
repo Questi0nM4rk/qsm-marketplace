@@ -2,7 +2,7 @@
 // Promise<InstallResult>.
 import { spawnSync } from "node:child_process";
 import { type Call, flagArg, parseCall, requiredString } from "./cli-base.ts";
-import { exitOf, fail, type Outcome, ok, renderJson } from "./outcome.ts";
+import { exitOf, fail, messageOf, type Outcome, ok, renderJson } from "./outcome.ts";
 import { type CommandArg, type QsmManifest, toKebab } from "./qsm-manifest.ts";
 
 export type InstallStatus =
@@ -191,7 +191,7 @@ export async function activationMain(
     try {
       state = activation.status(process.env);
     } catch (e) {
-      const outcome = fail("failed", e instanceof Error ? e.message : String(e));
+      const outcome = fail("failed", messageOf(e));
       process.stdout.write(call.json ? renderJson(outcome) : `failed: ${outcome.message}\n`);
       return exitOf(outcome.code);
     }
