@@ -4,15 +4,13 @@
 
 import { readFileSync } from "node:fs";
 import {
-  type Call,
   flagArg,
   type Handler,
   optionalString,
-  requiredString,
   runCli,
   stringList,
 } from "../../../lib/cli-base.ts";
-import { fail, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
+import { fail, ok } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import {
   compareTrees,
@@ -28,14 +26,12 @@ import {
 import {
   alwaysOn,
   detectLanguages,
-  findRepoRoot,
   type GatesConfig,
   isLangdevRepo,
   languageEnabled,
   readGatesConfig,
   writeGatesConfig,
 } from "../lib/config.ts";
-import { editFindings } from "../lib/edit-findings.ts";
 import { type GateOutcome, gatesCode, runGates, SELF_GATES } from "../lib/gate-runner.ts";
 import {
   HOOK_LANGS,
@@ -57,68 +53,11 @@ import {
   resolveLanguage,
 } from "../lib/registry.ts";
 import { semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
-import { type Editor, editedTrees, MAIN_AGENT, readStartPoint } from "../lib/state.ts";
-import {
-  compareWorktreeSince,
-  type StructureResult,
-  type StructureVerdict,
-  verdict,
-} from "../lib/structure.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
+import { dirOf, err, guarded, optOneOf, refuse, required, requireRepo } from "./call.ts";
+import { handlers as judgeHandlers } from "./cli-judge.ts";
 
 const manifest = parseManifest(manifestJson, "qsm-langdev/qsm.json");
-
-function err(line: string): void {
-  process.stderr.write(`${line}\n`);
-}
-
-/** A refusal raised from deep inside a verb's helpers. */
-class Refuse extends Error {
-  readonly outcome: Outcome;
-  constructor(outcome: Outcome) {
-    super(outcome.message ?? "");
-    this.outcome = outcome;
-  }
-}
-
-function refuse(code: Exclude<OutcomeCode, "ok">, message: string): never {
-  throw new Refuse(fail(code, message));
-}
-
-function guarded(handler: Handler): Handler {
-  return async (call) => {
-    try {
-      return await handler(call);
-    } catch (error) {
-      if (error instanceof Refuse) {
-        return error.outcome;
-      }
-      throw error;
-    }
-  };
-}
-
-/** The argument when it is one of `values`, undefined when it was not given. */
-function optOneOf<T extends string>(call: Call, name: string, values: readonly T[]): T | undefined {
-  const value = optionalString(call, name);
-  if (value === undefined) {
-    return undefined;
-  }
-  const match = values.find((candidate) => candidate === value);
-  return match ?? refuse("usage", `${name} must be one of ${values.join(", ")}`);
-}
-
-function required<T>(value: T | undefined, name: string): T {
-  return value ?? refuse("usage", `${name} is required`);
-}
-
-function requireRepo(target: string): string {
-  const root = findRepoRoot(target);
-  if (root === null) {
-    refuse("missing", `${target} is not inside a git repository`);
-  }
-  return root;
-}
 
 function parseLanguages(csv: string): Language[] {
   const named = csv.split(",").filter((f) => f.length > 0);
@@ -129,8 +68,6 @@ function parseLanguages(csv: string): Language[] {
   }
   return [...new Set(resolved.filter((language): language is Language => language !== null))];
 }
-
-const dirOf = (call: Call): string => optionalString(call, "dir") ?? ".";
 
 function printVerdicts(verdicts: readonly Verdict[], changedCount: number): void {
   if (verdicts.length === 0) {
@@ -387,118 +324,6 @@ const init: Handler = guarded((call) => {
   return ok({ profile, languages: widened, added, actions });
 });
 
-interface StructureTree {
-  root: string;
-  start: string;
-}
-
-/**
- * The commit `structure` compares against with no `--against`: the agent's own start point in this
- * tree when `--session` names one, else HEAD.
- */
-function namedCommit(
-  root: string,
-  against: string | undefined,
-  session: string | undefined,
-  agent: string | undefined,
-): string {
-  if (against !== undefined) {
-    return against;
-  }
-  if (session === undefined) {
-    return "HEAD";
-  }
-  const editor: Editor = { sessionId: session, agentId: agent ?? MAIN_AGENT };
-  const start = readStartPoint(editor, root);
-  if (start !== null) {
-    return start;
-  }
-  err(
-    `[qsm-langdev] no start point for agent ${editor.agentId} of session ${session} in this tree` +
-      " — comparing against HEAD. Commits the session already made here are not judged.",
-  );
-  return "HEAD";
-}
-
-/** The trees to judge: the single tree at `path` (or `.`), or, given
- * `--session`/`--agent` and no path, every tree that agent edited. */
-function structureTreesToJudge(
-  target: string | undefined,
-  values: { against?: string; session?: string; agent?: string },
-): StructureTree[] {
-  if (target !== undefined || values.agent === undefined) {
-    const root = requireRepo(target ?? ".");
-    const named = namedCommit(root, values.against, values.session, values.agent);
-    const start = resolveRef(root, named);
-    if (start === null) {
-      refuse("usage", `unknown commit '${named}'`);
-    }
-    return [{ root, start }];
-  }
-  if (values.session === undefined) {
-    refuse("usage", "--agent names an agent of a session; pass --session too");
-  }
-  return editedTrees({ sessionId: values.session, agentId: values.agent });
-}
-
-/** The first failing tree's verdict, else the last tree's, else the
- * report of an agent that edited nothing. */
-async function structureJudgeAll(trees: StructureTree[]): Promise<
-  StructureVerdict & {
-    tree: StructureTree | null;
-    result: StructureResult | null;
-  }
-> {
-  let last: (StructureVerdict & { tree: StructureTree; result: StructureResult }) | null = null;
-  for (const tree of trees) {
-    const result = await compareWorktreeSince(tree.root, tree.start);
-    last = { tree, result, ...verdict(result) };
-    if (!last.pass) {
-      return last;
-    }
-  }
-  return (
-    last ?? {
-      tree: null,
-      result: null,
-      pass: true,
-      summary: "agent edited no tree in this session; nothing to score",
-      detail: [],
-    }
-  );
-}
-
-const structure: Handler = guarded(async (call) => {
-  const against = optionalString(call, "against");
-  const session = optionalString(call, "session");
-  const agent = optionalString(call, "agent");
-  if (against !== undefined && session !== undefined) {
-    return fail(
-      "usage",
-      "--against and --session both name the commit to compare against; pass one",
-    );
-  }
-  const trees = structureTreesToJudge(optionalString(call, "path"), {
-    ...(against === undefined ? {} : { against }),
-    ...(session === undefined ? {} : { session }),
-    ...(agent === undefined ? {} : { agent }),
-  });
-  const report = await structureJudgeAll(trees);
-  err(`  ${report.summary}`);
-  for (const line of report.detail) {
-    err(`  ${line}`);
-  }
-  const data = {
-    root: report.tree?.root ?? null,
-    against: report.tree?.start ?? null,
-    pass: report.pass,
-    summary: report.summary,
-    detail: report.detail,
-    result: report.result,
-  };
-  return report.pass ? ok(data) : fail("worse", report.summary, data);
-});
-
 /** One installed-hook action as the line it prints, or nothing for a kind
  * `installGitHooks` doesn't report (uninstall-only kinds). */
 function describeInstallAction(action: HookAction): string | null {
@@ -614,15 +439,6 @@ const hook: Handler = guarded(async (call) => {
   return fail(code, deciding.map((outcome) => outcome.gate).join(", "), data);
 });
 
-const edited: Handler = guarded(async (call) => {
-  const editor: Editor = {
-    sessionId: requiredString(call, "session"),
-    agentId: optionalString(call, "agent") ?? MAIN_AGENT,
-  };
-  const text = await editFindings(editor, requiredString(call, "file"));
-  return ok({ text }, text ?? "");
-});
-
 if (import.meta.main) {
   process.exit(
     await runCli(manifest, "qsm-langdev", {
@@ -631,11 +447,10 @@ if (import.meta.main) {
       doctor,
       languages,
       init,
-      structure,
       install: installGitHooks,
       uninstall: uninstallGitHooks,
       hook,
-      edited,
+      ...judgeHandlers,
     }),
   );
 }
