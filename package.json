@@ -1,9 +1,10 @@
 {
   "name": "qsm-marketplace",
   "private": true,
+  "license": "GPL-3.0",
   "type": "module",
   "scripts": {
-    "validate": "bun .gates/validate-plugin-contracts.ts && bun .gates/validate-file-size.ts && bun .gates/validate-no-cross-plugin-import.ts && bun .gates/validate-generated.ts && bun .gates/validate-why-it-exists.ts && bun .gates/validate-dependencies.ts",
+    "validate": "bun .gates/validate-plugin-contracts.ts && bun .gates/validate-file-size.ts && bun .gates/validate-no-cross-plugin-import.ts && bun .gates/validate-generated.ts && bun .gates/validate-why-it-exists.ts && bun .gates/validate-dependencies.ts && bun .gates/validate-test-temp.ts",
     "lint": "oxlint --deny-warnings && oxfmt --check \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",
     "lint:fix": "oxlint --fix && oxfmt \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",
     "typecheck": "bun check && bun .gates/typecheck-hooks.ts",
@@ -17,6 +18,5 @@
     "oxlint": "1.88.0",
     "oxlint-tsgolint": "7.0.2004",
     "typescript": "7.0.2"
-  },
-  "license": "GPL-3.0"
+  }
 }
