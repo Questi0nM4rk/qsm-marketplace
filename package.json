@@ -4,6 +4,7 @@
   "license": "GPL-3.0",
   "type": "module",
   "scripts": {
+    "prepare": "git config core.hooksPath hooks",
     "validate": "bun .gates/validate-plugin-contracts.ts && bun .gates/validate-file-size.ts && bun .gates/validate-no-cross-plugin-import.ts && bun .gates/validate-generated.ts && bun .gates/validate-why-it-exists.ts && bun .gates/validate-dependencies.ts && bun .gates/validate-npm-packages.ts && bun .gates/validate-no-private-helpers.ts && bun .gates/validate-test-temp.ts",
     "lint": "oxlint --deny-warnings && oxfmt --check \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",
     "lint:fix": "oxlint --fix && oxfmt \".gates/**/*.ts\" \"lib/**/*.ts\" \"plugins/**/*.{ts,tsx}\"",

@@ -14,4 +14,6 @@ if ! bun check --help >/dev/null 2>&1; then
   exit 1
 fi
 bun run validate || exit 1
+# .claude/types is gitignored and copied from the engine, so a fresh clone or worktree has none.
+bun run plugin-types >/dev/null || exit 1
 bun run typecheck || exit 1
