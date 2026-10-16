@@ -252,3 +252,36 @@ test("the stage tool answers what the stage asks, and every prompt carries where
   expect(band).toContain('" VERIFY "');
   expect(band).toContain("LOAD · starting");
 });
+
+test("a failing tasks verb toasts qsm-cockpit ERROR and the session still starts", async ($, on) => {
+  beneath(on);
+  const toasts: string[] = [];
+  let toasted: () => void = () => {};
+  const arrived = new Promise<void>((resolve) => {
+    toasted = resolve;
+  });
+  on("session.start", (_engine, e) => ({ cwd: e.cwd }));
+  on("command.register", () => ({ value: { command: "cockpit" } }));
+  on("tool.register", () => ({ value: { tool: "stage" } }));
+  on("process.run", () => ({
+    value: {
+      exitCode: 4,
+      stdout: "",
+      stderr: "br did not run",
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }));
+  on("ui.log", () => ({ value: undefined }));
+  on("ui.toast", (_engine, e) => {
+    toasts.push(e.text);
+    toasted();
+    return { value: undefined };
+  });
+
+  await $.session.start({ cwd: "/repo", surface: null, isInteractive: false });
+  await arrived;
+
+  expect(toasts).toHaveLength(1);
+  expect(toasts[0]).toMatch(/^qsm-cockpit ERROR: tasks: .*\(exit 4\)/);
+});

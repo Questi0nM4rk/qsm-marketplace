@@ -1,6 +1,6 @@
 // The cockpit's rules, apart from its wiring: the six stages and what each asks, how a model maps to
 // its tier and colour, how a tool call is said short, and what an answered question records.
-import type { Decision, Stage, StageStep, Task } from "../types/index.d.ts";
+import type { Decision, Stage, StageStep, Task } from "../types/state.d.ts";
 
 export const STAGES: Stage[] = ["LOAD", "PLAN", "EXECUTE", "VERIFY", "LEARN", "CLOSE"];
 
@@ -54,19 +54,20 @@ const GUIDE: Record<Stage, { asks: string; done: string; next: Stage }> = {
   },
 };
 
+// differs: hooks sandbox (the hooks module imports this file, and root lib/ is out of its reach)
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-/** The in-progress tasks `br list --json` printed: each issue that has an id and a title. */
-export function parseIssues(stdout: string): Task[] {
-  const parsed: unknown = JSON.parse(stdout);
-  const issues = isRecord(parsed) && Array.isArray(parsed.issues) ? parsed.issues : [];
-  return issues.flatMap((issue: unknown) =>
-    isRecord(issue) && typeof issue.id === "string" && typeof issue.title === "string"
-      ? [{ id: issue.id, title: issue.title }]
-      : [],
-  );
+/** The tasks in a list of issues: each entry that has an id and a title. */
+export function tasksOf(issues: unknown): Task[] {
+  return Array.isArray(issues)
+    ? issues.flatMap((issue: unknown) =>
+        isRecord(issue) && typeof issue.id === "string" && typeof issue.title === "string"
+          ? [{ id: issue.id, title: issue.title }]
+          : [],
+      )
+    : [];
 }
 
 export function isStage(value: unknown): value is Stage {

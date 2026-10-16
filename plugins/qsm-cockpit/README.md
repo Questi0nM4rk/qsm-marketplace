@@ -41,6 +41,6 @@ tool.
 
 - The step is what the agent said. An agent that never calls `stage` leaves the band on "not said".
 - The Tasks card asks the task tool for the claimed tasks in the session's directory. A directory
-  without a tracker leaves the card as it was and logs why. A task an agent closes shows only after
-  the main chat runs a task-tool command.
+  without a tracker leaves the card as it was and toasts `qsm-cockpit ERROR: tasks: ...`. A task an
+  agent closes shows only after the main chat runs a task-tool command.
 - A subagent's `stage` call moves its own row, never the chat's step.
