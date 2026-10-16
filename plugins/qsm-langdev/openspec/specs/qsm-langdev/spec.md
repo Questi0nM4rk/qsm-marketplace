@@ -133,7 +133,8 @@ score only what is missing. So the first run in a worktree scores both sides
 once, and every later run scores the shipped side only, because the reference
 is the content of the last commit, which the store already holds from when it
 was the shipped side. A change of tool version or configuration misses the
-store and scores both sides again, once. Switching branches, pulling or
+store and scores both sides again, once, and so does a qsm-langdev that scores
+a side with other inputs: an entry an older one stored is not read. Switching branches, pulling or
 rebasing needs nothing special: content the store does not know is scored
 once. A rule pack a checker would pull over the network (semgrep's `p/<pack>`,
 or a single rule, `r/<id>`) SHALL be fetched once per run into a local file the

@@ -19,8 +19,9 @@ export type Score =
   | { tally: Tally; output: string }
   | { reason: string; timedOut?: true; failedRun?: true };
 
-/** The stored form of a score. */
-const SHAPE = 2;
+/** The stored form of a score, raised whenever what a stored score means changes (its form, or
+ * the inputs a side is scored with), so an entry an older qsm-langdev wrote is scored again. */
+const SHAPE = 3;
 
 /** How much of one side came from the store and how much was scored. */
 export interface SideUse {
