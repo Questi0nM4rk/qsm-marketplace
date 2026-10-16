@@ -1,18 +1,15 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PLACEHOLDER } from "./generate.ts";
 import { MAX_SKILL_BYTES, scanSkill } from "./scan.ts";
-
-const sandboxes: string[] = [];
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const frontmatter = (name: string) => `---\nname: ${name}\ndescription: "x"\n---\n\n`;
 
 /** A minimal assembled skill, valid unless a test breaks one thing in it. */
 function skillDir(slug: string, definition?: string): string {
-  const root = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-scan-"));
-  sandboxes.push(root);
+  const root = sandboxDir("qsm-book-to-skill-scan-");
   const dir = join(root, slug);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
@@ -21,15 +18,6 @@ function skillDir(slug: string, definition?: string): string {
   );
   return dir;
 }
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 describe("scanSkill", () => {
   test("a complete skill has no finding", () => {
@@ -111,6 +99,6 @@ describe("scanSkill over the skill's files", () => {
   });
 
   test("a directory that is not there is reported, not thrown", () => {
-    expect(scanSkill(join(tmpdir(), "qsm-book-to-skill-scan-absent")).length).toBe(1);
+    expect(scanSkill(join(sandboxDir("qsm-book-to-skill-scan-"), "absent")).length).toBe(1);
   });
 });

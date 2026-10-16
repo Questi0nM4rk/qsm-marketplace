@@ -4,14 +4,14 @@
 // here reaches GitHub, and the working directory is a scratch dir with no
 // origin remote, so repository detection is what the test says it is and
 // not what the developer's checkout happens to be.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseJson } from "../lib/exec.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -61,9 +61,9 @@ const GRAPHQL = {
 let sandbox = "";
 let cwd = "";
 
-beforeAll(() => {
-  sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-gh-"));
-  cwd = mkdtempSync(join(tmpdir(), "qsm-forge-gh-cwd-"));
+beforeEach(() => {
+  sandbox = sandboxDir("qsm-forge-gh-");
+  cwd = sandboxDir("qsm-forge-gh-cwd-");
   writeFileSync(join(sandbox, "graphql.json"), JSON.stringify(GRAPHQL));
   const fake = join(sandbox, "gh");
   writeFileSync(
@@ -77,14 +77,6 @@ esac
 `,
   );
   chmodSync(fake, 0o755);
-});
-
-afterAll(() => {
-  for (const dir of [sandbox, cwd]) {
-    if (dir !== "") {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
 });
 
 interface Run {

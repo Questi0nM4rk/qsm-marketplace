@@ -1,14 +1,14 @@
 // The gl half of qsm-forge through its real surface, against a `glab` the
 // test writes into a sandbox and puts first on PATH, with every call
 // prefixed "gl" for the merged binary.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseJson } from "../lib/exec.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isNumber, isString, objectOf, orNull } from "../lib/shape.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -43,9 +43,9 @@ const DISCUSSIONS = [
 let sandbox = "";
 let cwd = "";
 
-beforeAll(() => {
-  sandbox = mkdtempSync(join(tmpdir(), "qsm-forge-gl-"));
-  cwd = mkdtempSync(join(tmpdir(), "qsm-forge-gl-cwd-"));
+beforeEach(() => {
+  sandbox = sandboxDir("qsm-forge-gl-");
+  cwd = sandboxDir("qsm-forge-gl-cwd-");
   writeFileSync(join(sandbox, "mr.json"), JSON.stringify(MERGE_REQUEST));
   writeFileSync(join(sandbox, "discussions.json"), JSON.stringify(DISCUSSIONS));
   const fake = join(sandbox, "glab");
@@ -60,14 +60,6 @@ esac
 `,
   );
   chmodSync(fake, 0o755);
-});
-
-afterAll(() => {
-  for (const dir of [sandbox, cwd]) {
-    if (dir !== "") {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
 });
 
 interface Run {

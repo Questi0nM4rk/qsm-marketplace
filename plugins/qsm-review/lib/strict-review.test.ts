@@ -5,11 +5,11 @@
 // decisions with stub agents, which is what this file tests. The script source
 // is never edited, only wrapped, so a rule that moves in the script moves here.
 
-import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 interface AgentOpts {
   readonly phase?: string;
@@ -60,10 +60,9 @@ interface Result {
   };
 }
 
-const sandbox = mkdtempSync(join(tmpdir(), "qsm-review-flow-"));
-afterAll(() => {
-  rmSync(sandbox, { recursive: true, force: true });
-});
+// The wrapped workflow is imported once below, so removing its directory after
+// the first test is safe.
+const sandbox = sandboxDir("qsm-review-flow-");
 
 const script = join(import.meta.dirname, "..", "workflows", "strict-review.mjs");
 const source = readFileSync(script, "utf8").replace(/^export const meta/m, "const meta");

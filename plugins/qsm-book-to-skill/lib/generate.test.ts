@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   type AssembleResult,
@@ -11,23 +10,7 @@ import {
 } from "./generate.ts";
 import { scanSkill } from "./scan.ts";
 import { analyzeText } from "./structure.ts";
-
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-book-to-skill-generate-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 const FIXTURE = [
   "# Deep Modules",
@@ -48,7 +31,7 @@ function fillDrafts(dir: string): void {
 
 describe("draftSkill", () => {
   test("writes a source file and a summary scaffold per chapter", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-generate-");
     const result = draftSkill(FIXTURE, analyzeText(FIXTURE), dir);
     expect(result.chapters.map((c) => c.summary)).toEqual([
       "chapters/01-deep-modules.md",
@@ -63,7 +46,7 @@ describe("draftSkill", () => {
   });
 
   test("every drafted file carries the placeholder that keeps it unfinished", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-generate-");
     const result = draftSkill(FIXTURE, analyzeText(FIXTURE), dir);
     for (const file of result.chapters.map((c) => c.summary)) {
       expect(readFileSync(join(dir, file), "utf8")).toContain(PLACEHOLDER);
@@ -71,13 +54,13 @@ describe("draftSkill", () => {
   });
 
   test("a draft holds chapters and nothing else to fill", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-generate-");
     draftSkill(FIXTURE, analyzeText(FIXTURE), dir);
     expect(readdirSync(dir)).toEqual(["chapters"]);
   });
 
   test("a chapter with an unusable title still gets a file", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-book-to-skill-generate-");
     const text = ["# ???", "one", "# !!!", "two"].join("\n");
     const result = draftSkill(text, analyzeText(text), dir);
     expect(result.chapters.map((c) => c.summary)).toEqual([
@@ -91,8 +74,8 @@ describe("draftSkill", () => {
  * assemble. The three stages always run together here, because assembly has
  * nothing to work from until the first two have. */
 function assembled(): AssembleResult {
-  const draftDir = sandbox();
-  const outRoot = sandbox();
+  const draftDir = sandboxDir("qsm-book-to-skill-generate-");
+  const outRoot = sandboxDir("qsm-book-to-skill-generate-");
   draftSkill(FIXTURE, analyzeText(FIXTURE), draftDir);
   fillDrafts(draftDir);
   return assembleSkill({

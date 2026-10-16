@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   cacheDir,
@@ -11,44 +10,31 @@ import {
   tryLock,
   writeCache,
 } from "./cache.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 // Every sandbox this file makes is removed after the test that made it,
 // passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-statusline-cache-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of sandboxes.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 const NOW = 1_800_000_000_000;
 
 describe("readCache and writeCache", () => {
   test("a body written now reads back with no age", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cache-");
     writeCache(dir, "git", '{"branch":"main"}', NOW);
     expect(readCache(dir, "git", NOW)).toEqual({ ageMs: 0, body: '{"branch":"main"}' });
   });
 
   test("the age is measured against the stamp the write left", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cache-");
     writeCache(dir, "git", "body", NOW - 5000);
     expect(readCache(dir, "git", NOW)?.ageMs).toBe(5000);
   });
 
   test("nothing on disk is nothing to render, not a failure", () => {
-    expect(readCache(sandbox(), "git", NOW)).toBeNull();
+    expect(readCache(sandboxDir("qsm-statusline-cache-"), "git", NOW)).toBeNull();
   });
 
   test("a file in a layout this build does not read is treated as nothing", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cache-");
     writeFileSync(join(dir, "git"), "no stamp here\nbody");
     expect(readCache(dir, "git", NOW)).toBeNull();
   });
@@ -68,13 +54,13 @@ describe("isFresh", () => {
 
 describe("tryLock", () => {
   test("the first caller takes the lock and the next one is turned away", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cache-");
     expect(tryLock(dir, "git", NOW)).toBe(true);
     expect(tryLock(dir, "git", NOW)).toBe(false);
   });
 
   test("a lock nobody released expires, so one killed refresher cannot wedge a segment", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-statusline-cache-");
     expect(tryLock(dir, "git", NOW)).toBe(true);
     expect(tryLock(dir, "git", NOW + LOCK_TTL_MS)).toBe(true);
   });

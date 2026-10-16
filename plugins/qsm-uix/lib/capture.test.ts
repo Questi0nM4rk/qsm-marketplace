@@ -7,30 +7,14 @@
 // machine without it cannot run the kit either, so a failure here is honest
 // rather than a skipped test hiding a broken pipeline.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { CaptureError } from "./errors.ts";
 import { burst, contrast, crop, diff, IMAGE_TOOL, pixelSample, regionStats } from "./capture.ts";
 
 import { type Command, run } from "./run.ts";
-
-// Every sandbox this file makes is removed after the whole file, passing or
-// failing: a `finally` inside one test would leave the rest behind.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-uix-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterAll(() => {
-  for (const dir of sandboxes) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 /** One row of solid colours, one pixel each: `paint(into, name, ["#000000",
  * "#FFFFFF"])` is a two-pixel image, black on the left, white on the right. */
@@ -70,8 +54,8 @@ let dir = "";
 let pair = "";
 let quarters = "";
 
-beforeAll(() => {
-  dir = sandbox();
+beforeEach(() => {
+  dir = sandboxDir("qsm-uix-");
   pair = paint(dir, "pair.png", ["#000000", "#FFFFFF"]);
   quarters = paint(dir, "quarters.png", ["#000000", "#000000", "#000000", "#FFFFFF"]);
 });

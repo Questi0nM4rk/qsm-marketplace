@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { UsageError } from "./errors.ts";
 import { MissingError } from "./missing-error.ts";
 import { parseReviewPayload, readPayloadFile } from "./review-payload.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 describe("a well-formed payload", () => {
   test("a decision, an overall comment, and inline comments come through", () => {
@@ -80,24 +80,15 @@ describe("Empty or malformed input", () => {
 
 describe("the payload named by --file", () => {
   test("a file that is there comes back whole", () => {
-    const dir = mkdtempSync(join(tmpdir(), "qsm-forge-payload-"));
-    try {
-      const path = join(dir, "review.json");
-      writeFileSync(path, '{"decision":"approve"}');
-      expect(parseReviewPayload(readPayloadFile(path)).decision).toBe("approve");
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const path = join(sandboxDir("qsm-forge-payload-"), "review.json");
+    writeFileSync(path, '{"decision":"approve"}');
+    expect(parseReviewPayload(readPayloadFile(path)).decision).toBe("approve");
   });
 
   test("a path that is not there is an absent prerequisite, not a wrong argument", () => {
-    const dir = mkdtempSync(join(tmpdir(), "qsm-forge-payload-"));
-    try {
-      expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(MissingError);
-      expect(() => readPayloadFile(join(dir, "absent.json"))).not.toThrow(UsageError);
-      expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(/nothing was posted/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = sandboxDir("qsm-forge-payload-");
+    expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(MissingError);
+    expect(() => readPayloadFile(join(dir, "absent.json"))).not.toThrow(UsageError);
+    expect(() => readPayloadFile(join(dir, "absent.json"))).toThrow(/nothing was posted/);
   });
 });

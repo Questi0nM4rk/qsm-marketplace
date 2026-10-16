@@ -1,28 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { checkNote, parseFrontmatter, validateFile } from "./note.ts";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 
 // Every sandbox this file makes is removed after the test that made it,
 // passing or failing: a `finally` inside one test would leave the rest.
-const sandboxes: string[] = [];
-
-function sandbox(): string {
-  const dir = mkdtempSync(join(tmpdir(), "qsm-knowledge-"));
-  sandboxes.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  while (sandboxes.length > 0) {
-    const dir = sandboxes.pop();
-    if (dir !== undefined) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
-
 const GOOD = `---
 title: Strangler fig
 created: 2026-01-08
@@ -126,7 +109,7 @@ Body with [[branch-by-abstraction]].
 
 describe("validateFile", () => {
   test("a good note on disk reports ok", () => {
-    const path = join(sandbox(), "note.md");
+    const path = join(sandboxDir("qsm-knowledge-"), "note.md");
     writeFileSync(path, GOOD);
     const report = validateFile(path);
     expect(report.ok).toBe(true);
@@ -135,20 +118,20 @@ describe("validateFile", () => {
   });
 
   test("a note with a problem reports not ok", () => {
-    const path = join(sandbox(), "note.md");
+    const path = join(sandboxDir("qsm-knowledge-"), "note.md");
     writeFileSync(path, GOOD.replace("type: concept", "type: journal"));
     expect(validateFile(path).ok).toBe(false);
   });
 
   test("a path that is not there is an error, not a throw", () => {
-    const path = join(sandbox(), "absent.md");
+    const path = join(sandboxDir("qsm-knowledge-"), "absent.md");
     const report = validateFile(path);
     expect(report.ok).toBe(false);
     expect(report.errors[0]).toBe(`no file at ${path}`);
   });
 
   test("a directory is an error, not a throw", () => {
-    const dir = sandbox();
+    const dir = sandboxDir("qsm-knowledge-");
     const report = validateFile(dir);
     expect(report.ok).toBe(false);
     expect(report.errors).toEqual([`not a file: ${dir}`]);
