@@ -37,7 +37,7 @@ function registerBrief(on: On): void {
       next.error.message ?? `${next.error.kind}: ran past its ${next.error.budget} ms budget`;
     $.ui.toast(`qsm-builder ERROR: tool.call: ${cause.slice(0, 240)}`);
     $.ui.log(
-      `qsm-builder: the open tasks of a plugin were not added to ${e.file_path} (${next.error.kind}): ${cause}`,
+      `the open tasks of a plugin were not added to ${e.file_path} (${next.error.kind}): ${cause}`,
     );
     return next(e);
   });
