@@ -1,21 +1,21 @@
 ---
 name: writing
-description: "Use when writing anything the reader ships or keeps: a commit message, a ticket, a merge request title and description, a code review reply, a README or design document, a code comment, an error message, a changelog entry. Triggers: write the commit message, describe this MR, write the ticket, document this, reply to the review, README for this, explain this in the docs, napis commit, napis ticket."
+description: "Use when writing anything the reader ships or keeps: a commit message, a merge request title and description, a code review reply, a README or design document, a code comment, an error message, a changelog entry. Triggers: write the commit message, describe this MR, document this, reply to the review, README for this, explain this in the docs, napis commit."
 ---
 
 # Writing
 
-Chat follows the output style. This skill is for text that outlives the conversation: someone
-reads it later, without you there, and acts on it. It serves that reader. The failure it prevents
-is text that describes what was done instead of what the reader needs: a commit listing files, a
-ticket restating the bug report, a README explaining the framework, each correct and useless.
-Before the first word, know who reads it, what they do after, and the one thing they must not
-miss. It does not make the text longer: say what the reader needs and stop.
+Chat follows the output style. This skill is for text that outlives the conversation: someone reads
+it later, without you there, and acts on it. It serves that reader. The failure it prevents is text
+that describes what was done instead of what the reader needs: a commit listing files, a README
+explaining the framework, each correct and useless. Before the first word, know who reads it, what
+they do after, and the one thing they must not miss. It does not make the text longer: say what the
+reader needs and stop.
 
 ## For everything
 
-- Lead with what the reader does with it: a commit says what changed and why, a ticket what is
-  wrong for whom, a README how to use it in two minutes. Reason and detail follow.
+- Lead with what the reader does with it: a commit says what changed and why, a README how to use
+  it in two minutes. Reason and detail follow.
 - One reading per sentence: each pronoun points at one thing, `only` and `not` sit beside the
   word they limit, no more than two nouns in a row ("the timeout of the retry policy", not "retry
   policy timeout").
@@ -45,15 +45,7 @@ miss. It does not make the text longer: say what the reader needs and stop.
 
 ## Ticket
 
-- Title: the problem as the user meets it, in their words, under 80 characters ("Invoice PDF shows
-  last month's address after a move", not "Address bug").
-- First paragraph: what happens, for whom, how often, what they expected. A reader who stops here
-  can set priority.
-- Then numbered reproduction steps a stranger can follow with the exact input and wrong output,
-  what is known about the cause marked measured or guessed, and what done looks like as a check
-  someone can run.
-- Name what is out of scope when it is likely confused with the ticket ("Not this ticket: the email
-  template, tracked in X"). A developer must be able to act without a meeting.
+An epic, task or issue is written by the task-writing skill of qsm-tasks.
 
 ## Merge request
 
@@ -102,7 +94,6 @@ because git has the history and the tracker has the tasks.
 
 - When a commit subject names a file, name the behaviour, because the history reader never saw the
   diff.
-- When a ticket has no steps or expected output, add them, because nobody can start.
 - When an MR description walks through the diff, replace it with the why and the verify.
 - When a README explains the framework, link it and get to our commands.
 - When a document says "previously" or "new", delete it, because the document ages in a week.

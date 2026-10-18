@@ -66,6 +66,30 @@ by the main agent, except feedback, which a subagent files into the marketplace 
   tracker binary
 - **THEN** the mention is replaced with "the task tool" and a pointer to the `task-tool` skill
 
+### Requirement: Task text is written for a maintainer and a newcomer
+
+The `task-writing` skill SHALL hold the form of the text of an epic or task, tool-neutral: a title
+in the user's words, a plain summary, a before and after, done-when criteria that each pair an input
+with an exact expected result, what is out of scope, and a decision with its rejected options. It
+SHALL be the one owner of that form, and the `writing` skill SHALL point at it.
+
+#### Scenario: A bug is filed
+
+- **WHEN** the agent writes a task for a bug
+- **THEN** the title is the problem in the user's words, the reproduction steps carry exact input
+  and wrong output, and the cause is marked measured or guessed
+
+#### Scenario: A criterion is vague
+
+- **WHEN** a done-when line says "works" or "fast"
+- **THEN** it is replaced with an input and an exact result, or a number
+
+#### Scenario: A newcomer reads it
+
+- **WHEN** a first-time contributor opens the task
+- **THEN** the plain summary and the before and after tell them what changes without the precise
+  section, which is marked so they can skip it
+
 ### Requirement: Install puts br on the machine or says how
 
 `scripts/install.ts` SHALL probe for `br` and, when it is missing, report it as a missing
