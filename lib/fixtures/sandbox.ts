@@ -3,7 +3,15 @@
 // afterAll once per run. A helper's own top-level afterEach would bind only to the first test file
 // that imports it, which is how every other file's sandboxes leaked.
 import { afterAll, afterEach } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -44,6 +52,16 @@ function cleanBefore(base: string): void {
       `test-run: removed ${join(base, name)}, left by run ${pid} that ended before its cleanup`,
     );
   }
+}
+
+// bun reads bunfig.toml from the working directory only. A run started inside a plugin loads this
+// file as a plain import, its afterAll binds to the first test file, and that file's end removes the
+// run directory under every later file (ENOENT on mkdtemp).
+const bunfig = join(process.cwd(), "bunfig.toml");
+if (!existsSync(bunfig) || !readFileSync(bunfig, "utf8").includes("lib/fixtures/sandbox.ts")) {
+  throw new Error(
+    "test-run: run bun test from the repository root, where bunfig.toml preloads lib/fixtures/sandbox.ts",
+  );
 }
 
 // The run: every temp path below points into one directory of this process. A nested `bun test`
