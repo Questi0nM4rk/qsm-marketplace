@@ -81,13 +81,13 @@ replacement: `✔` can render as a box on a limited font.
 
 ## Progress and feedback
 
-- Under about 100 ms, print nothing extra. A spinner for a near-instant action is a flash.
-- From 1 s, show that work is alive: a spinner or a count on stderr (TTY only). Known total:
-  `done/total` and a percentage; unknown: a spinner and the current item. Why: silence past a
-  second reads as a hang, and people interrupt a working tool.
+- Feedback timing (when to stay silent, when to show progress) is the ux-audit standard; in a
+  terminal the progress is a spinner or a count on stderr, TTY only. Known total: `done/total` and
+  a percentage; unknown: a spinner and the current item.
 - Finish by overwriting the line with the final result, and leave the terminal clean (cursor shown,
   line cleared) on error and on SIGINT too.
-- Off a TTY, one line at the start and one at the end of a step that takes over 1 s; never a bar.
+- Off a TTY, one line at the start and one at the end of a step that earns progress under that
+  standard; never a bar.
 
 ## Messages
 
