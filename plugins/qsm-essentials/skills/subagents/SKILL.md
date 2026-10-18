@@ -27,6 +27,8 @@ does what").
    worker closes it silently.
 5. A worker that edits gets its own worktree and branch, made before dispatch. You review and merge.
    Two writers in one tree lose changes.
+   The dispatch prompt names the path made for that one worker, never your own tree or another
+   worker's: "your own worktree" beside a shared path still sends every worker into one tree.
 6. Independent tasks (no shared file, no ordering) go out in one response, each with its own slice
    of the work named, so no two cover the same ground. More than three for one piece of work is a
    Workflow (workflow-authoring skill).
