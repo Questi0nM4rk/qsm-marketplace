@@ -47,6 +47,11 @@ function stubOperations(
     if (argv.includes("--version")) {
       return done("wt v0.68.0\n");
     }
+    if (e.argv[0] === "qsm-worktrunk") {
+      return done(
+        JSON.stringify({ code: "ok", exit: 0, message: "", data: ["agent-x", "agent-y"] }),
+      );
+    }
     if (e.argv[0] === "sh") {
       return done("/usr/bin/wt\n");
     }
@@ -152,12 +157,18 @@ test("A new turn starts", async ($, on) => {
 
 test("The session ends", async ($, on) => {
   const argvs: string[] = [];
+  const toasts: string[] = [];
   on("session.end", (_$, e) => ({ sessionId: e.sessionId }));
+  on("ui.toast", (_$, e) => {
+    toasts.push(e.text);
+    return { value: undefined };
+  });
   stubOperations(on, { onRun: (argv) => argvs.push(argv.join(" ")) });
 
   await $.session.end({ reason: "other", sessionId: "sess-1", resume: { id: "sess-1" } });
 
   expect(argvs).toContain("wt config state marker clear");
+  expect(toasts.join("\n")).toContain("agent-x, agent-y");
 });
 
 test("session.start declares /qsm-worktrunk, which is what makes the doctor reachable", async ($, on) => {

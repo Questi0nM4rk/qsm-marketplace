@@ -22,12 +22,13 @@ reason to exist.
 | Command | `/qsm-worktrunk` | Reports whether `wt` is installed and new enough |
 | Hook | `tool.call` on Bash | Refuses raw `git worktree` and names the `wt` command instead |
 | Hook | `prompt.submit` | Tells the agent which workspace it runs in, and sets the working marker |
-| Hook | `session.end` | Clears the working marker |
+| Hook | `session.end` | Clears the working marker and names every local branch ahead of the working branch |
 | Hook | `WorktreeCreate` | Creates the workspace through `wt` and points it at the main checkout's task store |
 | Hook | `WorktreeRemove` | Removes the workspace through `wt` |
 | Hook | `Notification` | Sets the activity marker |
+| CLI | `qsm-worktrunk ahead` | Lists the local branches that hold commits the working branch lacks |
 
-This plugin ships no CLI of its own. `wt` is not shipped here.
+`wt` is not shipped here.
 
 ## Install
 
@@ -36,9 +37,10 @@ claude plugin install qsm-worktrunk@qsm-marketplace
 bun plugins/qsm-worktrunk/scripts/install.ts
 ```
 
-The install script compiles the three classic hooks. It links no binary. It reports `wt` when it is
-missing. Install `wt` first (`sudo pacman -S worktrunk`, `brew install worktrunk` or
-`cargo install worktrunk`), then run `wt config shell install` once and open a new shell.
+The install script compiles `qsm-worktrunk` and the three classic hooks, and links the binary. It
+reports `wt` when it is missing. Install `wt` first (`sudo pacman -S worktrunk`,
+`brew install worktrunk` or `cargo install worktrunk`), then run `wt config shell install` once and
+open a new shell.
 
 ## Use
 
@@ -52,7 +54,8 @@ wt merge <branch>
 wt remove <branch>
 ```
 
-`/qsm-worktrunk` reports whether `wt` is installed and new enough.
+`/qsm-worktrunk` reports whether `wt` is installed and new enough. `qsm-worktrunk ahead` lists the
+branches still to merge or delete; the session end toasts the same list.
 
 ## Caveats
 
@@ -62,6 +65,8 @@ wt remove <branch>
 - The block misses a `git worktree` call built inside a command substitution or a script file.
 - The task store is shared. A task closed in a workspace is closed everywhere, and it stays closed
   after the workspace is deleted.
+- The branches-ahead list is literal: any local branch with a commit the working branch lacks,
+  `main` included when the working branch is behind it.
 - Removing a workspace deletes its branch and does not ask. `wt remove` keeps a branch with
   unmerged commits.
 - `wt merge` squashes unless you pass `--no-squash`.
