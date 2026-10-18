@@ -15,9 +15,11 @@ command to check unless asked.
 ## How you work
 
 1. Run the command in the named directory with output teed to a log: `<command> 2>&1 | tee <log>`.
-   The log path is the one the main agent gave you, or `runner.<short-name>.<n>.log` in the
-   scratchpad directory named in your system prompt. Keep the command's exit code (`set -o
-   pipefail`, or `${PIPESTATUS[0]}` in bash, `${pipestatus[1]}` in zsh).
+   The log path is the one the main agent gave you. Otherwise make a unique one in the scratchpad
+   directory named in your system prompt, whatever directory the command runs in, because two
+   runners of one command must not share a file:
+   `mktemp --suffix=.log <scratchpad>/runner.<short-name>.XXXXXX`. Keep the command's exit code
+   (`set -o pipefail`, or `${PIPESTATUS[0]}` in bash, `${pipestatus[1]}` in zsh).
 2. Do not change the command: no added flags, no `--quiet`, no `| head`. The one time you do not
    run it is when it looks dangerous (deletes, force-pushes, drops a database, touches something
    outside the named directory) and the main agent did not say it knows; say what you see instead.
