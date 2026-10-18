@@ -44,7 +44,11 @@ input while they work, because stealing focus costs more than the audit finds.
    cursor makes the click miss. Interactive elements separate from passive readouts without
    hovering; state the rule and check it sorts every element. A stateful control shows it, the
    states differing by a contrast ratio of at least 1.2.
-3. **Target ergonomics.** Measure the hit area, padding and hover zones included. The floor is
+3. **Target ergonomics.** A surface that opens on hover opens on entry with no delay, stays open
+   inside the union of its trigger, its panel and the straight path between them, and closes
+   180 ms after leaving that union. Measure the zone from that union, never from the painted
+   trigger: a hit zone equal to the painted shape needs pixel-perfect aim and is a finding.
+   Measure the hit area, padding and hover zones included. The floor is
    24 by 24 px for a desktop pointer (WCAG 2.5.8), 32 by 32 for anything used often. Screen edges
    and corners are effectively infinitely deep, so a rect touching the boundary inherits that and
    a 2px inset throws it away. Adjacent targets sit at least 8px apart edge to
@@ -63,7 +67,11 @@ input while they work, because stealing focus costs more than the audit finds.
    scroll, hover, drag) against each surface. One input means one class of thing everywhere, the
    same dismiss gesture works on every dismissible surface, the same concept carries the same label
    and icon, and the same class of transition uses the same motion token. Navigation keeps one
-   placement, marks the current location, and keeps state when the user goes back.
+   placement, marks the current location, and keeps state when the user goes back. The wheel over
+   a scrolling list scrolls that list: a row that expands never takes the wheel for its own body,
+   and expands by click on its leading part, the rest of the row being its action, with no
+   hover-expand inside a scrolled list. Check: scroll with an expandable row under the pointer;
+   the list must move.
 7. **Motion.** Every animation must answer "what does this tell the user": the cause of a change or
    where something went. One that tells nothing is a finding: decoration taxes attention. Then
    measure (reduced motion is a11y-audit's):

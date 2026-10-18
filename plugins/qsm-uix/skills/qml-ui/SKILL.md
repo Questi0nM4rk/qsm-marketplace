@@ -24,9 +24,14 @@ choose values, audit, or restyle what was not asked.
    source; do not invent tokens inside a component. When the shell cannot be read, write
    `Theme.<role>` and `Motion.<name>`, list those names as assumed to be matched to the singleton
    before merge, never a literal and never a new object.
-3. **Reuse before building.** Look in the shell's own `components/` first, then Qt Quick Controls,
-   and write a custom control only when the design source demands what they cannot do, because a
-   system control brings focus, keyboard handling, and accessibility that a custom one must redo.
+3. **Reuse before building.** Search the shared component library by concept before writing any
+   visible control, in a consumer of the library too, then Qt Quick Controls. When a type already
+   does the concept, use it and add the missing slot or value to it. A consumer never defines a
+   control named after where it is used (`PopoutRow`, `OsdSlider`), because that is a second copy
+   that drifts, and a system control brings focus, keyboard handling, and accessibility that a
+   custom one must redo.
+4. **Open every file the owner named** (plugin, PDF, spec) before the first edit. If one is
+   missing, say so in the first reply, because an answer built without it is rebuilt.
 
 ## Rules
 
@@ -42,6 +47,10 @@ choose values, audit, or restyle what was not asked.
   for the whole shell; if it does not clamp, add the clamp there, not in components.
   Hover and press change colour, opacity, or elevation, never `width`/`height`/`x`/`y` of the
   hit area, because a moving bounds under the pointer flickers the state.
+- **A hover surface** opens on entry, stays open while the pointer is inside the union of its
+  trigger, panel and the path between them, and closes 180 ms after leaving it (ux-audit check 3).
+  Name the state by what the pointer does (`hovered`), never `held`, and never delay the opening,
+  because the owner ruled this and a delayed rollout reads as broken.
 - **Integer geometry.** A fractional `x`/`y`/`width` blurs a 1 px edge. Round computed sizes
   (`Math.round`, `Math.ceil` for text-driven ones). Position with `anchors` or `Layout`, never
   both on one item (a binding loop warning is the symptom), and use `Layout` where the content
@@ -102,9 +111,12 @@ this UI, it is the introspection surface.
 2. `qmllint <file>`, clean. Without import paths it may report Quickshell and `qs.*` types as not
    found (`-I <dir>` points it at qmltypes); read any other warning as real. Fix warnings, do not
    silence them.
-3. Run the real shell on the change (`qs -p <shell.qml>`, then the surface) and dump the tree: the
-   item sits where the design source says, at integer geometry, with no literal left. A clean
-   `qmllint` proves syntax, not that the popout opens or lands in the right place.
+3. Run the shell only when the owner asked (`qs -p <shell.qml>`, then dump the tree: the item sits
+   where the design source says, at integer geometry, no literal left). Otherwise end the reply
+   with "Not verified on the composed surface" and list each owner check as surface, route
+   (pointer, key, IPC), expected state. A clean `qmllint` proves syntax only, so never write
+   "fixed" or "works" for pointer, drag, hover, focus or animation behaviour on lint or a unit
+   test; the owner tests and judges.
 
 ## Red flags
 
@@ -119,13 +131,15 @@ this UI, it is the introspection surface.
   to the singleton, because a theme switch only reaches the singleton.
 - When you are about to replace a Qt control with a custom one, say what the control cannot do,
   because otherwise you rebuilt focus and keyboard handling for nothing.
+- When a property or id is named `on<Capital>` (a Qt signal handler) or `size`, `radius`, `live`
+  on an Item, rename it, because it crashes the load or drops the config silently.
 - When there is no running shell to dump, say the geometry is unverified, because a layout read
   from code is a hypothesis.
 
 ## Say it in the reply
 
 - Which tokens the change uses and any token it added, with the file.
-- The `qmlformat` / `qmllint` result, and whether the surface was run.
+- The `qmlformat` / `qmllint` result, and whether the surface was run, or the owner-check list.
 - How to dump the tree for the new item (the target and the `objectName`), or that it was not
   run.
 - For a reserved-space change: the `reserved` numbers before and after, or that they were not

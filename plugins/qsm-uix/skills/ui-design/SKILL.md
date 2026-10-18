@@ -83,6 +83,21 @@ Use these headings, because the audits and the stack skills look for them:
 - **Colour is never the only carrier of meaning.** Each status token comes with a word, glyph or
   shape (error is red and says what failed). Icons follow use: decorative beside text, named when
   alone, a button when interactive.
+- **A number comes from a named source.** Before choosing a colour, size, offset or duration, name
+  the token, reference file or mockup it comes from. With none, show two candidates live and wait
+  for the owner's pick; never tune a value from geometry alone, because the owner then supplies
+  the number anyway.
+- **Pastel or alive is a target, not an adjective.** Give each role a chroma and lightness range
+  (OKLCH) and check each accent is visible on the surface it sits on. Grey or dull is a finding,
+  and a role never shown is one too.
+- **Repeated list items are separated by one named device**: a gap, a hairline, or a surface step
+  (own body, a slight shadow allowed). A shadow alone is not a separator, and adjacent items
+  differ at rest.
+- **A token or colour pass changes values only.** List every visible element (separators,
+  handles, glass edge, readouts, layout) before and after and confirm each survives; a missing
+  one is a regression to fix, not a spec outcome.
+- **The owner's chat ruling beats an older source line.** Edit the line in place in the same
+  change and quote the owner; a line the owner overruled is out of date, not authority.
 - **Prefer the platform's control to a custom one**, unless the source says why not. The system
   one brings keyboard, focus, scaling and screen reader behaviour for free.
 - **A style is a constraint set, never a name.** Write what the look requires (for example "thin

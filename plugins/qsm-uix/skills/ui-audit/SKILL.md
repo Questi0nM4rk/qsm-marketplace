@@ -49,7 +49,9 @@ resting frame is not an audit.
    because equal radii on nested corners read as a seam. Zoom each edge at 4x to 8x: a 1px smear
    on a crisp edge is a non-integer position, which the tree confirms as a fractional x or y.
    Sample a suspected fringe with `qsm-uix pixel-sample`; a hue belonging to neither foreground nor
-   background is real.
+   background is real. Sample a gradient or glow edge on all four sides, at each corner and on an
+   open surface's corners, at the same distance from the edge: slight full colour at the edge
+   fading inward evenly, and any difference is a finding.
 4. **Colour and contrast.** `qsm-uix region-stats shot.png --rect X,Y,W,H --top 8` gives dominant
    colours with shares; every observed colour traces to a token, orphans are findings. Measure
    each on-pair, the fill and the token that sits on it, with
