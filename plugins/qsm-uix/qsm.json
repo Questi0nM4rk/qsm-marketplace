@@ -144,7 +144,7 @@
         ]
       },
       "qsm-uix region-stats": {
-        "description": "Colour and brightness statistics of a region: pixel count, distinct colours, mean luminance, the brightest and darkest pixel, and the dominant palette with each colour's share and OKLCH",
+        "description": "Colour and brightness statistics of a region: pixel count, distinct colours, mean luminance, the brightest and darkest pixel, and the dominant palette with each colour's share; every colour carries its OKLCH",
         "args": [
           {
             "name": "image",

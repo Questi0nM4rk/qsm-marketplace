@@ -158,6 +158,7 @@ interface SpotColor {
   readonly x: number;
   readonly y: number;
   readonly hex: string;
+  readonly oklch: Oklch;
 }
 
 export interface RegionSummary {
@@ -169,7 +170,12 @@ export interface RegionSummary {
   readonly palette: readonly PaletteEntry[];
 }
 
-const spot = (pixel: Pixel): SpotColor => ({ x: pixel.x, y: pixel.y, hex: pixel.hex });
+const spot = (pixel: Pixel): SpotColor => ({
+  x: pixel.x,
+  y: pixel.y,
+  hex: pixel.hex,
+  oklch: toOklch(pixel),
+});
 
 /**
  * The colour and brightness of a region as numbers a finding can cite: what it is mostly made of,

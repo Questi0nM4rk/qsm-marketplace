@@ -102,8 +102,8 @@ describe("summarizeRegion", () => {
 
   test("names the brightest and the darkest pixel with their coordinates", () => {
     const summary = summarizeRegion(pixels(["#808080", "#FFFFFF", "#000000"]), 6);
-    expect(summary.brightest).toEqual({ x: 1, y: 0, hex: "#FFFFFF" });
-    expect(summary.darkest).toEqual({ x: 2, y: 0, hex: "#000000" });
+    expect(summary.brightest).toMatchObject({ x: 1, y: 0, hex: "#FFFFFF" });
+    expect(summary.darkest).toMatchObject({ x: 2, y: 0, hex: "#000000" });
   });
 
   test("keeps only the top colours asked for", () => {
