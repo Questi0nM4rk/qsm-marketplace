@@ -87,8 +87,8 @@ answers).
 
 | Work | Who | Why |
 | ------ | ----- | ----- |
-| The whole flow is given from start to end: one task, one direct output, nothing to decide (run a command and keep its log) | haiku | Nothing to invent |
-| Granular work: a bounded implementation task, research, reading, review | sonnet | The default |
+| Everything that is not a harder implementation: search, research, reading, audit, review, verify, a runner, a small bounded edit | haiku | The default: Haiku 5.5 is as good as sonnet, it only plans less far ahead and links fewer things together |
+| A harder implementation task: several files that must fit together, a design to carry through | sonnet | Needs the foresight and the links haiku makes less of |
 | One agent doing a whole big, complex job alone | opus | As rarely as possible, because it costs several times more |
 | Build something from zero on the side, when we know what it should do but not how | fable, forked with a summary of this context and the full intent, treated as a teammate, not a worker | Needs the whole picture |
 
@@ -105,8 +105,9 @@ branch. A worker never merges, rebases, pushes, or deletes; a leftover worktree 
 
 More than three subagents for one piece of work is a Workflow, not a chain of dispatches. Find the
 work list yourself, then hand it to the workflow, and use `parallel()` only when a stage needs all
-results at once. Static work goes to a workflow of haiku steps where the flow is given, sonnet
-where something is decided, and opus only for a step that is really difficult. Never fable inside
+results at once. Every workflow step is haiku, finders, verifiers, and reviewers
+included, sonnet only for a step that is a harder implementation, and opus only for a step that is
+really difficult. Never fable inside
 a workflow.
 
 Review and fix stages are a quarter of the build stage: one reviewer for four builders, reading
