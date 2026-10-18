@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runsGit } from "./filter.ts";
+import { redirectsToFile, runsGit } from "./filter.ts";
 
 describe("runsGit", () => {
   test("a bare git command runs git", () => {
@@ -19,5 +19,19 @@ describe("runsGit", () => {
 
   test("a command that merely mentions git does not run git", () => {
     expect(runsGit("echo git status")).toBe(false);
+  });
+});
+
+describe("redirectsToFile", () => {
+  test("stdout redirects to a file", () => {
+    for (const c of ["ls > out.txt", "ls >> out.txt", "ls >out.txt", "ls 1> o", "ls &> o"]) {
+      expect(redirectsToFile(c)).toBe(true);
+    }
+  });
+
+  test("stderr-only redirects and plain commands do not", () => {
+    for (const c of ["ls", "ls 2>&1", "ls 2> err", "ls >&2", "ls | wc -l"]) {
+      expect(redirectsToFile(c)).toBe(false);
+    }
   });
 });

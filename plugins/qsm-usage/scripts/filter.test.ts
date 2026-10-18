@@ -104,4 +104,10 @@ describe("qsm-usage filter", () => {
     ask(bin, "git branch --show-current");
     expect(readFileSync(capture, "utf8")).toContain('"command":"git branch --show-current"');
   });
+
+  test("a command that redirects stdout to a file never reaches the filter", () => {
+    const { bin, capture } = stubFilter(0, REWRITE);
+    expect(ask(bin, "head -211 f.tsx > out.tsx")).toEqual(NOTHING);
+    expect(() => readFileSync(capture, "utf8")).toThrow();
+  });
 });

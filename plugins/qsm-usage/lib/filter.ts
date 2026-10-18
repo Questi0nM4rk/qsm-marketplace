@@ -25,6 +25,19 @@ export function runsGit(command: string): boolean {
     .some((segment) => segment.trim().split(/\s+/)[0] === "git");
 }
 
+/** Stdout goes to a file: `>`, `>>`, `1>`, `&>`. Not `2>`, `2>&1` or `>&2`. */
+const STDOUT_REDIRECT = /(?<![2-9<>])(?:&|1)?>>?(?!&)/;
+
+/** True when `command` writes its stdout to a file, so a filter that rewrites output must not touch it. */
+export function redirectsToFile(command: string): boolean {
+  return STDOUT_REDIRECT.test(command);
+}
+
+/** True when the filter must not see `command`: a subagent's git, or output written to a file. */
+export function leavesUnfiltered(command: string, subagent: boolean): boolean {
+  return (subagent && runsGit(command)) || redirectsToFile(command);
+}
+
 /** What the filter made of a command: the command to run instead, or the reason to refuse it. */
 export interface FilterAnswer {
   readonly command: string | null;
