@@ -9,6 +9,12 @@ qsm-forge gh submit-review 12 --file review.json
 `qsm-forge gh --help` and `qsm-forge gl --help` list verbs and flags. `--json` prints one envelope
 on stdout.
 
+`qsm-forge gh comments <pr> --json` also carries, per comment, where and when it was written: `url`,
+`createdAt`, `updatedAt`, `authorAssociation`, `authorType` (`User`, `Bot`), `reviewId`, `commit`
+and `originalCommit` (the commit it sits on now and the one it was written on), and `commentLine`,
+`originalLine`, `startLine`, `originalStartLine`. A value GitHub does not have is `null`. The text
+columns do not change.
+
 Review payload (`--file`, or stdin):
 
 ```json

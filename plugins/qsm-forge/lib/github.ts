@@ -16,7 +16,23 @@ import {
   orNull,
 } from "./shape.ts";
 
-interface GhComment {
+/** Where and when a comment was written; every value is null when GitHub has none. */
+interface GhProvenance {
+  readonly url: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly authorAssociation: string;
+  readonly authorType: string | null;
+  readonly reviewId: number | null;
+  readonly commit: string | null;
+  readonly originalCommit: string | null;
+  readonly commentLine: number | null;
+  readonly originalLine: number | null;
+  readonly startLine: number | null;
+  readonly originalStartLine: number | null;
+}
+
+interface GhComment extends GhProvenance {
   readonly id: number;
   readonly author: string;
   readonly body: string;
@@ -64,7 +80,18 @@ export const CHANGES_REQUESTED = "CHANGES_REQUESTED";
 interface GqlComment {
   readonly databaseId: number;
   readonly body: string;
-  readonly author: { readonly login: string } | null;
+  readonly author: { readonly login: string; readonly type: string } | null;
+  readonly url: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly authorAssociation: string;
+  readonly pullRequestReview: { readonly databaseId: number | null } | null;
+  readonly commit: { readonly oid: string } | null;
+  readonly originalCommit: { readonly oid: string } | null;
+  readonly line: number | null;
+  readonly originalLine: number | null;
+  readonly startLine: number | null;
+  readonly originalStartLine: number | null;
 }
 
 interface GqlThread {
@@ -154,10 +181,29 @@ type GqlRollup = NonNullable<GqlCommit["commit"]["statusCheckRollup"]>;
 
 const isLogin = orNull(objectOf<{ readonly login: string }>({ login: isString }));
 const isPageInfo = objectOf<GqlPageInfo>({ hasNextPage: isBoolean, endCursor: orNull(isString) });
+const isOid = orNull(objectOf<{ readonly oid: string }>({ oid: isString }));
 const isComment = objectOf<GqlComment>({
   databaseId: isNumber,
   body: isString,
-  author: isLogin,
+  author: orNull(
+    objectOf<{ readonly login: string; readonly type: string }>({
+      login: isString,
+      type: isString,
+    }),
+  ),
+  url: isString,
+  createdAt: isString,
+  updatedAt: isString,
+  authorAssociation: isString,
+  pullRequestReview: orNull(
+    objectOf<{ readonly databaseId: number | null }>({ databaseId: orNull(isNumber) }),
+  ),
+  commit: isOid,
+  originalCommit: isOid,
+  line: orNull(isNumber),
+  originalLine: orNull(isNumber),
+  startLine: orNull(isNumber),
+  originalStartLine: orNull(isNumber),
 });
 const isThread = objectOf<GqlThread>({
   id: isString,
@@ -227,7 +273,14 @@ const THREAD_FIELDS = `
           path
           line
           comments(first: 100) {
-            nodes { databaseId body author { login } }
+            nodes {
+              databaseId body url createdAt updatedAt authorAssociation
+              author { login type: __typename }
+              pullRequestReview { databaseId }
+              commit { oid }
+              originalCommit { oid }
+              line originalLine startLine originalStartLine
+            }
           }
         }
         pageInfo { hasNextPage endCursor }`;
@@ -358,6 +411,18 @@ function commentOf(node: GqlComment): GhComment {
     id: node.databaseId,
     author: node.author?.login ?? "unknown",
     body: node.body,
+    url: node.url,
+    createdAt: node.createdAt,
+    updatedAt: node.updatedAt,
+    authorAssociation: node.authorAssociation,
+    authorType: node.author?.type ?? null,
+    reviewId: node.pullRequestReview?.databaseId ?? null,
+    commit: node.commit?.oid ?? null,
+    originalCommit: node.originalCommit?.oid ?? null,
+    commentLine: node.line,
+    originalLine: node.originalLine,
+    startLine: node.startLine,
+    originalStartLine: node.originalStartLine,
   };
 }
 
@@ -563,7 +628,7 @@ export function requireThread(
   return found;
 }
 
-export interface ListedComment {
+export interface ListedComment extends GhProvenance {
   readonly id: number;
   readonly author: string;
   readonly path: string;
@@ -581,11 +646,9 @@ export function listComments(
   const kept = onlyUnresolved ? threads.filter((thread) => !thread.resolved) : threads;
   return kept.flatMap((thread) =>
     thread.comments.map((comment) => ({
-      id: comment.id,
-      author: comment.author,
+      ...comment,
       path: thread.path,
       line: thread.line,
-      body: comment.body,
       resolved: thread.resolved,
     })),
   );

@@ -33,7 +33,22 @@ const GRAPHQL = {
               line: 42,
               comments: {
                 nodes: [
-                  { databaseId: 901, body: "this leaks a handle", author: { login: "a-reviewer" } },
+                  {
+                    databaseId: 901,
+                    body: "this leaks a handle",
+                    author: { login: "a-reviewer", type: "User" },
+                    url: "https://github.com/owner/name/pull/12#discussion_r901",
+                    createdAt: "2020-01-01T00:00:00Z",
+                    updatedAt: "2020-01-01T00:00:00Z",
+                    authorAssociation: "MEMBER",
+                    pullRequestReview: { databaseId: 800 },
+                    commit: { oid: "c".repeat(40) },
+                    originalCommit: { oid: "a".repeat(40) },
+                    line: 42,
+                    originalLine: 40,
+                    startLine: null,
+                    originalStartLine: null,
+                  },
                 ],
               },
             },

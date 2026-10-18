@@ -55,6 +55,14 @@ restrict the list to unresolved comments when asked.
 - **THEN** the CLI SHALL return only comments belonging to an unresolved
   thread
 
+#### Scenario: Provenance in JSON
+
+- **WHEN** the caller lists comments as JSON
+- **THEN** each comment SHALL carry its URL, creation and update times, author
+  association and type, review id, current and original commit, and current
+  and original line range, with an explicit null for a value GitHub does not
+  have, and the text columns SHALL NOT change
+
 ### Requirement: Reply to a review thread
 
 The CLI SHALL post a reply to one review thread identified by its comment
