@@ -5,6 +5,20 @@ set -euo pipefail
 
 qsm-langdev hook pre-push || exit 1
 
+# A fresh worktree has no node_modules, and the gates below then fail with type errors that hide
+# the cause. Root `bun install` runs the prepare script (core.hooksPath and .gates/plugin-deps.ts,
+# which installs each plugin's own dependencies), so one install fixes every case.
+missing_node_modules() {
+  local dir
+  for dir in . plugins/*/; do
+    if [[ -f "$dir/package.json" && ! -d "$dir/node_modules" ]]; then
+      echo "pre-push: node_modules is missing in $dir, run: mise exec -- bun install (its prepare script also installs each plugin's dependencies)" >&2
+      return 1
+    fi
+  done
+}
+missing_node_modules || exit 1
+
 # The marketplace's own gates, repo-specific, so nothing outside a langdev checker
 # (the generated contracts, every plugin's hooks tsconfig against .claude/types)
 # reaches origin red.
