@@ -53,7 +53,8 @@ resting frame is not an audit.
    open surface's corners, at the same distance from the edge: slight full colour at the edge
    fading inward evenly, and any difference is a finding.
 4. **Colour and contrast.** `qsm-uix region-stats shot.png --rect X,Y,W,H --top 8` gives dominant
-   colours with shares; every observed colour traces to a token, orphans are findings. Measure
+   colours with shares and each one's OKLCH l, c, h, which the hue and neutral-chroma checks
+   read; every observed colour traces to a token, orphans are findings. Measure
    each on-pair, the fill and the token that sits on it, with
    `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: 4.5 for body text, 3 for large text and
    essential glyphs (WCAG 2.2, 1.4.3). Non-text parts need 3 against what they sit on (1.4.11):

@@ -91,7 +91,7 @@ if (import.meta.main) {
       "pixel-sample": captured(
         (call) =>
           pixelSample({ image: requiredString(call, "image"), at: requiredString(call, "at") }),
-        ["hex", "r", "g", "b"],
+        ["hex", "oklch", "r", "g", "b"],
       ),
       contrast: captured(
         (call) =>

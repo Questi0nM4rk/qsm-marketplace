@@ -102,7 +102,7 @@
         ]
       },
       "qsm-uix pixel-sample": {
-        "description": "Read one pixel of an image as hex and rgb, so a colour claim cites the rendered pixel and not the name in code",
+        "description": "Read one pixel of an image as hex, OKLCH and rgb, so a colour claim cites the rendered pixel and not the name in code",
         "args": [
           {
             "name": "image",
@@ -144,7 +144,7 @@
         ]
       },
       "qsm-uix region-stats": {
-        "description": "Colour and brightness statistics of a region: pixel count, distinct colours, mean luminance, the brightest and darkest pixel, and the dominant palette with each colour's share",
+        "description": "Colour and brightness statistics of a region: pixel count, distinct colours, mean luminance, the brightest and darkest pixel, and the dominant palette with each colour's share and OKLCH",
         "args": [
           {
             "name": "image",

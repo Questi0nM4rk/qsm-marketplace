@@ -10,6 +10,7 @@ import {
   type Pixel,
   parsePixelDump,
   summarizeRegion,
+  toOklch,
 } from "./color.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 import { parsePoint, parseRect, type Rect, requireAmount, requireCount } from "./geometry.ts";
@@ -274,6 +275,7 @@ export function pixelSample(call: PixelSampleCall): object {
     image: call.image,
     at,
     hex: pixel.hex,
+    oklch: toOklch(pixel),
     r: pixel.r,
     g: pixel.g,
     b: pixel.b,

@@ -7,6 +7,7 @@ import {
   relativeLuminance,
   summarizeRegion,
   toHex,
+  toOklch,
 } from "./color.ts";
 
 const BLACK = hexToRgb("#000000");
@@ -93,7 +94,7 @@ describe("summarizeRegion", () => {
 
   test("reports each colour's share of the region as a percentage", () => {
     const summary = summarizeRegion(pixels(["#000000", "#000000", "#000000", "#FFFFFF"]), 6);
-    expect(summary.palette).toEqual([
+    expect(summary.palette).toMatchObject([
       { hex: "#000000", share: 75 },
       { hex: "#FFFFFF", share: 25 },
     ]);
@@ -107,7 +108,7 @@ describe("summarizeRegion", () => {
 
   test("keeps only the top colours asked for", () => {
     const summary = summarizeRegion(pixels(["#000000", "#000000", "#FFFFFF", "#FF0000"]), 1);
-    expect(summary.palette).toEqual([{ hex: "#000000", share: 50 }]);
+    expect(summary.palette).toMatchObject([{ hex: "#000000", share: 50 }]);
   });
 
   test("breaks a tie on the colour itself, so the same region always reports the same order", () => {
@@ -122,5 +123,16 @@ describe("summarizeRegion", () => {
 
   test("refuses an empty region rather than inventing a summary of nothing", () => {
     expect(() => summarizeRegion([], 6)).toThrow(/no pixels/);
+  });
+});
+
+describe("toOklch", () => {
+  test("reads pure red as the reference OKLCH value", () => {
+    // Ottosson's published OKLab for sRGB red: L 0.628, C 0.2577, h 29.23.
+    expect(toOklch(hexToRgb("#FF0000"))).toEqual({ l: 0.628, c: 0.258, h: 29.2 });
+  });
+
+  test("gives a grey no chroma and no hue", () => {
+    expect(toOklch(hexToRgb("#808080"))).toMatchObject({ c: 0, h: 0 });
   });
 });

@@ -62,6 +62,49 @@ const linear = (channel: number): number => {
     : ((scaled + SRGB_OFFSET) / SRGB_SCALE) ** SRGB_GAMMA;
 };
 
+export interface Oklch {
+  readonly l: number;
+  readonly c: number;
+  /** Degrees, 0 to 360; an achromatic colour has no hue, so it reads 0. */
+  readonly h: number;
+}
+
+/** Björn Ottosson's OKLab: linear sRGB to a cone response, cube root, then the Lab matrix. */
+const LMS = [
+  [0.412_221_470_8, 0.536_332_536_3, 0.051_445_992_9],
+  [0.211_903_498_2, 0.680_699_545_1, 0.107_396_956_6],
+  [0.088_302_461_9, 0.281_718_837_6, 0.629_978_700_5],
+] as const;
+const LAB = [
+  [0.210_454_255_3, 0.793_617_785, -0.004_072_046_8],
+  [1.977_998_495_1, -2.428_592_205, 0.450_593_709_9],
+  [0.025_904_037_1, 0.782_771_766_2, -0.808_675_766],
+] as const;
+const FULL_TURN = 360;
+const HALF_TURN = 180;
+const OKLCH_PLACES = 3;
+const HUE_PLACES = 1;
+/** Below this chroma the hue is rounding noise, not a colour. */
+const ACHROMATIC = 1e-4;
+
+const dot = (row: readonly number[], v: readonly number[]): number =>
+  row.reduce((sum, k, i) => sum + k * (v[i] ?? 0), 0);
+
+/** Lightness, chroma and hue in OKLCH: the space a "one hue within 15 degrees" check is made in. */
+export function toOklch(rgb: Rgb): Oklch {
+  const lin = [linear(rgb.r), linear(rgb.g), linear(rgb.b)];
+  const cone = LMS.map((row) => Math.cbrt(dot(row, lin)));
+  const [l = 0, a = 0, b = 0] = LAB.map((row) => dot(row, cone));
+  const chroma = Math.hypot(a, b);
+  const hue =
+    chroma < ACHROMATIC ? 0 : ((Math.atan2(b, a) * HALF_TURN) / Math.PI + FULL_TURN) % FULL_TURN;
+  return {
+    l: Number(l.toFixed(OKLCH_PLACES)),
+    c: Number(chroma.toFixed(OKLCH_PLACES)),
+    h: Number(hue.toFixed(HUE_PLACES)),
+  };
+}
+
 export function toHex(rgb: Rgb): string {
   return `#${pair(rgb.r)}${pair(rgb.g)}${pair(rgb.b)}`;
 }
@@ -106,6 +149,7 @@ export function parsePixelDump(dump: string, origin: { x: number; y: number }): 
 
 interface PaletteEntry {
   readonly hex: string;
+  readonly oklch: Oklch;
   /** Percent of the region, one decimal. */
   readonly share: number;
 }
@@ -164,6 +208,7 @@ export function summarizeRegion(pixels: readonly Pixel[], top: number): RegionSu
     .slice(0, top)
     .map(([hex, count]) => ({
       hex,
+      oklch: toOklch(hexToRgb(hex)),
       share: Number(((count / pixels.length) * PERCENT).toFixed(SHARE_PLACES)),
     }));
   return {
