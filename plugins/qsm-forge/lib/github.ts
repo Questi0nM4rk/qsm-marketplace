@@ -411,6 +411,13 @@ function commentOf(node: GqlComment): GhComment {
     id: node.databaseId,
     author: node.author?.login ?? "unknown",
     body: node.body,
+    ...provenanceOf(node),
+  };
+}
+
+/** Where and when a review comment was written, for `--json` only; a missing value is null. */
+function provenanceOf(node: GqlComment): Omit<GhComment, "id" | "author" | "body"> {
+  return {
     url: node.url,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
