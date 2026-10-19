@@ -1,17 +1,17 @@
 ---
 name: ui-audit
-description: "Use when asked to audit, review, or measure the static visual design of a UI: a desktop shell, panel, web page, or any screen with a screenshot or live geometry. Triggers: audit this UI, review this screenshot, check the spacing, are the radii consistent, why does this look off, check the contrast, is this aligned, separators vanish in dark mode, does it match the theme, popup under my dock, zkontroluj vizual, zmer mezery. Static visuals only: layout, spacing, geometry, colour, type, icons, elevation, theme and monitor parity. Motion, feedback and flows are ux-audit; keyboard, focus and screen reader are a11y-audit."
+description: "Use when asked to audit, review, or measure the static visual design of a UI: a desktop shell, panel, web page, or any screen with a screenshot or live geometry. Triggers: audit this UI, review this screenshot, check the spacing, are the radii consistent, why does this look off, check the contrast, is this aligned, separators vanish in dark mode, does it match the theme, popup under my dock, zkontroluj vizual, zmer mezery. Static visuals only: layout, spacing, geometry, colour, type, icons, elevation, theme and monitor parity. Motion is review-animations; feedback and flows are ux-audit; keyboard, focus and screen reader are a11y-audit."
 ---
 
 # UI Audit
 
 A screen that is looked at produces an opinion; a screen that is measured produces a finding. This
 skill serves the person who builds and publishes a UI and wants to settle a design argument with a
-number, so no finding goes in without one, and the number comes from a place the reader can
-check. "The gap looks like about 170px" and "the contrast is low" are plausible, uncheckable, and
-about half wrong. It audits static visuals only and does not fix the UI. Motion is ux-audit.
-Accessibility criteria are a11y-audit's; run it for this surface. How to create the design source
-is ui-design, and how to expose a UI on one stack is that stack skill.
+number, so no finding goes in without one, and the number comes from a place the reader can check.
+"The gap looks like about 170px" and "the contrast is low" are plausible, uncheckable, and about
+half wrong. It audits static visuals only and does not fix the UI. Motion is review-animations.
+Accessibility criteria are a11y-audit's; run it for this surface. How to create the design source is
+ui-design, and how to expose a UI on one stack is that stack skill.
 
 ## Collect three channels before judging
 
@@ -119,8 +119,8 @@ screens, passes skipped, and why), so the reader does not assume there were no g
 - When you are about to rule on focus, keyboard, labels, colour-only meaning or reduced motion,
   stop and say accessibility criteria are a11y-audit's, because its method and the criterion list
   decide those, not a screenshot.
-- When you are about to describe how something moves, hand it to ux-audit, because this skill has
-  no motion method.
+- When you are about to describe how something moves, hand it to review-animations, because this
+  skill has no motion method.
 
 ## Say it in the reply
 

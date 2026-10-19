@@ -10,8 +10,8 @@ colour, guesses an exclusive zone, or cannot be measured afterwards. This skill 
 who builds a shell and must answer for how it looks and whether everyone can use it: build on the
 shell's existing tokens, make the layer-shell windows reserve the right space, and leave a way to
 read the real geometry back. Why the tokens are what they are: ui-design. Why a control needs a
-name, keyboard path, or reduced motion: a11y-audit. Motion rules: ux-audit. This skill does not
-choose values, audit, or restyle what was not asked.
+name, keyboard path, or reduced motion: a11y-audit. Motion rules: animate and review-animations.
+This skill does not choose values, audit, or restyle what was not asked.
 
 ## Before the first line
 

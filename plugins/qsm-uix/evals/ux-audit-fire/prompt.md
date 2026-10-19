@@ -6,5 +6,6 @@ max_turns: 6
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-The panel slide-in on my desktop shell feels off, tell me what's wrong with the animation. The shell
-is not in this sandbox, so do not look for it.
+Our tray popout on my desktop shell opens only on hover over a thin screen-edge strip. Is it
+discoverable, and are the click targets big enough? The shell is not in this sandbox, so do not look
+for it.

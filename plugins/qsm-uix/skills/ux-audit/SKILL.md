@@ -1,6 +1,6 @@
 ---
 name: ux-audit
-description: "Use when asked to evaluate how a UI behaves and feels rather than how it looks. Triggers: audit the UX, is this discoverable, review the interaction, review the flow, does the feedback feel right, are these click targets big enough, what does this animation communicate, the slide-in feels off, is deleting this safe, what happens on a bad input, is this mode obvious, zkontroluj ovladani, jak se to chova, animace je divna. Covers discoverability, feedback, targets, mode visibility, interruption cost, vocabulary, motion, reversibility, error recovery and forms. Static pixels, spacing, colour and typography belong to ui-audit; keyboard, focus and screen reader to a11y-audit."
+description: "Use when asked to evaluate how a UI behaves and feels rather than how it looks. Triggers: audit the UX, is this discoverable, review the interaction, review the flow, does the feedback feel right, are these click targets big enough, is deleting this safe, what happens on a bad input, is this mode obvious, zkontroluj ovladani, jak se to chova. Covers discoverability, feedback, targets, mode visibility, interruption cost, vocabulary, reversibility, error recovery and forms. Static pixels, spacing, colour and typography belong to ui-audit; motion to review-animations; keyboard, focus and screen reader to a11y-audit."
 ---
 
 # UX Audit
@@ -8,7 +8,8 @@ description: "Use when asked to evaluate how a UI behaves and feels rather than 
 Behaviour is judged from evidence of behaviour. A resting screenshot proves nothing about
 interaction, so this skill drives the interface, times it, and measures targets before saying how it
 feels, replacing "presumably clickable" with traces and numbers. Out of scope: static visuals
-(ui-audit), accessibility criteria (a11y-audit), building the fix (the stack skill), redesigning.
+(ui-audit), motion judgement (review-animations), accessibility criteria (a11y-audit), building the
+fix (the stack skill), redesigning.
 
 ## Evidence first
 
@@ -72,21 +73,15 @@ input while they work, because stealing focus costs more than the audit finds.
    and expands by click on its leading part, the rest of the row being its action, with no
    hover-expand inside a scrolled list. Check: scroll with an expandable row under the pointer;
    the list must move.
-7. **Motion.** Every animation must answer "what does this tell the user": the cause of a change or
-   where something went. One that tells nothing is a finding: decoration taxes attention. Then
-   measure (reduced motion is a11y-audit's):
+7. **Motion.** Every animation, its purpose, timing, curve and interruption, is judged by
+   review-animations; run it for this surface and file its verdict here, never a second ruling.
+   This audit adds only the measurement on a running surface:
    - Read the duration and easing tokens from the source first, then poll the introspection
      surface across the transition and build the timeline from mid-flight values.
    - With pixels only, `qsm-uix burst --count 8 --interval 120 --out-dir frames/` gives frames with
      real elapsed time, honest to 100ms to 200ms per step and no finer. Say that limit.
    - `qsm-uix diff a.png b.png` (distortion under 0.001) works only on a frozen scene; on a live
      desktop use tree equality and say which you used.
-   - Surface open and close land within the motion token plus 10 percent. The end state settles
-     on the resting geometry exactly.
-   - Exit takes 60 to 70 percent of the enter duration.
-   - Interrupt it mid-flight (reverse the trigger): it must retarget from the current value, not
-     jump or finish first. It never blocks input. More than 1 to 2 animated elements per view is a
-     finding. Durations come from one token set, not literals.
 8. **Reversibility.** For every destructive or hard-to-repeat action, trace what happens after it.
    Undo beats a confirm dialog: people click through confirms. Silent and instant with no
    undo is a finding; so is a confirm for a trivial action. The destructive control is separated
