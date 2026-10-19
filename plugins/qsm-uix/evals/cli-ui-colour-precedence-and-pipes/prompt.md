@@ -1,5 +1,5 @@
 ---
-name: tui-ui-colour-precedence-and-pipes
+name: cli-ui-colour-precedence-and-pipes
 tags: [scenario]
 runs: 3
 max_turns: 8
