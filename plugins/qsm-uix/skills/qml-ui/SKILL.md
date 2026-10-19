@@ -1,6 +1,6 @@
 ---
 name: qml-ui
-description: "Use when writing or changing QML in a Quickshell shell: a new component, bindings, delegates, layouts, Loader, the Theme singleton, exclusive zone and layer-shell windows, and when a QML surface must be made checkable by the audits. Triggers: new QML component, add a popout to my Quickshell bar, my panel overlaps maximized windows, exclusive zone, Theme singleton, qmllint, qmlformat, QML delegate, QML Loader, dump the item tree, udelej komponentu v quickshellu, panel prekryva okna. QML code only: what a bar, popout or OSD is and does, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
+description: "Use when writing or changing QML in a Quickshell shell: a new component, bindings, delegates, layouts, Loader, the Theme singleton, exclusive zone and layer-shell windows, and when a QML surface must be made checkable by the audits. Triggers: new QML component, add a popout to my Quickshell bar, my panel overlaps maximized windows, Quickshell exclusive zone, QML Theme singleton, qmllint, qmlformat, QML delegate, QML Loader, dump the QML item tree, udelej komponentu v quickshellu, panel prekryva okna. QML code only: what a bar, popout or OSD is and does, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
 ---
 
 # QML UI
@@ -27,7 +27,7 @@ Names, keyboard, reduced motion: a11y-audit.
    named after where it is used (`PopoutRow`, `OsdSlider`), because that is a second copy that
    drifts, and a system control brings focus and keyboard handling a custom one must redo.
 4. **Open every file the owner named** (plugin, PDF, spec) before the first edit; if one is
-   missing, say so in the first reply, or the answer is rebuilt.
+   missing, say so in the first reply.
 
 ## Rules
 
@@ -78,9 +78,10 @@ Names, keyboard, reduced motion: a11y-audit.
 
 Qt's QML coding conventions and the qt-qml-review checklist, the stricter form where they differ:
 
-- **Declaration order in an object:** `id` first (`id: root` on a component's top item), then
-  properties, signals, signal handlers, attached properties, states and transitions, child
-  objects (visual first), then functions. Group related properties (`anchors { }`, `font { }`).
+- **Declaration order in an object** (checklist ORD-1): `id` (`id: root` on a component's top
+  item), property assignments, property declarations, signal declarations, attached properties,
+  `states`, `transitions`, signal handlers, child objects (visual first), functions. Group related
+  properties (`anchors { }`, `font { }`).
 - **Bindings:** never assign a property in JavaScript when it has a binding, because the
   assignment replaces the binding for good and `qmllint` does not catch it; restore reactivity
   with `Qt.binding(() => expr)`. Typed properties (`int`, `string`, `color`), never
@@ -92,10 +93,9 @@ Qt's QML coding conventions and the qt-qml-review checklist, the stricter form w
   reads outer ids. No nested Repeaters or several Loaders in one. In a delegate `parent` is its
   internal container, not the view: use `ListView.view` or an id. `currentIndex` starts at 0, not
   -1, once a model is set: reset it when no item should be current.
-- **Layouts:** functions call down, signals go up. Never set `width` or `height` on a Layout
-  child (use `Layout.preferredWidth` and the like) and never `x` or `y`, because the first breaks
-  size negotiation and the second is ignored. A reusable component sets `implicitWidth` and
-  `implicitHeight`.
+- **Layouts:** never set `width` or `height` on a Layout child (use `Layout.preferredWidth` and
+  the like) and never `x` or `y`, because the first breaks size negotiation and the second is
+  ignored. A reusable component sets `implicitWidth` and `implicitHeight`.
 - **Connections:** always set `target`, because the default is `parent` and a handler lands on
   the wrong object when the parent type changes. Write `function onFoo()`, not `onFoo:`.
 - **Lifetime:** guard on `Loader.status`; never switch a Loader between `source` and
@@ -108,7 +108,8 @@ Qt's QML coding conventions and the qt-qml-review checklist, the stricter form w
 - **States:** a `Transition` states its `from` and `to`, or it fires on every state change. A
   reusable component with states uses `StateGroup`, not top-level `states`.
 - **Cost:** `Image` gets `sourceSize` and `asynchronous: true`; `Text.PlainText` unless rich text
-  is needed; avoid a transparent `Rectangle`, `clip` and `layer.enabled` unless measured.
+  is needed; avoid a transparent `Rectangle` and `clip` unless measured. `layer.enabled: true`
+  caches a texture and costs GPU memory: only on an expensive item, measured.
 
 ## Stress and variants
 
@@ -163,8 +164,7 @@ live geometry.
 
 ## Red flags
 
-- When you type `#` and hex, or a number beside `radius`, `spacing`, `duration` or `margins`,
-  use a token: the literal is the defect the audits measure.
+- A hex, or a number beside `duration`, `radius` or `spacing`: use a token.
 - When a panel overlaps windows on one monitor, read `reserved`, the window's anchors and
   `exclusionMode` for that output before touching a margin: the cause is nearly always a zone or
   a missing per-output window.
