@@ -25,7 +25,12 @@ source's tokens on its stack, SHALL say how to expose geometry and state so the 
 it (an item-tree dump for QML, the DOM and its accessibility tree for web, none for a terminal), and
 SHALL point to the core skills for the reasons instead of restating them. react-ui SHALL cover only
 what React leaves to the author (focus, announcements, forms, loading) and point to css-ui for the
-CSS half. Each SHALL name the maintained libraries for its stack and SHALL carry its stack's conventions, paraphrased from named sources: the Vercel web interface guidelines for css-ui and react-ui; Qt's QML coding conventions, the qt-qml-review rules, the Hyprland animation syntax, and KDE and GNOME desktop rules for qml-ui; the tui-design rules and clig.dev for tui-ui. Text under a share-alike licence SHALL be paraphrased, never copied. A stack skill SHALL NOT contain audit procedure, criteria, or design-system content.
+CSS half. Each SHALL name the maintained libraries for its stack and SHALL carry its stack's
+conventions, paraphrased from named sources: the Vercel web interface guidelines for css-ui and
+react-ui; Qt's QML coding conventions, the qt-qml-review rules, the Hyprland animation syntax, and
+KDE and GNOME desktop rules for qml-ui; the tui-design rules and clig.dev for tui-ui. Text under a
+share-alike licence SHALL be paraphrased, never copied. A stack skill SHALL NOT contain audit
+procedure, criteria, or design-system content.
 
 #### Scenario: Building a QML panel
 
@@ -38,7 +43,6 @@ CSS half. Each SHALL name the maintained libraries for its stack and SHALL carry
 - **WHEN** the user asks for coloured or progress output from a command line tool
 - **THEN** tui-ui SHALL require the non-TTY and NO_COLOR fallback, and SHALL delegate the result
   envelope and exit codes to the outcome system instead of redefining them
-
 
 #### Scenario: A TUI list needs a library
 

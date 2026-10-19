@@ -121,7 +121,8 @@ Use these headings, because the audits and the stack skills look for them:
 - **Prefer the platform's control to a custom one**, unless the source says why not. The system
   one brings keyboard, focus, scaling and screen reader behaviour for free.
 - **A style is a constraint set, never a name.** Write what the look requires (for example "raised
-  surfaces separate by a 3:1 low-alpha border or a soft shadow, never an opaque border"), the accessibility it
+  surfaces separate by a 3:1 low-alpha border or a soft shadow, never an opaque border"), the
+  accessibility it
   brings, and where it must not be used (dense data, small text, high-contrast users). Why: a
   named fad such as "glass" says nothing the audit can measure; a constraint can fail a pair.
 
@@ -158,4 +159,5 @@ with the stack skill, then run ui-audit against this file, which is the expected
 - What is not covered: no running UI was measured, so nothing here is verified until ui-audit
   runs against it.
 
-The polish rules follow Emil Kowalski's emil-design-eng and README (github.com/emilkowalski/skills, MIT).
+The polish rules follow Emil Kowalski's emil-design-eng and README (github.com/emilkowalski/skills,
+MIT).

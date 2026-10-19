@@ -39,7 +39,9 @@ visual design of a UI: layout, spacing, geometry, colour, contrast, typography, 
 elevation and layer order, reserved space, theme and variant parity, or multi-monitor consistency.
 The skill SHALL require measured evidence, a captured image, live UI geometry from an
 introspection surface, and a design source, before filing any finding, and SHALL NOT file a finding
-based on visual impression alone. It SHALL cite WCAG 2.2 for contrast and non-text contrast. It SHALL leave motion to review-animations and every other accessibility criterion to a11y-audit, pointing to
+based on visual impression alone. It SHALL cite WCAG 2.2 for contrast and non-text contrast. It
+SHALL leave motion to review-animations and every other accessibility criterion to a11y-audit,
+pointing to
 them. It SHALL output one severity-ranked findings table (blocker, major, minor, polish), a
 separate Hypotheses list, and a Not examined list.
 
@@ -61,7 +63,6 @@ separate Hypotheses list, and a Not examined list.
 - **THEN** the skill SHALL capture each, run the same checks on each, and file a theme-parity
   finding for any border, divider, or state visible in one and not the other
 
-
 ### Requirement: UX audit skill reports measured interaction findings
 
 The plugin SHALL trigger the ux-audit skill when asked to evaluate how a UI behaves or feels:
@@ -69,7 +70,8 @@ discoverability, affordance and feedback, target ergonomics, mode and state visi
 interruption cost, gesture-vocabulary consistency, motion, reversibility, error recovery, or forms.
 The skill SHALL require an enumerated state-space map and traced interactions as evidence, and
 SHALL NOT judge behaviour from a single resting screenshot. It SHALL hand every motion
-judgement to review-animations and SHALL NOT judge timing, curve, or interruption itself. It SHALL point to a11y-audit for the
+judgement to review-animations and SHALL NOT judge timing, curve, or interruption itself. It SHALL
+point to a11y-audit for the
 keyboard-only path, focus, and reduced-motion criteria. It SHALL output one severity-ranked
 findings table, a Needs human trial list carrying the exact trial to run, and a Not examined list.
 
@@ -89,4 +91,3 @@ findings table, a Needs human trial list carrying the exact trial to run, and a 
 - **WHEN** a traced action destroys user data and the UI offers neither undo nor a confirmation
 - **THEN** the skill SHALL file a reversibility finding naming the action and the missing recovery
   path
-

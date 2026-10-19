@@ -2,11 +2,11 @@
 
 ### Requirement: Apple design skill carries interface foundations for every stack
 
-The plugin SHALL provide apple-design, adapted from emilkowalski/skills (MIT) under his name: Apple's
-interface foundations (feedback, spatial consistency, materials and depth, typography by optical
-size, tracking and leading, reduced motion) translated for Quickshell QML, Hyprland, CSS/React and
-TUI where they apply. It SHALL point to animate for curves, durations and springs, and SHALL fit
-12 KB with no extra file.
+The plugin SHALL provide apple-design, adapted from emilkowalski/skills (MIT) under his name:
+Apple's interface foundations (feedback, spatial consistency, materials and depth, typography by
+optical size, tracking and leading, reduced motion) translated for Quickshell QML, Hyprland,
+CSS/React and TUI where they apply. It SHALL point to animate for curves, durations and springs, and
+SHALL fit 12 KB with no extra file.
 
 #### Scenario: A translucent panel is designed
 
@@ -24,7 +24,10 @@ writing a design system. The skill SHALL produce one design source: tokens with 
 colours, scales for spacing, type, radius, elevation, layer order, icon size, motion, and density,
 light and dark themes designed separately, a style stated as a constraint set with the
 accessibility requirements it brings, and a master with per-surface overrides in which the
-override wins. It SHALL carry the polish rules of emilkowalski/skills emil-design-eng (pressed states, hover only on hover-capable pointers, tooltip delay, popover origin, defaults over options, one component personality) and the README's shadow-over-solid-border rule as its own rules. It SHALL put accessibility first among the concerns it orders. It SHALL NOT ship
+override wins. It SHALL carry the polish rules of emilkowalski/skills emil-design-eng (pressed
+states, hover only on hover-capable pointers, tooltip delay, popover origin, defaults over options,
+one component personality) and the README's shadow-over-solid-border rule as its own rules. It SHALL
+put accessibility first among the concerns it orders. It SHALL NOT ship
 palettes, font pairings, or style catalogues, SHALL NOT name a framework, and SHALL NOT audit a
 running UI.
 
@@ -40,9 +43,9 @@ running UI.
 - **THEN** the skill SHALL design the dark values as their own column, not as an inversion of the
   light ones, and SHALL require borders, dividers, and states to be visible in both
 
-
 #### Scenario: A card is separated from its background
 
 - **WHEN** the design separates a raised surface from what is under it
-- **THEN** the skill SHALL use a semi-transparent shadow or a low-alpha border by his README's rule, not a
+- **THEN** the skill SHALL use a semi-transparent shadow or a low-alpha border by his README's rule,
+  not a
   solid opaque border

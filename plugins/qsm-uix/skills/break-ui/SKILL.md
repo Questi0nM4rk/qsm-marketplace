@@ -58,7 +58,7 @@ Use `example.com`, `example.org` or `.test` for addresses so a fixture never poi
   Alexander Montgomery III` (naive initials give `CI`); `Jo` and `J` (empty column, initial `J`);
   `Dang Thi Ngoc Han` with stacked diacritics (clipped by tight line height); `王秀英` (no spaces);
   an RTL name (icons land on the wrong side); `🦊 Fox` (`charAt(0)` is half a surrogate pair);
-  `  Sam   Lee ` (repeated spaces); a missing name, only an email.
+  "  Sam   Lee " (leading, trailing and repeated spaces); a missing name, only an email.
 - **Unbreakable strings:** the long email above; `a@b.co`; a long URL with query; a UUID; a file
   name `Q3 Board Deck - FINAL (revised) v12 [approved by legal].pdf` (end-truncation hides the
   version and extension); a camera file name; a very long handle.
@@ -164,4 +164,5 @@ with several right answers, each with a recommendation. What held up: the worst 
 survives. Say which findings you saw and which you inferred. Close with where the toggle is, its
 states, and "Say `fix all` or `fix 1, 3` and I'll apply them."
 
-Source: skills/break-ui/SKILL.md and CATALOG.md in github.com/emilkowalski/skills (MIT, Emil Kowalski).
+Source: skills/break-ui/SKILL.md and CATALOG.md in github.com/emilkowalski/skills (MIT, Emil
+Kowalski).

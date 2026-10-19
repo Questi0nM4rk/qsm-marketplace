@@ -10,7 +10,8 @@ terminal, a log file, a CI job, a screen reader reading the stream. Unaided, an 
 `\x1b[32m` literals, sizes columns by `string.length`, and draws a progress bar that fills every log
 with redraws. This skill is the output rules for the person who ships CLIs and answers for who can
 use them. In a qsm binary it does not define the envelope, exit codes, `--json` or `--no-input` (see
-below); it does not measure pixels (there are none), and picks no framework beyond the one for the project's language (Libraries).
+below); it does not measure pixels (there are none), and picks no framework beyond the one for the
+project's language (Libraries).
 
 Why: ui-design (tokens), a11y-audit (criteria), ux-audit (feedback timing). Here: how the stream
 is written. To measure a CLI, its output stream is the introspection surface: capture it with
@@ -116,10 +117,10 @@ A one-shot command that only prints needs none of these. Width helpers: `Bun.str
 
 From the tui-design rules and clig.dev, in our words:
 
-- **One loop, kept apart:** input, event, state, update, layout, render. Rendering is a pure function
-  of state and terminal size; I/O is a command or effect, never a call inside update or draw (a
-  Bubble Tea `Cmd`, a Ratatui channel plus task, never blocking in the event loop). Layout is
-  computed in draw from the real area, not in the key handler and not from a constant.
+- **One loop, kept apart:** input, event, state, update, layout, render. Rendering is a pure
+  function of state and terminal size; I/O is a command or effect, never a call inside update or
+  draw (a Bubble Tea `Cmd`, a Ratatui channel plus task, never blocking in the event loop). Layout
+  is computed in draw from the real area, not in the key handler and not from a constant.
 - **Terminal contract.** Required: a TTY, UTF-8, a stated minimum grid (80x24). Truecolor, mouse,
   hyperlinks and bracketed paste are enhancements with a fallback; feature-detect and degrade
   truecolor, 256, 16, mono. Check `isatty` on stdout before taking the full screen; in a pipe print
@@ -169,4 +170,5 @@ From the tui-design rules and clig.dev, in our words:
 - The width used for a table and what happens when it is unknown or narrow.
 - Anything unverified: a terminal you did not run in, a font you assumed.
 
-Sources: pageton/tui-design-skill (MIT), tpscloud/charmedimsure charmed-bubbletea (MIT), clig.dev (CC-BY-SA-4.0, paraphrased), no-color.org.
+Sources: pageton/tui-design-skill (MIT), tpscloud/charmedimsure charmed-bubbletea (MIT), clig.dev
+(CC-BY-SA-4.0, paraphrased), no-color.org.
