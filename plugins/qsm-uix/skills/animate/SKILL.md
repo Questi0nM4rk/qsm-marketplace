@@ -55,6 +55,9 @@ library's job, not a hand-rolled `<div>`.
 - `translate` percentages are relative to the element's own size: `translateY(100%)` moves by its
   own height whatever the content. Prefer them to pixels.
 - `scale()` scales children too; on a press that is the point.
+- No state changes layout bounds. A press is a `transform: scale()` on `:active` or pressed, which
+  keeps the box (the one owner of this rule); hover, focus and disabled change colour, opacity or
+  shadow only.
 - Write `transform` on the element itself, never through a variable on its parent.
 
 ### 5. Easing and duration, or a spring
@@ -148,22 +151,26 @@ the values above as tokens, never literals in a component.
 - Gestures and "alive" motion: `SpringAnimation { spring; damping; mass }`, tuned by feel.
 - A layer-shell window vanishes the instant it is hidden, so an exit needs it kept visible until the
   motion ends: `visible: open || content.opacity > 0`.
-- Hover and press never change the hit area's bounds. Reduced motion is clamped in `Motion`.
+- No state changes the hit area's bounds; a press scale is a transform and is allowed. Reduced
+  motion is clamped in `Motion`.
 
-**Hyprland.** The config is Lua. A curve takes his points directly:
-`hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`, then
-`hl.animation({ leaf = "windows", enabled = true, speed = 2,
-bezier = "easeOut", style = "popin 95%" })`.
-Speed is in deciseconds, so 2 is 200 ms; `popin 95%` is his start scale 0.95. Layers (bars, popouts,
-launchers drawn by the shell): the `layersIn` leaf with `speed = 2, style = "fade"` and a faster
-`layersOut`. Workspace switches are keyboard-driven and constant: the `workspaces` leaf with
-`enabled = false`, or at most a 2 to 3 decisecond `slide`. Motion off entirely is
-`hl.config({ animations = { enabled = false } })`.
+**Hyprland.** The config is Lua. A curve takes his points directly: `hl.curve("easeOut", { type =
+"bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`, then `hl.animation({ leaf = "windows", enabled
+= true, speed = 2, bezier = "easeOut", style = "popin 95%" })`. Speed is in deciseconds, so 2 is 200
+ms; `popin 95%` is his start scale 0.95. Layers: one owner per surface. A surface opened from a
+trigger (popout, menu, tooltip) animates in QML with its origin at the trigger, and its layer
+namespace gets no compositor animation (`hl.layer_rule({ match = { namespace = "..." }, no_anim =
+true })`). A surface with no trigger (notification, OSD, a bar appearing) may use the compositor
+instead: the `layersIn` leaf with `speed = 2, style = "fade"` and a faster `layersOut`. Never both.
+A launcher or palette toggle gets neither (step 1). Workspace switches are keyboard-driven and
+constant: the `workspaces` leaf with `enabled = false`, or at most a 2 to 3 decisecond `slide`.
+Motion off entirely is `hl.config({ animations = { enabled = false } })`.
 
-**CSS and React.** His form as written above: `--ease-out`, `--ease-in-out`, `--ease-drawer`
-custom properties, `@starting-style`, `@media (prefers-reduced-motion: reduce)` and
-`@media (hover: hover) and (pointer: fine)`, WAAPI, and `useReducedMotion()` in Motion. In Motion
-write `animate={{ transform: "translateX(100px)" }}`, not `x: 100`, when the page is busy.
+**CSS and React.** His form: custom properties `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`,
+`--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`,
+then `@starting-style`, `@media (prefers-reduced-motion: reduce)` and `@media (hover: hover) and
+(pointer: fine)`, WAAPI, and `useReducedMotion()` in Motion. In Motion write `animate={{ transform:
+"translateX(100px)" }}`, not `x: 100`, when the page is busy.
 
 **TUI.** Most of this does not apply: a terminal redraws, it does not composite. What applies: no
 animation for a keyboard-driven action, a spinner only on a TTY and never in piped output (tui-ui
@@ -184,5 +191,5 @@ rejected and why), the ingredients (tool, properties, curve, duration or spring)
 feel-check because code cannot show it: play it at 2 to 5 times the duration, step it frame by
 frame, test gestures on the real device, look again the next day.
 
-Adapted from skills/animate/SKILL.md (RECIPES.md folded in) and the motion half of
+Adapted from skills/animate/SKILL.md, skills/animate/RECIPES.md and the motion half of
 skills/emil-design-eng/SKILL.md in github.com/emilkowalski/skills, MIT licence, Emil Kowalski.

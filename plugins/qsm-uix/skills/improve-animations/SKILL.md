@@ -89,9 +89,10 @@ The plan names targets in the stack's own form; the numbers never change.
   every duration, a `Behavior` where a fixed-`from` animation restarts, `opacity` and `scale` where
   `width` and `height` animate, clamping in `Motion` for reduced motion.
 - **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
-  and the `layersIn` leaf at `speed = 2, bezier = "easeOut", style = "fade"`, speed in deciseconds
-  (2 is 200 ms), `workspaces` off or very short for keybind switching,
-  `hl.config({ animations = { enabled = false } })` as reduced motion.
+  and, for a surface with no trigger, the `layersIn` leaf at `speed = 2, bezier = "easeOut", style =
+  "fade"` (animate owns which surface gets which; 2 is 200 ms), `workspaces` off or very short for
+  keybind switching, `hl.config({ animations = { enabled = false } })` is motion off, not reduced
+  motion.
 - **CSS and React**: tokens `--ease-out`, `--ease-in-out`, `--ease-drawer`, `@starting-style`,
   `prefers-reduced-motion`, hover gating, the full `transform` string in Motion.
 - **TUI**: audit only spinner use (TTY only, none in piped output) and keyboard-driven redraw; the

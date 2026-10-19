@@ -36,9 +36,10 @@ A violation of any is a finding.
    `top`, `left` are performance findings. `transition: all` is always a finding.
 8. **Accessible.** Reduced motion is honoured and means gentler, not zero: keep opacity and colour,
    drop movement. Hover motion is gated to a real hovering pointer.
-9. **Asymmetric where deciding.** Deliberate phases (press, hold, destructive confirm) run slower,
-   the system's answer snaps (hold 2 s linear, release 200 ms ease-out). Symmetric timing on a
-   press-and-release is a finding. A common exit is the enter's mirror, quicker.
+9. **Asymmetric where deciding.** Deliberate phases (press, hold, destructive confirm) run
+   slower, the system's answer snaps (hold 2 s linear, release 200 ms ease-out). Symmetric timing on
+   a press-and-release is a finding. A common exit is the enter's mirror, quicker; an exit as slow
+   as its enter is a finding (his example: enter 2 s, exit 200 ms).
 10. **Cohesive.** Motion matches the component's character and the rest of the product: playful may
     bounce, a dashboard stays crisp. Five hand-typed near-identical curves is a consolidation
     finding. A crossfade that shows two overlapping objects is bridged with `blur(2px)`. When unsure
@@ -85,7 +86,7 @@ because `visible` flips at once; hover that changes the hit area; reduced motion
 limit). Findings: a built-in `default` or `ease` curve on a window or layer; speed over 3 with no
 reason; an animation on `workspaces` for keybind-driven switching (keyboard-initiated, so none or a
 very short `slide`); `popin` starting below 90 percent.
-`hl.config({ animations = { enabled = false } })` is the reduced-motion form.
+`hl.config({ animations = { enabled = false } })` is motion off, not the reduced-motion form.
 
 **CSS and React.** The ten standards in their original form, including `@starting-style`,
 `prefers-reduced-motion`, `(hover: hover) and (pointer: fine)`, and Motion's `x`/`y`/`scale` against

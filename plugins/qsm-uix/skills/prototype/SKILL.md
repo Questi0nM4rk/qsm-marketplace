@@ -1,6 +1,7 @@
 ---
 name: prototype
 description: "Use only when the person explicitly invokes it (the prototype skill, /prototype): build several genuinely different versions of one described UI piece behind a switcher, flip through them live, promote the chosen one. Does not trigger on its own, and not when someone merely asks to build one piece. Triggers: use the prototype skill for this toast, prototype three versions of the pricing card, /prototype a hold-to-delete button, prototype variants of this popout, prototypuj varianty. Reviewing existing UI is ui-audit and ux-audit; stack syntax is css-ui, react-ui, qml-ui, tui-ui."
+disable-model-invocation: true
 ---
 
 # Prototyping Variants
@@ -102,10 +103,11 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
   box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 24px rgba(0,0,0,.24), 0 2px 6px rgba(0,0,0,.12);
   font: 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   user-select: none; }
-.proto-picker-highlight { position: absolute; top: 4px; left: 0; height: 28px;
-  border-radius: 999px; background: rgba(255,255,255,.12); will-change: transform; }
+.proto-picker-highlight { position: absolute; top: 4px; left: 0; width: 1px; height: 28px;
+  transform-origin: left; border-radius: 999px; background: rgba(255,255,255,.12);
+  will-change: transform; }
 .proto-picker[data-ready] .proto-picker-highlight {
-  transition: transform 250ms cubic-bezier(.23,1,.32,1), width 250ms cubic-bezier(.23,1,.32,1); }
+  transition: transform 250ms cubic-bezier(.23,1,.32,1); }
 @media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
 .proto-picker-item { position: relative; display: flex; align-items: center; height: 28px;
   padding: 0 12px; border: 0; border-radius: 999px; background: transparent;
@@ -119,15 +121,16 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
 .proto-picker[data-position="top"] { bottom: auto; top: 24px; }
 ```
 
-The highlight slides between items (it has no layout dependents, so animating `width` is the one
-exception to transform-and-opacity); the variant swap stays instant. The one allowed change:
+The highlight moves between items with `transform` only (`translateX` and `scaleX`, never `left` or
+`width`); the variant swap stays instant. The picker is throwaway chrome and holds literals on
+purpose: it is deleted when a variant is promoted. The one allowed change:
 `data-position="top"` when a variant occupies the bottom-centre (toast stack, sheet, dock).
 Render replay and its divider only when a variant has motion to re-trigger.
 
 Behaviour: keys `1` to `N` and arrows switch, `R` replays, ignored in an input, textarea, select,
 contenteditable or with a modifier held. Exactly one item carries `data-active` and
 `aria-current="true"`. The choice persists in `?v=2`, default 1. `data-ready` is added after two
-animation frames so load does not animate the highlight; set the highlight's width and
+animation frames so load does not animate the highlight; set the highlight's `scaleX` and
 `translateX` from the active item's `offsetWidth` and `offsetLeft`, again on resize. A switch
 re-mounts the variant (clear, render next frame) so entrance animations re-run; replay re-mounts
 without switching.
@@ -155,4 +158,5 @@ distinct directions beat three padded.
 - When production code is edited before a pick, revert it, because exploration lives on its own
   surface.
 
-Source: skills/prototype/SKILL.md and PICKER.md in github.com/emilkowalski/skills (MIT, Emil Kowalski).
+Source: skills/prototype/SKILL.md and PICKER.md in github.com/emilkowalski/skills (MIT, Emil
+Kowalski).

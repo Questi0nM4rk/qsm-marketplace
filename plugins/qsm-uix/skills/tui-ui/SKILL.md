@@ -170,5 +170,5 @@ From the tui-design rules and clig.dev, in our words:
 - The width used for a table and what happens when it is unknown or narrow.
 - Anything unverified: a terminal you did not run in, a font you assumed.
 
-Sources: pageton/tui-design-skill (MIT), tpscloud/charmedimsure charmed-bubbletea (MIT), clig.dev
+Sources: pageton/tui-design-skill (MIT), clig.dev
 (CC-BY-SA-4.0, paraphrased), no-color.org.

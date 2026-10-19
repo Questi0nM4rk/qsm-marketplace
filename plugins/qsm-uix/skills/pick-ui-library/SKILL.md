@@ -6,9 +6,6 @@ disable-model-invocation: true
 
 # Picking The Right Library
 
-When first invoked without a specific question, respond only with: "I'm ready to pick the right
-library for your task, my picks come from Emil Kowalski's curated list." Then wait.
-
 A lookup for React and web work. Given a task ("I need toasts"), match it to the list and recommend
 one library. The picks are deliberate and taste-driven: do not substitute others unless the user
 asks or the task is not covered. Hand-rolling what a maintained library does is the failure this
@@ -18,8 +15,8 @@ skill prevents.
 
 1. Identify the task, not the library the user named. "A dropdown" is a UI-primitives task even if
    they asked about something else.
-2. Check `package.json` first. A listed library already installed is used. A competitor (react-window
-   instead of Virtuoso) is flagged but not swapped unless asked.
+2. Check `package.json` first. A listed library already installed is used. A competitor
+   (react-window instead of Virtuoso) is flagged but not swapped unless asked.
 3. Recommend one library, say what it is for in one sentence, and install and wire it when that is
    part of the request. A clear answer is not a menu.
 4. A task the list does not cover is said so explicitly; recommend from your own knowledge and make

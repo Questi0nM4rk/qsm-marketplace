@@ -93,6 +93,8 @@ resting frame is not an audit.
      in the tree.
    - A popover's anchor edge sits on its trigger, and a modal is centred in the viewport.
    - Every control with a pressed state in one theme has it in the other.
+   - A raised surface has a soft shadow and no opaque border (ui-design); a solid border under a
+     shadow is a finding.
 
 ## The findings table
 

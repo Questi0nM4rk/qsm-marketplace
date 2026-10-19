@@ -41,8 +41,8 @@ motion: a11y-audit. Motion: animate and review-animations.
 - **Durations come from `Motion`, easing from its curves.** If the `Motion` singleton clamps
   durations for reduced motion, use it, because a component that bypasses it breaks the setting
   for the whole shell; if it does not clamp, add the clamp there, not in components.
-  Hover and press change colour, opacity, or elevation, never `width`/`height`/`x`/`y` of the
-  hit area, because a moving bounds under the pointer flickers the state.
+  No state changes the hit area's bounds (animate: a press scale is a transform and is allowed),
+  because moving bounds under the pointer flicker the state.
 - **A hover surface** opens on entry, stays open while the pointer is inside the union of its
   trigger, panel and the path between them, and closes 180 ms after leaving it (ux-audit check 3).
   Name the state by what the pointer does (`hovered`), never `held`, and never delay the opening,
@@ -100,12 +100,9 @@ Qt's QML coding conventions and the qt-qml-review rules, in our words:
 - **Cost:** `Image` gets `sourceSize` and `asynchronous: true`; `Text.PlainText` unless rich text is
   needed; avoid a transparent `Rectangle`, `clip` and `layer.enabled` unless measured.
 
-Hyprland animates layer-shell surfaces itself, from the `layersIn` and `layersOut` leaves (styles
-`slide`, `popin`, `fade`; `speed` in deciseconds; a named bezier or spring curve). Animate a surface
-in the compositor or in a `Behavior`, never both, or the two play over each other. `loop` on an
-`*angle` leaf keeps the GPU rendering at the refresh rate always, so avoid it. The config is Lua:
-`hl.curve(name, { type = "bezier", points = { { x1, y1 }, { x2, y2 } } })` and
-`hl.animation({ leaf, enabled, speed, bezier, style })`.
+Hyprland also animates layer-shell surfaces (the `layersIn` and `layersOut` leaves). Which owner
+a surface gets is animate's Hyprland section, never both. `loop` on an `*angle` leaf keeps the GPU
+rendering at the refresh rate always, so avoid it. The config is Lua (Hyprland 0.55 and later).
 
 Desktop rules from the KDE and GNOME human interface guidelines, paraphrased:
 
@@ -181,5 +178,5 @@ Hand the tree and the reserved numbers to ui-audit as live geometry.
   read.
 
 Sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions,
-hyprwm/hyprland-wiki (BSD-3-Clause), KDE HIG and GNOME HIG (CC-BY-SA-4.0, paraphrased),
-emilkowalski/skills (MIT).
+hyprwm/hyprland-wiki (BSD-3-Clause), the GNOME HIG via Paresh-Maheshwari/gnome-skills
+(CC-BY-SA-4.0), the KDE HIG (paraphrased), emilkowalski/skills (MIT).

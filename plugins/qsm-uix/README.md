@@ -20,13 +20,13 @@ When designs carry their source and their numbers by default, this plugin can go
 | Skill | `ui-design` | Writes a stack-neutral design source: tokens, on-pairs, light and dark themes, a style with its accessibility rules |
 | Skill | `apple-design` | Apple's interface foundations (response, materials and depth, typography, principles) for QML, Hyprland, CSS and React, TUI; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `ui-audit` | Measures static visuals: spacing, geometry, colour, contrast, type, icons, elevation, theme parity |
-| Skill | `ux-audit` | Traces behaviour: discoverability, feedback, targets, motion, reversibility, error recovery, forms |
-| Skill | `animate` | Builds one animation: gates whether it should animate, then the curve, duration and properties on QML, Hyprland, CSS or a TUI |
-| Skill | `review-animations` | Judges motion against ten standards with values, defaults to flagging, owns the motion verdict |
-| Skill | `improve-animations` | Surveys a codebase's motion and writes prioritized self-contained plans, read-only |
-| Skill | `find-animation-opportunities` | Proposes motion where it helps and rejects the rest, read-only |
-| Skill | `animation-vocabulary` | Turns a vague description of a motion effect into its exact term |
-| Skill | `animation-performance` | Finds why an animation drops frames and keeps it inside the frame budget |
+| Skill | `ux-audit` | Traces behaviour: discoverability, feedback, targets, reversibility, error recovery, forms; motion is review-animations |
+| Skill | `animate` | Builds one animation: gates whether it should animate, then the curve, duration and properties on QML, Hyprland, CSS or a TUI; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `review-animations` | Judges motion against ten standards with values, defaults to flagging, owns the motion verdict; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `improve-animations` | Surveys a codebase's motion and writes prioritized self-contained plans, read-only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `find-animation-opportunities` | Proposes motion where it helps and rejects the rest, read-only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `animation-vocabulary` | Turns a vague description of a motion effect into its exact term; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `animation-performance` | Finds why an animation drops frames and keeps it inside the frame budget; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `a11y-audit` | Drives the UI by keyboard and the accessibility tree, and fills a per-criterion conformance table |
 | Skill | `a11y-conformance` | Gives the WCAG 2.2 A and AA criteria and the law behind them (European Accessibility Act, EN 301 549) |
 | Skill | `qml-ui` | Quickshell and QML on Hyprland: Theme singleton, item-tree dump, qmllint and qmlformat |

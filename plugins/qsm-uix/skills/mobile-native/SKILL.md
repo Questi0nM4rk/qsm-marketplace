@@ -1,18 +1,14 @@
 ---
 name: mobile-native
-description: "Use when a web app or PWA (browser, React, plain CSS) is built for or reviewed on a phone and something works in Chrome but feels wrong on the phone: sticky hover after a tap, gray tap flash, the 100vh bug, an input that zooms the page, laggy taps, pull-to-refresh hijacking scroll, content under the notch, long-press selecting button text, a carousel that scrolls the wrong way, a mismatched status bar. Triggers: feels like a website on my phone, make it feel native, bottom sheet, carousel, safe area, PWA, 100vh on mobile, tap highlight, vypada to jako web na mobilu. Web only: Quickshell, QML, Hyprland and terminal UI never load it. Motion is animate, plain CSS rules are css-ui."
+description: "Use when a web app or PWA (browser, React, plain CSS) is built for or reviewed on a phone and something works in Chrome but feels wrong on the phone: sticky hover after a tap, gray tap flash, the 100vh bug, an input that zooms the page, laggy taps, pull-to-refresh hijacking scroll, content under the notch, long-press selecting button text, a carousel that scrolls the wrong way, a mismatched status bar. Triggers: feels like a website on my phone, make this web app feel native, bottom sheet on a web page, carousel on a web page, safe area, PWA, 100vh on mobile, tap highlight, vypada to jako web na mobilu. Web only: Quickshell, QML, Hyprland and terminal UI never load it. Motion is animate, plain CSS rules are css-ui."
 ---
 
 # Feeling Native On Mobile
 
-When first invoked without a specific question, respond only with: "I'm ready to make your web app
-feel native on mobile, my knowledge comes from Emil Kowalski's design engineering philosophy."
-Then wait for the question.
-
 A web app on a phone gives itself away by a handful of platform-layer tells: viewport, touch,
 scroll, safe areas, browser chrome. This skill removes them one by one for the person who ships web
 UI to real phones. It does not design or review motion (animate, review-animations) and does not
-cover React Native (animate-expo). Most "janky on mobile" reports are not animation problems: they
+cover React Native. Most "janky on mobile" reports are not animation problems: they
 are a tap delay, a gray flash, or a hover that will not let go.
 
 The phone is the source of truth. A desktop browser with the device toolbar on is not a phone, and
@@ -84,11 +80,12 @@ from code and which need a device.
    surface) and traps the user otherwise; `pan-x` on a vertical sheet handle. A native-scroll
    carousel prefers `scroll-snap-type: x mandatory` and `scroll-snap-align: start`: the browser's
    physics beat a hand-rolled spring.
-10. **Status bar.** `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">`
-    and the dark twin, plus `<meta name="color-scheme" content="light dark">`. Match the colour at
-    the very top of the page, not the brand colour. Next.js sets it through the `viewport` export;
-    a class-based theme updates the tag from JavaScript on toggle; an installed PWA also needs the
-    manifest `theme_color` and `background_color`.
+10. **Status bar.**
+    `<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">` and the dark
+    twin, plus `<meta name="color-scheme" content="light dark">`. Match the colour at the very top
+    of the page, not the brand colour. Next.js sets it through the `viewport` export; a class-based
+    theme updates the tag from JavaScript on toggle; an installed PWA also needs the manifest
+    `theme_color` and `background_color`.
 11. **Hardware.** Sticky hover, tap highlight, URL bar effect on `vh`, input zoom, click delay,
     overscroll, safe areas and the software keyboard are real-device behaviours. Use a phone a few
     years old, with the keyboard open, once in landscape, and as an installed PWA when that is a

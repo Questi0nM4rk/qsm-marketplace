@@ -1,6 +1,6 @@
 ---
 name: break-ui
-description: "Use when asked to stress-test, break, or find edge cases in a UI piece by feeding it worst-case data: long and unbreakable strings, one-letter names, missing fields, huge counts, zero items, non-Latin text, emoji, extreme numbers. Triggers: try to break this, stress test this component, worst case data, what if the name is very long, empty state, edge cases for this list, long window title in my bar, rozbij to, nejhorsi pripad, dlouhy nazev. Reports every break with its fix and stops. How to fix it is css-ui, react-ui, qml-ui, tui-ui; design taste is ui-design; motion is ux-audit."
+description: "Use when asked to stress-test, break, or find edge cases in a UI piece by feeding it worst-case data: long and unbreakable strings, one-letter names, missing fields, huge counts, zero items, non-Latin text, emoji, extreme numbers. Triggers: try to break this, stress test this component, worst case data, what if the name is very long, empty state, edge cases for this list, long window title in my bar, rozbij to, nejhorsi pripad, dlouhy nazev. Reports every break with its fix and stops. How to fix it is css-ui, react-ui, qml-ui, tui-ui; design taste is ui-design; motion is review-animations."
 ---
 
 # Breaking UI

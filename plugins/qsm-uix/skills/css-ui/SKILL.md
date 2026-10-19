@@ -11,7 +11,7 @@ motion setting. This skill is for the person who ships web UI and answers for it
 Its outcome is CSS where every value traces to a token, both themes are checked, and the
 page is plain semantic HTML first. Out of scope: choosing the token values (ui-design: the
 design source is the expected column), measuring the result (ui-audit), criteria and law
-(a11y-audit, a11y-conformance), motion judgement (ux-audit), React (react-ui).
+(a11y-audit, a11y-conformance), motion judgement (review-animations), React (react-ui).
 
 ## Rules
 
@@ -33,20 +33,21 @@ design source is the expected column), measuring the result (ui-audit), criteria
    against the adjacent colours, `outline-offset` so it clears the border. Reason: removing the
    outline without replacing it is the commonest keyboard lock-out, and `:focus-visible`
    keeps the ring off mouse clicks.
-5. **States change colour, opacity or shadow, never bounds.** No hover `transform: scale`
-   that overlaps neighbours, no border that goes from 1 px to 2 px, no added padding or
-   font-weight. Reserve the space (`outline`, `box-shadow`, or a transparent border of the
-   final width). Reason: bounds that move make the pointer leave the target and flicker.
+5. **No state changes layout bounds.** A press is `transform: scale()` on `:active` (animate owns
+   it); hover, focus and disabled change colour, opacity or shadow. No border that goes from 1 px
+   to 2 px, no added padding or font-weight: reserve the space (`outline`, `box-shadow`, or a
+   transparent border of the final width). Reason: bounds that move make the pointer leave the
+   target and flicker.
    Adjacent states differ by a contrast ratio of 1.2 or more.
 6. **Targets are at least 24 px, 32 px when frequent.** `min-block-size` and `min-inline-size`
    on the control, padding for the rest; a 16 px icon button gets padding, not a bigger icon.
-7. **Motion comes from two tokens per surface, and stops on request.** `--dur-in` and
-   `--dur-out` (exit shorter than enter; why is ux-audit's), transitions name the properties
-   (`transition: opacity var(--dur-in) var(--ease)`, never `all`). Animate `opacity` and
-   `transform` only. Then
-   `@media (prefers-reduced-motion: reduce) { :root { --dur-in: 0.01ms; --dur-out: 0.01ms } }`,
-   so one switch covers every component. Reason: a per-component override is forgotten in the
-   next component.
+7. **Motion comes from tokens, and gentles on request.** `--dur-in` and `--dur-out` for opacity and
+   colour (exit shorter than enter; review-animations judges it), `--dur-move` for transform and
+   position; transitions name the properties (`transition: opacity var(--dur-in) var(--ease)`,
+   never `all`). Animate `opacity` and `transform` only. Then
+   `@media (prefers-reduced-motion: reduce) { :root { --dur-move: 0.01ms } }`: movement is
+   zeroed, the short fade stays (animate: gentler, not zero), and one switch covers every
+   component. Reason: a per-component override is forgotten in the next component.
 8. **Layout does not shift.** `aspect-ratio` or `width`/`height` on images and embeds, a
    reserved block for async content, `font-display: swap` with a metric-matched fallback
    (`size-adjust`). Reason: a late image pushing a button under the pointer is a mis-click.
@@ -70,10 +71,9 @@ design source is the expected column), measuring the result (ui-audit), criteria
 ## Libraries
 
 Platform first: `dialog`, `popover`, `details`, `:has`, container queries and `color-scheme` need no
-package. Beyond that, a maintained library beats hand-rolled code: Tailwind v4 for tokens as
-utilities (below), `clsx` for conditional class strings and `cva` for typed variants, `next-themes`
-for a flash-free theme switch in a Next.js app. No CSS-in-JS runtime for a static page. Touch and
-phone fixes (tap highlight, `dvh`, safe areas, input zoom) are mobile-native; motion is animate.
+package. Tailwind v4 carries tokens as utilities (below); the library picks are pick-ui-library's.
+No CSS-in-JS runtime for a static page. Touch and phone fixes (tap highlight, `dvh`, safe areas,
+input zoom) are mobile-native; motion is animate and review-animations.
 
 ## Conventions
 

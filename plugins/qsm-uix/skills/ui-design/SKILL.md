@@ -70,8 +70,9 @@ Use these headings, because the audits and the stack skills look for them:
   literal in a component is a decision nobody reviewed, and a scale is how one change reaches
   every surface. Density is an axis of the scale (compact, regular), not a second design.
 - **Every pressable has a pressed state, and no state moves its neighbours.** The press shrinks
-  the element to 0.95 to 0.98 of its size at once; hover, focus and disabled change colour,
-  opacity or elevation and keep the box. Adjacent states of a control differ by a contrast ratio
+  the element to 0.95 to 0.98 of its size at once, as a transform on `:active` or pressed that does
+  not change layout bounds (animate owns it); hover, focus and disabled change colour, opacity or
+  elevation and keep the box. Adjacent states of a control differ by a contrast ratio
   of at least 1.2, and the focus indicator reaches 3:1 against its neighbours. Why: a press with
   no response feels like the UI did not hear the person, a scaled press leaves layout alone, and
   a state that cannot be told apart is not a state.
@@ -90,6 +91,8 @@ Use these headings, because the audits and the stack skills look for them:
   Why: a rule right in isolation still reads wrong beside a neighbour of another character.
 - **A raised surface separates by a soft shadow, not a solid border.** A semi-transparent shadow
   or a low-alpha border reads as depth; an opaque border reads as a box drawn around the content.
+  A low-alpha separator on a card is decorative: WCAG 1.4.11 applies to the boundaries a person
+  needs to identify a control, so the 3:1 rule is for control boundaries and inputs.
 - **Handle edge cases where nobody looks.** A hover that must survive the gap between stacked
   items, a timer that pauses when the view is hidden, a drag that continues outside its box.
   These are details nobody notices, and that is what correct looks like.
@@ -121,7 +124,7 @@ Use these headings, because the audits and the stack skills look for them:
 - **Prefer the platform's control to a custom one**, unless the source says why not. The system
   one brings keyboard, focus, scaling and screen reader behaviour for free.
 - **A style is a constraint set, never a name.** Write what the look requires (for example "raised
-  surfaces separate by a 3:1 low-alpha border or a soft shadow, never an opaque border"), the
+  surfaces separate by a low-alpha border or a soft shadow, never an opaque border"), the
   accessibility it
   brings, and where it must not be used (dense data, small text, high-contrast users). Why: a
   named fad such as "glass" says nothing the audit can measure; a constraint can fail a pair.

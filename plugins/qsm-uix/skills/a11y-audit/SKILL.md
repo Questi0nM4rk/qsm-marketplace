@@ -63,8 +63,9 @@ code.
 7. **Text scaling and reduced motion.** Set the system text scale to 200 percent (1.4.4) and
    recapture every surface: clipped, overlapped or unreachable content is a finding, with the
    cropped capture as evidence. Set the system reduced-motion preference and trigger every animated
-   surface: motion that still plays is a finding against the design source's own requirement, not
-   a failed AA criterion (2.3.3 is AAA), and the timing method is ux-audit's.
+   surface: motion that still plays is a finding against the design source's own requirement, not a
+   failed AA criterion (2.3.3 is AAA), and review-animations judges the timing, which ux-audit check
+   7 measures on a running surface.
 8. **Targets.** Take the measured hit areas from ux-audit check 3 (or the tree) and record only
    the 2.5.8 verdict with its exceptions from a11y-conformance.
 

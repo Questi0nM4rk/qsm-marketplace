@@ -12,7 +12,7 @@ This skill serves the person who publishes a React UI and answers for its access
 holds only what React leaves to you. Hooks, state management, data fetching, performance tuning
 and current API signatures are not here (read them through the Context7 skill). Colours, spacing and
 motion values are css-ui and the design source. Why a rule exists: a11y-audit (criteria) and
-ux-audit (feedback, motion, forms).
+ux-audit (feedback, forms). Motion is animate and review-animations.
 
 ## Rules
 
@@ -56,12 +56,7 @@ ux-audit (feedback, motion, forms).
 ## Libraries
 
 A maintained library beats a hand-rolled one, and the project's own `package.json` decides first.
-The picks (Emil Kowalski's list; the full list loads only when the user invokes pick-ui-library):
-base-ui for dialogs, popovers, menus and selects; Sonner for toasts; cmdk for a command menu;
-input-otp for code inputs; motion for springs and layout animation, plain CSS for a hover or fade;
-NumberFlow for animated numbers; dnd kit for drag and drop; Virtuoso for long lists; recharts for
-charts; zustand for shared state; clsx and cva for class strings and variants; next-themes for a
-flash-free theme.
+The picks are pick-ui-library's, which loads only when the user invokes it.
 
 ## Conventions
 
@@ -79,9 +74,6 @@ From the Vercel web interface guidelines, in our words:
 - **Feedback.** Update optimistically and reconcile on the response, rolling back or offering Undo
   on failure. A destructive action is confirmed or undoable. A toast and inline validation use a
   polite live region (rule 4).
-- **Cost.** Virtualize lists over about 50 rows, prefer uncontrolled inputs, count re-renders
-  before tuning, and format dates and numbers with `Intl`, not by hand. A mutation answers in under
-  about 500 ms or shows progress.
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
   rendering against a server and client mismatch.
 - **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, set `inert` on

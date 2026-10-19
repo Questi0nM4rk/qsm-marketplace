@@ -72,8 +72,9 @@ The recipe is written in the stack's form; the values are the same.
 - **QML**: a `Behavior on opacity` and `scale` with `Easing.BezierSpline` and
   `bezierCurve: [0.23, 1, 0.32, 1, 1, 1]`, durations from `Motion` tokens, origin at the trigger.
 - **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
-  with the `layersIn` leaf at `speed = 2, bezier = "easeOut", style = "fade"` (speed in
-  deciseconds); never workspace motion on a keybind-driven switch.
+  for a surface with no trigger, the `layersIn` leaf at `speed = 2, bezier = "easeOut", style =
+  "fade"` (animate owns which surface gets which; deciseconds); never workspace motion on a
+  keybind-driven switch.
 - **CSS and React**: `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`, `--ease-in-out:
   cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`,
   `@starting-style`, reduced-motion handling (gentler, not zero) and hover gating on every
