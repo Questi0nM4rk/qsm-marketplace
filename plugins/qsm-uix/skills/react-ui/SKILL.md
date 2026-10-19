@@ -46,11 +46,46 @@ ux-audit (feedback, motion, forms).
    element. When a custom widget is unavoidable (combobox, tabs), give it the role, `aria-*`
    state, arrow-key handling and visible focus, in that order; an icon-only button gets
    `aria-label`, an icon beside text gets `aria-hidden`. Prefer a maintained headless library
-   (Radix, React Aria) over writing the pattern: the keyboard contract is the hard part.
+   (base-ui, or Radix or React Aria when the project has them) over writing the pattern: the
+   keyboard contract is the hard part.
 8. **JS-driven motion honours reduced motion.** CSS handles its own (css-ui). For animation run
    from JS, read `matchMedia("(prefers-reduced-motion: reduce)")` and subscribe to `change`; with
    an animation library use its switch (`MotionConfig reducedMotion="user"`). Replace movement
    with an instant state change or a fade, never remove the state change itself.
+
+## Libraries
+
+A maintained library beats a hand-rolled one, and the project's own `package.json` decides first.
+The picks (Emil Kowalski's list; the full list loads only when the user invokes pick-ui-library):
+base-ui for dialogs, popovers, menus and selects; Sonner for toasts; cmdk for a command menu;
+input-otp for code inputs; motion for springs and layout animation, plain CSS for a hover or fade;
+NumberFlow for animated numbers; dnd kit for drag and drop; Virtuoso for long lists; recharts for
+charts; zustand for shared state; clsx and cva for class strings and variants; next-themes for a
+flash-free theme.
+
+## Conventions
+
+From the Vercel web interface guidelines, in our words:
+
+- **Forms.** Enter submits a focused input, and in a `textarea` Cmd or Ctrl plus Enter. Accept free
+  text and validate after, never block typing, and let an incomplete form submit so validation can
+  show. Never block paste (password managers and 2FA codes depend on it); trim values; use
+  `autocomplete`, a meaningful `name`, the right `type` and `inputmode`. Keep submit enabled until
+  the request starts, then disable it with a spinner and keep the original label. Warn before
+  navigating away from unsaved changes.
+- **State lives in the URL.** Filters, tabs, pagination and an expanded panel are deep-linkable;
+  Back and Forward restore scroll. Navigation is `<a>` or the router's `Link`, so Cmd, Ctrl and
+  middle click work; never a `div` with `onClick`.
+- **Feedback.** Update optimistically and reconcile on the response, rolling back or offering Undo
+  on failure. A destructive action is confirmed or undoable. A toast and inline validation use a
+  polite live region (rule 4).
+- **Cost.** Virtualize lists over about 50 rows, prefer uncontrolled inputs, count re-renders
+  before tuning, and format dates and numbers with `Intl`, not by hand. A mutation answers in under
+  about 500 ms or shows progress.
+- **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
+  rendering against a server and client mismatch.
+- **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, set `inert` on
+  the dragged element and disable text selection.
 
 ## Red flags
 
@@ -72,3 +107,5 @@ ux-audit (feedback, motion, forms).
 - For each interactive piece: where focus goes on open, close, route change and failed submit.
 - Which native element was used, and for any custom widget why none fit.
 - What was run and what was not, so unrun checks read as unrun.
+
+Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills pick-ui-library (MIT).

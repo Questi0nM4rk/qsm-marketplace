@@ -67,6 +67,38 @@ design source is the expected column), measuring the result (ui-audit), criteria
     Baseline and safe to use; anything newer is checked on MDN before use**, and gets an
     `@supports` fallback. The page works without it.
 
+## Libraries
+
+Platform first: `dialog`, `popover`, `details`, `:has`, container queries and `color-scheme` need no
+package. Beyond that, a maintained library beats hand-rolled code: Tailwind v4 for tokens as
+utilities (below), `clsx` for conditional class strings and `cva` for typed variants, `next-themes`
+for a flash-free theme switch in a Next.js app. No CSS-in-JS runtime for a static page. Touch and
+phone fixes (tap highlight, `dvh`, safe areas, input zoom) are mobile-native; motion is animate.
+
+## Conventions
+
+From the Vercel web interface guidelines, in our words:
+
+- Modals and drawers get `overscroll-behavior: contain`, so the page behind does not scroll. A
+  dark theme sets `color-scheme: dark` on `html`, a native `select` gets explicit `background-color`
+  and `color`, and `theme-color` matches the page background.
+- Increase contrast on `:hover`, `:active` and `:focus`, never lower it. Make focus rings clear
+  sticky bars (rule 10), and keep a visible replacement for any removed outline.
+- Layered shadows (an ambient one and a direct one), crisp edges from a semi-transparent border
+  plus a shadow, nested radii where the child is never larger than the parent, and borders and
+  shadows tinted toward the background hue so greys do not look pasted on.
+- Animate from where the thing physically comes from (`transform-origin`), list SVG transforms on
+  a `<g>` with `transform-box: fill-box`, and keep animations interruptible. Animate only to show
+  cause and effect; how and how much is animate.
+- Text: `text-wrap: balance` on headings, `…` not `...`, a non-breaking space inside `10 MB` and
+  `⌘ K`, curly quotes, `scroll-margin-top` on headings, and a skip link.
+- Content survives short, average and very long user text, and empty, sparse, dense and error states
+  are designed; a skeleton mirrors the final content so nothing shifts.
+- If it looks clickable it is clickable; the label and its checkbox or radio share one hit target
+  with no dead zone; a tooltip is the last resort after inline help.
+- Verify at phone, laptop and ultra-wide widths (50% zoom simulates the last), and with CPU
+  throttling before claiming performance.
+
 ## Make it checkable
 
 The audits measure what the page exposes. Give them three reads: the DOM dump
@@ -115,3 +147,5 @@ ratios you checked or could not measure (a measured number, or "not measured: no
 ui-audit measures it). List the states and what bounds they hold. Say which rules from the
 design source you could not apply because it was absent, and which you assumed. Never claim a
 contrast ratio you did not compute.
+
+Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT).
