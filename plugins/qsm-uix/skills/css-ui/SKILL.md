@@ -1,6 +1,6 @@
 ---
 name: css-ui
-description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, dark theme, dark mode, sticky header covers content, layout shifts, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
+description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, CSS dark mode, CSS sticky header covers content, CSS layout shifts, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
 ---
 
 # CSS UI
@@ -63,20 +63,18 @@ design source is the expected column), measuring the result (ui-audit), criteria
     height (so anchors and focused fields are not hidden under it), `padding-bottom` for a fixed
     footer; safe areas are mobile-native's. Reason: a focused control under a sticky
     header fails 2.4.11, and the user cannot see where they are.
-11. **An icon stands alone only where everyone reads it the same** (close, play, volume), and it
-    then has a tooltip and an `aria-label`; any other action gets a text label. Never icon and
-    label on one button; an icon beside other text is `aria-hidden="true"`.
+11. **Icons follow ui-design's icon rule.** In HTML: an icon-only control has a tooltip and an
+    `aria-label`; an icon beside other text is `aria-hidden="true"`.
 12. **Features: container queries, `dvh`, `:focus-visible`, `:has`, `color-scheme` are
     Baseline and safe to use; anything newer is checked on MDN before use**, and gets an
     `@supports` fallback. The page works without it.
-13. **A surface that opens on hover is also reachable without hover.** It opens on entry, stays
-    for 180 ms after the pointer leaves, and every action and fact in it is reachable by click
-    and by keyboard: a `button` with `aria-expanded` (or `popovertarget`) toggles it, `Escape`
-    closes it. Reason: touch and keyboard users never hover. `:focus-within` keeps a compound
-    control open while focus is inside.
-14. **A dark overlay carries a soft shadow and a light edge.** Menus, popovers and dialogs always
-    get a layered shadow; in the dark theme also a `1px` low-alpha light border (never opaque),
-    because a shadow vanishes on a dark fill.
+13. **A surface that opens on hover is also reachable without hover.** It opens on entry, closes
+    after the delay in ux-audit (the owner's ruling), and every action and fact in it is reachable
+    by click and by keyboard: a `button` with `aria-expanded` (or `popovertarget`) toggles it,
+    `Escape` closes it. Reason: touch and keyboard users never hover. `:focus-within` keeps a
+    compound control open while focus is inside.
+14. **A dark overlay follows ui-design's overlay rule.** In CSS: a layered `box-shadow`, and in the
+    dark block a `1px` border whose colour token carries alpha.
 
 ## Libraries
 
@@ -108,16 +106,17 @@ From the Vercel web interface guidelines, in our words:
   never set, because they block zoom.
 - If it looks clickable it is clickable; the label and its checkbox or radio share one hit target
   with no dead zone; a tooltip is the last resort after inline help.
+- Performance: `content-visibility: auto` for static rows, flex or grid before measuring in JS,
+  `<link rel="preconnect">` for asset hosts.
 - Verify at phone, laptop and ultra-wide widths (50% zoom simulates the last), and with CPU
   throttling before claiming performance.
 
 ## Materials
 
-A translucent surface is a `backdrop-filter: blur()` with saturation on a semi-transparent fill,
-designed solid first. `@media (prefers-reduced-transparency: reduce)` swaps in the solid fill and
-drops the blur, `@media (prefers-contrast: more)` adds a border, and the text pair is measured
-over the blur, not over the fill. Never stack a translucent surface on another. Press feedback
-starts on `:active` (pointer-down), letter-spacing is in `em` per heading step, spacing in `rem`.
+The material rules are apple-design's. In CSS: `backdrop-filter: blur()` with saturation on a
+semi-transparent fill, `@media (prefers-reduced-transparency: reduce)` swapping in the solid fill
+and dropping the blur, `@media (prefers-contrast: more)` adding a border. Letter-spacing is in `em`
+per heading step, spacing in `rem`.
 
 ## Make it checkable
 
@@ -168,5 +167,4 @@ ui-audit measures it). List the states and what bounds they hold. Say which rule
 design source you could not apply because it was absent, and which you assumed. Never claim a
 contrast ratio you did not compute.
 
-Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT), including its
-apple-design distillation of Apple WWDC talks.
+Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT).

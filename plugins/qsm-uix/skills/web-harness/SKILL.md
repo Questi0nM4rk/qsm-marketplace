@@ -14,7 +14,9 @@ the property the table names.
 ## The data toggle (break-ui)
 
 A segmented control labelled Demo data / Worst case (plus Empty, One, 1,000 rows), fixed
-bottom-centre, small, gray track and white pill, system font, no animation on the content. In a
+bottom-centre, small, gray track and white pill, system font, no animation on the content. When
+the prototype picker shows too, the toggle (class `data-toggle`) moves to top-centre:
+`html:has(.proto-picker) .data-toggle { bottom: auto; top: 24px; }`. In a
 project with a dev server: a `?data=worst` URL param read where the fixture is chosen, only behind
 the build's dev flag (it survives reload), or a prototype route per fixture. No project: one
 self-contained HTML file with the component and both datasets inline. Reason: the toggle swaps
@@ -89,7 +91,7 @@ without switching.
 
 The fix names the property; the rules around it are css-ui's. Where the picker's own colours break
 css-ui's token rule, that is intended: it is deleted when a variant is promoted. Its colour
-change uses animate's `ease` exception for colour.
+change on hover uses animate's `ease` exception.
 
 | What you see | Cause | Fix |
 | --- | --- | --- |

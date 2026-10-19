@@ -1,6 +1,6 @@
 ---
 name: react-ui
-description: "Use when building or fixing the interactive behaviour of a React UI: a modal or dialog that loses focus or lets the screen reader read the page behind, focus after a route change, signup or checkout form errors, loading and skeleton states, live announcements. Triggers: React modal focus, screen reader reads background, focus lost after close, route change focus, form validation errors in React, spinner flashes, skeleton while loading, aria-live in React, modal v Reactu, formular chyby. React-specific only: CSS and tokens are css-ui, why a rule exists is a11y-audit and ux-audit."
+description: "Use when building or fixing the interactive behaviour of a React UI: a modal or dialog that loses focus or lets the screen reader read the page behind, focus after a route change, signup or checkout form errors, loading and skeleton states, live announcements. Triggers: React modal focus, screen reader reads background, React focus lost after close, React route change focus, form validation errors in React, React spinner flashes, React skeleton while loading, aria-live in React, modal v Reactu, formular chyby. React-specific only: CSS and tokens are css-ui, why a rule exists is a11y-audit and ux-audit."
 ---
 
 # React UI
@@ -12,7 +12,8 @@ This skill serves the person who publishes a React UI and answers for its access
 holds only what React leaves to you. Hooks, state management, data fetching, performance tuning
 and current API signatures are not here (read them through the Context7 skill). Colours, spacing and
 motion values are css-ui and the design source. Why a rule exists: a11y-audit (criteria) and
-ux-audit (feedback, forms). Motion is animate and review-animations.
+ux-audit (feedback, forms). Motion is animate and review-animations. To make the page readable
+by the audits, follow css-ui "Make it checkable".
 
 ## Rules
 
@@ -47,20 +48,19 @@ ux-audit (feedback, forms). Motion is animate and review-animations.
    ux-audit.
 7. **A custom control carries name, role and state.** `div onClick` is a defect: use the native
    element. When a custom widget is unavoidable (combobox, tabs), give it the role, `aria-*`
-   state, arrow-key handling and visible focus, in that order. An icon stands alone only where
-   everyone reads it the same (close, play, volume), with a tooltip and `aria-label`; any other
-   button gets a text label, never icon and label together, and an icon beside text gets
-   `aria-hidden`. Prefer a maintained headless library
-   (pick-ui-library) over writing the pattern: the keyboard contract is the hard part.
+   state, arrow-key handling and visible focus, in that order. Icons follow ui-design's icon rule:
+   an icon-only button gets `aria-label`, an icon beside text gets `aria-hidden`. Prefer a
+   maintained headless library (pick-ui-library) over writing the pattern: the keyboard contract
+   is the hard part.
 8. **JS-driven motion honours reduced motion.** CSS handles its own (css-ui). For animation run
    from JS, read `matchMedia("(prefers-reduced-motion: reduce)")` and subscribe to `change`; with
    an animation library use its switch (`MotionConfig reducedMotion="user"`). Replace movement
    with an instant state change or a fade, never remove the state change itself. How the motion
    is written and kept fast is web-motion.
 9. **A hover card or popover opens by click and by keyboard too.** It still opens on hover and
-   stays 180 ms after the pointer leaves, but the trigger is a `button` with `aria-expanded`,
-   Enter and Space open it, Escape closes it and returns focus, and every action and fact inside
-   is reachable that way. Reason: touch and keyboard users never hover.
+   closes after the delay in ux-audit (the owner's ruling), but the trigger is a `button` with
+   `aria-expanded`, Enter and Space open it, Escape closes it and returns focus, and every action
+   and fact inside is reachable that way. Reason: touch and keyboard users never hover.
 
 ## Libraries
 
@@ -90,11 +90,10 @@ From the Vercel web interface guidelines, in our words:
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
   rendering against a server and client mismatch; `suppressHydrationWarning` only where truly
   needed.
-- **Performance.** Virtualize a long list (the library is pick-ui-library's; `content-visibility:
-  auto` for static rows). No layout read in render (`getBoundingClientRect`, `offsetHeight`,
-  `scrollTop`); batch DOM reads then writes. Prefer uncontrolled inputs; a controlled one must be
-  cheap per keystroke. Prefer flex or grid to measuring in JS, and `<link rel="preconnect">` for
-  asset hosts.
+- **Performance.** Virtualize a long list (the library is pick-ui-library's). No layout read in
+  render (`getBoundingClientRect`, `offsetHeight`, `scrollTop`); batch DOM reads then writes.
+  Prefer uncontrolled inputs; a controlled one must be cheap per keystroke. The CSS and HTML
+  performance rules are css-ui's Conventions.
 - **Interaction.** `autoFocus` only on desktop and on the single primary input. Locale and
   captions are css-ui's Conventions.
 - **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, disable text
