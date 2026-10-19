@@ -31,7 +31,7 @@ extend them, never fork), the product's character (playful or crisp), and a freq
 hit 100+ times a day, what occasionally, what rarely. Sweeps: `transition`, `animation`,
 `@keyframes`, `motion.`, `useSpring`, `ease-in`, `transition: all`, `scale(0)`,
 `prefers-reduced-motion`, `transform-origin`; in QML `Behavior on`, `NumberAnimation`, `Easing.`,
-`duration:`; in Hyprland `animation =`, `bezier =`.
+`duration:`; in Hyprland `hl.animation`, `hl.curve`.
 
 **2. Audit** against eight categories, each with its target values:
 
@@ -77,19 +77,21 @@ dependencies and a status column. A plan holds:
   not optional: motion can be correct and still feel wrong.
 
 Variants: bare runs all four phases; `quick` and `deep` set the depth; a category name audits only
-it; `plan <description>` skips the audit and writes one plan; `reconcile` marks done plans, refreshes
-stale file:line and retires fixed findings.
+it; `plan <description>` skips the audit and writes one plan; `reconcile` marks done plans,
+refreshes stale file:line and retires fixed findings.
 
 ## On each stack
 
 The plan names targets in the stack's own form; the numbers never change.
+
 - **QML**: `Behavior on opacity { NumberAnimation { duration: Motion.<token>; easing.type:
   Easing.BezierSpline; easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`, a `Motion` token for
   every duration, a `Behavior` where a fixed-`from` animation restarts, `opacity` and `scale` where
   `width` and `height` animate, clamping in `Motion` for reduced motion.
-- **Hyprland**: `bezier = easeOut, 0.23, 1, 0.32, 1` and `animation = layersIn, 1, 2, easeOut,
-  fade`, speed in deciseconds (2 is 200 ms), `workspaces` off or very short for keybind switching,
-  `animations { enabled = false }` as reduced motion.
+- **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
+  and the `layersIn` leaf at `speed = 2, bezier = "easeOut", style = "fade"`, speed in deciseconds
+  (2 is 200 ms), `workspaces` off or very short for keybind switching,
+  `hl.config({ animations = { enabled = false } })` as reduced motion.
 - **CSS and React**: tokens `--ease-out`, `--ease-in-out`, `--ease-drawer`, `@starting-style`,
   `prefers-reduced-motion`, hover gating, the full `transform` string in Motion.
 - **TUI**: audit only spinner use (TTY only, none in piped output) and keyboard-driven redraw; the

@@ -80,11 +80,12 @@ where a Behavior belongs (restarts instead of retargeting); a layer-shell window
 because `visible` flips at once; hover that changes the hit area; reduced motion not clamped in
 `Motion`.
 
-**Hyprland.** Read `bezier = name, x1, y1, x2, y2` against the curve list and `animation = leaf, 1,
-speed, curve, style` with speed in deciseconds (3 is 300 ms, the limit). Findings: a built-in
-`default` or `ease` curve on a window or layer; speed over 3 with no reason; an animation on
-`workspaces` for keybind-driven switching (keyboard-initiated, so none or a very short `slide`);
-`popin` starting below 90 percent. `animations { enabled = false }` is the reduced-motion form.
+**Hyprland.** Read each `hl.curve` against the curve list and each
+`hl.animation({ leaf, enabled, speed, bezier, style })` with speed in deciseconds (3 is 300 ms, the
+limit). Findings: a built-in `default` or `ease` curve on a window or layer; speed over 3 with no
+reason; an animation on `workspaces` for keybind-driven switching (keyboard-initiated, so none or a
+very short `slide`); `popin` starting below 90 percent.
+`hl.config({ animations = { enabled = false } })` is the reduced-motion form.
 
 **CSS and React.** The ten standards in their original form, including `@starting-style`,
 `prefers-reduced-motion`, `(hover: hover) and (pointer: fine)`, and Motion's `x`/`y`/`scale` against

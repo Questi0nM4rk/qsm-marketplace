@@ -21,10 +21,10 @@ of high-conviction ones beats a wishlist. It reports and never implements.
 ## The gate, four questions in order, each answer recorded
 
 1. **Frequency.** 100+ times a day (keyboard shortcut, launcher, palette, core navigation): reject,
-   never animate. Tens a day (hover, list navigation, frequent toggle): reject, or near-imperceptible
-   motion only. Occasional (modal, drawer, toast, settings): eligible. Rare or first-time
-   (onboarding, empty state, success, celebration): eligible, the delight budget. A keyboard-
-   initiated action is a disqualifier, not a judgment call.
+   never animate. Tens a day (hover, list navigation, frequent toggle): reject, or
+   near-imperceptible motion only. Occasional (modal, drawer, toast, settings): eligible. Rare or
+   first-time (onboarding, empty state, success, celebration): eligible, the delight budget. A
+   keyboard- initiated action is a disqualifier, not a judgment call.
 2. **Purpose**, named: feedback, spatial consistency, state indication, preventing a jarring change,
    explanation (marketing and onboarding only), delight (rare tier only). No name, reject.
 3. **Speed.** It must fit the budget: press 100 to 160, tooltip and small popover 125 to 200,
@@ -53,7 +53,7 @@ of high-conviction ones beats a wishlist. It reports and never implements.
 
 Sweep for conditional renders with no transition, `onClick` with no press style, accordion markup,
 drag handlers, entering lists, empty-state and success components; in QML a `visible:` flip with no
-`Behavior`, in Hyprland a surface class with `animation = <leaf>, 0`.
+`Behavior`, in Hyprland a leaf with `enabled = false`.
 
 ## Workflow
 
@@ -68,10 +68,12 @@ drag handlers, entering lists, empty-state and success components; in QML a `vis
 ## On each stack
 
 The recipe is written in the stack's form; the values are the same.
+
 - **QML**: a `Behavior on opacity` and `scale` with `Easing.BezierSpline` and
   `bezierCurve: [0.23, 1, 0.32, 1, 1, 1]`, durations from `Motion` tokens, origin at the trigger.
-- **Hyprland**: `bezier = easeOut, 0.23, 1, 0.32, 1` with `animation = layersIn, 1, 2, easeOut,
-  fade` (speed in deciseconds); never workspace motion on a keybind-driven switch.
+- **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
+  with the `layersIn` leaf at `speed = 2, bezier = "easeOut", style = "fade"` (speed in
+  deciseconds); never workspace motion on a keybind-driven switch.
 - **CSS and React**: `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`, `--ease-in-out:
   cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`,
   `@starting-style`, reduced-motion handling (gentler, not zero) and hover gating on every
@@ -86,7 +88,8 @@ motion with exact curve, duration and properties (`transform` and `opacity` only
 two to five rejected candidates, each with the gate question that killed it, for example the
 launcher toggle ("keyboard-initiated, 100+ a day, never animate") or a live data graph ("functional
 data being read"). Part 3, one short paragraph: how much motion this interface needs, whether it is
-already close, the single highest-leverage suggestion, and the hand-off to `improve-animations plan`.
+already close, the single highest-leverage suggestion, and the hand-off to
+`improve-animations plan`.
 
 Adapted from skills/find-animation-opportunities/SKILL.md in github.com/emilkowalski/skills, MIT
 licence, Emil Kowalski.

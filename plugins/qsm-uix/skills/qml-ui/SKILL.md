@@ -5,12 +5,10 @@ description: "Use when writing or changing Quickshell/QML UI on Hyprland: a bar,
 
 # QML UI
 
-Quickshell is niche and moves fast, so an unaided model writes plausible QML that hard-codes a
-colour, guesses an exclusive zone, or cannot be measured afterwards. This skill serves the person
-who builds a shell: build on its existing tokens, reserve the right space, and leave a way to
-read the real geometry back. Why the tokens are what they are: ui-design. Why a control needs a
-name, keyboard path, or reduced motion: a11y-audit. Motion rules: animate and review-animations.
-This skill does not choose values, audit, or restyle what was not asked.
+Quickshell is niche and moves fast, so an unaided model hard-codes a colour, guesses an exclusive
+zone, or leaves nothing to measure. This skill builds on the shell's tokens, reserves the right
+space, and leaves a way to read real geometry back. Values: ui-design. Names, keyboard, reduced
+motion: a11y-audit. Motion: animate and review-animations.
 
 ## Before the first line
 
@@ -20,9 +18,8 @@ This skill does not choose values, audit, or restyle what was not asked.
    `theme/`) plus any `Motion` singleton, and the design source if one exists. Read both fully and
    the nearest existing component to the one you build. Match its structure, because the shell is
    one product and a second dialect is a defect. With no singleton, say so and ask for the design
-   source; do not invent tokens inside a component. When the shell cannot be read, write
-   `Theme.<role>` and `Motion.<name>`, list those names as assumed to be matched to the singleton
-   before merge, never a literal and never a new object.
+   source; do not invent tokens inside a component. Shell unreadable: write `Theme.<role>`
+   and list those names as assumed.
 3. **Reuse before building.** Search the shared component library by concept before writing any
    visible control, in a consumer of the library too, then Qt Quick Controls. When a type already
    does the concept, use it and add the missing slot or value to it. A consumer never defines a
@@ -52,30 +49,26 @@ This skill does not choose values, audit, or restyle what was not asked.
   because the owner ruled this and a delayed rollout reads as broken.
 - **Integer geometry.** A fractional `x`/`y`/`width` blurs a 1 px edge. Round computed sizes
   (`Math.round`, `Math.ceil` for text-driven ones). Position with `anchors` or `Layout`, never
-  both on one item (a binding loop warning is the symptom), and use `Layout` where the content
+  both on one item, and use `Layout` where the content
   size drives the parent.
-- **Reserved space is an exclusive zone, never a margin.** A bar or dock is a `PanelWindow`
-  anchored to its edge. `exclusionMode: ExclusionMode.Auto` (the default) derives the zone from
-  the window's size and anchors; setting `exclusiveZone` switches the window to `Normal`, which
-  reads that number; `Ignore` reserves nothing and is right only for overlays. A zone needs one
-  anchored edge, or three (a full-width bar). Read the window's mode and zone before changing
-  anything. Content windows must not paint into
-  reserved space: a margin that mimics a bar's width breaks the day the bar changes.
+- **Reserved space is an exclusive zone, never a margin.** A bar or dock is a `PanelWindow` anchored
+  to its edge. `exclusionMode: ExclusionMode.Auto` (the default) derives the zone from the window's
+  size and anchors; setting `exclusiveZone` switches the window to `Normal`, which reads that
+  number; `Ignore` reserves nothing and is right only for overlays. A zone needs one anchored edge,
+  or three (a full-width bar). Content windows never paint into reserved space: a margin that mimics
+  a bar's width breaks the day the bar changes.
 - **One window set per output.** `Variants { model: Quickshell.screens }` with the screen as
   `required property var modelData`, and `screen: modelData` on the window. A window made once
   lands on one monitor, which is the usual reason a panel overlaps maximized windows on the
   second.
 - **Scale is per output.** Item coordinates are logical pixels and a screenshot is physical:
   divide pixel positions by the output's `scale` (`hyprctl monitors -j`) before comparing them
-  with the tree, and judge a smear at a fractional scale by the tree, not the picture.
+  with the tree.
 - **Expose what an assistive tool needs.** Interactive custom items get `Accessible.role`,
   `Accessible.name`, and a keyboard path (`activeFocusOnTab`, `Keys.onReturnPressed`,
   visible focus), because a bare `MouseArea` is invisible to the keyboard and the platform tree.
 
 ## Libraries
-
-Use what Quickshell and Qt ship before a shell-out or a hand-rolled item; check the installed
-version's docs for the exact type.
 
 - `Quickshell.Services.*` for system state: Pipewire (volume, devices), Mpris (players), UPower
   (battery), SystemTray, Notifications. Not `pactl`, `playerctl` or `upower` in a `Process`.
@@ -110,9 +103,9 @@ Qt's QML coding conventions and the qt-qml-review rules, in our words:
 Hyprland animates layer-shell surfaces itself, from the `layersIn` and `layersOut` leaves (styles
 `slide`, `popin`, `fade`; `speed` in deciseconds; a named bezier or spring curve). Animate a surface
 in the compositor or in a `Behavior`, never both, or the two play over each other. `loop` on an
-`*angle` leaf keeps the GPU rendering at the refresh rate always, so avoid it. The wiki's config
-form is Lua (`hl.animation({ leaf, enabled, speed, curve, style })`); check the config in use before
-writing either form. Which motion is animate and review-animations.
+`*angle` leaf keeps the GPU rendering at the refresh rate always, so avoid it. The config is Lua:
+`hl.curve(name, { type = "bezier", points = { { x1, y1 }, { x2, y2 } } })` and
+`hl.animation({ leaf, enabled, speed, bezier, style })`.
 
 Desktop rules from the KDE and GNOME human interface guidelines, paraphrased:
 
@@ -122,10 +115,8 @@ Desktop rules from the KDE and GNOME human interface guidelines, paraphrased:
   (offline, degraded), a spinner for a short wait, a progress bar with a count for a long one.
 - An empty list shows an icon, a sentence and the action that fills it.
 - Popouts close on Escape and on a click outside; an OSD is transient and never takes focus.
-- Icons are monochrome, icon-only buttons carry a tooltip (the first delayed, the next instant),
+- Icons are monochrome, icon-only buttons carry a tooltip,
   and labels name the action, never "OK" or "Yes".
-- A hit area is at least 24 logical px even when the glyph is smaller, and the surface works at
-  200% text scale.
 
 ## Make it checkable
 
@@ -150,8 +141,8 @@ IpcHandler { target: "probe"; function tree(): string { return JSON.stringify(du
 
 `win` is a window's `id`; for a full scene use its `contentItem`. Read it with
 `qs ipc -p <shell.qml> call probe tree | jq`; use `-p` or `-c` because a bare `qs ipc` looks for a
-`default` config and fails on a named one. Positions are window-relative logical pixels (a `10.5` is
-a fractional position) and sizes are what the layout produced. Give the items under test an
+`default` config and fails on a named one. Positions are window-relative
+logical pixels. Give the items under test an
 `objectName` so the audit finds them. Reserved space on screen:
 `hyprctl monitors -j | jq '.[] | {name, scale, reserved}'` (`reserved` is left, top, right, bottom).
 Hand the tree and the reserved numbers to ui-audit as live geometry.
@@ -162,12 +153,10 @@ Hand the tree and the reserved numbers to ui-audit as live geometry.
 2. `qmllint <file>`, clean. Without import paths it may report Quickshell and `qs.*` types as not
    found (`-I <dir>` points it at qmltypes); read any other warning as real. Fix warnings, do not
    silence them.
-3. Run the shell only when the owner asked (`qs -p <shell.qml>`, then dump the tree: the item sits
-   where the design source says, at integer geometry, no literal left). Otherwise end the reply
-   with "Not verified on the composed surface" and list each owner check as surface, route
-   (pointer, key, IPC), expected state. A clean `qmllint` proves syntax only, so never write
-   "fixed" or "works" for pointer, drag, hover, focus or animation behaviour on lint or a unit
-   test; the owner tests and judges.
+3. Run the shell only when the owner asked (`qs -p <shell.qml>`, then dump the tree). Otherwise end
+   with "Not verified on the composed surface" and list each owner check as surface, route,
+   expected state. Lint proves syntax only: never write "works" for pointer, hover, focus or
+   animation behaviour; the owner tests and judges.
 
 ## Red flags
 
@@ -178,10 +167,6 @@ Hand the tree and the reserved numbers to ui-audit as live geometry.
   zone or a missing per-output window.
 - When `qmllint` is clean but the surface renders empty, check the log (`qs log`) for a binding
   or import error, because lint does not see runtime type failures.
-- When you add a second `Theme`-like object or a new colour property inside a component, move it
-  to the singleton, because a theme switch only reaches the singleton.
-- When you are about to replace a Qt control with a custom one, say what the control cannot do,
-  because otherwise you rebuilt focus and keyboard handling for nothing.
 - When a property or id is named `on<Capital>` (a Qt signal handler) or `size`, `radius`, `live`
   on an Item, rename it, because it crashes the load or drops the config silently.
 - When there is no running shell to dump, say the geometry is unverified, because a layout read
@@ -190,9 +175,8 @@ Hand the tree and the reserved numbers to ui-audit as live geometry.
 ## Say it in the reply
 
 - Which tokens the change uses and any token it added, with the file.
-- The `qmlformat` / `qmllint` result, and whether the surface was run, or the owner-check list.
-- How to dump the tree for the new item (the target and the `objectName`), or that it was not
-  run.
+- The `qmlformat` / `qmllint` result, whether the surface was run (or the owner checks), and the
+  dump target and `objectName`.
 - For a reserved-space change: the `reserved` numbers before and after, or that they were not
   read.
 

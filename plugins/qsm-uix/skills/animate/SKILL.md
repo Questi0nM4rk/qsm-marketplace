@@ -137,6 +137,7 @@ interrupted drag keeps its velocity.
 
 **Quickshell QML.** Durations and curves are `Motion.*` tokens (qml-ui owns the singleton); write
 the values above as tokens, never literals in a component.
+
 - `Behavior on opacity { NumberAnimation { duration: Motion.fast; easing.type: Easing.BezierSpline;
   easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`. The array is his x1, y1, x2, y2, then `1, 1`.
   ease-in-out is `[0.77, 0, 0.175, 1, 1, 1]`, drawer `[0.32, 0.72, 0, 1, 1, 1]`.
@@ -149,12 +150,15 @@ the values above as tokens, never literals in a component.
   motion ends: `visible: open || content.opacity > 0`.
 - Hover and press never change the hit area's bounds. Reduced motion is clamped in `Motion`.
 
-**Hyprland.** `bezier = name, x1, y1, x2, y2` takes his points directly:
-`bezier = easeOut, 0.23, 1, 0.32, 1`, then `animation = windows, 1, 2, easeOut, popin 95%`.
+**Hyprland.** The config is Lua. A curve takes his points directly:
+`hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`, then
+`hl.animation({ leaf = "windows", enabled = true, speed = 2,
+bezier = "easeOut", style = "popin 95%" })`.
 Speed is in deciseconds, so 2 is 200 ms; `popin 95%` is his start scale 0.95. Layers (bars, popouts,
-launchers drawn by the shell): `animation = layersIn, 1, 2, easeOut, fade` and a faster
-`layersOut`. Workspace switches are keyboard-driven and constant: `animation = workspaces, 0`, or at
-most a 2 to 3 decisecond `slide`. Motion off entirely is `animations { enabled = false }`.
+launchers drawn by the shell): the `layersIn` leaf with `speed = 2, style = "fade"` and a faster
+`layersOut`. Workspace switches are keyboard-driven and constant: the `workspaces` leaf with
+`enabled = false`, or at most a 2 to 3 decisecond `slide`. Motion off entirely is
+`hl.config({ animations = { enabled = false } })`.
 
 **CSS and React.** His form as written above: `--ease-out`, `--ease-in-out`, `--ease-drawer`
 custom properties, `@starting-style`, `@media (prefers-reduced-motion: reduce)` and

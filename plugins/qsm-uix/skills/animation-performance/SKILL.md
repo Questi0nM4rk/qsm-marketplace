@@ -59,8 +59,8 @@ beside it every frame, `translateX` does not.
 
 **Where it runs.** JS runs on the main thread: a `requestAnimationFrame` animation (GSAP, Motion
 components) competes with everything else and its frame is late when the thread is busy. WAAPI and
-CSS transitions and keyframes can be hardware-accelerated and stay smooth whatever JS is doing. Watch
-for motion that plays while the page does heavy work (page transitions, a tab indicator during
+CSS transitions and keyframes can be hardware-accelerated and stay smooth whatever JS is doing.
+Watch for motion that plays while the page does heavy work (page transitions, a tab indicator during
 navigation, anything beside fetching or hydration): Vercel's tab indicator, a shared layout
 animation, dropped frames while the next page loaded, and a CSS animation fixed it. Acceleration is
 progressive enhancement: percentage transforms are the right call for unknown sizes even where an
@@ -77,11 +77,11 @@ engine declines to accelerate them, because correctness beats a best-effort opti
   when the animation must survive a busy thread.
 - **Blur.** Animated `blur()` gets expensive fast; under 20 px.
 
-**`will-change`** promotes an element up front so no CPU-to-GPU hand-off shifts it by a pixel.
-Add it only after you see the shift or measured dropped frames: engines already promote what animates
+**`will-change`** promotes an element up front so no CPU-to-GPU hand-off shifts it by a pixel. Add
+it only after you see the shift or measured dropped frames: engines already promote what animates
 `transform` or `opacity`, and every promoted layer costs GPU memory. Put it on the element that
-animates, never on `*` or a large container; it earns its place on an expensive paint such as a large
-blurred element, kept small.
+animates, never on `*` or a large container; it earns its place on an expensive paint such as a
+large blurred element, kept small.
 
 **JS animation is allowed.** Main-thread motion only suffers when the page is busy during it. The
 split: CSS for simple motion and anything that plays while the page is busy; a library for complex,
@@ -95,8 +95,8 @@ interruptible, gesture-driven motion (springs, layout and exit animations, momen
    `box-shadow` and `border-radius`, easy to miss); does the jank coincide with a busy page; is
    React re-rendering per frame; does it worsen as content grows; is a CSS variable animated at all;
    blur over 20 px; and last, `will-change: transform`. Confirm with a recording, not by feel: the
-   Performance panel for dropped frames and long tasks, the Animations panel to slow it. Profile on a
-   real mid-range device; CPU throttling on a desktop models a slow CPU, not a weak GPU.
+   Performance panel for dropped frames and long tasks, the Animations panel to slow it. Profile on
+   a real mid-range device; CPU throttling on a desktop models a slow CPU, not a weak GPU.
 3. **Report** each finding as element and `file:line`, cause, before, after, and verified (from code
    or needs a device recording), ordered by cost, layout before paint, busy thread before idle. Then
    stop; fixes are applied when asked.
@@ -105,12 +105,13 @@ interruptible, gesture-driven motion (springs, layout and exit animations, momen
 
 **Quickshell QML.** The same budget, a different pipeline: the scene graph renders on its own
 thread, and the GUI thread runs the bindings.
+
 - Animate `opacity`, `scale`, `x`, `y`, `rotation`. Animating `width` or `height` re-lays-out
   children and re-rasterises text, the layout tier.
 - The animator types (`OpacityAnimator`, `ScaleAnimator`, `XAnimator`, `YAnimator`,
   `RotationAnimator`) run on the render thread, the counterpart of a CSS animation under load; a
-  plain `NumberAnimation` runs on the GUI thread like rAF. Use an animator for motion that plays while
-  the shell is busy.
+  plain `NumberAnimation` runs on the GUI thread like rAF. Use an animator for motion that plays
+  while the shell is busy.
 - A binding re-evaluated every frame (a `Behavior` on a property that many children bind to) is the
   inherited-variable trap; animate the one item and let children be positioned relative to it.
 - `layer.enabled: true` is the `will-change` analogue: it caches an item as a texture and costs GPU
@@ -120,11 +121,11 @@ thread, and the GUI thread runs the bindings.
   `QSG_VISUALIZE=overdraw` shows paint cost. State which were run; a QML claim from code alone is
   "from code".
 
-**Hyprland.** The compositor animates windows, layers and workspaces on its own render loop, so a
-`animation =` line costs frames only through the surface it animates, not through the shell's code.
+**Hyprland.** The compositor animates windows, layers and workspaces on its own render loop, so an
+`hl.animation` leaf costs frames only through the surface it animates, not through the shell's code.
 Cost scales with window size and monitor refresh; a long `workspaces` slide across a large
 high-refresh monitor is where it shows. Read the refresh rate from `hyprctl monitors`;
-`animations { enabled = false }` is the quick test of whether an
+`hl.config({ animations = { enabled = false } })` is the quick test of whether an
 animation is the cause.
 
 **CSS and React.** Everything above, as written.
@@ -134,8 +135,8 @@ what changed, cap spinner updates to a steady interval, never redraw when output
 
 ## Say it in the reply
 
-The animation table, then one block per finding as in step 3, closing with what was verified from code
-and what still needs a recording on a real device.
+The animation table, then one block per finding as in step 3, closing with what was verified from
+code and what still needs a recording on a real device.
 
 Adapted from skills/animation-performance/SKILL.md in github.com/emilkowalski/skills, MIT licence,
 Emil Kowalski.
