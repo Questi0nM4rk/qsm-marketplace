@@ -16,6 +16,6 @@
 
 ## 3. Proof and wiring
 
-- [ ] 3.1 fire cases for the two new skills, a negative case for pick-ui-library on a QML task,
+- [x] 3.1 fire cases for the two new skills, a negative case for pick-ui-library on a QML task,
       README list with credits (owns their eval directories and README lines; proof:
       `bun run validate`; blocked by 1.x)
