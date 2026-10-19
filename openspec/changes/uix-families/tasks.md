@@ -6,7 +6,7 @@
 - [x] 1.2 terminal: new cli-ui from tui-ui's output half and the clig.dev digest; tui-ui narrowed
       to full-screen programs with the TUI digest; terminal forms moved in (owns
       `skills/cli-ui/`, `skills/tui-ui/`; proof: as 1.1)
-- [ ] 1.3 web: css-ui and react-ui take the web forms from the general skills (owns
+- [x] 1.3 web: css-ui and react-ui take the web forms from the general skills (owns
       `skills/css-ui/`, `skills/react-ui/`; proof: as 1.1)
 
 ## 2. General skills (after 1.x)
