@@ -1,6 +1,6 @@
 ---
 name: react-ui
-description: "Use when building or fixing the interactive behaviour of a React UI: a modal or dialog that loses focus or lets the screen reader read the page behind, focus after a route change, signup or checkout form errors, loading and skeleton states, live announcements, JS-driven animation. Triggers: React modal focus, screen reader reads background, focus lost after close, route change focus, form validation errors in React, spinner flashes, skeleton while loading, aria-live in React, reduced motion in React, modal v Reactu, formular chyby. React-specific only: CSS and tokens are css-ui, why a rule exists is a11y-audit and ux-audit."
+description: "Use when building or fixing the interactive behaviour of a React UI: a modal or dialog that loses focus or lets the screen reader read the page behind, focus after a route change, signup or checkout form errors, loading and skeleton states, live announcements. Triggers: React modal focus, screen reader reads background, focus lost after close, route change focus, form validation errors in React, spinner flashes, skeleton while loading, aria-live in React, modal v Reactu, formular chyby. React-specific only: CSS and tokens are css-ui, why a rule exists is a11y-audit and ux-audit."
 ---
 
 # React UI
@@ -41,9 +41,10 @@ ux-audit (feedback, forms). Motion is animate and review-animations.
    typed. What the label, the error text and the validation timing must say is ux-audit.
 6. **Loading keeps old content on screen.** Wrap navigation and refetch in `startTransition` so a
    `Suspense` fallback does not replace content already on screen; the old content staying visible
-   is the loading state. A wait shows feedback (a busy state or spinner) by 1 s at the latest and
-   none for an instant action; a known length that passes about 10 s gets
-   `<progress value max>` with a count. Skeleton thresholds are ux-audit.
+   is the loading state. No busy state for a wait under 150 to 300 ms, feedback for every wait
+   over 1 s, and a shown indicator stays 300 to 500 ms (a `Suspense` fallback does this); a known
+   length past about 10 s gets `<progress value max>` with a count. Skeleton thresholds are
+   ux-audit.
 7. **A custom control carries name, role and state.** `div onClick` is a defect: use the native
    element. When a custom widget is unavoidable (combobox, tabs), give it the role, `aria-*`
    state, arrow-key handling and visible focus, in that order. An icon stands alone only where
@@ -89,14 +90,13 @@ From the Vercel web interface guidelines, in our words:
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
   rendering against a server and client mismatch; `suppressHydrationWarning` only where truly
   needed.
-- **Performance.** Virtualize a list over 50 items (`virtua`, or `content-visibility: auto`). No
-  layout read in render (`getBoundingClientRect`, `offsetHeight`, `scrollTop`); batch DOM reads
-  then writes. Prefer uncontrolled inputs; a controlled one must be cheap per keystroke. Prefer
-  flex or grid to measuring in JS, and `<link rel="preconnect">` for asset hosts.
-- **Locale.** Dates and numbers go through `Intl.DateTimeFormat` and `Intl.NumberFormat`, never a
-  hard-coded format; language comes from `Accept-Language` or `navigator.languages`, not the IP.
-- **Interaction.** `autoFocus` only on desktop and on the single primary input. Meaningful media
-  has captions or a transcript, and its controls work from the keyboard.
+- **Performance.** Virtualize a long list (the library is pick-ui-library's; `content-visibility:
+  auto` for static rows). No layout read in render (`getBoundingClientRect`, `offsetHeight`,
+  `scrollTop`); batch DOM reads then writes. Prefer uncontrolled inputs; a controlled one must be
+  cheap per keystroke. Prefer flex or grid to measuring in JS, and `<link rel="preconnect">` for
+  asset hosts.
+- **Interaction.** `autoFocus` only on desktop and on the single primary input. Locale and
+  captions are css-ui's Conventions.
 - **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, disable text
   selection and set `inert` on dragged elements, as the Vercel rule says.
 

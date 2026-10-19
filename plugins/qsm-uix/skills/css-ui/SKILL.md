@@ -1,6 +1,6 @@
 ---
 name: css-ui
-description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, dark theme, dark mode, hover animation, sticky header covers content, layout shifts, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
+description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, dark theme, dark mode, sticky header covers content, layout shifts, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
 ---
 
 # CSS UI
@@ -34,37 +34,38 @@ design source is the expected column), measuring the result (ui-audit), criteria
    outline without replacing it is the commonest keyboard lock-out, and `:focus-visible`
    keeps the ring off mouse clicks.
 5. **No state changes layout bounds.** A press is `transform: scale()` on `:active` (animate owns
-   it); hover, focus and disabled change colour, opacity or shadow. No border that goes from 1 px
-   to 2 px, no added padding or font-weight: reserve the space (`outline`, `box-shadow`, or a
-   transparent border of the final width). Reason: bounds that move make the pointer leave the
-   target and flicker.
-   Adjacent states differ by a contrast ratio of 1.2 or more.
-6. **Targets are at least 24 px, 32 px when frequent.** `min-block-size` and `min-inline-size`
-   on the control, padding for the rest; a 16 px icon button gets padding, not a bigger icon.
+   it); hover (inside `@media (hover: hover) and (pointer: fine)`), focus and disabled change
+   colour, opacity or shadow. No border that goes from 1 px to 2 px, no added padding or
+   font-weight: reserve the space (`outline`, `box-shadow`, or a transparent border of the final
+   width). Reason: bounds that move make the pointer leave the target and flicker.
+6. **Targets are at least 44 px on touch** (Vercel README); 24 px is the WCAG 2.5.8 floor.
+   `min-block-size` and `min-inline-size` on the control, padding for the rest; a 16 px icon
+   button gets padding, not a bigger icon.
 7. **Motion comes from tokens, and gentles on request.** Easing and duration are custom
-   properties, and `@media (prefers-reduced-motion: reduce)` sets the movement durations on
-   `:root` to `0.01ms`, so one switch covers every component. Reason: a per-component override is
-   forgotten in the next component. Curves, `@starting-style`, hover gating and the rest are
-   web-motion's.
+   properties, and movement has its own duration token (`--dur-move-*`), separate from the
+   opacity and colour ones (`--dur-fade-*`). `@media (prefers-reduced-motion: reduce)` sets the
+   movement durations on `:root` to `0.01ms`, so one switch covers every component. Reason: a
+   per-component override is forgotten in the next component. Curves, `@starting-style`, hover
+   gating and the rest are web-motion's.
 8. **Layout does not shift.** `aspect-ratio` or `width`/`height` on images and embeds, a
-   reserved block for async content, `font-display: swap` with a metric-matched fallback
-   (`size-adjust`), and the critical font preloaded. Below-fold images get `loading="lazy"`, the
-   hero `fetchpriority="high"`; a video replaces an animated GIF.
-   Reason: a late image pushing a button under the pointer is a mis-click.
+   reserved block for async content (a busy state after 1 s; thresholds: ui-design),
+   `font-display: swap` with a metric-matched fallback (`size-adjust`), and the critical font
+   preloaded. Below-fold images get `loading="lazy"`, the hero `fetchpriority="high"`; a video
+   replaces an animated GIF. Reason: a late image pushing a button under the pointer is a
+   mis-click.
 9. **Size by the container and the content.** `min()`, `max()`, `clamp()` for fluid type and
    width; `@container` (set `container-type: inline-size`) so a card adapts to its slot, not
-   the viewport; `min-height: 100dvh` for full height on mobile, not `100vh`. `dvh` follows
-   the browser bars, so do not drive layout that must not jump while scrolling from it.
-   Long user text: `overflow-wrap: anywhere` on a shrinkable flex or grid child, never
-   `word-break: break-all` on prose. Numbers in columns: `font-variant-numeric: tabular-nums`.
+   the viewport; full-height rules (`100dvh` for a shell, `100svh` for a hero, never `100vh`)
+   are mobile-native's. Long user text: `overflow-wrap: anywhere` on a shrinkable flex or grid
+   child, never `word-break: break-all` on prose. Numbers in columns:
+   `font-variant-numeric: tabular-nums`.
 10. **A sticky or fixed bar reserves its space.** `scroll-padding-top` equal to the header
     height (so anchors and focused fields are not hidden under it), `padding-bottom` for a fixed
-    footer, `env(safe-area-inset-*)` on notch devices. Reason: a focused control under a sticky
+    footer; safe areas are mobile-native's. Reason: a focused control under a sticky
     header fails 2.4.11, and the user cannot see where they are.
 11. **An icon stands alone only where everyone reads it the same** (close, play, volume), and it
     then has a tooltip and an `aria-label`; any other action gets a text label. Never icon and
-    label on one button; an icon beside other text is `aria-hidden="true"`. Icon boxes are 12 px
-    or more, text 10 px or more.
+    label on one button; an icon beside other text is `aria-hidden="true"`.
 12. **Features: container queries, `dvh`, `:focus-visible`, `:has`, `color-scheme` are
     Baseline and safe to use; anything newer is checked on MDN before use**, and gets an
     `@supports` fallback. The page works without it.
@@ -100,6 +101,9 @@ From the Vercel web interface guidelines, in our words:
   `⌘ K`, curly quotes, `scroll-margin-top` on headings, and a skip link.
 - Content survives short, average and very long user text, and empty, sparse, dense and error states
   are designed; a skeleton mirrors the final content so nothing shifts.
+- Dates and numbers go through `Intl.DateTimeFormat` and `Intl.NumberFormat`, never a hard-coded
+  format; language comes from `Accept-Language` or `navigator.languages`, not the IP. Meaningful
+  media has captions or a transcript, and its controls work from the keyboard.
 - Brand names and code tokens get `translate="no"`; `user-scalable=no` and `maximum-scale=1` are
   never set, because they block zoom.
 - If it looks clickable it is clickable; the label and its checkbox or radio share one hit target
@@ -119,7 +123,7 @@ starts on `:active` (pointer-down), letter-spacing is in `em` per heading step, 
 
 The audits measure what the page exposes. Give them three reads: the DOM dump
 (`document.documentElement.outerHTML`), the accessibility-tree dump (role, name, state per node;
-Playwright `page.accessibility.snapshot()` or the browser's accessibility pane), and
+a test driver's accessibility snapshot or the browser's accessibility pane), and
 `getComputedStyle(el)` for colour, size and bounds per state. These are the introspection surface
 for ui-audit and a11y-audit; a UI that cannot be read this way is reported as not measured.
 
@@ -149,8 +153,8 @@ Tailwind is the same tokens in another syntax; it adds nothing to the discipline
 - A dark block that only swaps `#fff` and `#000`: design the values on their own, because
   inverted greys wash out and borders vanish.
 - `transition: all`: name the properties, because layout properties will animate and shift.
-- `100vh`, `position: fixed` header with no `scroll-padding`: fix per rules 9 and 10, because
-  the mobile address bar and the sticky header both hide content.
+- `100vh`, or a `position: fixed` header with no `scroll-padding`: fix per mobile-native and
+  rule 10, because the mobile address bar and the sticky header both hide content.
 - A hover that sets `width`, `border-width`, `margin`, `padding`, or `font-weight`: move to a
   non-layout property, because the target moves under the pointer.
 - `<div onclick>` or `<span role="button">`: use `button`, because role, name and keyboard

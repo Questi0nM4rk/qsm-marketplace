@@ -11,29 +11,34 @@ a web page, for the person who ships it. A model left alone writes `transition: 
 `ease-in`, a hover effect that fires on touch and no reduced-motion block. The outcome is motion
 whose curves are tokens, whose properties are compositor-only, that survives a second click and a
 busy thread, and that the reviewer passes on the first read. The numbers (curves, durations,
-scales) are animate's tables; they are not repeated here beyond the three curves.
+scales) are animate's tables; here are only the three curves and the CSS forms of its rules.
 
 ## Write it
 
-1. **Curves are custom properties, never the keywords.** `--ease-out: cubic-bezier(0.23, 1, 0.32,
-   1)`, `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72,
-   0, 1)`; durations are the design source's `--dur-<name>` tokens. Reason: the built-in
-   `ease-out` is too weak to feel deliberate, and one token is one place to fix.
+1. **Curves are custom properties, never the keywords,** except animate's named exceptions
+   (`ease` for colour and hover changes, and for the toast). `--ease-out: cubic-bezier(0.23, 1,
+   0.32, 1)`, `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32,
+   0.72, 0, 1)`. Durations are the design source's tokens, movement (`--dur-move-<name>`)
+   separate from opacity and colour (`--dur-fade-<name>`). Reason: the built-in `ease-out` is
+   too weak to feel deliberate, and one token is one place to fix.
 2. **Name the properties and keep to `transform` and `opacity`.**
-   `transition: opacity var(--dur-<name>) var(--ease-out), transform var(--dur-<name>)
-   var(--ease-out)`, never `all`. Reason: `all` animates whatever someone adds later, layout
-   properties included. `clip-path` is the third allowed property; `height` is tolerated on an
-   accordion with the content height measured, never animated to `auto`.
+   `transition: opacity var(--dur-fade-<name>) var(--ease-out), transform
+   var(--dur-move-<name>) var(--ease-out)`, never `all`. Reason: `all` animates whatever someone
+   adds later, layout properties included. The whitelist (`clip-path`, `height` on an accordion)
+   is animate's; `height` is never animated to `auto`.
 3. **Origin is where the thing comes from.** `transform-origin` at the trigger for a popover,
    dropdown, menu or tooltip; a modal stays centred. An SVG transform goes on a `<g>` with
    `transform-box: fill-box; transform-origin: center`, because without the box the origin is the
    viewport corner.
 4. **Entry on mount is `@starting-style`**, from `scale(0.95)` and `opacity: 0`, never from
    `scale(0)`. Reason: nothing real appears from nothing, and `@starting-style` needs no mounted
-   flag in script.
-5. **Press is `:active { transform: scale(0.97) }`** (0.95 to 0.98) in 160 ms, ungated: `:active`
-   is a real press. **Hover motion is gated**: `@media (hover: hover) and (pointer: fine)`.
-   Reason: a touch screen fires hover on tap and the effect sticks.
+   flag in script. Other forms of animate's table: a tooltip from `scale(0.97)`, a modal from
+   `scale(0.96)` with a centred origin, a drawer or toast from `translateY(100%)` (percentages
+   are of the element's own height), a stagger step `translateY(8px)` with opacity.
+5. **Press is `:active { transform: scale(0.97) }`** (0.95 to 0.98), ungated: `:active` is a
+   real press. **Hover motion is gated** by `@media (hover: hover) and (pointer: fine)`, the CSS
+   form of ui-design's fine hovering pointer. Reason: a touch screen fires hover on tap and the
+   effect sticks.
 6. **Reduced motion ships with the animation.** `@media (prefers-reduced-motion: reduce)` zeroes
    the movement durations on `:root` (css-ui rule 7) and keeps the opacity and colour changes that
    explain the change: gentler, not zero. A muted decorative loop stops under it. Autoplay motion
@@ -66,7 +71,7 @@ scales) are animate's tables; they are not repeated here beyond the three curves
   `scale()` for a size, `translate()` for `top`, `left` or `margin`, `filter: drop-shadow()` for
   `box-shadow`.
 - **Blur under 20 px**; an animated `blur()` is expensive. A crossfade of two objects is `blur(2px)`
-  with opacity 0.7 for 200 ms.
+  with opacity 0.7 (duration: animate).
 - **`will-change: transform` only after you see a 1 px shift or measure dropped frames**, on the
   animated element, never on `*` or a large container. Reason: every promoted layer costs GPU
   memory, and engines already promote what animates `transform` or `opacity`.
@@ -78,12 +83,12 @@ scales) are animate's tables; they are not repeated here beyond the three curves
 
 Each is a finding in review-animations' tiers, with the fix beside it:
 
-- `ease-in` or the built-in `ease-out` on UI: the three curves.
+- `ease-in` or the built-in `ease-out` on UI: the three curves (`ease` only in the exceptions).
 - `transition: all`, or a transition on `width`, `height`, `margin`, `top`, `left`: name
   `transform` and `opacity`.
 - `scale(0)` entrance; centre origin on a trigger-anchored popover; a keyframe on a rapidly
   fired element.
-- A duration literal in a component or over 300 ms with no reason.
+- A duration literal in a component, or one over animate's cap with no reason.
 - Hover motion outside the hover media query; movement with no reduced-motion block; a reduced
   variant that removes all feedback.
 - A parent's variable driving a child's transform; Motion `x` or `y` on a page that is busy.
