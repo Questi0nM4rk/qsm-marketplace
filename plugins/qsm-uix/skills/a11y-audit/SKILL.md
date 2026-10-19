@@ -1,16 +1,16 @@
 ---
 name: a11y-audit
-description: "Use when asked whether a UI can be used without a mouse, with a screen reader, with larger text, with reduced motion, or without telling colours apart, or to check it before publishing. Triggers: keyboard only, tab order, focus visible, screen reader, accessible name, is this accessible, colour only, red text for errors, reduced motion, text scaling, WCAG check, a11y audit, pristupnost, dostupne jen z klavesnice. Fills a per-criterion conformance table from driving and reading the UI. Criterion levels and legal status are a11y-conformance; static visual measurement is ui-audit; motion method is ux-audit."
+description: "Use when asked whether a UI can be used without a mouse, with a screen reader, with larger text, with reduced motion, or without telling colours apart, or to check it before publishing. Triggers: keyboard only, tab order, focus visible, screen reader, accessible name, is this accessible, colour only, red text for errors, reduced motion, text scaling, WCAG check, a11y audit, pristupnost, dostupne jen z klavesnice. Fills a per-criterion conformance table from driving and reading the UI. Criterion levels and legal status are a11y-conformance; static visual measurement is ui-audit; motion is review-animations."
 ---
 
 # A11y Audit
 
 Whether someone can use a UI is decided by what the keyboard reaches, what the platform tree
-announces, and what survives without colour, motion or default text size. A screenshot shows none
-of that, so an unaided agent reads the code, says "looks accessible", and files nothing measured.
-This skill serves the person who publishes interfaces and answers for their accessibility: it drives
-and reads the UI, and fills a conformance table where every verdict has evidence or says it has
-none. It does not judge static visuals (ui-audit), time motion (ux-audit), fix the UI (the stack
+announces, and what survives without colour, motion or default text size. A screenshot shows none of
+that, so an unaided agent reads the code, says "looks accessible", and files nothing measured. This
+skill serves the person who publishes interfaces and answers for their accessibility: it drives and
+reads the UI, and fills a conformance table where every verdict has evidence or says it has none. It
+does not judge static visuals (ui-audit), judge motion (review-animations), fix the UI (the stack
 skills), or give legal advice. Criterion numbers, levels and legal status are in a11y-conformance.
 
 ## First line: what you can see
