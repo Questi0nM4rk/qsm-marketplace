@@ -17,9 +17,10 @@ import { QsmError } from "../../../lib/qsm-error.ts";
 import {
   buildDefinition,
   chooseRuntime,
+  contextHash,
   execDefinition,
+  imageSourceDefinition,
   type Instance,
-  imagePresentDefinition,
   instanceName,
   listDefinition,
   liveViewUrl,
@@ -137,18 +138,21 @@ function instances(box: Box): Instance[] {
   return parseInstances(lines.join("\n"));
 }
 
+/** Builds the image when there is none or its docker context changed since it was built. */
 function ensureImage(box: Box): void {
-  const present = box.run(imagePresentDefinition());
-  if (present.status === 0 && !box.dryRun) {
-    return;
-  }
   const root = pluginRoot(process.env);
   if (root === undefined) {
     throw new QsmError("missing", NO_ROOT);
   }
   const context = join(root, "docker");
-  process.stderr.write(`qsm-web browserbox: building the image from ${context}\n`);
-  const built = box.run(buildDefinition(context), false);
+  const source = contextHash(context);
+  const image = box.run(imageSourceDefinition());
+  if (image.status === 0 && image.stdout.trim() === source && !box.dryRun) {
+    return;
+  }
+  const why = image.status === 0 ? "its docker context changed" : "there is none yet";
+  process.stderr.write(`qsm-web browserbox: building the image from ${context}, ${why}\n`);
+  const built = box.run(buildDefinition(context, source), false);
   if (built.status !== 0) {
     throw new QsmError("failed", `the image build failed (exit ${built.status})`);
   }

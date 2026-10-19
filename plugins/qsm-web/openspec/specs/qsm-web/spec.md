@@ -290,6 +290,23 @@ one tab waits, other tabs and instances SHALL stay usable.
 - **WHEN** no human clears the wall before the caller's timeout
 - **THEN** qsm-web browserbox SHALL report `failed`, not a resumed state
 
+### Requirement: The browser image follows its source
+
+qsm-web browserbox SHALL label the image it builds with a hash of every file under the plugin's
+`docker/` context, and before it starts an instance it SHALL build the image again when no image
+exists or the label differs from the current hash, because an image built from older sources runs
+an older driver that never answers the current one.
+
+#### Scenario: The docker context changed
+
+- **WHEN** a file under `docker/` changed since the image was built
+- **THEN** `qsm-web browserbox start` SHALL build the image again before it starts the instance
+
+#### Scenario: The image is current
+
+- **WHEN** the image's label equals the hash of the current `docker/` context
+- **THEN** `qsm-web browserbox start` SHALL start the instance without a build
+
 ### Requirement: Install places the one bin on PATH
 
 Installing qsm-web SHALL place the one `qsm-web` command on PATH, needing no upstream service beyond

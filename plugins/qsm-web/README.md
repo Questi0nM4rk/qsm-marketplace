@@ -63,7 +63,7 @@ qsm-web browserbox stop "$name"
 - Search needs an instance: `qsm-web searxng setup` or `QSM_SEARXNG_INSTANCE`.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
-  (minutes, about 1 GB).
+  (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.
 - The live view has no password. Its port is loopback only: never publish it elsewhere.
 - A login is filled only by the main agent with you present, from Bitwarden (`rbw` or `bw`) through
   `fill-secret`, never from the conversation. The `web-research` agent stops at a login.

@@ -1,9 +1,12 @@
 // The browser rung's container plane: what to name an instance, which port its live view gets, and
 // the exact argument vector that starts it.
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 export const IMAGE = "qsm-browserbox";
 export const LABEL = "qsm.browserbox";
+/** The image label that records which docker context it was built from. */
+const SOURCE_LABEL = "qsm.browserbox.source";
 /** One live-view port per instance. */
 export const PORT_LOW = 11_000;
 export const PORT_HIGH = 11_100;
@@ -128,12 +131,30 @@ export function stopDefinition(name: string): string[] {
   return ["rm", "--force", name];
 }
 
-export function buildDefinition(contextDir: string): string[] {
-  return ["build", "--tag", IMAGE, contextDir];
+export function buildDefinition(contextDir: string, source: string): string[] {
+  return ["build", "--tag", IMAGE, "--label", `${SOURCE_LABEL}=${source}`, contextDir];
 }
 
-export function imagePresentDefinition(): string[] {
-  return ["image", "inspect", IMAGE];
+/** Prints the source hash the image was built from, or fails when there is no image. */
+export function imageSourceDefinition(): string[] {
+  return ["image", "inspect", "--format", `{{ index .Config.Labels "${SOURCE_LABEL}" }}`, IMAGE];
+}
+
+/**
+ * The sha256 of every file under the docker context, path and content, in path order: the image
+ * is current only when it was built from exactly these files.
+ */
+export function contextHash(dir: string): string {
+  const files = readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && !e.parentPath.includes("__pycache__"))
+    .map((e) => join(e.parentPath, e.name))
+    .toSorted();
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const file of files) {
+    hasher.update(`${relative(dir, file)}\0`);
+    hasher.update(readFileSync(file));
+  }
+  return hasher.digest("hex");
 }
 
 /**
