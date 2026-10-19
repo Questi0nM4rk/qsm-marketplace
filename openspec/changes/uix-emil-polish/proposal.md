@@ -2,7 +2,7 @@
 
 ui-design decides tokens and themes but carries none of the small polish rules that make a UI feel
 finished: a semi-transparent shadow instead of a solid border, a pressed state on every button,
-concentric radii, optical alignment. Emil Kowalski's emil-design-eng and apple-design
+a popover that grows from its trigger. Emil Kowalski's emil-design-eng and apple-design
 (github.com/emilkowalski/skills, MIT, commit 2d22863) hold them, and the person chose his skills
 as the source of truth for qsm-uix (epic qsm-d0c).
 

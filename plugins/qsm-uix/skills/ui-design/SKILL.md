@@ -88,6 +88,8 @@ Use these headings, because the audits and the stack skills look for them:
 - **A component's character is one personality.** Spacing, type, and feel agree with the
   product's mood: a professional dashboard is crisp and dense, a playful tool may be looser.
   Why: a rule right in isolation still reads wrong beside a neighbour of another character.
+- **A raised surface separates by a soft shadow, not a solid border.** A semi-transparent shadow
+  or a low-alpha border reads as depth; an opaque border reads as a box drawn around the content.
 - **Handle edge cases where nobody looks.** A hover that must survive the gap between stacked
   items, a timer that pauses when the view is hidden, a drag that continues outside its box.
   These are details nobody notices, and that is what correct looks like.
@@ -118,8 +120,8 @@ Use these headings, because the audits and the stack skills look for them:
   change and quote the owner; a line the owner overruled is out of date, not authority.
 - **Prefer the platform's control to a custom one**, unless the source says why not. The system
   one brings keyboard, focus, scaling and screen reader behaviour for free.
-- **A style is a constraint set, never a name.** Write what the look requires (for example "thin
-  borders at 1 px, 3:1 against the surface; no shadow-only separation"), the accessibility it
+- **A style is a constraint set, never a name.** Write what the look requires (for example "raised
+  surfaces separate by a 3:1 low-alpha border or a soft shadow, never an opaque border"), the accessibility it
   brings, and where it must not be used (dense data, small text, high-contrast users). Why: a
   named fad such as "glass" says nothing the audit can measure; a constraint can fail a pair.
 
@@ -156,4 +158,4 @@ with the stack skill, then run ui-audit against this file, which is the expected
 - What is not covered: no running UI was measured, so nothing here is verified until ui-audit
   runs against it.
 
-The polish rules follow Emil Kowalski's emil-design-eng (github.com/emilkowalski/skills, MIT).
+The polish rules follow Emil Kowalski's emil-design-eng and README (github.com/emilkowalski/skills, MIT).
