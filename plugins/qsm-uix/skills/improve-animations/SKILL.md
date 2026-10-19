@@ -35,13 +35,13 @@ sweep terms are the family skill's (web-motion, desktop-ui, tui-ui).
 
 | Category | Hunt for, and the target |
 | --- | --- |
-| Purpose and frequency | animation on keyboard actions, palettes, constant hover; fix is often delete |
-| Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms (the toast `ease` exception aside); targets are animate's curve and duration tables; tooltips after the first open instantly |
-| Physicality and origin | `scale(0)`, pure fades, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt |
+| Purpose and frequency | animation on keyboard actions, palettes, constant hover; more than 1 to 2 animated elements per view; fix is often delete |
+| Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms; a keyword outside animate's exceptions; targets are animate's curve and duration tables; tooltips after the first open instantly |
+| Physicality and origin | a scale from zero, pure fades, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt |
 | Interruptibility | keyframes on toasts and toggles, tweened gestures, distance-only drag dismiss (velocity, per animate), hard drag stops; targets transitions or springs (animate's values) |
-| Performance | a transition on every property, animated layout properties, a busy thread driving the motion, an inherited value driving a child's transform, blur over 20 px |
+| Performance | a transition on every property, animated layout properties, a property outside animate's whitelist, a busy thread driving the motion, an inherited value driving a child's transform, blur over 20 px |
 | Accessibility | movement with no reduced-motion branch, ungated hover, reduced motion that removes all feedback (it must be gentler, not zero) |
-| Cohesion and tokens | near-duplicate curves and durations, one bouncy component in a crisp app, entrances with no stagger, double-exposed crossfades (`blur(2px)`) |
+| Cohesion and tokens | near-duplicate curves and durations, one bouncy component in a crisp app, entrances with no stagger, double-exposed crossfades (a blur of 2 px) |
 | Missed opportunities | state that teleports, panels with no origin story, flat rare moments; at most a handful, grounded in a seen seam |
 
 Depth by effort, default standard: quick is high-traffic components, about five HIGH findings;
@@ -50,12 +50,12 @@ anything beyond a small repo, hand read-only helpers one category each, with the
 rule 4 quoted, returning file:line and evidence only.
 
 **3. Vet, prioritize, confirm.** Re-read every cited line yourself; reject what is by design,
-misattributed, duplicated or exempt (a centred modal, a long marketing duration). Present one
-table ordered by impact over effort: id, severity, category, location, finding, fix. HIGH is
-feel-breaking (wrong easing on UI, animation on a keyboard or 100+/day action, dropped frames,
-`scale(0)`), MEDIUM noticeably off (wrong origin, non-interruptible dynamic UI, no reduced motion),
-LOW polish. List two to four missed opportunities apart, since they add rather than correct. Then
-stop and let the person pick; non-interactively, take the top three to five.
+misattributed, duplicated or exempt (a centred modal, a long marketing duration). Present one table
+ordered by impact over effort: id, severity, category, location, finding, fix. HIGH is feel-breaking
+(wrong easing on UI, animation on a keyboard or 100+/day action, dropped frames, a scale from zero),
+MEDIUM noticeably off (wrong origin, non-interruptible dynamic UI, no reduced motion), LOW polish.
+List two to four missed opportunities apart, since they add rather than correct. Then stop and let
+the person pick; non-interactively, take the top three to five.
 
 **4. Write plans.** One plan per chosen finding in `plans/NNN-short-slug.md`, numbered upward,
 stamped with `git rev-parse --short HEAD`, then `plans/README.md` with execution order,

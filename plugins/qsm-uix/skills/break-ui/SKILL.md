@@ -34,10 +34,10 @@ your workspace has 1,284 members. All of them exist in production somewhere.
 
 ## Workflow
 
-1. **Map the surface.** List every value rendered, with source, type, limit, optional or not:
-   counts in headers, timestamps, badge and status text, labels from data, tooltips, images, and
-   the list's own length. Find limits in the validation schema, migrations, API types, `maxLength`;
-   note where front and back disagree.
+1. **Map the surface.** List every value rendered, with source, type, limit, optional or not: counts
+   in headers, timestamps, badge and status text, labels from data, tooltips, images, and the list's
+   own length. Find limits in the validation schema, migrations, API types, form length limits; note
+   where front and back disagree.
 2. **Build the worst case** from the catalogue below, shaped exactly like the demo data. Also cover
    what is not one dataset: empty (zero items), one (every count at 1), huge (1,000+ rows if
    unpaginated, a performance break as well).
@@ -54,11 +54,12 @@ your workspace has 1,284 members. All of them exist in production somewhere.
 
 Use `example.com`, `example.org` or `.test` for addresses so a fixture never points at a real inbox.
 
-- **Names:** `Aleksandra Wisniewska-Kowalczyk` (long, hyphen is a break point); `Christopher
-  Alexander Montgomery III` (naive initials give `CI`); `Jo` and `J` (empty column, initial `J`);
-  `Đặng Thị Ngọc Hân` with stacked diacritics (clipped by tight line height); `王秀英` (no spaces);
-  an RTL name (icons land on the wrong side); `🦊 Fox` (`charAt(0)` is half a surrogate pair);
-  "  Sam   Lee " (leading, trailing and repeated spaces); a missing name, only an email.
+- **Names:** `Aleksandra Wisniewska-Kowalczyk` (long, hyphen is a break point);
+  `Christopher Alexander Montgomery III` (naive initials give `CI`); `Jo` and `J` (empty column,
+  initial `J`); `Đặng Thị Ngọc Hân` with stacked diacritics (clipped by tight line height); `王秀英`
+  (no spaces); an RTL name (icons land on the wrong side); `🦊 Fox` (taking the first character cuts
+  a surrogate pair in half); "  Sam   Lee " (leading, trailing and repeated spaces); a missing name,
+  only an email.
 - **Unbreakable strings:** the long email above; `a@b.co`; a long URL with query; a UUID; a file
   name `Q3 Board Deck - FINAL (revised) v12 [approved by legal].pdf` (end-truncation hides the
   version and extension); a camera file name; a very long handle.
@@ -120,7 +121,7 @@ survives. Say which findings you saw and which you inferred. Close with where th
 states, and "Say `fix all` or `fix 1, 3` and I'll apply them."
 
 The toggle and the fixes are written per family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
-tui-ui), web (web-harness, css-ui, react-ui).
+tui-ui), web (web-harness).
 
 Source: skills/break-ui/SKILL.md and CATALOG.md in github.com/emilkowalski/skills (MIT, Emil
 Kowalski).

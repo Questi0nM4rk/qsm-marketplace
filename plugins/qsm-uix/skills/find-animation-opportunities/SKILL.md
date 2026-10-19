@@ -35,10 +35,10 @@ of high-conviction ones beats a wishlist. It reports and never implements.
 ## Where to hunt
 
 - **Feedback gaps.** A pressable with no pressed state gets animate's press scale. A destructive
-  action behind a plain click gets hold-to-confirm (animate's recipe).
+  action gets undo first; only an act with no undo gets hold-to-confirm (animate's recipe).
 - **Teleporting state.** Content that appears or vanishes: enter from animate's start scale plus
-  opacity 0, ease-out, never `scale(0)`; a collapse that snaps gets height plus opacity; a list that
-  adds and removes rows (not a high-frequency one) gets transitions, not keyframes.
+  opacity 0, ease-out, never a scale from zero; a collapse that snaps gets height plus opacity; a
+  list that adds and removes rows (not a high-frequency one) gets transitions, not keyframes.
 - **No spatial story.** A panel or menu with no tie to its trigger scales from the trigger's origin
   (a modal stays centred). A surface that exits another way than it entered gets symmetric paths,
   with percentage translates, not pixels.
@@ -66,7 +66,7 @@ family's.
 ## Say it in the reply
 
 Part 1, an opportunities table, ordered by leverage: location, today, purpose, frequency, suggested
-motion with exact curve, duration and properties (`transform` and `opacity` only). Part 2, required:
+motion with exact curve, duration and properties (animate's property whitelist). Part 2, required:
 two to five rejected candidates, each with the gate question that killed it, for example the
 launcher toggle ("keyboard-initiated, 100+ a day, never animate") or a live data graph ("functional
 data being read"). Part 3, one short paragraph: how much motion this interface needs, whether it is

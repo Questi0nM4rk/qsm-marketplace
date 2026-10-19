@@ -18,7 +18,7 @@ legal advice, it does not drive a UI (a11y-audit), and it does not say how to de
   was removed in 2.2).
 - **EN 301 549** is the European standard for ICT. Clause 9 covers web, 10 documents, 11 non-web
   software, and each clause numbers WCAG criteria as `<clause>.<criterion>` (`9.1.4.11`,
-  `11.2.4.7`). The edition checked here is V3.2.1 (2021-03); its Note 1 says it reflects WCAG 2.1.
+  `11.2.4.7`). The edition checked here is V3.2.1; its Note 1 says it reflects WCAG 2.1.
   So a criterion new in 2.2 is not in its text.
 - **The Act** (Directive (EU) 2019/882) binds through Annex I, which is functional: services must be
   accessible "in a consistent and adequate way by making them perceivable, operable, understandable
@@ -92,7 +92,7 @@ The target is at least 24 by 24 CSS pixels, except: undersized targets whose 24 
 on each bounding box, intersect no other target or circle (spacing); the same function by another
 control on the page (equivalent); a target inside a sentence or bound by its line height (inline);
 a size set by the user agent (user agent control); a presentation that is essential or legally
-required. The maintainer's 32 px for frequent controls is taste, not this criterion.
+required. The 44 px touch target is ui-design's rule, not this criterion.
 
 ## What the Act covers
 

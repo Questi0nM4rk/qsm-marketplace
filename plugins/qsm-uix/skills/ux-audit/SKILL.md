@@ -39,22 +39,21 @@ input while they work, because stealing focus costs more than the audit finds.
    finding, severity by how core it is. Measure each hint against its backdrop with
    `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: a hint that is the only way in needs 3 or better,
    and under 1.5 it is decoration. More than one hint style for one behaviour class is a finding.
-2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Anything at or
-   over 1 s gets a progress affordance; a near-instant action must not flash a spinner. A state that
-   changes the layout bounds is a finding (the rule is ui-design's), because moving the target under
-   the cursor makes the click miss. Interactive elements separate from passive readouts without
-   hovering; state the rule and check it sorts every element. A stateful control shows it, the
-   states differing by a contrast ratio of at least 1.2.
+2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Anything over
+   1 s gets a progress affordance, and one shown stays at least 300 ms; a wait under 150 ms must not
+   flash a spinner (ui-design's wait values). A state that changes the layout bounds is a finding
+   (the rule is ui-design's), because moving the target under the cursor makes the click miss.
+   Interactive elements separate from passive readouts without hovering; state the rule and check it
+   sorts every element. A stateful control shows it: its states are told apart at a glance.
 3. **Target ergonomics.** A surface that opens on hover opens on entry with no delay, stays open
-   inside the union of its trigger, its panel and the straight path between them, and closes
-   180 ms after leaving that union. Measure the zone from that union, never from the painted
-   trigger: a hit zone equal to the painted shape needs pixel-perfect aim and is a finding.
-   Measure the hit area, padding and hover zones included. The floor is
-   24 by 24 px for a desktop pointer (WCAG 2.5.8), 32 by 32 for anything used often. Screen edges
-   and corners are effectively infinitely deep, so a rect touching the boundary inherits that and
-   a 2px inset throws it away. Adjacent targets sit at least 8px apart edge to
-   edge, or the closest pair carries a mis-click finding. A corner spent on a destructive action is
-   a finding.
+   inside the union of its trigger, its panel and the straight path between them, and closes 180 ms
+   after leaving that union. Measure the zone from that union, never from the painted trigger: a hit
+   zone equal to the painted shape needs pixel-perfect aim and is a finding. Measure the hit area,
+   padding and hover zones included. The floor is 44 px on touch, and 24 by 24 px for a desktop
+   pointer (the WCAG 2.5.8 floor). Screen edges and corners are effectively infinitely deep, so a
+   rect touching the boundary inherits that and a 2px inset throws it away. Adjacent targets sit at
+   least 8px apart edge to edge, or the closest pair carries a mis-click finding. A corner spent on
+   a destructive action is a finding.
 4. **Mode and state visibility.** From any single frame a viewer can name the current mode: which
    surface is open, which workspace, which suppression is on. Capture each mode and name the pixel
    that distinguishes it; none is a finding. A fact shown in two places agrees in every captured
@@ -68,28 +67,29 @@ input while they work, because stealing focus costs more than the audit finds.
    scroll, hover, drag) against each surface. One input means one class of thing everywhere, the
    same dismiss gesture works on every dismissible surface, the same concept carries the same label
    and icon, and every transition's duration and easing are traced to a motion token in the source
-   (whether the values are right is review-animations'). Navigation keeps one
-   placement, marks the current location, and keeps state when the user goes back. The wheel over
-   a scrolling list scrolls that list: a row that expands never takes the wheel for its own body,
-   and expands by click on its leading part, the rest of the row being its action, with no
-   hover-expand inside a scrolled list. Check: scroll with an expandable row under the pointer;
-   the list must move.
+   (whether the values are right is review-animations'). Navigation keeps one placement, marks the
+   current location, and keeps state when the user goes back. The wheel over a scrolling list
+   scrolls that list: a row that expands never takes the wheel for its own body, and expands by
+   click on its leading part, the rest of the row being its action, with no hover-expand inside a
+   scrolled list. Check: scroll with an expandable row under the pointer; the list must move.
 7. **Motion.** Every animation, its purpose, timing, curve and interruption, is judged by
    review-animations; run it for this surface and file its verdict here, never a second ruling.
    This audit adds only the measurement on a running surface:
    - Read the duration and easing tokens from the source first, then poll the introspection
      surface across the transition and build the timeline from mid-flight values.
-   - Open and close land within the motion token plus 10 percent and settle on the resting
-     geometry.
+   - Record each measured duration beside its token; open and close land within the token plus
+     10 percent and settle on the resting geometry. Whether the value is right is the verdict of
+     review-animations.
    - With pixels only, `qsm-uix burst --count 8 --interval 120 --out-dir frames/` gives frames with
      real elapsed time, honest to 100ms to 200ms per step and no finer. Say that limit.
    - `qsm-uix diff a.png b.png` (distortion under 0.001) works only on a frozen scene; on a live
      desktop use tree equality and say which you used.
-8. **Reversibility.** For every destructive or hard-to-repeat action, trace what happens after it.
-   Undo beats a confirm dialog: people click through confirms. Silent and instant with no
-   undo is a finding; so is a confirm for a trivial action. The destructive control is separated
-   from the primary one and signalled with a danger cue that clears the 1.2 ratio against its
-   neutral siblings. One primary action per screen; secondary ones read as subordinate.
+8. **Reversibility.** For every destructive or hard-to-repeat action, trace what happens after it. A
+   confirm dialog where undo is possible is a finding; a confirm names the verb and the object and
+   appears only when undo cannot reverse the act, because people click through confirms. Silent and
+   instant with no undo is a finding too. The destructive control is separated from the primary one
+   and carries a danger cue distinct from its neutral siblings. One primary action per screen;
+   secondary ones read as subordinate.
 9. **Error recovery and forms.** Drive the bad path, not only the good one: empty, malformed,
    server refusal. Per failure record where the error appears (beside the field), whether it names
    cause and fix, and whether the input survived. Fields have a visible label, validation fires on
@@ -128,8 +128,8 @@ as a pass) and **Not examined** (what was not reached, and why).
 ## Say it in the reply
 
 The state-space map, the table, the three lists, then one line on how the interface was driven and
-what could not be, so the reader knows which half the audit saw. With no running UI, still give
-the standards with their numbers (24 px floor, 32 frequent, 100 ms feedback) as the check to run,
+what could not be, so the reader knows which half the audit saw. With no running UI, still give the
+standards with their numbers (24 px WCAG floor, 44 px touch, 100 ms feedback) as the check to run,
 the human-trial steps with a pass criterion, and what was not examined.
 
 How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),

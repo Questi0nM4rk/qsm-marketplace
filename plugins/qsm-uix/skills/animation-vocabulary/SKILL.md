@@ -175,7 +175,7 @@ animation-performance's.
 - **Spatial consistency** — Animating so an element keeps its identity and position across states,
   so users never lose track of where things went.
 - **Hardware acceleration** — Animating transform and opacity lets the GPU keep motion smooth.
-- **Reduced motion** — Respecting the user's prefers-reduced-motion setting by toning down or
+- **Reduced motion** — Respecting the system reduced-motion setting by toning down or
   removing motion.
 
 The config name of a term on a stack is its family: desktop (desktop-ui, qml-ui), terminal

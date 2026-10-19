@@ -14,8 +14,8 @@ screen halves the budget. It does not pick curves or judge whether the motion sh
 
 ## Hard rules
 
-1. `transform` and `opacity` by default; anything else needs a reason. If a cheaper property gives
-   the same picture, use it even when the expensive one "seems fine".
+1. Animate's property whitelist by default; anything else needs a reason. If a cheaper property
+   gives the same picture, use it even when the expensive one "seems fine".
 2. Name the cause before changing code. "Promoted a layer, seems smoother" is not a diagnosis.
 3. Never conclude "it is fine" from a fast machine. Say which findings come from code and which need
    a recording on a real device.
@@ -28,7 +28,7 @@ screen halves the budget. It does not pick curves or judge whether the motion sh
 
 | Symptom | Fix |
 | --- | --- |
-| Stutters | animate `transform` and `opacity`, not size, margin or position |
+| Stutters | animate the whitelisted properties (animate), not size, margin or position |
 | Shadow animation choppy | animate a cheaper shadow form, or fade a prepared one |
 | Janks only during navigation or loading | move it off the thread that is busy then |
 | A shorthand drops frames on a busy thread | write the full transform on the element |
@@ -53,10 +53,10 @@ what you animate (work per frame) and where it runs (whether other work can bloc
 | Layout, paint and composite | size, padding, margin, position, border width |
 
 Swap down a tier: a scale instead of a size; a translate instead of a position or margin; opacity
-instead of display or visibility; a drop shadow instead of a box shadow.
-A padding animation and a scale look the same and only one cannot regress on a slow device. Layout
-properties also move the wrong things: animating a sidebar's `margin-left` re-lays-out the page
-beside it every frame, `translateX` does not.
+instead of display or visibility; a drop shadow instead of a box shadow. A padding animation and a
+scale look the same and only one cannot regress on a slow device. Layout properties also move the
+wrong things: animating a sidebar's left margin re-lays-out the page beside it every frame, a
+translate does not.
 
 **Where it runs.** Motion driven by script on the main thread competes with everything else and its
 frame is late when the thread is busy; declarative motion the platform can hand to the compositor
@@ -75,7 +75,7 @@ because correctness beats a best-effort optimisation.
 - **Inherited variables.** A drag distance written to a variable that a child's transform reads
   recalculates styles for every descendant each frame; a drawer lagged past about 20 items with
   no re-render at all. Set the transform on the element itself.
-- **Blur.** Animated `blur()` gets expensive fast; under 20 px.
+- **Blur.** Animated blur gets expensive fast; under 20 px.
 
 **Layer promotion** (a hint that gives the element its own layer) costs GPU memory per layer and
 engines already promote what animates `transform` or `opacity`. Add it only after you see the
@@ -90,13 +90,12 @@ momentum).
 
 1. **Find what animates**: a table of element, driver, properties, plays during. Expand
    catch-all transitions and shorthands into what they really animate.
-2. **Diagnose**, in the order each is usually the cause: which properties (layout first, then
-   shadow and corner radius, easy to miss); does the jank coincide with a busy page; is the UI
-   re-rendering per frame; does it worsen as content grows; is an inherited value animated at all;
-   blur over 20 px; and last, layer promotion. Confirm with a recording, not by feel: the
-   profiler's frame view for dropped frames and long tasks, the animation inspector to slow it.
-   Profile on
-   a real mid-range device; CPU throttling on a desktop models a slow CPU, not a weak GPU.
+2. **Diagnose**, in the order each is usually the cause: which properties (layout first, then shadow
+   and corner radius, easy to miss); does the jank coincide with a busy page; is the UI re-rendering
+   per frame; does it worsen as content grows; is an inherited value animated at all; blur over 20
+   px; and last, layer promotion. Confirm with a recording, not by feel: the profiler's frame view
+   for dropped frames and long tasks, the animation inspector to slow it. Profile on a real
+   mid-range device; CPU throttling on a desktop models a slow CPU, not a weak GPU.
 3. **Report** each finding as element and `file:line`, cause, before, after, and verified (from code
    or needs a device recording), ordered by cost, layout before paint, busy thread before idle. Then
    stop; fixes are applied when asked.

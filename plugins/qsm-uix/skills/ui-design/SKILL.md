@@ -30,10 +30,9 @@ Work top-down, because a late concern costs a rebuild and an early one costs a s
 Never assume the stack. Look for an existing `design/` folder, a theme file, tokens in code, a
 screenshot. If a design source exists, read it whole before writing: extend it, do not regenerate
 it. Ask one question only when the answer changes the source: the surfaces (bar, page, CLI), the
-audience, any fixed brand colour. If the stack is unknown, the source stays stack-neutral anyway;
-the stack skill maps it later. Do not stop at the question: state the
-assumption and still write the source with tokens, pairs and ratios, because a draft the person
-can correct is worth more than a questionnaire.
+audience, any fixed brand colour. The source stays stack-neutral; the stack skill maps it later.
+Do not stop at the question: state the assumption and still write the source with tokens, pairs
+and ratios, because a draft the person can correct is worth more than a questionnaire.
 
 ## The design source
 
@@ -73,12 +72,12 @@ Use these headings, because the audits and the stack skills look for them:
 - **Every pressable has a pressed state, and no state moves its neighbours.** The press shrinks
   the element to 0.95 to 0.98 of its size at once, as a transform on the pressed state that does
   not change layout bounds (animate owns it); hover, focus and disabled change colour, opacity or
-  elevation and keep the box. Adjacent states of a control differ by a contrast ratio
-  of at least 1.2, and the focus indicator reaches 3:1 against its neighbours. Why: a press with
-  no response feels like the UI did not hear the person, a scaled press leaves layout alone, and
-  a state that cannot be told apart is not a state.
-- **Hover is for pointers that hover.** A hover effect is gated to hover-capable pointers,
-  because a touch screen fires hover on tap and shows it as a false positive.
+  elevation and keep the box. The focus indicator reaches 3:1 against its neighbours. Why: a
+  press with no response feels like the UI did not hear the person, and a scaled press leaves
+  layout alone.
+- **Hover is for a fine hovering pointer.** A hover effect applies only where the device has one
+  (animate and review-animations point here), because a touch screen fires hover on tap and shows
+  it as a false positive.
 - **A tooltip delays once, then follows at once.** The first waits so a passing pointer does not
   trigger it; while one is open its neighbours show instantly, which makes the whole row feel
   faster without losing the delay's purpose.
@@ -87,26 +86,32 @@ Use these headings, because the audits and the stack skills look for them:
   checking them is `review-animations`.
 - **Defaults carry the design; options are for the few.** Most people never change a setting, so
   the default look, spacing and timing must already be the best the design has.
-- **A component's character is one personality.** Spacing, type, and feel agree with the
-  product's mood: a professional dashboard is crisp and dense, a playful tool may be looser.
-  Why: a rule right in isolation still reads wrong beside a neighbour of another character.
+- **A component's character is one personality.** A professional dashboard is crisp and dense, a
+  playful tool may be looser; a rule right in isolation reads wrong beside another character.
 - **A raised surface separates by a soft shadow, not a solid border.** A semi-transparent shadow
-  or a low-alpha border reads as depth; an opaque border reads as a box drawn around the content.
-  A low-alpha separator on a card is decorative: WCAG 1.4.11 applies to the boundaries a person
-  needs to identify a control, so the 3:1 rule is for control boundaries and inputs.
+  reads as depth; an opaque border reads as a box drawn around the content (emilkowalski/skills
+  README.md names a solid border over a shadow as an agent mistake). In a dark theme an overlay
+  also gets a 1 px low-alpha light edge, because a shadow vanishes on a dark surface, and the edge
+  is never opaque. A low-alpha separator on a card is decorative: WCAG 1.4.11 applies to the
+  boundaries of controls and inputs, so the 3:1 rule is for those.
+- **A wait shows feedback by its length.** No busy indicator under 150 to 300 ms, because a
+  flash reads as a glitch; over 1 s always feedback; once shown it stays at least 300 to 500 ms;
+  a progress bar with a count past about 10 s when the length is known (Vercel guidelines). The
+  families write the form.
 - **Handle edge cases where nobody looks.** A hover that must survive the gap between stacked
   items, a timer that pauses when the view is hidden, a drag that continues outside its box.
   These are details nobody notices, and that is what correct looks like.
-- **Sizes carry a floor.** Target 24 px minimum (WCAG 2.5.8), 32 px for anything used often;
-  icon box at least 12 px, text at least 10 px. These are defaults, and the source records any
-  override per project with its reason, because a threshold silently changed is a regression
-  nobody can find.
+- **Targets carry a floor.** 44 px on touch (Vercel web-interface-guidelines README); 24 px is
+  the WCAG 2.5.8 floor, labelled as such. The source records any override per project with its
+  reason, because a threshold silently changed is a regression nobody can find.
 - **One primary action per surface.** Secondary actions are visibly subordinate and a destructive
   one is separated and named as such. Why: when two things shout, the user has to decide what
   the design should have decided.
 - **Colour is never the only carrier of meaning.** Each status token comes with a word, glyph or
-  shape (error is red and says what failed). Icons follow use: decorative beside text, named when
-  alone, a button when interactive.
+  shape (error is red and says what failed).
+- **An icon stands alone only where everyone reads it the same** (close, play, volume), and then
+  it has a tooltip and an accessible name; otherwise the control is a text label. Never icon and
+  label on one button, because the pair says one thing twice and costs width.
 - **A number comes from a named source.** Before choosing a colour, size, offset or duration, name
   the token, reference file or mockup it comes from. With none, show two candidates live and wait
   for the owner's pick; never tune a value from geometry alone, because the owner then supplies
@@ -118,17 +123,15 @@ Use these headings, because the audits and the stack skills look for them:
   (own body, a slight shadow allowed). A shadow alone is not a separator, and adjacent items
   differ at rest.
 - **A token or colour pass changes values only.** List every visible element (separators,
-  handles, glass edge, readouts, layout) before and after and confirm each survives; a missing
-  one is a regression to fix, not a spec outcome.
+  handles, glass edge, readouts, layout) before and after and confirm each survives.
 - **The owner's chat ruling beats an older source line.** Edit the line in place in the same
-  change and quote the owner; a line the owner overruled is out of date, not authority.
+  change and quote the owner; an overruled line is out of date, not authority.
 - **Prefer the platform's control to a custom one**, unless the source says why not. The system
   one brings keyboard, focus, scaling and screen reader behaviour for free.
 - **A style is a constraint set, never a name.** Write what the look requires (for example "raised
-  surfaces separate by a low-alpha border or a soft shadow, never an opaque border"), the
-  accessibility it brings, and where it must not be used (dense data, small text, high-contrast
-  users). Why: a named fad such as "glass" says nothing the audit can measure; a constraint can
-  fail a pair.
+  surfaces separate by a soft shadow, never an opaque border"), the accessibility it brings, and
+  where it must not be used (dense data, small text, high-contrast users). Why: a named fad such as
+  "glass" says nothing the audit can measure; a constraint can fail a pair.
 
 ## Output
 
