@@ -50,7 +50,14 @@ jobs:
           bun build --compile --target bun --outfile "$HOME/qsm-bin/qsm-statusline" plugins/qsm-statusline/scripts/cli.ts
           echo "$HOME/qsm-bin" >> "$GITHUB_PATH"
       - run: bun run validate
-      - run: bun run lint
+      # oxlint's type-aware rules read the hooks modules' types from the same engine declarations,
+      # so in CI every hooks file resolves to `error` and trips the unsafe-* rules. CI lints the
+      # rest and formats everything; the local pre-commit and pre-push gates lint the hooks with
+      # the declarations present.
+      - name: Lint
+        run: |
+          bunx oxlint --deny-warnings --ignore-pattern "plugins/*/hooks/**"
+          bunx oxfmt --check ".gates/**/*.ts" "lib/**/*.ts" "plugins/**/*.{ts,tsx}"
       # `bun run typecheck` also typechecks the hooks modules, which needs the engine
       # declarations that only a local Claude Code session writes. CI runs the root part.
       - run: bun check
