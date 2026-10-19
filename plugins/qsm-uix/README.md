@@ -41,22 +41,22 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `desktop-ui` | Shell surfaces (bar, popout, OSD, notification, tray, launcher), Hyprland config for animation, blur and layer rules, desktop motion, stress forms; sources: KDE HIG (CC-BY-SA-4.0), GNOME HIG, hyprland-wiki (BSD-3-Clause), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `qml-ui` | Quickshell and QML: tokens, exclusive zone, per-output windows, scale, Accessible, item-tree dump, qmllint and qmlformat; source: Qt's qt-qml-review (BSD-3-Clause) |
+| Skill | `desktop-ui` | Shell surfaces (bar, popout, OSD, notification, tray, launcher), Hyprland config for animation, blur and layer rules, desktop motion, what to expose to the audits; sources: KDE HIG (CC-BY-SA-4.0), GNOME HIG (no licence stated; paraphrase only, credit), hyprland-wiki (BSD-3-Clause), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `qml-ui` | Quickshell and QML: tokens, exclusive zone, per-output windows, scale, Accessible, stress and variants, item-tree dump, qmllint and qmlformat; sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions |
 
 ### Terminal
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `cli-ui` | A command that prints and exits: streams, colour, exit codes, errors, signals, secrets, help; sources: clig.dev (CC-BY-SA-4.0), gfargo and pageton tui-design-skill (MIT), no-color.org |
+| Skill | `cli-ui` | A command that prints and exits: streams, colour, exit codes, errors, signals, secrets, help; sources: clig.dev (CC-BY-SA-4.0), gfargo and pageton tui-design-skill (MIT) |
 | Skill | `tui-ui` | A full-screen terminal program: frameworks, keys, focus, layout by width, resize, plain mode, motion, stress and variants; sources: gfargo and pageton tui-design-skill, jrschumacher skill-bubbletea-tui (MIT), clig.dev (CC-BY-SA-4.0) |
 
 ### Web
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions; source: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
-| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions; source: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
+| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions; sources: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions; sources: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT), [emilkowalski/skills](https://github.com/emilkowalski/skills) pick-ui-library (MIT) |
 | Skill | `web-motion` | Motion on a web page: curves as custom properties, compositor-only properties, reduced motion, the Motion library, performance, review and survey terms; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) and [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
 | Skill | `web-harness` | The browser side of break-ui and prototype: a Demo data or Worst case toggle, the variant picker, the CSS fixes for the breaks; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `mobile-native` | Makes a web app feel native on a phone: hover, tap highlight, viewport height, input zoom, safe areas, scroll; web only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
@@ -106,7 +106,8 @@ qsm-uix region-stats shot.png --rect 120,40,60,24 --top 8
 ## Sources
 
 The skills named "adapted from emilkowalski/skills" (and `web-motion`, `web-harness`, `ui-design`,
-`ui-audit`'s polish pass) carry Emil Kowalski's work under his licence, given here in full.
+`desktop-ui`, `css-ui`, `react-ui`, `ui-audit`'s polish pass) carry Emil Kowalski's work under his
+licence, given here in full.
 
 ```text
 MIT License
