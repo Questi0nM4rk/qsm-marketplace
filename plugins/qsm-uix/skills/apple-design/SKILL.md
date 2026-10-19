@@ -5,13 +5,13 @@ description: "Use when an interface should feel the way Apple's do and the quest
 
 # Apple Design
 
-An interface feels Apple-made when it answers before the person finishes acting, keeps things
-where they came from, layers material so that structure shows without shouting, and sets type
-for its size. This skill serves the person who builds interfaces on a desktop, in a terminal or on
-the web and wants that feel, and gives the foundations. It does
-not write stack syntax, choose the design's numbers (ui-design), or carry motion: curves,
-durations, springs, gestures, momentum and rubber-banding are `animate`, and `review-animations`
-checks them. Say so when a question is about them.
+An interface feels Apple-made when it answers before the person finishes acting, keeps things where
+they came from, layers material so that structure shows without shouting, and sets type for its
+size. This skill serves the person who builds interfaces on a desktop, in a terminal or on the web
+and wants that feel, and gives the foundations. It does not write stack syntax, choose the design's
+numbers (ui-design), or carry motion: curves, durations, springs, gestures, momentum and
+rubber-banding are `animate`, and `review-animations` checks them. Say so when a question is about
+them.
 
 The through-line: every rule serves one of four needs, safety (predictable), understanding,
 achievement, joy. A rule that serves none is decoration.
@@ -87,8 +87,8 @@ explain a control means weak mapping. Name navigation for its contents, not "Hom
 Reduced motion means a gentler equivalent, not no feedback: a short opacity cross-fade in place of
 slides, springs and parallax, no overshoot, and the opacity and colour changes that aid
 comprehension stay. Durations and curves are `animate`'s. Large moving things turn semi-transparent
-while they travel, no background moves across the whole viewport, and a light-to-dark switch eases
-instead of jumping in brightness.
+while they travel, no background moves across the whole viewport, no slow loop oscillates near
+0.2 Hz (one cycle per 5 s), and a light-to-dark switch eases instead of jumping in brightness.
 
 ## Red flags
 
@@ -106,7 +106,7 @@ The foundation rule applied, the solid variant, and the family skill that writes
 handed to `animate`.
 
 How each rule lands on a stack is its family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
-tui-ui), web (css-ui, react-ui).
+tui-ui), web (css-ui, react-ui, web-motion).
 
 Source: Apple's WWDC talks (Designing Fluid Interfaces, Details of UI Typography, Principles of
 Great Design) as distilled in emilkowalski/skills apple-design, github.com/emilkowalski/skills,

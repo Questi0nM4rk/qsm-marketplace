@@ -23,11 +23,11 @@ ui-design, and how to expose a UI on one stack is that stack skill.
    (item tree, DOM, accessibility tree). Dump it before measuring any gap by eye. The stack skill
    says how to expose it. If none is reachable, say so in those words and file every geometry claim
    as a hypothesis, because a gap counted off a screenshot measures the image, not the layout.
-3. **The design source.** The written spec the UI is audited against: its tokens, pairs, scales.
-   The expected column cites it, never taste. It is `design/MASTER.md` with
-   `design/pages/<surface>.md` overriding it, so a page that differs from the master is no conflict.
-   With none, derive the system from the measurements
-   ("9 of 11 gaps are 12px"), say so, and file the deviators against it.
+3. **The design source.** The written spec the UI is audited against: its tokens, pairs, scales. The
+   expected column cites it, never taste. It is `design/MASTER.md` with `design/pages/<surface>.md`
+   overriding it, so a page that differs from the master is no conflict. With none, derive the
+   system from the measurements ("9 of 11 gaps are 12px"), say so, and file the deviators against
+   it.
 
 Drive the UI into every surface and state (each popout, panel, overlay) and capture each; one
 resting frame is not an audit.
@@ -53,22 +53,20 @@ resting frame is not an audit.
    open surface's corners, at the same distance from the edge: slight full colour at the edge
    fading inward evenly, and any difference is a finding.
 4. **Colour and contrast.** `qsm-uix region-stats shot.png --rect X,Y,W,H --top 8` gives dominant
-   colours with shares and each one's OKLCH l, c, h, which the hue and neutral-chroma checks
-   read; every observed colour traces to a token, orphans are findings. Measure
-   each on-pair, the fill and the token that sits on it, with
-   `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: 4.5 for body text, 3 for large text and
-   essential glyphs (WCAG 2.2, 1.4.3). Non-text parts need 3 against what they sit on (1.4.11):
-   control borders, dividers that carry meaning, icons, data marks. A deliberately
-   dim resting state passes only if its active state is captured and measured too. Adjacent states
-   of one control differ by a ratio of at least 1.2. Sample the rendered pixel, never the colour
-   the code names, because opacity stacks and blending change what reaches the screen.
+   colours with shares and each one's OKLCH l, c, h, which the hue and neutral-chroma checks read;
+   every observed colour traces to a token, orphans are findings. Measure each on-pair, the fill and
+   the token that sits on it, with `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: 4.5 for body text,
+   3 for large text and essential glyphs (WCAG 2.2, 1.4.3). Non-text parts need 3 against what they
+   sit on (1.4.11): control borders, dividers that carry meaning, icons, data marks. A deliberately
+   dim resting state passes only if its active state is captured and measured too. Sample the
+   rendered pixel, never the colour the code names, because opacity stacks and blending change what
+   reaches the screen.
 5. **Type and icons.** Inventory every text item with family, rendered size, weight. Sizes form a
    scale, each step about 1.125 times the one below, because a scale makes hierarchy legible
    without reading. Rank items by size, weight, and contrast; the most glance-critical readouts
    belong at the top. Text in a row shares a baseline within 1px. Icons in one cluster share a
    bounding size within 1px and an optical weight (a hairline icon among filled ones is a
-   finding). Text under about 10px and an icon box under about 12px are findings at desktop
-   distance, whatever the style intent.
+   finding).
 6. **Token sets.** Elevation, layer (z-order) and icon size are sets of a few named values, like
    spacing. Collect each observed shadow, stacking order and icon box from the tree and capture;
    a value outside the set is a finding, and two overlays whose order contradicts the layer scale
@@ -85,7 +83,6 @@ resting frame is not an audit.
    file any overlap as a number of pixels. A shell claiming an edge lands flush on every output,
    so expect a zero gap at each. Capture every output, because the focused one alone is a coverage
    gap; toggle a per-screen state on one output and capture the other, since state must not leak.
-
 9. **Polish.** Reasons are ui-design's. Hold each pressable down and capture it:
    - A pressed state exists and differs from rest: same bounds in the tree, or scaled to 0.95 to
      0.98 of them, with a measured pixel difference.
@@ -95,18 +92,20 @@ resting frame is not an audit.
    - Every control with a pressed state in one theme has it in the other.
    - A raised surface has a soft shadow and no opaque border (ui-design); a solid border under a
      shadow is a finding.
+   - In a dark theme an overlay has the 1 px low-alpha light edge besides its shadow, and the
+     edge is not opaque (ui-design).
 
 ## The findings table
 
 | id | pass | element | evidence (measured) | expected (source) | actual | severity |
 
 Severity is `blocker`, `major`, `minor`, or `polish`. Evidence is a number from channel 1 or 2,
-expected cites channel 3. A rule taken from a standard names it (`1.4.11`); a maintainer
-threshold needs no citation. Check each row with a zoom crop of that exact region. Two design
-sources from different owners that disagree are one finding citing both, tagged
-`source-conflict`, because which wins is the owner's ruling. Under the table: **Hypotheses**
-(observed, not measured, never mixed into the table) and **Not examined** (states, themes,
-screens, passes skipped, and why), so the reader does not assume there were no gaps.
+expected cites channel 3. A rule taken from a standard names it (`1.4.11`); a maintainer threshold
+needs no citation. Check each row with a zoom crop of that exact region. Two design sources from
+different owners that disagree are one finding citing both, tagged `source-conflict`, because which
+wins is the owner's ruling. Under the table: **Hypotheses** (observed, not measured, never mixed
+into the table) and **Not examined** (states, themes, screens, passes skipped, and why), so the
+reader does not assume there were no gaps.
 
 ## Red flags
 

@@ -13,7 +13,8 @@ qsm-uix's source of truth (epic qsm-d0c).
   numbers), shows it behind a demo / worst-case toggle, and reports each break with its fix.
 - prototype, under his name: builds several genuinely different versions of one UI piece behind a
   switcher and promotes the chosen one. Fires only when invoked.
-- Both say how the toggle or switcher is built on QML, CSS/React and TUI.
+- Both name no stack syntax: they say what the toggle or switcher is and point to the families that
+  build it (desktop-ui, tui-ui, web-harness).
 
 ## Capabilities
 
@@ -27,13 +28,15 @@ None.
 
 ## Impact
 
-- `plugins/qsm-uix/skills/break-ui/SKILL.md`, `skills/prototype/SKILL.md`: new.
+- `plugins/qsm-uix/skills/break-ui/SKILL.md`, `skills/prototype/SKILL.md`: new; the toggle and fix
+  forms land in `skills/{desktop-ui,tui-ui,web-harness}/SKILL.md`.
 - `plugins/qsm-uix/evals/`: a fire case each; README list.
 
 ## Critiques
 
-- Devil's advocate: a QML shell has no browser toggle. Fixed: the per-stack section builds the
-  toggle as a Theme or IPC flag in QML and an environment variable in a TUI.
+- Devil's advocate: a QML shell has no browser toggle. Fixed: desktop-ui builds the
+  toggle as a debug property flipped over IPC, tui-ui as an environment variable, web-harness as a
+  component.
 - Future archaeologist: why does prototype not trigger on its own? Fixed: his design, kept, named
   in its description.
 - Scope sniper: CATALOG.md and PICKER.md are extra files. Fixed: folded or cut to the 12 KB cap.

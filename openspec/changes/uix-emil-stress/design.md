@@ -8,9 +8,9 @@ break-ui is 14.4 KB with CATALOG.md; prototype is 7.8 KB with PICKER.md.
 1. **His names, one file each, 12 KB cap.** His catalogue is kept whole within the 12 KB cap;
    PICKER.md folds into prototype.
 2. **The toggle in the families.** web-harness: his component. desktop-ui: a property on a debug
-   singleton, set over `qs ipc`, so the shell flips data without a restart. tui-ui: an environment
-   variable that swaps the data source. break-ui and prototype say what the toggle is and point
-   there.
+   singleton, set over `qs ipc`, so the shell flips data without a restart (qml-ui holds the QML
+   syntax). tui-ui: an environment variable that swaps the data source. break-ui and prototype say
+   what the toggle is and point there.
 3. **break-ui reports, the family skill fixes.** Each break names its cause; the family holds the
-   how (elide in desktop-ui, `min-width: 0` in web-harness, truncation by display width in
-   tui-ui).
+   how (elide in desktop-ui, `min-width: 0` in web-harness, truncation in tui-ui by the display
+   width that cli-ui owns).

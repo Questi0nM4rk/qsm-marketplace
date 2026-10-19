@@ -16,17 +16,16 @@ skills), or give legal advice. Criterion numbers, levels and legal status are in
 ## First line: what you can see
 
 Name the evidence channels you have before any verdict: the platform accessibility tree, a way to
-send keys, captures (`qsm-uix screenshot`), the design source. A criterion that
-needs a channel you lack is `not tested`, said up front, because a pass without the channel measures
-nothing and `not tested` is the honest cell. Never write `pass` for what you only inferred from
-code.
+send keys, captures (`qsm-uix screenshot`), the design source. A criterion that needs a channel you
+lack is `not tested`, said up front, because a pass without the channel measures nothing and
+`not tested` is the honest cell. Never write `pass` for what you only inferred from code.
 
 ## Method
 
 1. **Announce, then drive.** Keys are synthetic input; say which surfaces you will drive and do not
-   send them while someone is working in the window. Focus the window first
-   then send Tab, Shift+Tab and Escape. If `qsm-uix doctor` says the key tool is missing, the
-   keyboard path goes to Needs human trial with exact steps.
+   send them while someone is working in the window. Focus the window first then send Tab, Shift+Tab
+   and Escape. If `qsm-uix doctor` says the key tool is missing, the keyboard path goes to Needs
+   human trial with exact steps.
 2. **Keyboard path.** From a fresh surface press Tab (Shift+Tab back) until focus repeats; record
    the stops in order. Check: the order follows the visual order (2.4.3), nothing reachable by
    pointer is missing from it (2.1.1), focus leaves every widget (2.1.2), Esc closes what opened.
@@ -46,18 +45,16 @@ code.
    or contains the visible label, 2.5.3), role (a clickable rectangle that reports as generic is a
    fail of 4.1.2), state (checked, expanded, disabled, value). Decorative icons carry no name; an
    icon alone carries one; the same glyph beside text is decorative. How to read the tree:
-   - Native toolkit on Linux: `qsm-uix a11y-tree <app-name> [--depth N] [--json]` prints
-     each node as indent, role, name and `[focused,focusable,showing]` from AT-SPI; the default
-     depth of 32 covers GTK4 apps, whose trees are deep. `qsm-uix doctor` says whether the bus
-     answers; if it does not, name the doctor's remedy and mark tree-bound criteria `not tested`.
-     Verified live against a GTK4 app (pavucontrol): the tree reads and Tab moves `focused`.
-     A toolkit app that is absent from the tree is the family skill's case before it is called
-     unreachable.
+   - Native desktop app: `qsm-uix a11y-tree <app-name> [--depth N] [--json]` prints each node
+     as indent, role, name and state; deep trees need a larger `--depth`. `qsm-uix doctor` says
+     whether the accessibility bus answers; if it does not, name the doctor's remedy and mark
+     tree-bound criteria `not tested`. A toolkit app that is absent from the tree is the family
+     skill's case before it is called unreachable.
    - Web: the browser's accessibility tree, not the DOM.
 6. **Colour not the only carrier.** For each state shown by colour (error, selected, status, chart
-   series) capture it, convert to grayscale (`magick in.png -colorspace Gray out.png`) and look: the
-   state must still differ by text, icon, shape or pattern (1.4.1). Red text alone fails; red text
-   plus a message and an icon passes. Contrast numbers for the text itself are ui-audit's.
+   series) capture it, convert it to grayscale with any image tool and look: the state must still
+   differ by text, icon, shape or pattern (1.4.1). Red text alone fails; red text plus a message and
+   an icon passes. Contrast numbers for the text itself are ui-audit's.
 7. **Text scaling and reduced motion.** Set the system text scale to 200 percent (1.4.4) and
    recapture every surface: clipped, overlapped or unreachable content is a finding, with the
    cropped capture as evidence. Set the system reduced-motion preference and trigger every animated
@@ -104,4 +101,4 @@ surfaces were driven and which half of the criteria the tree could not test. Poi
 a11y-conformance for what each criterion means in law.
 
 How to drive and expose each stack is its family: desktop (desktop-ui, qml-ui), terminal
-(cli-ui, tui-ui), web (css-ui, react-ui).
+(cli-ui, tui-ui), web (css-ui, react-ui, web-motion).

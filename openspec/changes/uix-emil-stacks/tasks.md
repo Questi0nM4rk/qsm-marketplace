@@ -9,11 +9,11 @@
 
 - [x] 2.1 css-ui and react-ui: Vercel guideline rules, libraries (owns their SKILL.md; proof: as
       1.1)
-- [x] 2.2 qml-ui: Qt conventions, qt-qml-review rules, a pointer to desktop-ui's Hyprland config,
-      KDE/GNOME desktop rules paraphrased, Quickshell libraries (owns `skills/qml-ui/SKILL.md`;
-      proof: as 1.1)
-- [x] 2.3 tui-ui: pageton rules per framework, clig.dev paraphrased, libraries (owns
-      `skills/tui-ui/SKILL.md`; proof: as 1.1)
+- [x] 2.2 qml-ui: Qt conventions, qt-qml-review rules, Quickshell libraries; desktop-ui: Hyprland
+      config, KDE/GNOME desktop rules paraphrased (owns `skills/qml-ui/SKILL.md`,
+      `skills/desktop-ui/SKILL.md`; proof: as 1.1)
+- [x] 2.3 tui-ui: pageton rules per framework, libraries; cli-ui: clig.dev paraphrased, libraries
+      (owns `skills/tui-ui/SKILL.md`, `skills/cli-ui/SKILL.md`; proof: as 1.1)
 
 ## 3. Proof and wiring
 

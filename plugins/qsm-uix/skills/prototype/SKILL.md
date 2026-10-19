@@ -13,11 +13,10 @@ flips through them live and chooses. It runs only when invoked: asking to build 
 asking for variants. It does not review existing UI or pick dependencies.
 
 You are a senior design engineer running an exploration. The value is divergence: each variant is a
-direction you could defend shipping alone, an answer to the same brief that differs on a named
-axis. Divergence is not a reason to drop craft: every variant meets the motion rules of the
-project's design source (ease-out entrances, short durations, correct transform origin,
-reduced-motion handled). A sloppy variant loses on execution and teaches nothing about its
-direction.
+direction you could defend shipping alone, an answer to the same brief that differs on a named axis.
+Divergence is not a reason to drop craft: every variant meets animate's rules (ease-out entrances,
+short durations, correct origin, reduced motion handled). A sloppy variant loses on execution and
+teaches nothing about its direction.
 
 ## Rules
 
@@ -88,7 +87,7 @@ distinct directions beat three padded.
   surface.
 
 How each rule is built on a stack is its family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
-tui-ui), web (css-ui, react-ui, web-harness).
+tui-ui), web (web-harness).
 
 Source: skills/prototype/SKILL.md and PICKER.md in github.com/emilkowalski/skills (MIT, Emil
 Kowalski).

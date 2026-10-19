@@ -6,7 +6,7 @@ description: "Use when asked to build one animation or one transition for a popo
 # Animate
 
 An agent asked for motion picks its own curve and duration, and picks wrong: `ease-in` on an enter,
-`scale(0)` from nothing, a transition on every property, an animation on a keyboard action. This
+a scale from zero, a transition on every property, an animation on a keyboard action. This
 skill serves the person who builds an interface and must answer for how it feels: it turns a request
 for motion into an implementation that survives `review-animations` the first time. The first answer
 is sometimes "do not animate", and that is a result, not a dodge. Never present motion options as a
@@ -44,17 +44,18 @@ it. A spring or a library only for springs, layout and exit animations, or gestu
 
 ### 4. Pick the properties
 
-- `transform` and `opacity` only. Size, margin, padding and position trigger layout and paint;
-  a height is tolerated for an accordion.
-- Never `scale(0)`. Start from `scale(0.9` to `0.97)` with `opacity: 0`, because nothing real
+- The whitelist, one owner here: `transform` and `opacity`; `clip-path` for reveals and the tab
+  indicator; height only for an accordion. Size, margin, padding and position trigger layout and
+  paint, so animation-performance and the web-motion family point here for the list.
+- Never scale from zero. Start from a scale of 0.9 to 0.97 with opacity 0, because nothing real
   appears from nothing.
 - Transform origin at the trigger for popover, dropdown, menu, tooltip. A modal is exempt and stays
   centred.
-- `translate` percentages are relative to the element's own size: `translateY(100%)` moves by its
-  own height whatever the content. Prefer them to pixels.
-- No state changes layout bounds. A press is a scale while pressed, which
-  keeps the box; hover, focus and disabled change colour, opacity or shadow only (ui-design owns the
-  no-layout-change rule).
+- A translate in percent is relative to the element's own size: 100 percent of its height moves it
+  by its own height whatever the content. Prefer it to pixels.
+- No state changes layout bounds. A press is a scale while pressed, which keeps the box; hover,
+  focus and disabled change colour, opacity or shadow only (ui-design owns the no-layout-change
+  rule).
 
 ### 5. Easing and duration, or a spring
 
@@ -68,7 +69,7 @@ it. A spring or a library only for springs, layout and exit animations, or gestu
 
 Never ease-in on UI: it starts slow, which is the moment the user watches. Ease-out at 200 ms feels
 faster than ease-in at 200 ms. The built-in keywords are too weak; use these three, never an
-invented `(0.4, 0, 0.2, 1)`:
+invented curve:
 
 | Token | Points x1, y1, x2, y2 | Use |
 | --- | --- | --- |
@@ -76,7 +77,10 @@ invented `(0.4, 0, 0.2, 1)`:
 | ease-in-out | `0.77, 0, 0.175, 1` | movement already on screen |
 | ease-drawer | `0.32, 0.72, 0, 1` | drawers and sheets |
 
-A curve that is not here comes from easing.dev or easings.co, never hand-rolled.
+A curve that is not here comes from easing.dev or easings.co, never hand-rolled. The keyword `ease`
+is allowed in exactly two places, each with its reason: the toast (its motion is tuned to the
+component's personality) and a colour change on hover (a colour has no direction to accelerate
+along). Any other keyword is a finding.
 
 | Element | Duration |
 | --- | --- |
@@ -87,8 +91,8 @@ A curve that is not here comes from easing.dev or easings.co, never hand-rolled.
 
 UI stays under 300 ms: a 180 ms dropdown feels more responsive than a 400 ms one. Speed is
 perception too: a faster spinner makes loading feel faster at the same load time. The one named
-exception is the toast: `ease` at 400 ms, because its motion is tuned to the component's
-personality (Sonner reads as elegant that way), not to the generic UI budget.
+duration exception is the toast at 400 ms with `ease` (Sonner reads as elegant that way), not the
+generic UI budget. An exit takes 60 to 70 percent of its enter duration.
 
 A spring instead for a drag with momentum, an element that should feel alive, a reversible
 gesture, or decorative mouse tracking: duration 0.5 s with bounce 0.2 (easier to reason about)
@@ -103,41 +107,43 @@ drag-to-dismiss and playful moments only.
 - Exit the way it entered: a toast in from the bottom leaves through the bottom, which is what makes
   swipe-to-dismiss obvious.
 - Asymmetric timing where the user is deciding: slow on the deliberate phase (hold-to-confirm
-  press, 2 s linear), snappy on the system's answer (release, 200 ms ease-out).
+  press, 2 s linear), snappy on the system's answer (release, 200 ms ease-out). Undo comes first:
+  hold-to-confirm is only for an act with no undo.
 
 ### 7. Reduced motion and pointer gating
 
 Both ship with the animation. Reduced motion means fewer and gentler, not zero: keep opacity and
-colour changes that aid comprehension, drop movement and position changes. Hover motion only where
-a real pointer hovers.
+colour changes that aid comprehension, drop movement and position changes. Hover motion follows
+ui-design's rule for a fine hovering pointer.
 
 ## Recipes
 
 | Case | Recipe |
 | --- | --- |
 | Button press | scale 0.97 while pressed (0.95 to 0.98), 160 ms ease-out. No hover gate: a press is real |
-| Dropdown, popover, menu | origin at the trigger; from `scale(0.95)` + opacity 0, 200 ms ease-out |
-| Tooltip | as a popover, 125 ms, from `scale(0.97)`; once one is open, neighbours open with 0 ms and no delay |
-| Modal | centred origin; `scale(0.96)` + opacity 0, 250 ms ease-out; backdrop opacity on the same 250 ms |
-| Drawer, sheet | `translateY(100%)` to 0, 500 ms ease-drawer; with drag it becomes a gesture (below) |
-| Toast | enters from `translateY(100%)` with opacity 0, 400 ms `ease` (the exception above) |
+| Dropdown, popover, menu | origin at the trigger; from a scale of 0.95 + opacity 0, 200 ms ease-out |
+| Tooltip | as a popover, 125 ms, from a scale of 0.97; once one is open, neighbours open with 0 ms and no delay |
+| Modal | centred origin; from a scale of 0.96 + opacity 0, 250 ms ease-out; backdrop opacity on the same 250 ms |
+| Drawer, sheet | translate from 100 percent of its height to 0, 500 ms ease-drawer; with drag it becomes a gesture (below) |
+| Toast | enters from 100 percent of its height below with opacity 0, 400 ms `ease` (the exception above) |
 | Accordion | height + opacity, 200 ms ease-out, content height measured |
-| Stagger a group | 30 to 80 ms between items, `translateY(8px)` + opacity, 300 ms ease-out; only for a view seen occasionally, never blocks input |
-| Hold to confirm | a wipe from empty to full: press 2 s linear, release 200 ms ease-out, plus the press scale |
+| Stagger a group | 30 to 80 ms between items, a rise of 8 px + opacity, 300 ms ease-out; only for a view seen occasionally, never blocks input |
+| Hold to confirm (no undo exists) | a wipe from empty to full: press 2 s linear, release 200 ms ease-out, plus the press scale |
 | Tab indicator with colour change | duplicate the tab list styled active, clip the copy to the active tab, animate the clip 250 ms ease-in-out |
-| Crossfade that shows two objects | `blur(2px)` with opacity 0.7 for 200 ms; blur under 20 px |
+| Crossfade that shows two objects | a blur of 2 px with opacity 0.7 for 200 ms; blur under 20 px |
 
 Drag to dismiss: springs, not durations. Dismiss on a flick, not only distance: velocity
-`abs(distance) / elapsedMs` above about 0.11. Capture the pointer once the drag starts, ignore extra
+`abs(distance) / elapsedMs` above 0.11. Capture the pointer once the drag starts, ignore extra
 touch points, damp the movement past an edge (friction, not a wall), and settle with a spring so an
 interrupted drag keeps its velocity.
 
 ## Never ship
 
-a transition on every property; `scale(0)` entrance; ease-in on UI; built-in `ease-out` on a
+a transition on every property; a scale-from-zero entrance; ease-in on UI; built-in `ease-out` on a
 deliberate animation; animation on a keyboard shortcut; UI over 300 ms without a reason; centre
 origin on a trigger-anchored popover; keyframes on a rapidly triggered element; animated layout
-properties; ungated hover motion; no reduced-motion variant; everything entering at once.
+properties; ungated hover motion; a keyword easing outside the two exceptions; no reduced-motion
+variant; everything entering at once.
 
 ## Say it in the reply
 

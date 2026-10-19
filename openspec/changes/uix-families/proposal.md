@@ -22,10 +22,12 @@ UI/UX knowledge in the general skills (epic qsm-d0c).
   the family skills, and they point to the family by name.
 - Decisions taken by the person, written as rules: no secret in a flag or environment variable;
   hover may open a surface but everything in it is reachable by click and keyboard; undo first,
-  a confirm naming the verb only when undo is impossible; feedback from 1 s, a progress bar with
-  a count past about 10 s when the length is known; a dark overlay gets a soft shadow plus a
-  1 px low-alpha light edge; an icon alone only where everyone reads it the same, never icon and
-  label on one button.
+  a confirm naming the verb only when undo is impossible, and in a command a reversible act (trash,
+  backup) asks nothing while the rest follows the clig.dev ladder; waits show feedback by their
+  length (none under 150 to 300 ms, always over 1 s, kept 300 to 500 ms, a progress bar with a
+  count past about 10 s when the length is known); a dark overlay gets a soft shadow plus a 1 px
+  low-alpha light edge; an icon alone only where everyone reads it the same, never icon and label
+  on one button.
 
 ## Capabilities
 
@@ -35,7 +37,8 @@ None.
 
 ### Modified Capabilities
 
-- `qsm-uix`: adds the families requirement; the motion, apple-design and stress requirements
+- `qsm-uix`: adds the families requirement; modifies the stack skills requirement (the family
+  owners, libraries and conventions per skill); the motion, apple-design and stress requirements
   point to the families instead of carrying stack syntax.
 
 ## Impact
