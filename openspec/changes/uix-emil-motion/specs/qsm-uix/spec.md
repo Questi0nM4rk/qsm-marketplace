@@ -17,7 +17,7 @@ file and licence.
 - **WHEN** the user asks to animate a popout, dropdown, or panel opening on any stack
 - **THEN** animate SHALL pick an ease-out curve, a duration under 300 ms, transform and opacity
   only, a start from a scale near 0.95 and never from 0, and SHALL write the curve in that stack's
-  form (`Easing.BezierSpline` in QML, `bezier =` in Hyprland, `cubic-bezier()` in CSS)
+  form (`Easing.BezierSpline` in QML, `hl.curve` in Hyprland's Lua config, `cubic-bezier()` in CSS)
 
 #### Scenario: A keyboard action is animated
 
@@ -67,7 +67,7 @@ separate Hypotheses list, and a Not examined list.
 
 The plugin SHALL trigger the ux-audit skill when asked to evaluate how a UI behaves or feels:
 discoverability, affordance and feedback, target ergonomics, mode and state visibility,
-interruption cost, gesture-vocabulary consistency, motion, reversibility, error recovery, or forms.
+interruption cost, gesture-vocabulary consistency, reversibility, error recovery, or forms.
 The skill SHALL require an enumerated state-space map and traced interactions as evidence, and
 SHALL NOT judge behaviour from a single resting screenshot. It SHALL hand every motion
 judgement to review-animations and SHALL NOT judge timing, curve, or interruption itself. It SHALL

@@ -7,7 +7,8 @@
 
 ## 2. Stack skills
 
-- [x] 2.1 css-ui and react-ui: Vercel guideline rules, libraries (owns their SKILL.md; proof: as 1.1)
+- [x] 2.1 css-ui and react-ui: Vercel guideline rules, libraries (owns their SKILL.md; proof: as
+      1.1)
 - [x] 2.2 qml-ui: Qt conventions, qt-qml-review rules, Hyprland animation syntax, KDE/GNOME desktop
       rules paraphrased, Quickshell libraries (owns `skills/qml-ui/SKILL.md`; proof: as 1.1)
 - [x] 2.3 tui-ui: pageton rules per framework, clig.dev paraphrased, libraries (owns
@@ -15,6 +16,6 @@
 
 ## 3. Proof and wiring
 
-- [x] 3.1 fire cases for the two new skills, a negative case for pick-ui-library on a QML task,
+- [ ] 3.1 fire cases for the two new skills, a negative case for pick-ui-library on a QML task,
       README list with credits (owns their eval directories and README lines; proof:
       `bun run validate`; blocked by 1.x)

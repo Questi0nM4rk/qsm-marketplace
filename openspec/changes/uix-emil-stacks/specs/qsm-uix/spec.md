@@ -24,8 +24,10 @@ section), react-ui (React components), and tui-ui (terminal output). Each SHALL 
 source's tokens on its stack, SHALL say how to expose geometry and state so the audits can measure
 it (an item-tree dump for QML, the DOM and its accessibility tree for web, none for a terminal), and
 SHALL point to the core skills for the reasons instead of restating them. react-ui SHALL cover only
-what React leaves to the author (focus, announcements, forms, loading) and point to css-ui for the
-CSS half. Each SHALL name the maintained libraries for its stack and SHALL carry its stack's
+what React leaves to the author (focus, announcements, forms, loading, URL state, hydration) and
+point to css-ui for the
+CSS half. Each SHALL name the maintained libraries for its stack (css-ui and react-ui by pointing to
+pick-ui-library, the one owner of the web list) and SHALL carry its stack's
 conventions, paraphrased from named sources: the Vercel web interface guidelines for css-ui and
 react-ui; Qt's QML coding conventions, the qt-qml-review rules, the Hyprland animation syntax, and
 KDE and GNOME desktop rules for qml-ui; the tui-design rules and clig.dev for tui-ui. Text under a
