@@ -7,8 +7,7 @@ description: "Use when writing or changing Quickshell/QML UI on Hyprland: a bar,
 
 Quickshell is niche and moves fast, so an unaided model writes plausible QML that hard-codes a
 colour, guesses an exclusive zone, or cannot be measured afterwards. This skill serves the person
-who builds a shell and must answer for how it looks and whether everyone can use it: build on the
-shell's existing tokens, make the layer-shell windows reserve the right space, and leave a way to
+who builds a shell: build on its existing tokens, reserve the right space, and leave a way to
 read the real geometry back. Why the tokens are what they are: ui-design. Why a control needs a
 name, keyboard path, or reduced motion: a11y-audit. Motion rules: animate and review-animations.
 This skill does not choose values, audit, or restyle what was not asked.
@@ -68,12 +67,65 @@ This skill does not choose values, audit, or restyle what was not asked.
   second.
 - **Scale is per output.** Item coordinates are logical pixels and a screenshot is physical:
   divide pixel positions by the output's `scale` (`hyprctl monitors -j`) before comparing them
-  with the tree. At a fractional scale such as 1.2, integer logical geometry still lands on
-  fractional pixels, so judge a smear with the tree, not the picture.
+  with the tree, and judge a smear at a fractional scale by the tree, not the picture.
 - **Expose what an assistive tool needs.** Interactive custom items get `Accessible.role`,
   `Accessible.name`, and a keyboard path (`activeFocusOnTab`, `Keys.onReturnPressed`,
-  visible focus), because a bare `MouseArea` is invisible to the keyboard and to the platform
-  tree. The criteria are a11y-audit's.
+  visible focus), because a bare `MouseArea` is invisible to the keyboard and the platform tree.
+
+## Libraries
+
+Use what Quickshell and Qt ship before a shell-out or a hand-rolled item; check the installed
+version's docs for the exact type.
+
+- `Quickshell.Services.*` for system state: Pipewire (volume, devices), Mpris (players), UPower
+  (battery), SystemTray, Notifications. Not `pactl`, `playerctl` or `upower` in a `Process`.
+- `Quickshell.Hyprland` for workspaces, the focused client, and `GlobalShortcut`; `hyprctl` only for
+  what it does not expose.
+- `Quickshell.Io` for `Process`, `FileView`, sockets and `IpcHandler`; `Quickshell.Wayland` for
+  layer-shell options and toplevels; `Quickshell.Widgets` for `IconImage`, `ClippingRectangle`,
+  `WrapperItem`.
+- Qt Quick Controls and Layouts for controls and sizing, `MultiEffect` (Qt 6.5+) for blur and
+  shadow, never `QtGraphicalEffects`; pointer handlers (`TapHandler`, `HoverHandler`,
+  `DragHandler`) over `MouseArea` when touch or multi-device input matters.
+
+## Conventions
+
+Qt's QML coding conventions and the qt-qml-review rules, in our words:
+
+- **Declaration order in an object:** `id` first (`id: root` on a component's top item), then
+  properties, signals, functions, then child objects. Group related properties (`anchors { }`,
+  `font { }`); spell out a handler's parameters, so a thing is found by position.
+- **Delegates:** `required property` for model data, `pragma ComponentBehavior: Bound` when a
+  delegate reads outer ids, and no nested Repeaters or several Loaders in one.
+- **Bindings:** declarative, not `property var` plus imperative assignment; `readonly property` to
+  cache an expensive expression; `let` or `const` and `===` in JS; never anchor to an invisible
+  item or across unrelated branches, and never size by `implicitWidth` bindings that feed back.
+- **Data flows one way:** functions call down, signals go up. A reusable component sets
+  `implicitWidth` and `implicitHeight`, not `width` and `height`, so the consumer can resize it.
+- **Lifetime:** guard on `Loader.status`, never switch a Loader between `source` and
+  `sourceComponent`, destroy what `createObject()` made, null-check `parent` in a delegate.
+- **Cost:** `Image` gets `sourceSize` and `asynchronous: true`; `Text.PlainText` unless rich text is
+  needed; avoid a transparent `Rectangle`, `clip` and `layer.enabled` unless measured.
+
+Hyprland animates layer-shell surfaces itself, from the `layersIn` and `layersOut` leaves (styles
+`slide`, `popin`, `fade`; `speed` in deciseconds; a named bezier or spring curve). Animate a surface
+in the compositor or in a `Behavior`, never both, or the two play over each other. `loop` on an
+`*angle` leaf keeps the GPU rendering at the refresh rate always, so avoid it. The wiki's config
+form is Lua (`hl.animation({ leaf, enabled, speed, curve, style })`); check the config in use before
+writing either form. Which motion is animate and review-animations.
+
+Desktop rules from the KDE and GNOME human interface guidelines, paraphrased:
+
+- One primary action per surface; a destructive one is set apart and undoable (a toast with Undo)
+  rather than a confirmation dialog. Reserve a dialog for a blocking decision.
+- Match feedback to its life: a toast for a finished action, a banner for a state that persists
+  (offline, degraded), a spinner for a short wait, a progress bar with a count for a long one.
+- An empty list shows an icon, a sentence and the action that fills it.
+- Popouts close on Escape and on a click outside; an OSD is transient and never takes focus.
+- Icons are monochrome, icon-only buttons carry a tooltip (the first delayed, the next instant),
+  and labels name the action, never "OK" or "Yes".
+- A hit area is at least 24 logical px even when the glyph is smaller, and the surface works at
+  200% text scale.
 
 ## Make it checkable
 
@@ -97,17 +149,16 @@ IpcHandler { target: "probe"; function tree(): string { return JSON.stringify(du
 ```
 
 `win` is a window's `id`; for a full scene use its `contentItem`. Read it with
-`qs ipc -p <shell.qml> call probe tree | jq`; use `-p` or `-c` because a bare `qs ipc` looks for
-a `default` config and fails on a named one. Positions are window-relative logical pixels, so a
-`10.5` is a fractional position, and sizes are what the layout produced, not what the code
-asked. Give the items under test an `objectName` so the audit finds them. Reserved space on
-screen: `hyprctl monitors -j | jq '.[] | {name, scale, reserved}'` (`reserved` is left, top,
-right, bottom). Hand the tree and the reserved numbers to ui-audit as live geometry; to measure
-this UI, it is the introspection surface.
+`qs ipc -p <shell.qml> call probe tree | jq`; use `-p` or `-c` because a bare `qs ipc` looks for a
+`default` config and fails on a named one. Positions are window-relative logical pixels (a `10.5` is
+a fractional position) and sizes are what the layout produced. Give the items under test an
+`objectName` so the audit finds them. Reserved space on screen:
+`hyprctl monitors -j | jq '.[] | {name, scale, reserved}'` (`reserved` is left, top, right, bottom).
+Hand the tree and the reserved numbers to ui-audit as live geometry.
 
 ## Gates, in this order
 
-1. `qmlformat -i <file>` (it sorts imports; `-n` keeps the order if the project's files do not).
+1. `qmlformat -i <file>`.
 2. `qmllint <file>`, clean. Without import paths it may report Quickshell and `qs.*` types as not
    found (`-I <dir>` points it at qmltypes); read any other warning as real. Fix warnings, do not
    silence them.
@@ -144,3 +195,7 @@ this UI, it is the introspection surface.
   run.
 - For a reserved-space change: the `reserved` numbers before and after, or that they were not
   read.
+
+Sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions,
+hyprwm/hyprland-wiki (BSD-3-Clause), KDE HIG and GNOME HIG (CC-BY-SA-4.0, paraphrased),
+emilkowalski/skills (MIT).
