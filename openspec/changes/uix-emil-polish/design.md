@@ -15,5 +15,6 @@ emil-design-eng is 27.1 KB, about half motion (to uix-emil-motion) and half poli
 3. **apple-design is cut to 12 KB.** Foundations (feedback, spatial consistency, materials and
    depth, typography: optical size, tracking, leading) stay; spring and gesture values point to
    animate.
-4. **Per-stack lines** as in uix-emil-motion: QML, Hyprland (blur, rounding, shadow config),
-   CSS/React, TUI.
+4. **Stack forms in the families**, as in uix-emil-motion: desktop-ui holds Hyprland blur,
+   rounding and shadow and the QML materials, css-ui the web materials, tui-ui the terminal depth.
+   apple-design and ui-design end with a pointer to them.

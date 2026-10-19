@@ -17,16 +17,13 @@ Sizes of the source files, against the 12 KB cap of Iron Law 4:
 
 1. **His name, one file per skill.** A rule traces to his file of the same name. No extra files:
    RECIPES, STANDARDS, AUDIT and PLAN-TEMPLATE fold into their SKILL.md or are cut.
-2. **Rules once, stacks after.** Each skill states his rule stack-neutral with its value, then one
-   section "On each stack" with a line per stack only where the rule applies:
-   - QML: `Behavior on`, `NumberAnimation`, `Easing.BezierSpline` with his cubic-bezier points,
-     `SpringAnimation`; durations and curves come from the `Motion` singleton when the shell has
-     one, else the `Theme` singleton.
-   - Hyprland (Lua config):
-     `hl.curve(name, { type = "bezier", points = { { x1, y1 }, { x2, y2 } } })` and
-     `hl.animation({ leaf, enabled, speed, bezier, style })`; speed is in deciseconds.
-   - CSS/React: his original form.
-   - TUI: spinners and redraw only; most motion rules do not apply and the skill says so.
+2. **Rules once, stacks in the families.** Each skill states his rule stack-neutral with its
+   value and ends with one pointer to the families (uix-families). The stack form of each rule
+   lives only there, where the rule applies:
+   - desktop-ui and qml-ui: `Behavior`, `Easing.BezierSpline` with his points, `SpringAnimation`,
+     tokens from `Motion` else `Theme`, and Hyprland's `hl.curve` and `hl.animation`.
+   - web-motion: his original CSS and React form.
+   - tui-ui and cli-ui: spinners and redraw only; most motion rules do not apply and they say so.
 3. **Over the cap is a cut, not a split.** animation-vocabulary and animation-performance drop
    web-only depth first (Framer Motion internals, React re-render detail) to fit 12 KB, because the
    cap is a law and a second skill per source breaks decision 1. His skills are dense, so the 12 KB
@@ -40,4 +37,4 @@ Sizes of the source files, against the 12 KB cap of Iron Law 4:
 ## Risks
 
 - His values may feel different on QML's scene graph than in a browser. The person's desktop run
-  decides; a value that feels wrong is a finding against the per-stack line, not the rule.
+  decides; a value that feels wrong is a finding against the family skill's line, not the rule.

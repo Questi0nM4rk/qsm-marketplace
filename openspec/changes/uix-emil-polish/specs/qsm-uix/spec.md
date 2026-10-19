@@ -4,16 +4,16 @@
 
 The plugin SHALL provide apple-design, adapted from emilkowalski/skills (MIT) under his name:
 Apple's interface foundations (feedback, spatial consistency, materials and depth, typography by
-optical size, tracking and leading, reduced motion) translated for Quickshell QML, Hyprland,
-CSS/React and TUI where they apply. It SHALL point to animate for curves, durations and springs, and
-SHALL fit 12 KB with no extra file.
+optical size, tracking and leading, reduced motion), with no stack syntax. It SHALL point to
+animate for curves, durations and springs, to the families for how each foundation lands on a stack
+(desktop-ui, qml-ui, cli-ui, tui-ui, css-ui, react-ui), and SHALL fit 12 KB with no extra file.
 
 #### Scenario: A translucent panel is designed
 
 - **WHEN** the user asks for a translucent or blurred panel on Hyprland
-- **THEN** apple-design SHALL give the material and depth rule and SHALL say how it lands as
-  the Hyprland blur setting, with a shell surface's blur set at runtime and never as a standing
-  layer rule, and as the QML surface's colour and opacity
+- **THEN** apple-design SHALL give the material and depth rule and SHALL point to desktop-ui,
+  which holds how it lands as the Hyprland blur setting (a shell surface's blur set at runtime and
+  never as a standing layer rule) and as the QML surface's colour and opacity
 
 ## MODIFIED Requirements
 

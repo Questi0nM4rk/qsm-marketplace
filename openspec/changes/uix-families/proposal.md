@@ -15,7 +15,8 @@ UI/UX knowledge in the general skills (epic qsm-d0c).
     rules; desktop rules from the KDE and GNOME HIGs).
   - terminal: a new cli-ui (command output: streams, colour, exit codes, errors, signals, per
     clig.dev) and tui-ui narrowed to full-screen interactive apps (frameworks, keys, layout).
-  - web: css-ui, react-ui, mobile-native, pick-ui-library.
+  - web: css-ui, react-ui, mobile-native, pick-ui-library, and two new skills for the web lines
+    the general skills held: web-motion (motion) and web-harness (break-ui toggle, picker).
 - **BREAKING** The general skills (ui-design, the audits, a11y, the motion skills, break-ui,
   prototype, apple-design) keep principles and values only; their per-stack sections move into
   the family skills, and they point to the family by name.

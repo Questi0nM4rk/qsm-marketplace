@@ -18,9 +18,10 @@ work. Each SHALL fit 12 KB with no extra file and SHALL name its source and lice
 
 ### Requirement: Stack skills build on their stack and expose it to the audits
 
-The plugin SHALL provide four stack skills, each triggered by building or fixing a UI on its stack:
-qml-ui (Quickshell and QML on Hyprland), css-ui (framework-free CSS and HTML, Tailwind as a short
-section), react-ui (React components), and tui-ui (terminal output). Each SHALL implement the design
+The plugin SHALL provide stack skills, grouped into the families of uix-families, each triggered by
+building or fixing a UI on its stack: qml-ui (Quickshell and QML on Hyprland), css-ui
+(framework-free CSS and HTML, Tailwind as a short section), react-ui (React components), and tui-ui
+(terminal programs). Each SHALL implement the design
 source's tokens on its stack, SHALL say how to expose geometry and state so the audits can measure
 it (an item-tree dump for QML, the DOM and its accessibility tree for web, none for a terminal), and
 SHALL point to the core skills for the reasons instead of restating them. react-ui SHALL cover only
@@ -30,8 +31,8 @@ point to css-ui for the
 CSS half. Each SHALL name the maintained libraries for its stack (css-ui and react-ui by pointing to
 pick-ui-library, the one owner of the web list) and SHALL carry its stack's
 conventions, paraphrased from named sources: the Vercel web interface guidelines for css-ui and
-react-ui; Qt's QML coding conventions, the qt-qml-review rules, a pointer to animate's Hyprland
-section (the one owner of the Hyprland animation syntax), and KDE and GNOME desktop rules for
+react-ui; Qt's QML coding conventions, the qt-qml-review rules, a pointer to desktop-ui
+(the one owner of the Hyprland animation syntax), and KDE and GNOME desktop rules for
 qml-ui; the tui-design rules and clig.dev for tui-ui. Text under a share-alike licence SHALL be
 paraphrased, never copied. A stack skill SHALL NOT contain audit procedure; it MAY state the
 numbers a builder must hit (target size, contrast ratio, focus ring) and points to the core skills
@@ -47,7 +48,7 @@ for criteria and design-system content.
 #### Scenario: A CLI prints to a pipe
 
 - **WHEN** the user asks for coloured or progress output from a command line tool
-- **THEN** tui-ui SHALL require the non-TTY and NO_COLOR fallback, and SHALL delegate the result
+- **THEN** cli-ui SHALL require the non-TTY and NO_COLOR fallback, and SHALL delegate the result
   envelope and exit codes to the outcome system instead of redefining them
 
 #### Scenario: A TUI list needs a library

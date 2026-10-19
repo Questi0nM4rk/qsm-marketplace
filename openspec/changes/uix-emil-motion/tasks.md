@@ -3,15 +3,16 @@
 Source for every line: `skills/<name>/` in github.com/emilkowalski/skills at 2d22863, plus the
 motion half of `skills/emil-design-eng/SKILL.md`.
 
-- [x] 1.1 animate: his SKILL.md and RECIPES.md, emil-design-eng's motion rules, per-stack section
-      (owns `plugins/qsm-uix/skills/animate/SKILL.md`; proof: file under 12 KB, `bun run validate`)
-- [x] 1.2 review-animations: his SKILL.md and STANDARDS.md, per-stack section
+- [x] 1.1 animate: his SKILL.md and RECIPES.md, emil-design-eng's motion rules, pointer to the
+      families (owns `plugins/qsm-uix/skills/animate/SKILL.md`; proof: file under 12 KB,
+      `bun run validate`)
+- [x] 1.2 review-animations: his SKILL.md and STANDARDS.md, pointer to the families
       (owns `plugins/qsm-uix/skills/review-animations/SKILL.md`; proof: as 1.1)
 - [x] 1.3 improve-animations: his SKILL.md, AUDIT.md and PLAN-TEMPLATE.md folded in
       (owns `plugins/qsm-uix/skills/improve-animations/SKILL.md`; proof: as 1.1)
 - [x] 1.4 find-animation-opportunities (owns its SKILL.md; proof: as 1.1)
 - [x] 1.5 animation-vocabulary, cut to 12 KB (owns its SKILL.md; proof: as 1.1)
-- [x] 1.6 animation-performance, web-only depth cut first, QML scene-graph and Hyprland notes added
+- [x] 1.6 animation-performance, web-only depth cut first, stack notes in the families
       (owns its SKILL.md; proof: as 1.1)
 
 ## 2. Hand-off and wiring

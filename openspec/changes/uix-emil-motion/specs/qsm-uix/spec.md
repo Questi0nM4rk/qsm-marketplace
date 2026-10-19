@@ -7,17 +7,18 @@ animate (build one animation), review-animations (judge motion code, default to 
 improve-animations (survey a codebase's motion and write prioritized plans, never edits source),
 find-animation-opportunities (propose motion where it helps and reject the rest, read-only),
 animation-vocabulary (turn a vague description into the exact term), and animation-performance
-(keep motion inside the frame budget). Each SHALL state its rules once with their values, then
-SHALL say how each rule lands on Quickshell QML, Hyprland animation config, CSS/React, and TUI,
-only where the rule applies there. Each SHALL fit 12 KB with no extra file and SHALL name its source
+(keep motion inside the frame budget). Each SHALL state its rules once with their values, SHALL name
+no stack syntax, and SHALL end with a pointer to the families that write each rule on a stack:
+desktop (desktop-ui, qml-ui), terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
+Each SHALL fit 12 KB with no extra file and SHALL name its source
 file and licence.
 
 #### Scenario: An enter animation is built
 
 - **WHEN** the user asks to animate a popout, dropdown, or panel opening on any stack
 - **THEN** animate SHALL pick an ease-out curve, a duration under 300 ms, transform and opacity
-  only, a start from a scale near 0.95 and never from 0, and SHALL write the curve in that stack's
-  form (`Easing.BezierSpline` in QML, `hl.curve` in Hyprland's Lua config, `cubic-bezier()` in CSS)
+  only, a start from a scale near 0.95 and never from 0, and SHALL leave writing the curve to the
+  family skill of the stack (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
 
 #### Scenario: A keyboard action is animated
 
@@ -26,9 +27,9 @@ file and licence.
 
 #### Scenario: Motion on a terminal
 
-- **WHEN** a motion skill is asked about a TUI
-- **THEN** it SHALL give only the rules that apply to a redraw-based surface (spinner cadence,
-  no animation on a pipe) and SHALL say the rest do not apply
+- **WHEN** motion is asked about a TUI or a command's output
+- **THEN** tui-ui and cli-ui SHALL give only the rules that apply to a redraw-based surface
+  (spinner cadence, no animation on a pipe) and SHALL say the rest do not apply
 
 ## MODIFIED Requirements
 

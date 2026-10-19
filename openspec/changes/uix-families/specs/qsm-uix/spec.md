@@ -2,14 +2,15 @@
 
 ### Requirement: Each UI family owns its stack and the general skills stay general
 
-The plugin SHALL group its stack skills into three families: desktop (desktop-ui for shell
-surfaces, Hyprland config and desktop rules; qml-ui for QML code), terminal (cli-ui for commands
-that print and exit; tui-ui for full-screen interactive programs), and web (css-ui, react-ui,
-mobile-native, pick-ui-library). A family skill SHALL hold its stack's syntax, libraries and
-design rules, taken as the strictest rule its named sources give. The general skills (ui-design,
-ui-audit, ux-audit, a11y-audit, a11y-conformance, the motion skills, break-ui, prototype,
-apple-design) SHALL hold principles and values only and SHALL point to the family skills for
-stack syntax.
+The plugin SHALL group its stack skills into three families: desktop (desktop-ui for shell surfaces,
+Hyprland config and desktop rules; qml-ui for QML code and layer-shell mechanics: tokens, exclusive
+zone, per-output windows, scale, Accessible and the gates), terminal (cli-ui for commands that print
+and exit; tui-ui for full-screen interactive programs), and web (css-ui, react-ui, mobile-native,
+pick-ui-library, web-motion for motion on a page, web-harness for the break-ui toggle and the
+prototype picker). A family skill SHALL hold its stack's syntax, libraries and design rules, taken
+as the strictest rule its named sources give. The general skills (ui-design, ui-audit, ux-audit,
+a11y-audit, a11y-conformance, the motion skills, break-ui, prototype, apple-design) SHALL hold
+principles and values only and SHALL point to the family skills for stack syntax.
 
 #### Scenario: A TUI task loads no desktop or web syntax
 

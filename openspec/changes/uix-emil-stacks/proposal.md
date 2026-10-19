@@ -14,7 +14,7 @@ the web side; a web search on 2026-10-19 found rule sets for the other stacks (e
   - css-ui and react-ui: vercel-labs/web-interface-guidelines (MIT): keyboard, targets, forms,
     URL state.
   - qml-ui: Qt's QML coding conventions and TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3),
-    a pointer to animate's Hyprland section (the Hyprland wiki, BSD-3), and desktop layout,
+    a pointer to desktop-ui's Hyprland config (the Hyprland wiki, BSD-3), and desktop layout,
     navigation and feedback rules paraphrased from the KDE and GNOME HIGs (CC-BY-SA-4.0,
     paraphrase only).
   - tui-ui: pageton/tui-design-skill (MIT) for bubbletea, ink, ratatui and textual, and
