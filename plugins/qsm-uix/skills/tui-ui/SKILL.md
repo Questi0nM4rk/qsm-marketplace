@@ -10,7 +10,7 @@ terminal, a log file, a CI job, a screen reader reading the stream. Unaided, an 
 `\x1b[32m` literals, sizes columns by `string.length`, and draws a progress bar that fills every log
 with redraws. This skill is the output rules for the person who ships CLIs and answers for who can
 use them. In a qsm binary it does not define the envelope, exit codes, `--json` or `--no-input` (see
-below); it does not measure pixels (there are none), and does not pick a TUI framework.
+below); it does not measure pixels (there are none), and picks no framework beyond the one for the project's language (Libraries).
 
 Why: ui-design (tokens), a11y-audit (criteria), ux-audit (feedback timing). Here: how the stream
 is written. To measure a CLI, its output stream is the introspection surface: capture it with
@@ -97,6 +97,53 @@ replacement: `✔` can render as a box on a limited font.
   class; the text carries the next step.
 - No emoji decoration, no banners. The reader scans for the answer; every extra line is cost.
 
+## Libraries
+
+Name the maintained library for the project's language before hand-rolling a list, table, prompt or
+spinner, and read the manifest first: a framework already in it wins.
+
+| Language | Framework | Pairs with |
+| --- | --- | --- |
+| Go | Bubble Tea (Model, Update, View) | Lip Gloss for styles, Bubbles for list, table, input, spinner, Huh for forms |
+| TypeScript | Ink (React for the terminal) | `@inkjs/ui` for inputs and spinners; no alt screen or mouse built in |
+| Rust | Ratatui with Crossterm | `Table`, `List` and `Block` widgets, stateful rendering for selection |
+| Python | Textual (retained widgets, CSS) | Rich for plain styled output |
+
+A one-shot command that only prints needs none of these. Width helpers: `Bun.stringWidth`, Go
+`uniseg`, Rust `unicode-width`, Python `wcwidth`; use the one the framework already depends on.
+
+## Conventions
+
+From the tui-design rules and clig.dev, in our words:
+
+- **One loop, kept apart:** input, event, state, update, layout, render. Rendering is a pure function
+  of state and terminal size; I/O is a command or effect, never a call inside update or draw (a
+  Bubble Tea `Cmd`, a Ratatui channel plus task, never blocking in the event loop). Layout is
+  computed in draw from the real area, not in the key handler and not from a constant.
+- **Terminal contract.** Required: a TTY, UTF-8, a stated minimum grid (80x24). Truecolor, mouse,
+  hyperlinks and bracketed paste are enhancements with a fallback; feature-detect and degrade
+  truecolor, 256, 16, mono. Check `isatty` on stdout before taking the full screen; in a pipe print
+  plain output. An explicit `tui` subcommand beats a TUI that surprises scripts.
+- **Restore on every exit:** raw mode, alt screen, cursor, mouse reporting, on normal exit, error,
+  panic, Ctrl+C and SIGTERM (a `Drop` guard, a `defer`, a signal handler). A shell left in raw mode
+  is the worst failure a user meets.
+- **Resize.** Keep width and height in state, debounce recomputation to about 50 ms, show a polite
+  message below the minimum size, collapse a sidebar when narrow, cap content width on a huge
+  terminal, and truncate with `…` by grapheme, never by byte.
+- **Keys.** Everything works by keyboard, the mouse only adds. Show the keys in a status-bar hint
+  and a `?` help screen, keep Ctrl+C as quit, Ctrl+Z as suspend, treat Ctrl+S and Ctrl+Q as flow
+  control, handle a lone Esc, and take pasted text as data, not as keystrokes. The focused row is
+  always visible, the TUI's form of press feedback.
+- **Look.** Start monochrome, three or four colours with a job each (status, active, data), borders
+  only to group, spacing before lines. Design the empty, loading and error views as states with a
+  next action, not as a crash. Animation (a spinner) never carries information alone.
+- **Right-to-left text** is the terminal's job: never reverse a string by hand.
+- **Danger and secrets** (clig.dev): confirm a destructive action in a TTY or require an explicit
+  flag, never take a secret as a flag value (a file, stdin or the environment instead), and lead
+  `--help` with examples.
+- **Prove it headless:** state transitions, event to action, and a frame at a fixed size, driven
+  by scripted keys (`Down Down Enter`) with an injected clock, with no TTY, so CI runs them.
+
 ## Red flags
 
 - When you see `\x1b[` or a colour helper called with no gate, route it through the one colour
@@ -121,3 +168,5 @@ replacement: `✔` can render as a box on a limited font.
 - What a non-TTY run prints, shown from a real piped run (`bin | cat`, and with `NO_COLOR=1`).
 - The width used for a table and what happens when it is unknown or narrow.
 - Anything unverified: a terminal you did not run in, a font you assumed.
+
+Sources: pageton/tui-design-skill (MIT), tpscloud/charmedimsure charmed-bubbletea (MIT), clig.dev (CC-BY-SA-4.0, paraphrased), no-color.org.
