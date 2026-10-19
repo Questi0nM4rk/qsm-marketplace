@@ -123,6 +123,14 @@ what done means, ending in a `strict-reviewer` review.
 | `test-hooks` | `claude plugin validate` and the hooks tests of every plugin |
 | `plugin-eval` | `bun run eval <plugin>`: the skill and agent evals |
 
+## Where work lands
+
+Everything lands on `main`, and the main checkout follows it. The main checkout is the repository
+root, the tree Claude Code installs this marketplace from and every bin is compiled from. A
+`git pull --ff-only` there runs `hooks/post-merge`, which rebuilds every bin and refreshes every
+plugin, so the whole system runs the commit on `main`. A worktree is only where a change is made,
+never the installed tree.
+
 ## Before a commit
 
 Run `mise exec -- bun install` once after a clone: its `prepare` script points git at `hooks/` and
