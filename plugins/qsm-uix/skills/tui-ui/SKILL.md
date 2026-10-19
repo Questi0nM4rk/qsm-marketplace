@@ -1,6 +1,6 @@
 ---
 name: tui-ui
-description: "Use when building or fixing a full-screen terminal program that takes over the screen: panes, lists, forms, dashboards, a picker, keybindings and a key hint bar, focus, layout that follows the terminal size, resize, the alternate screen, a plain mode. Triggers: build a TUI, ratatui, bubbletea, lipgloss, ink, textual, TUI keybinding bar, TUI help screen, alt screen, terminal left in raw mode, terminal layout breaks when I resize, TUI too small, terminal redraw flicker, screen reader plain mode, udelej TUI, klavesove zkratky, rozlozeni v terminalu. A command that prints and exits (colour, streams, exit codes, errors, progress, help, Ctrl-C, pipes, secrets) is cli-ui."
+description: "Use when building or fixing a full-screen terminal program that takes over the screen: panes, lists, forms, dashboards, a picker, keybindings and a key hint bar, focus, layout that follows the terminal size, resize, the alternate screen, a plain mode. Triggers: build a TUI, ratatui, bubbletea, lipgloss, ink, textual, TUI keybinding bar, TUI help screen, TUI alt screen, terminal left in raw mode, terminal layout breaks when I resize, TUI too small, TUI redraw flicker, TUI screen reader plain mode, udelej TUI, klavesove zkratky, rozlozeni v terminalu. A command that prints and exits (colour, streams, exit codes, errors, progress, help, Ctrl-C, pipes, secrets) is cli-ui."
 ---
 
 # Full-screen terminal programs
@@ -25,9 +25,9 @@ update, layout and render; the framework gives it, so do not fight its idiom.
 - Go: Bubble Tea (Model, Update, View) with Lip Gloss for styles, Bubbles for list, table, input
   and spinner, Huh for forms.
 - Rust: Ratatui with Crossterm; `Table`, `List` and `Block`, stateful widgets for selection.
-- TypeScript: Ink (React for the terminal) with `@inkjs/ui`. Ink 7 and later has an option for the
-  alternate screen (inline by default); Ink 8 has no mouse or focus reports and reads the size from
-  `useWindowSize()`, not `stdout.columns`.
+- TypeScript: Ink (React for the terminal) with `@inkjs/ui` (its `<Spinner>`). Ink 7 and later has
+  an option for the alternate screen (inline by default); Ink 8 has no mouse or focus reports and
+  reads the size from `useWindowSize()`, not `stdout.columns`.
 - Python: Textual (retained widgets, CSS), with Rich for styled plain output.
 
 A display-width helper is already a dependency of the framework; use it, add no second one.
@@ -94,8 +94,8 @@ A display-width helper is already a dependency of the framework; use it, add no 
   because a pasted newline can run as Enter.
 - Validate a field on blur or submit, not on each keystroke.
 - A destructive action: undo first (act, show the result, offer undo in a toast); a confirm only
-  when it cannot be undone, naming the verb and the object, focus on Cancel, default No, a typed
-  name for data loss. Never a question that fits every action ("Are you sure?").
+  when it cannot be undone, with focus on Cancel. The question's wording, the default No and the
+  typed name for data loss are cli-ui's.
 
 ## Look and states
 
@@ -121,10 +121,10 @@ A display-width helper is already a dependency of the framework; use it, add no 
 ## Plain mode
 
 Every action is reachable in a linear mode, chosen by a flag or an environment variable
-(`--plain`, `ACCESSIBLE=1`), never by guessing a screen reader. In it: no alternate screen, results
-on stdout and prompts on stderr, status lines appended instead of repainted, a table flattened to
-`Header: value` lines, menu choices numbered, each line labelled by kind, and meaning never carried
-by colour or position. Why: screen readers read a TUI poorly, and this mode is the practical help.
+(`--plain`, `ACCESSIBLE=1`), never by guessing a screen reader. In it: no alternate screen, status
+lines appended instead of repainted, menu choices numbered, each line labelled by kind, and meaning
+never carried by position. Streams, the colour carrier and table folding are cli-ui's. Why:
+screen readers read a TUI poorly, and this mode is the practical help.
 
 ## Prove it headless
 

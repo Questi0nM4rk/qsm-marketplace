@@ -28,7 +28,8 @@ skill keeps the motion forms; the numbers are ui-design and animate.
 ## Rules
 
 - **Nothing is hover-only.** A surface may open on hover (stays open inside trigger, panel and the
-  path between them, closes 180 ms after leaving, never delays opening), and every action and fact
+  path between them, closes after the delay in ux-audit, the owner's ruling, never delays
+  opening), and every action and fact
   in it is also reachable by click and by keyboard. A tooltip holds a name, never text the person
   must read.
 - **Undo first.** A destructive action runs at once and offers Undo in a toast or an inline
@@ -44,14 +45,13 @@ skill keeps the motion forms; the numbers are ui-design and animate.
   source is focused. A finished action is shown on the object itself (a toast only for undo or a
   message with no object); a state that persists (offline, degraded) is a banner.
 - **Nothing appears unbidden.** No OSD or dialog for an automatic event. A tray icon is opt-in.
-- **Icons.** An icon alone only where everyone reads it the same (close, play, volume) and then
-  with a tooltip; otherwise a text label. Never icon and label on one button. Icons are monochrome.
+- **Icons** follow ui-design's icon rule, and are monochrome.
 - **Labels** are short, key word first, name the action. A toggle label says what on does, in the
   positive ("Show seconds", not "Hide seconds: off").
 - **Colour has jobs.** Red only for a destructive action or an error; orange warning; blue focus
   and selection. Colour never carries a state alone.
-- **Dark overlays.** A soft shadow always. In a dark theme the overlay also gets a 1 px low-alpha
-  light edge, never opaque, because a shadow vanishes on dark and an opaque border reads as a box.
+- **Dark overlays** follow ui-design's overlay rule: a soft shadow, and in a dark theme a
+  low-alpha light edge.
 - **Keyboard.** Every action works from the keyboard. Focus starts on the first operable control
   and is distinct from selection. Popouts close on Escape; a popover has no Close button. Super
   belongs to the compositor: a shell binding never takes it alone.
@@ -59,7 +59,6 @@ skill keeps the motion forms; the numbers are ui-design and animate.
 - **Launcher search** is live, global, tolerant of typos, ordered by relevance, and says "No
   results" in text. An empty list shows an icon, a sentence and the action that fills it (KDE
   `simple_by_default.md`).
-- **One primary action per surface.** A destructive one sits apart from it.
 
 ## Hyprland config
 
@@ -117,21 +116,21 @@ The numbers are animate's; this is how they land here.
   motion ends: `visible: open || content.opacity > 0`.
 - No state changes the hit area's bounds; a press scale is a transform and is allowed. Every
   tappable item shows a pressed state.
-- Review checks: ease-in (`Easing.InQuad`, `InCubic`) on UI; animated
-  `width` or `height`; a fixed-`from` animation where a `Behavior` belongs; a hidden window with
-  no exit; a hover that changes the hit area; reduced motion not clamped. On Hyprland: the
-  built-in `default` curve on a window or layer; speed over 3 without reason; any animation on
-  `workspaces`; `popin` below 90 percent.
+- Numbers a builder hits, animate's start-scale, 300 ms and curve rules applied here, judged by
+  review-animations: ease-in (`Easing.InQuad`, `InCubic`) on UI; animated `width` or `height`; a
+  fixed-`from` animation where a `Behavior` belongs; a hidden window with no exit; a hover that
+  changes the hit area; reduced motion not clamped. On Hyprland: the built-in `default` curve on a
+  window or layer; speed over 3 without reason; any animation on `workspaces`; `popin` below 90
+  percent.
 - Survey and gaps: a `visible:` flip with no `Behavior`; a leaf with `enabled = false` that a
   surface needs. A plan names targets as `Behavior` + `Easing.BezierSpline` + token duration.
 - Speed: animators (`OpacityAnimator`, `ScaleAnimator`, `XAnimator`, `YAnimator`,
   `RotationAnimator`) run on the render thread; a plain `NumberAnimation` runs on the GUI thread.
   Use an animator for motion that plays while the shell is busy. A `Behavior` on a property many
-  children bind to re-evaluates every frame: animate one item and position children relative to
-  it. `layer.enabled: true` caches a texture and costs GPU memory: only on an expensive item,
-  measured. A `MultiEffect` blur or shadow animating every frame is the costly case.
-  `QSG_RENDER_TIMING=1` prints frame timing, `QSG_VISUALIZE=overdraw` shows paint cost; a claim
-  made from code alone is "from code".
+  children bind to re-evaluates every frame: animate one item and position children relative to it.
+  `layer.enabled` and its cost are qml-ui's. A `MultiEffect` blur or shadow animating every frame is
+  the costly case. `QSG_RENDER_TIMING=1` prints frame timing, `QSG_VISUALIZE=overdraw` shows paint
+  cost; a claim made from code alone is "from code".
 
 ## Materials
 
@@ -143,22 +142,19 @@ The numbers are animate's; this is how they land here.
 
 ## Stress and variants
 
-A debug property every model reads through one binding, flipped from outside the shell and gated
-on an environment variable, swaps worst, empty and one datasets; a bar module fed a title wider
-than itself must elide and the bar hold. Variants load in the real bar or popout position from a
-directory the production shell does not import. The QML for both is qml-ui.
+A bar module fed a title wider than itself must elide and the bar hold; worst, empty and one
+datasets, and variants in the real bar or popout position, are exercised the way qml-ui's Stress
+section says.
 
-## Driving it for a11y-audit
+## Expose it for the audits
 
-- Focus the window with `hyprctl dispatch focuswindow <selector>`, then send keys with
-  `wtype -k Tab`, `wtype -M shift -k Tab -m shift`, `wtype -k Escape`.
+- Focus a window with `hyprctl dispatch 'hl.dsp.focus({ window = "<selector>" })'`, and send keys
+  with `wtype -k Tab`, `wtype -M shift -k Tab -m shift`, `wtype -k Escape`.
 - `qsm-uix a11y-tree <app-name> [--depth N]` prints each node as indent, role, name and the AT-SPI
   states `[focused,focusable,showing]`; the default depth of 32 covers GTK4 apps, whose trees are
   deep.
-- Colour-only states: capture the state, run `magick in.png -colorspace Gray out.png`, and look; it
-  must still differ by text, icon or shape.
 - A Qt or QML app (Quickshell included) is absent from the accessibility tree unless launched
-  with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`: relaunch with it before calling the tree unreachable.
+  with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`.
 
 ## Red flags
 
@@ -177,5 +173,6 @@ directory the production shell does not import. The QML for both is qml-ui.
   surface, route, expected state.
 
 Sources, paraphrased: KDE HIG, invent.kde.org/documentation/develop-kde-org `content/hig`
-(CC-BY-SA-4.0); GNOME HIG, gitlab.gnome.org/Teams/Websites/developer.gnome.org-hig `source`;
-hyprwm/hyprland-wiki (BSD-3-Clause); emilkowalski/skills (MIT).
+(CC-BY-SA-4.0); GNOME HIG, gitlab.gnome.org/Teams/Websites/developer.gnome.org-hig `source` (no
+licence stated; paraphrase only, credit); hyprwm/hyprland-wiki (BSD-3-Clause); emilkowalski/skills
+(MIT).

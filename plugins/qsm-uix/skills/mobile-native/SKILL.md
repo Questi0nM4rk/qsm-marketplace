@@ -1,6 +1,6 @@
 ---
 name: mobile-native
-description: "Use when a web app or PWA (browser, React, plain CSS) is built for or reviewed on a phone and something works in Chrome but feels wrong on the phone: sticky hover after a tap, gray tap flash, the 100vh bug, an input that zooms the page, laggy taps, pull-to-refresh hijacking scroll, content under the notch, long-press selecting button text, a carousel that scrolls the wrong way, a mismatched status bar. Triggers: feels like a website on my phone, make this web app feel native, bottom sheet on a web page, carousel on a web page, safe area, PWA, 100vh on mobile, tap highlight, vypada to jako web na mobilu. Web only: Quickshell, QML, Hyprland and terminal UI never load it. Motion is animate, plain CSS rules are css-ui."
+description: "Use when a web app or PWA (browser, React, plain CSS) is built for or reviewed on a phone and something works in Chrome but feels wrong on the phone: sticky hover after a tap, gray tap flash, the 100vh bug, an input that zooms the page, laggy taps, pull-to-refresh hijacking scroll, content under the notch, long-press selecting button text, a carousel that scrolls the wrong way, a mismatched status bar. Triggers: feels like a website on my phone, make this web app feel native, bottom sheet on a web page, carousel on a web page, PWA safe area, 100vh on mobile web, web tap highlight, vypada to jako web na mobilu. Web only: Quickshell, QML, Hyprland and terminal UI never load it. Motion is animate, plain CSS rules are css-ui."
 ---
 
 # Feeling Native On Mobile
@@ -61,9 +61,9 @@ from code and which need a device.
    `inputmode="numeric"` or `"decimal"`, `type="email"` or `"tel"`, `autocapitalize="none"` and
    `autocorrect="off"` on usernames and codes, `enterkeyhint="send"`, `"search"` or `"done"`.
 5. **Laggy tap.** Two causes stack: the double-tap-zoom wait (`touch-action: manipulation` makes
-   `click` fire at once) and feedback on release instead of press. Keep press feedback at 100 to
-   160ms, `ease-out`, using the codebase's animate tokens rather than a new curve:
-   `.button:active { transform: scale(0.97) }`.
+   `click` fire at once) and feedback on release instead of press. Press feedback is animate's
+   (duration, curve, press scale), written as a transform on `.button:active` with the codebase's
+   tokens.
 6. **Overscroll.** `contain` on children (a sheet's content, a chat list): it keeps the
    container's bounce and stops the page behind it. Root `overscroll-behavior: none` only when
    pull-to-refresh hijacks an app shell's scroll, never on a scrolling document where it is

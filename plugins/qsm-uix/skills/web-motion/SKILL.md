@@ -1,6 +1,6 @@
 ---
 name: web-motion
-description: "Use when motion on a web page is written, judged, surveyed or debugged in CSS, WAAPI or React: the transition or keyframes for a dropdown, modal, toast or press, a reduced-motion block, a Motion or Framer Motion component, a CSS animation that drops frames on a busy page, or a grep sweep of a web codebase for bad easing. Triggers: CSS transition for a modal, @starting-style, prefers-reduced-motion block, hover gating, WAAPI element.animate, Framer Motion x vs transform, animation janks while the page loads, will-change, transition all, ease-in on a dropdown, animace v CSS, plynuly prechod na webu. Web form only: whether and which curve is animate, judging is review-animations, QML and Hyprland are qml-ui and desktop-ui."
+description: "Use when motion on a web page is written, judged, surveyed or debugged in CSS, WAAPI or React: the transition or keyframes for a dropdown, modal, toast or press, a reduced-motion block, a Motion or Framer Motion component, a CSS animation that drops frames on a busy page, or a grep sweep of a web codebase for bad easing. Triggers: CSS transition for a modal, @starting-style, prefers-reduced-motion block, CSS hover gating, WAAPI element.animate, Framer Motion x vs transform, web animation janks while the page loads, CSS will-change, CSS transition all, CSS ease-in on a dropdown, animace v CSS, plynuly prechod na webu. Web form only: whether and which curve is animate, judging is review-animations, QML and Hyprland are qml-ui and desktop-ui."
 ---
 
 # Web Motion
@@ -15,12 +15,12 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
 
 ## Write it
 
-1. **Curves are custom properties, never the keywords,** except animate's named exceptions
-   (`ease` for colour and hover changes, and for the toast). `--ease-out: cubic-bezier(0.23, 1,
-   0.32, 1)`, `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32,
-   0.72, 0, 1)`. Durations are the design source's tokens, movement (`--dur-move-<name>`)
-   separate from opacity and colour (`--dur-fade-<name>`). Reason: the built-in `ease-out` is
-   too weak to feel deliberate, and one token is one place to fix.
+1. **Curves are custom properties, never the keywords,** except animate's named exceptions (`ease`
+   for a colour change on hover, and for the toast; a hover that moves uses ease-out). `--ease-out:
+   cubic-bezier(0.23, 1, 0.32, 1)`, `--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)`,
+   `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`. Durations are the design source's tokens,
+   movement (`--dur-move-<name>`) separate from opacity and colour (`--dur-fade-<name>`). Reason:
+   the built-in `ease-out` is too weak to feel deliberate, and one token is one place to fix.
 2. **Name the properties and keep to `transform` and `opacity`.**
    `transition: opacity var(--dur-fade-<name>) var(--ease-out), transform
    var(--dur-move-<name>) var(--ease-out)`, never `all`. Reason: `all` animates whatever someone
@@ -30,28 +30,29 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
    dropdown, menu or tooltip; a modal stays centred. An SVG transform goes on a `<g>` with
    `transform-box: fill-box; transform-origin: center`, because without the box the origin is the
    viewport corner.
-4. **Entry on mount is `@starting-style`**, from `scale(0.95)` and `opacity: 0`, never from
-   `scale(0)`. Reason: nothing real appears from nothing, and `@starting-style` needs no mounted
-   flag in script. Other forms of animate's table: a tooltip from `scale(0.97)`, a modal from
-   `scale(0.96)` with a centred origin, a drawer or toast from `translateY(100%)` (percentages
-   are of the element's own height), a stagger step `translateY(8px)` with opacity.
-5. **Press is `:active { transform: scale(0.97) }`** (0.95 to 0.98), ungated: `:active` is a
+4. **Entry on mount is `@starting-style`**, from the start scale animate gives that element and
+   `opacity: 0`, never from `scale(0)`. Reason: nothing real appears from nothing, and
+   `@starting-style` needs no mounted flag in script. A drawer or toast starts from
+   `translateY(100%)` (a percentage is of the element's own height); the stagger offset is
+   animate's.
+5. **Press is `:active { transform: scale(<animate's press scale>) }`**, ungated: `:active` is a
    real press. **Hover motion is gated** by `@media (hover: hover) and (pointer: fine)`, the CSS
    form of ui-design's fine hovering pointer. Reason: a touch screen fires hover on tap and the
    effect sticks.
 6. **Reduced motion ships with the animation.** `@media (prefers-reduced-motion: reduce)` zeroes
    the movement durations on `:root` (css-ui rule 7) and keeps the opacity and colour changes that
-   explain the change: gentler, not zero. A muted decorative loop stops under it. Autoplay motion
-   that runs over 5 s beside other content gets a pause, stop or hide control (Vercel's rule,
-   stricter than ours, so it applies).
+   explain the change: gentler, not zero. A muted decorative loop stops under it. Vercel's README
+   states the autoplay rule: motion that plays on its own for over 5 s beside other content has
+   a pause, stop or hide control.
 7. **Interruptible by default.** A transition retargets from the current value; a keyframe
    restarts from zero. Use transitions for anything the user can fire twice in a second (toast,
    toggle, menu); WAAPI (`element.animate()`) when script must control it with CSS performance;
    a keyframe only for predetermined motion that must stay smooth while the page is busy.
 8. **Motion library only where CSS cannot.** Springs, layout and exit animations, gesture-driven
    values (pick-ui-library names the library). In it write `animate={{ transform:
-   "translateX(100px)" }}`, not `x: 100`, when the page is busy: the `x`, `y` and `scale`
-   shorthands run through CSS variables and are not accelerated. Reduced motion is
+   "translateX(100px)" }}`, not `x: 100`, when the page is busy: Emil's cause is that the `x`,
+   `y` and `scale` shorthands run on the main thread through `requestAnimationFrame` and drop
+   frames under load. Reduced motion is
    `useReducedMotion()` or `MotionConfig reducedMotion="user"`.
 
 ## Keep it fast
@@ -63,15 +64,11 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
 - **No state per frame.** `setState` in rAF, pointer-move, scroll or drag re-renders every
   16.7 ms. Write `ref.current.style.transform` or a motion value.
 - **No inherited variable for a drag.** A drag distance in a CSS variable that a child's
-  `translateY()` reads recalculates every descendant each frame (a drawer lagged past about 20
-  items). Set `transform` on the element itself.
-- **Tiers by name.** Composite only: `transform`, `opacity`, and in current Chrome and Firefox
-  `filter`, `clip-path`, `background-color`. Paint: `box-shadow`, `border-radius`, `color`.
-  Layout: `width`, `height`, `padding`, `margin`, `top`, `left`, `border-width`. Swap down:
-  `scale()` for a size, `translate()` for `top`, `left` or `margin`, `filter: drop-shadow()` for
-  `box-shadow`.
-- **Blur under 20 px**; an animated `blur()` is expensive. A crossfade of two objects is `blur(2px)`
-  with opacity 0.7 (duration: animate).
+  `translateY()` reads recalculates every descendant each frame. Set `transform` on the element
+  itself.
+- **Tiers** are animation-performance's table. In CSS: `scale()` for a size and `translate()`
+  for `top`, `left` or `margin`.
+- **Blur under 20 px**; an animated `blur()` is expensive. The crossfade recipe is animate's.
 - **`will-change: transform` only after you see a 1 px shift or measure dropped frames**, on the
   animated element, never on `*` or a large container. Reason: every promoted layer costs GPU
   memory, and engines already promote what animates `transform` or `opacity`.
