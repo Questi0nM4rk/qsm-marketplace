@@ -1,6 +1,6 @@
 ---
 name: cli-ui
-description: "Use when writing or fixing a command that prints and exits: what goes to stdout and stderr, exit codes, coloured status lines, a progress bar or spinner, tables that must fit the terminal, error messages, --help, Ctrl-C, a closed pipe, a token the command needs. Triggers: NO_COLOR, ANSI colours, piped output has escape codes, progress bar fills the log, stack trace on head, exit code, --help text, Ctrl-C twice, broken pipe, secret in a flag, CLI output looks bad, barvy v terminalu, chybova hlaska, tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
+description: "Use when writing or fixing a command that prints and exits: what goes to stdout and stderr, exit codes, coloured status lines, a progress bar or spinner, tables that must fit the terminal, error messages, --help, Ctrl-C, a closed pipe, a token the command needs. Triggers: NO_COLOR, ANSI colours, piped output has escape codes, CLI progress bar fills the log, stack trace on head, CLI exit code, --help text, CLI Ctrl-C twice, broken pipe, secret in a flag, CLI output looks bad, barvy v terminalu, chybova hlaska, tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
 ---
 
 # Command-line output
@@ -18,10 +18,10 @@ are written. To check a command, run it three ways (TTY, `| cat`, `NO_COLOR=1`) 
 ## In a qsm binary, what already exists
 
 `lib/outcome.ts` (`renderText`, `renderJson`, `exitOf`) owns the result, the exit code and the
-machine-readable form; `lib/cli-base.ts` owns `--json`, `--no-input` and the `process.stdin.isTTY`
-prompt gate. Return an `Outcome`; never print a status line of your own around it. They hold no
-colour, width, progress or signal logic, so the rules below apply there too. Every rule that
-names an exit code applies only outside qsm.
+machine-readable form; `lib/cli-base.ts` owns `--json` and `--no-input`. Return an `Outcome`;
+never print a status line of your own around it. They hold no colour, width, progress or signal
+logic, so the rules below apply there too. Every rule that names an exit code applies only
+outside qsm.
 
 ## Streams and exit codes
 
@@ -37,6 +37,13 @@ names an exit code applies only outside qsm.
   flag that supplies the answer, because a prompt in a pipeline hangs it. With `--no-input`, never
   prompt.
 - Long output to a person on a TTY may go through a pager, never to a pipe.
+
+## Libraries
+
+The manifest decides first. In TypeScript: `commander` for arguments, `picocolors` or `chalk` for
+colour (their disable rules differ by version, so the one decision function still owns it), `ora`
+for a spinner, `cli-progress` for a bar, `@clack/prompts` for wizard prompts, `string-width`
+for width. Inside Ink, `<Spinner>` replaces `ora` (tui-ui).
 
 ## Secrets
 
@@ -63,8 +70,8 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   Why: the user's explicit choice outranks detection and the flag outranks the environment.
   Document the order in `--help` and test the variables together, because runtimes disagree
   (`FORCE_COLOR=0` means off in the chalk convention; one tool may let it beat `NO_COLOR`).
-- Read the environment in one decision function, once. `process.stdout.getColorDepth()` (1, 4, 8,
-  24) gives depth on a TTY and is absent off one; use it only for depth.
+- Read the environment in one decision function, once. In Bun, `process.stdout.getColorDepth()`
+  (1, 4, 8, 24) returns 24 on a TTY and is absent when piped (measured); use it only for depth.
 - One semantic role per job (ok, warn, error, info, muted, emphasis, path), mapped to colours in
   one file; no literal colour in a call site. Conventional meanings: green ok or added, red error
   or deleted, yellow warning or modified, cyan or blue for paths and hints, dim for secondary text,
@@ -81,19 +88,21 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 
 - `process.stdout.columns` is undefined off a TTY. Use 80 for a TTY of unknown size, no wrapping
   for a pipe, and re-read on `resize`.
-- Measure display width (`Bun.stringWidth`, Go `uniseg`, Rust `unicode-width`, Python `wcwidth`),
-  never `.length`: a wide glyph takes two cells, an escape sequence none. Pad and cut by cells.
+- Measure display width (`Bun.stringWidth` or `string-width` in TypeScript, `unicode-width` in
+  Rust), never `.length`: a wide glyph takes two cells, an escape sequence none. Pad and cut by
+  cells.
 - Truncate by kind and reserve one cell for the `…`: a path from the start or the middle, prose
   from the tail, never the column the row is found by. Wrap only prose, never a table cell.
-- Narrower than about 60 columns, a table becomes one record per block (`label: value`).
+- Narrower than 80 columns, a table folds to one record per block (`label: value`).
 - Number columns right-aligned, dates fixed-width ISO.
 
 ## Progress
 
 - Say something within 100 ms of starting work that touches the network or disk at length.
-- A spinner or bar appears only after about 100-200 ms, on stderr, on a TTY. From 1 s on there is
-  always feedback; past about 3 s the spinner shows elapsed time, and when the total is known and
-  the wait passes about 10 s it becomes a bar with `done/total`. A spinner names its subject.
+- A spinner or bar appears only after 150 to 300 ms, on stderr, on a TTY, and once shown stays
+  300 to 500 ms. Every wait over 1 s has feedback; past about 3 s the spinner shows elapsed time,
+  and a known total past about 10 s becomes a bar with `done/total`. A spinner names its subject.
+  animate's motion rules do not apply to a spinner: it is a stepped redraw.
 - Steps that succeed fold their logs away; the step that fails prints its log, because the
   person needs it exactly then.
 - Finish by overwriting the line with the result. Leave the terminal clean (cursor shown, line
@@ -112,9 +121,10 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 - Success is past tense with the object (`rolled back api to v2.3.9`); say what changed, and
   suggest the next command. Never "Successfully", never "Loading...".
 - No emoji decoration, no banners; every extra line is cost.
-- A destructive action: a mild one asks nothing, a moderate one asks for a yes or offers
-  `--dry-run`, a severe one needs the object's name typed. Default answer No; the question names
-  the verb and the object, never "Are you sure?".
+- A destructive action is made reversible when it can be (trash, backup) and then asks nothing.
+  Otherwise the ladder: moderate asks y/N or offers `--dry-run`, severe needs the object's name
+  typed; `--force` or `--yes` skips it, and with no TTY the command refuses without `--force`.
+  Default answer No; the question names the verb and the object, never "Are you sure?".
 
 ## Help
 
@@ -129,7 +139,7 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   what a second Ctrl-C does. Second Ctrl-C: skip the cleanup and exit. Register the handler once at
   the process boundary; a library that owns signals already keeps its own.
 - A reader that closes the pipe (`cmd | head`) ends the command with exit 0 or 141 and no trace:
-  catch `EPIPE` on stdout (Node and Bun: `process.stdout.on("error", ...)`), stop writing, exit.
+  catch `EPIPE` on stdout (Node: `process.stdout.on("error", ...)`), stop writing, exit.
 
 ## Red flags
 
@@ -141,7 +151,7 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   consumer gets every redraw.
 - A secret in a flag, an environment variable or an echo: change it to a file, stdin or the store.
 - A stack trace on `| head`: handle `EPIPE`.
-- Your own `--json`, exit codes or prompt gate in a qsm binary: use `lib/cli-base.ts`.
+- Your own `--json` or exit codes in a qsm binary: use `lib/cli-base.ts`.
 
 ## Say it in the reply
 
@@ -150,5 +160,5 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 - The width used for a table and what happens when it is unknown or narrow.
 - What Ctrl-C and a closed pipe do, from a run. Anything unverified: a terminal you did not run in.
 
-Sources: clig.dev (CC-BY-SA-4.0, paraphrased), gfargo/tui-design-skill (MIT),
-pageton/tui-design-skill (MIT), no-color.org, force-color.org.
+Sources: clig.dev (CC-BY-SA-4.0, paraphrased), gfargo/tui-design-skill (MIT,
+`ecosystem-typescript.md`), pageton/tui-design-skill (MIT), no-color.org, force-color.org.

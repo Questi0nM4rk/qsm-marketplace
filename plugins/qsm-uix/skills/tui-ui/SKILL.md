@@ -1,6 +1,6 @@
 ---
 name: tui-ui
-description: "Use when building or fixing a full-screen terminal program that takes over the screen: panes, lists, forms, dashboards, a picker, keybindings and a key hint bar, focus, layout that follows the terminal size, resize, the alternate screen, a plain mode. Triggers: build a TUI, ratatui, bubbletea, lipgloss, ink, textual, keybinding bar, help screen, alt screen, terminal left in raw mode, layout breaks when I resize, TUI too small, redraw flicker, screen reader plain mode, udelej TUI, klavesove zkratky, rozlozeni v terminalu. A command that prints and exits (colour, streams, exit codes, errors, progress, help, Ctrl-C, pipes, secrets) is cli-ui."
+description: "Use when building or fixing a full-screen terminal program that takes over the screen: panes, lists, forms, dashboards, a picker, keybindings and a key hint bar, focus, layout that follows the terminal size, resize, the alternate screen, a plain mode. Triggers: build a TUI, ratatui, bubbletea, lipgloss, ink, textual, TUI keybinding bar, TUI help screen, alt screen, terminal left in raw mode, terminal layout breaks when I resize, TUI too small, terminal redraw flicker, screen reader plain mode, udelej TUI, klavesove zkratky, rozlozeni v terminalu. A command that prints and exits (colour, streams, exit codes, errors, progress, help, Ctrl-C, pipes, secrets) is cli-ui."
 ---
 
 # Full-screen terminal programs
@@ -54,10 +54,10 @@ A display-width helper is already a dependency of the framework; use it, add no 
   first), and a fallback for each enhancement (truecolor to 256 to 16 to mono, mouse, hyperlinks,
   bracketed paste). Unicode is likely, not certain: keep an ASCII twin for every glyph and let the
   user force it (`--ascii`). No emoji in chrome.
-- Restore on every exit: raw mode, alternate screen, cursor, mouse reporting; on normal exit,
-  error, panic and signal (a `Drop` guard, a `defer`, a handler registered once at the process
-  boundary). When the framework owns signals, do not add a second handler beside it. A shell left
-  in raw mode is the worst failure a user meets.
+- Restore on every exit: raw mode, alternate screen, cursor (cli-ui), mouse reporting; on normal
+  exit, error, panic and signal (a `Drop` guard, a `defer`, a handler registered once at the
+  process boundary). When the framework owns signals, do not add a second handler beside it. A
+  shell left in raw mode is the worst failure a user meets.
 - Running an editor, a shell or a child is a pause, not an exit: stop input, restore the terminal,
   wait, re-enter the modes, reload what the child may have changed, force a full redraw. Never
   final-unmount an app that must resume. Ctrl-Z suspend has no meaning on Windows.
@@ -74,9 +74,8 @@ A display-width helper is already a dependency of the framework; use it, add no 
 - Keep width and height in state and recompute from them on each resize event. Coalesce events
   only if layout is expensive enough that dragging the window stutters. Cap content width on a huge
   terminal; prose measure about 72 to 100 cells.
-- Truncate with `…` by grapheme and by kind (a path from the start or the middle, prose from the
-  tail), reserve a cell for the ellipsis, never wrap a dense table cell. Centre only a splash, an
-  empty state or a dialog.
+- Truncate by grapheme and by kind as cli-ui's Width does. Centre only a splash, an empty state
+  or a dialog.
 - Right-to-left text goes in its own field; terminals disagree on bidi, so never reverse by hand.
 
 ## Keys
@@ -100,17 +99,18 @@ A display-width helper is already a dependency of the framework; use it, add no 
 
 ## Look and states
 
-- Start monochrome. Give each colour one job (status, active, data) mapped to named roles in one
-  file, never a literal in a screen; borders only to group, spacing before lines. A glyph marking
+- Start monochrome. Colour roles and the 16-colour rule are cli-ui's; here each colour has one
+  job (status, active, data); borders only to group, spacing before lines. A glyph marking
   every row marks nothing.
 - Design the empty, loading and error views as states with a next action, never as a crash.
-- Waits: feedback from 1 s; a spinner names its subject and shows elapsed time after about 3 s; a
-  progress bar with a count when the length is known and the wait passes about 10 s. Esc cancels an
-  in-flight request. Not "Loading...", not "An error occurred".
-- Motion in a terminal is a redraw, not a composite. No animation on a keyboard action. A spinner
-  or loop is stepped, never carries information alone, and stops when motion is off (the switch is
-  named in help). One frame clock for the app; an idle screen does not tick and a spinner steps
-  every second frame, because the cost is bytes written per redraw. Redraw only what changed.
+- Waits: the thresholds are cli-ui's Progress. On screen the indicator is a row in the frame,
+  never a print into it. Esc cancels an in-flight request. Not "Loading...", not "An error
+  occurred".
+- Motion in a terminal is a redraw, not a composite: animate's curves, durations and property
+  rules do not apply. No animation on a keyboard action. A spinner or loop is stepped, never
+  carries information alone, and stops when motion is off (cli-ui). One frame clock for the app;
+  an idle screen does not tick and a spinner steps every second frame, because the cost is bytes
+  written per redraw. Redraw only what changed.
 - Depth is one step of background shade or a rule line, never transparency; hierarchy is bold, dim
   and case, never colour alone. The font is the person's.
 - Stress it: an environment variable (`APP_DATA=worst`, `empty`, `one`) swaps the data source where
