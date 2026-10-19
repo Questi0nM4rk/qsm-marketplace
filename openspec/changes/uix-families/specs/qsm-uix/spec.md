@@ -50,15 +50,16 @@ source's tokens on its stack, SHALL say how to expose geometry and state so the 
 it (an item-tree dump for QML, the DOM and its accessibility tree for web, none for a terminal), and
 SHALL point to the core skills for the reasons instead of restating them. react-ui SHALL cover only
 what React leaves to the author (focus, announcements, forms, loading, URL state, hydration,
-feedback, gestures) and point to css-ui for the CSS half. Each SHALL name the maintained libraries
-for its stack (css-ui and react-ui by pointing to pick-ui-library, the one owner of the web list)
-and SHALL carry its stack's conventions, paraphrased from named sources: the Vercel web interface
-guidelines for css-ui and react-ui; Qt's QML coding conventions and the qt-qml-review rules for
-qml-ui; the KDE and GNOME guidelines and the Hyprland wiki for desktop-ui (the one owner of the
-Hyprland animation syntax); clig.dev for cli-ui; the tui-design rules for tui-ui. Text under a
-share-alike licence SHALL be paraphrased, never copied. A stack skill SHALL NOT contain audit
-procedure; it MAY state the numbers a builder must hit (target size, contrast ratio, focus ring) and
-points to the core skills for criteria and design-system content.
+feedback, gestures, a virtualisation pointer, layout reads in render) and point to css-ui for the
+CSS half. Each SHALL name the maintained libraries for its stack (css-ui and react-ui by pointing to
+pick-ui-library, the one owner of the web list) and SHALL carry its stack's conventions, paraphrased
+from named sources: the Vercel web interface guidelines for css-ui and react-ui; Qt's QML coding
+conventions and the qt-qml-review rules for qml-ui; the KDE and GNOME guidelines and the Hyprland
+wiki for desktop-ui (the one owner of the Hyprland animation syntax); clig.dev for cli-ui; the
+tui-design rules for tui-ui. Text under a share-alike licence SHALL be paraphrased, never copied. A
+stack skill SHALL NOT contain audit procedure; it MAY state the numbers a builder must hit (target
+size, contrast ratio, focus ring) and points to the core skills for criteria and design-system
+content.
 
 #### Scenario: Building a QML panel
 

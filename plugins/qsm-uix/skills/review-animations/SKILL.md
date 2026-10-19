@@ -22,9 +22,10 @@ A violation of any is a finding.
    remove or drastically reduce. Occasional: standard. Rare or first-time: delight allowed. A
    keyboard-driven toggle (launcher, palette, workspace switch) is no animation, with no exception.
 3. **Responsive easing.** Enter and exit use ease-out or a strong custom curve; moving on screen
-   uses ease-in-out; hover and colour use ease; constant motion is linear. Ease-in on UI blocks,
-   because it delays the moment watched. Built-in keywords are too weak for a deliberate animation;
-   `ease` is allowed only for the toast and for hover colour (animate's exception list).
+   uses ease-in-out; a colour change on hover uses ease, a hover that moves uses ease-out; constant
+   motion is linear. Ease-in on UI blocks, because it delays the moment watched. Built-in keywords
+   are too weak for a deliberate animation; `ease` is allowed only for the toast and for hover
+   colour (animate's exception list).
 4. **Under 300 ms, and few.** Each element's duration is in animate's table; marketing may run
    longer. Over 300 on a UI element needs a stated reason, and the toast is one. An exit takes 60
    to 70 percent of its enter duration. More than 1 to 2 animated elements per view is a finding,
@@ -84,8 +85,8 @@ regressions, missed simplifications, performance, interruptibility and timing, o
 accessibility. Close with Block (a feel-breaking regression, an animation on a keyboard or 100+/day
 action, a scale from zero or ease-in on UI, a layout property with an easy transform fix) or Approve
 (none of those, values inside bounds, interruption and reduced motion handled). Cite `file:line`.
-When feel cannot be judged from code, say so and name the check: slow motion at 2 to 5 times the
-duration, frame by frame, a real device for gestures, fresh eyes the next day.
+When feel cannot be judged from code, say so and name the check: slow motion with the duration
+raised to 2 to 5 times, frame by frame, a real device for gestures, fresh eyes the next day.
 
 How each rule is written and read on a stack is its family: desktop (desktop-ui, qml-ui),
 terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).

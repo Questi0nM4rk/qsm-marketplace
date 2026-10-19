@@ -95,9 +95,9 @@ Use these headings, because the audits and the stack skills look for them:
   is never opaque. A low-alpha separator on a card is decorative: WCAG 1.4.11 applies to the
   boundaries of controls and inputs, so the 3:1 rule is for those.
 - **A wait shows feedback by its length.** No busy indicator under 150 to 300 ms, because a
-  flash reads as a glitch; over 1 s always feedback; once shown it stays at least 300 to 500 ms;
-  a progress bar with a count past about 10 s when the length is known (Vercel guidelines). The
-  families write the form.
+  flash reads as a glitch (Vercel guidelines README: 150 to 300 ms, and once shown 300 to 500 ms);
+  over 1 s always feedback; a progress bar with a count past about 10 s when the length is known.
+  The 1 s and 10 s limits are the owner's decision. The families write the form.
 - **Handle edge cases where nobody looks.** A hover that must survive the gap between stacked
   items, a timer that pauses when the view is hidden, a drag that continues outside its box.
   These are details nobody notices, and that is what correct looks like.
@@ -148,8 +148,8 @@ with the stack skill, then run ui-audit against this file, which is the expected
   inversion keeps light's mistakes and adds new ones.
 - When you reach for a hex literal in a component description, name a token instead, because the
   literal is invisible to the audit and to the next theme.
-- When the draft names a framework, a CSS property, or a QML type, move it to the stack skill,
-  because the source must survive a change of stack.
+- When the draft names a framework, a stack's property or component type, move it to the stack
+  skill, because the source must survive a change of stack.
 - When you are about to list palettes, font pairings, or "styles for SaaS", stop and write the
   token roles and constraints, because the person picks the look and the source holds its rules.
 - When a surface's page file contradicts the master, keep the page file and note the override

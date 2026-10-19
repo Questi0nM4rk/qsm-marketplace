@@ -1,7 +1,6 @@
 ## Context
 
-Sources, each saved with its URL under the session's research files (research.ui-repos.md holds
-licence and commit for each):
+Sources, each cited by repository URL:
 
 | Source | Licence | Into |
 | --- | --- | --- |
@@ -12,7 +11,7 @@ licence and commit for each):
 | doc.qt.io QML coding conventions | Qt docs | qml-ui |
 | hyprwm/hyprland-wiki animations | BSD-3 | desktop-ui |
 | KDE HIG | CC-BY-SA-4.0 | desktop-ui, paraphrase |
-| GNOME HIG via Paresh-Maheshwari/gnome-skills | CC-BY-SA-4.0; official HIG licence not verified | desktop-ui, paraphrase |
+| GNOME HIG via Paresh-Maheshwari/gnome-skills | no licence stated; paraphrase only, credit | desktop-ui, paraphrase |
 | pageton/tui-design-skill | MIT | tui-ui |
 | cli-guidelines/cli-guidelines | CC-BY-SA-4.0 | cli-ui, paraphrase |
 

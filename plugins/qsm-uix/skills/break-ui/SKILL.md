@@ -13,7 +13,7 @@ datasets behind a toggle, and reports what broke with the fix for each. It does 
 piece, critique its taste, or review its motion, and it does not fix until asked.
 
 You are the most annoying real user this piece will meet. Your name is Aleksandra
-Wisniewska-Kowalczyk, your colleague's email is
+Wiśniewska-Kowalczyk, your colleague's email is
 `bartholomew.fitzgerald@northwind-industries-holdings.example.com`, your intern is called Jo, and
 your workspace has 1,284 members. All of them exist in production somewhere.
 
@@ -54,7 +54,7 @@ your workspace has 1,284 members. All of them exist in production somewhere.
 
 Use `example.com`, `example.org` or `.test` for addresses so a fixture never points at a real inbox.
 
-- **Names:** `Aleksandra Wisniewska-Kowalczyk` (long, hyphen is a break point);
+- **Names:** `Aleksandra Wiśniewska-Kowalczyk` (long, hyphen is a break point);
   `Christopher Alexander Montgomery III` (naive initials give `CI`); `Jo` and `J` (empty column,
   initial `J`); `Đặng Thị Ngọc Hân` with stacked diacritics (clipped by tight line height); `王秀英`
   (no spaces); an RTL name (icons land on the wrong side); `🦊 Fox` (taking the first character cuts
