@@ -7,8 +7,10 @@ Sources, each cited by URL:
 | clig.dev (cli-guidelines) | CC-BY-SA-4.0, paraphrase only | <https://clig.dev> |
 | gfargo/tui-design-skill, jrschumacher/skill-bubbletea-tui, pageton/tui-design-skill | MIT | <https://github.com/gfargo/tui-design-skill>, <https://github.com/jrschumacher/skill-bubbletea-tui>, <https://github.com/pageton/tui-design-skill> |
 | TheQtCompanyRnD/agent-skills qt-qml-review | BSD-3-Clause | <https://github.com/TheQtCompanyRnD/agent-skills> |
+| Qt QML coding conventions | Qt documentation terms | <https://doc.qt.io/qt-6/qml-codingconventions.html> |
+| Hyprland wiki | BSD-3-Clause | <https://github.com/hyprwm/hyprland-wiki> |
 | KDE HIG | CC-BY-SA-4.0, paraphrase only | <https://develop.kde.org/hig/> |
-| GNOME HIG | no licence stated; paraphrase only, credit | <https://developer.gnome.org/hig/> |
+| GNOME HIG, primary documentation | no content licence found in its COPYING.md; link and paraphrase, do not copy | <https://developer.gnome.org/hig/> |
 | vercel-labs/web-interface-guidelines | MIT | <https://github.com/vercel-labs/web-interface-guidelines> |
 | emilkowalski/skills | MIT | <https://github.com/emilkowalski/skills> |
 
@@ -39,4 +41,11 @@ Sources, each cited by URL:
    shared ones. Libraries live in qml-ui for desktop and in cli-ui and tui-ui for terminal.
 8. **The stack skills requirement is modified here, once.** The family owners (desktop-ui for the
    HIGs and Hyprland, qml-ui, cli-ui for clig.dev, tui-ui) are named in this change's MODIFIED
-   block; uix-emil-stacks adds only the web-only skills.
+    block; uix-emil-stacks adds only the web-only skills.
+9. **Prompting has an explicit picker exception.** Ordinary CLI prompts require interactive stdin
+   and stdout outside CI. A composable picker may explicitly open `/dev/tty` for its interactive
+   input and chrome while reserving stdout for the selected value. `--no-input` disables both.
+10. **The web harness is an adaptation.** Its picker names departures from Emil's PICKER.md:
+    transform-only highlight sizing, measured rather than permanent layer promotion, gated hover,
+    the colour-easing exception, reduced transparency, and the combined harness layout. It does
+    not call modified code verbatim.

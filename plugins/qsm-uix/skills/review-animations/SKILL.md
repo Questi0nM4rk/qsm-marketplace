@@ -27,13 +27,15 @@ A violation of any is a finding.
    are too weak for a deliberate animation; `ease` is allowed only for the toast and for hover
    colour (animate's exception list).
 4. **Under 300 ms, and few.** Each element's duration is in animate's table; marketing may run
-   longer. Over 300 on a UI element needs a stated reason, and the toast is one. An exit takes 60
-   to 70 percent of its enter duration. More than 1 to 2 animated elements per view is a finding,
+   longer. Over 300 on a UI element needs a stated reason, and the toast is one. Exit is about
+   20 percent shorter than entry (about 80 percent of its duration, Emil's animate-expo/RECIPES.md).
+   More than 1 to 2 animated elements per view is a finding,
    because motion that is everywhere points nowhere.
 5. **Origin and physicality.** A popover, dropdown or tooltip scales from its trigger, not its
    centre (a modal stays centred). Never from a scale of zero: start from animate's start scale with
    opacity 0. Press feedback is a scale per animate's recipe. An exit leaves the way it entered (a
-   toast in from the bottom leaves through the bottom).
+   toast in from the bottom leaves through the bottom). Backdrop fades and reduced-motion fades
+   are allowed; they do not need an invented transform.
 6. **Interruptible.** What is triggered rapidly or by a gesture (toast, toggle, drag) retargets from
    the current value: transitions or springs, not keyframes that restart from zero. Decoration
    (a stagger) never blocks input while it plays.
@@ -57,9 +59,9 @@ animate's tables. Pull a value from there, never approximate one.
 
 ## Escalate on sight
 
-a transition on every property; a scale from zero or a pure fade with no initial transform; ease-in
-on any UI; an animation on a keyboard shortcut or 100+/day action; UI over 300 ms with no reason;
-centre origin on a trigger-anchored popover; keyframes on a toast or toggle; animated layout
+a transition on every property; a scale from zero or a pure-fade entrance with no initial transform;
+ease-in on any UI; an animation on a keyboard shortcut or 100+/day action; UI over 300 ms with no
+reason; centre origin on a trigger-anchored popover; keyframes on a toast or toggle; animated layout
 properties; a parent's variable driving a child's transform; no reduced-motion handling on movement;
 ungated hover motion; symmetric press-and-release; everything entering at once where a stagger
 belongs.

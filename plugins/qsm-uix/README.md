@@ -22,10 +22,10 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `ui-design` | Writes a stack-neutral design source: tokens, on-pairs, light and dark themes, a style with its accessibility rules; rules from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `apple-design` | Apple's interface foundations: response, materials and depth, typography, principles; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `ui-audit` | Measures static visuals: spacing, geometry, colour, contrast, type, icons, elevation, theme parity; its polish pass checks the rules of [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `ux-audit` | Traces behaviour: discoverability, feedback, targets, reversibility, error recovery, forms; motion is review-animations |
+| Skill | `ui-design` | Writes a stack-neutral design source: tokens, pairs, themes and product-defined scales; polish from [Emil](https://github.com/emilkowalski/skills) (MIT), waits and targets from [Vercel](https://github.com/vercel-labs/web-interface-guidelines) (MIT); scale references: Carbon, Modular Scale, USWDS |
+| Skill | `apple-design` | Apple's interface foundations: response, materials, typography, principles; Apple's WWDC talks Designing Fluid Interfaces, The Details of UI Typography and Principles of Great Design, as distilled by [Emil](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `ui-audit` | Measures static visuals against the product's design source; polish from [Emil](https://github.com/emilkowalski/skills) (MIT), grouping from [NN/g proximity](https://www.nngroup.com/articles/gestalt-proximity/), contrast from WCAG |
+| Skill | `ux-audit` | Traces behaviour, feedback, targets, reversibility and forms; direct-response timing from [NN/g](https://www.nngroup.com/articles/response-times-3-important-limits/), contrast from WCAG; motion verdicts belong to review-animations |
 | Skill | `a11y-audit` | Drives the UI by keyboard and the accessibility tree, and fills a per-criterion conformance table |
 | Skill | `a11y-conformance` | Gives the WCAG 2.2 A and AA criteria and the law behind them (European Accessibility Act, EN 301 549) |
 | Skill | `animate` | Builds one animation: gates whether it should animate, then the curve, duration and properties; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
@@ -41,8 +41,8 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `desktop-ui` | Shell surfaces (bar, popout, OSD, notification, tray, launcher), Hyprland config for animation, blur and layer rules, desktop motion, what to expose to the audits; sources: KDE HIG (CC-BY-SA-4.0), GNOME HIG (no licence stated; paraphrase only, credit), hyprland-wiki (BSD-3-Clause), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `qml-ui` | Quickshell and QML: tokens, exclusive zone, per-output windows, scale, Accessible, stress and variants, item-tree dump, qmllint and qmlformat; sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions |
+| Skill | `desktop-ui` | Shell surfaces, Hyprland config, desktop motion and audit exposure; sources: KDE HIG (CC-BY-SA-4.0), primary GNOME HIG (no content licence found in COPYING.md; linked and paraphrased, not copied), hyprland-wiki (BSD-3-Clause), [Emil](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `qml-ui` | Quickshell and QML: tokens, layer-shell mechanics, stress and variants, item-tree dump, qmllint and qmlformat; sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions, Quickshell API |
 
 ### Terminal
 
@@ -55,10 +55,10 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions; sources: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section; sources: [Vercel](https://github.com/vercel-labs/web-interface-guidelines) (MIT), [Emil](https://github.com/emilkowalski/skills) (MIT), [Tailwind documentation](https://tailwindcss.com/docs/theme) for its syntax |
 | Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions; sources: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT), [emilkowalski/skills](https://github.com/emilkowalski/skills) pick-ui-library (MIT) |
 | Skill | `web-motion` | Motion on a web page: curves as custom properties, compositor-only properties, reduced motion, the Motion library, performance, review and survey terms; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) and [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
-| Skill | `web-harness` | The browser side of break-ui and prototype: a Demo data or Worst case toggle, the variant picker, the CSS fixes for the breaks; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `web-harness` | The browser side of break-ui and prototype: data toggle, adapted variant picker and CSS fixes; sources: [Emil](https://github.com/emilkowalski/skills) (MIT), [Vercel](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
 | Skill | `mobile-native` | Makes a web app feel native on a phone: hover, tap highlight, viewport height, input zoom, safe areas, scroll; web only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `pick-ui-library` | Picks a maintained library for a React or web task instead of a hand-rolled one, only when invoked; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 

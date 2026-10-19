@@ -1,12 +1,12 @@
 ---
 name: qml-ui
-description: "Use when writing or changing QML in a Quickshell shell: a new component, bindings, delegates, layouts, Loader, the Theme singleton, exclusive zone and layer-shell windows, and when a QML surface must be made checkable by the audits. Triggers: new QML component, add a popout to my Quickshell bar, my panel overlaps maximized windows, Quickshell exclusive zone, QML Theme singleton, qmllint, qmlformat, QML delegate, QML Loader, dump the QML item tree, udelej komponentu v quickshellu, panel prekryva okna. QML code only: what a bar, popout or OSD is and does, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
+description: "Use when writing or changing QML in a Quickshell shell: components, bindings, delegates, layouts, Loader, Theme, exclusive zones and layer-shell windows, or exposing QML geometry to the audits. Triggers: new QML component, add a popout to my Quickshell bar, Quickshell panel overlaps maximized windows, Quickshell exclusive zone, QML Theme singleton, qmllint, qmlformat, QML delegate, QML Loader, dump the QML item tree, udelej komponentu v quickshellu, Quickshell panel prekryva okna. QML code only: shell surface behaviour, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
 ---
 
 # QML UI
 
-Quickshell is niche and moves fast, so an unaided model hard-codes a colour, guesses an exclusive
-zone, or leaves nothing to measure. This skill builds on the shell's tokens, reserves the right
+Quickshell moves fast: an unaided model guesses a colour or exclusive zone and leaves nothing to
+measure. This skill builds on the shell's tokens, reserves the right
 space, and leaves a way to read geometry back. It is how QML is written; what a bar, popout
 or OSD is and does, the desktop rules and the Hyprland config are desktop-ui. Values: ui-design.
 Names, keyboard, reduced motion: a11y-audit.
@@ -64,7 +64,8 @@ Names, keyboard, reduced motion: a11y-audit.
 ## Libraries
 
 - `Quickshell.Services.*` for system state: Pipewire (volume, devices), Mpris (players), UPower
-  (battery), SystemTray, Notifications. Not `pactl`, `playerctl` or `upower` in a `Process`.
+  (battery), SystemTray, Notifications. Check the [Quickshell API](https://quickshell.org/docs/)
+  for the installed version before choosing a service.
 - `Quickshell.Hyprland` for workspaces, the focused client, `GlobalShortcut` (`hyprctl` only for
   the rest); `Quickshell.Io` for `Process`, `FileView`, sockets, `IpcHandler`; `Quickshell.Wayland`
   for layer-shell options and toplevels.

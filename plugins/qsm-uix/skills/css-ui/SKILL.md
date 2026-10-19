@@ -44,7 +44,9 @@ design source is the expected column), measuring the result (ui-audit), criteria
 7. **Motion comes from tokens, and gentles on request.** Easing and duration are custom
    properties, and movement has its own duration token (`--dur-move-*`), separate from the
    opacity and colour ones (`--dur-fade-*`). `@media (prefers-reduced-motion: reduce)` sets the
-   movement durations on `:root` to `0.01ms`, so one switch covers every component. Reason: a
+   movement-duration tokens on `:root` to `0ms`, replacing movement with the settled state while
+   keeping useful opacity and colour feedback (animate). Settle state directly rather than waiting
+   for a transition-end event at zero duration. Reason: a
    per-component override is forgotten in the next component. Curves, `@starting-style`, hover
    gating and the rest are web-motion's.
 8. **Layout does not shift.** `aspect-ratio` or `width`/`height` on images and embeds, a
@@ -87,8 +89,8 @@ input zoom) are mobile-native; motion is animate and review-animations.
 
 From the Vercel web interface guidelines, in our words:
 
-- Modals and drawers get `overscroll-behavior: contain`, so the page behind does not scroll. A
-  dark theme sets `color-scheme: dark` on `html`, a native `select` gets explicit `background-color`
+- Modal and drawer scroll containment follows mobile-native's Overscroll rule. A dark theme
+  sets `color-scheme: dark` on `html`, a native `select` gets explicit `background-color`
   and `color`, and `theme-color` matches the page background.
 - Increase contrast on `:hover`, `:active` and `:focus`, never lower it. Make focus rings clear
   sticky bars (rule 10), and keep a visible replacement for any removed outline.
@@ -168,3 +170,6 @@ design source you could not apply because it was absent, and which you assumed. 
 contrast ratio you did not compute.
 
 Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT).
+Tailwind syntax: [theme variables](https://tailwindcss.com/docs/theme) and
+[class detection](https://tailwindcss.com/docs/detecting-classes-in-source-files).
+The token-only policy is ui-design's, not a Tailwind restriction.

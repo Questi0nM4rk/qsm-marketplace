@@ -48,7 +48,8 @@ Translucency is a floating layer that brings structure without stealing focus.
   and put colour on a solid layer, not on the translucent one.
 - Where floating chrome overlaps content, fade a small gradient or blur mask instead of a 1 px
   divider; keep the divider where nothing overlaps.
-- A low-alpha light top edge reads as light catching the material (its value is ui-design's).
+- A low-alpha light top edge reads as light catching the material; its alpha comes from the
+  project's material token and is checked on the composed surface, not supplied by ui-design.
 - Accessibility is three settings, each its own: reduced transparency makes the surface frostier
   or solid (raise opacity, drop the blur), more contrast gives near-solid fills with a defined
   border, reduced motion is `animate`'s. Design the solid variant first, then add the material.

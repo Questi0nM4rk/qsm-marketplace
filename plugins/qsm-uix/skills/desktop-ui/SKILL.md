@@ -1,6 +1,6 @@
 ---
 name: desktop-ui
-description: "Use when building, reviewing or deciding the behaviour of a Quickshell/Hyprland desktop shell surface (bar, popout, OSD, notification, tray, launcher, settings pane) or the Hyprland Lua config for its animation, blur and layer rules. Triggers: Quickshell popout, Hyprland layer rule, hl.layer_rule no_anim, Quickshell OSD, shell notification, shell system tray, Quickshell app launcher, Quickshell hover popout, Hyprland blur behind my panel, layersIn, animate a popout in my shell, undo or confirm in a shell panel, Hyprland animation curve, oznameni v shellu, animace panelu. Shell surface behaviour and Hyprland only: QML code is qml-ui, tokens are ui-design, motion values are animate, audits are ui-audit, ux-audit and a11y-audit."
+description: "Use when building, reviewing or deciding the behaviour of a Quickshell/Hyprland desktop shell surface (bar, popout, OSD, notification, tray, launcher, settings pane) or the Hyprland Lua config for its animation, blur and layer rules. Triggers: Quickshell popout, Hyprland layer rule, hl.layer_rule no_anim, Quickshell OSD, shell notification, shell system tray, Quickshell app launcher, Quickshell hover popout, Hyprland blur behind my panel, layersIn, animate a popout in my shell, undo or confirm in a shell panel, Hyprland animation curve, oznameni v shellu, animace panelu v Hyprlandu. Shell surface behaviour and Hyprland only: QML code is qml-ui, tokens are ui-design, motion values are animate, audits are ui-audit, ux-audit and a11y-audit."
 ---
 
 # Desktop UI
@@ -32,13 +32,12 @@ skill keeps the motion forms; the numbers are ui-design and animate.
   opening), and every action and fact
   in it is also reachable by click and by keyboard. A tooltip holds a name, never text the person
   must read.
-- **Undo first.** A destructive action runs at once and offers Undo in a toast or an inline
-  message. A confirm dialog is only for what cannot be undone, and its button names the verb
-  ("Delete 3 files"), never "OK" or "Yes". Cancel comes first, Escape cancels, Return activates
+- **Destructive actions follow ux-audit's reversibility rule.** In a shell, Undo is a toast or
+  inline action. A remaining confirm names the verb ("Delete 3 files"), never "OK" or "Yes".
+  Cancel comes first, Escape cancels, Return activates
   unless the action is destructive.
-- **Waits.** No busy state for a wait under 150 to 300 ms. Every wait over 1 s shows a spinner or
-  busy state, which once shown stays 300 to 500 ms. A known length past about 10 s gets a
-  progress bar with a count.
+- **Waits follow ui-design's values.** The shell form is a spinner or busy state and, for known
+  progress, a bar with a count.
 - **Errors say what happened and what to do next.** Nothing fails silently. Invalid input disables
   the confirm button and says why beside the field.
 - **Notify sparingly.** Only for what is needed while away; rate-limit; offer off; none while the
@@ -169,8 +168,8 @@ section says.
 
 - The surface kind and which of the rules above shaped it.
 - For Hyprland: the lines changed and which owner animates each surface.
-- What was run and what was not: "Not verified on the composed surface" with each owner check as
-  surface, route, expected state.
+- What was run, and the owner checks not run, as surface, route, expected state. qml-ui owns the
+  composed-surface verification rule.
 
 Sources, paraphrased: KDE HIG, invent.kde.org/documentation/develop-kde-org `content/hig`
 (CC-BY-SA-4.0); GNOME HIG, gitlab.gnome.org/Teams/Websites/developer.gnome.org-hig `source` (no

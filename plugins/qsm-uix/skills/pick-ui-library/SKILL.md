@@ -1,6 +1,6 @@
 ---
 name: pick-ui-library
-description: "Use only when invoked by name, for a React or web frontend task that needs a library instead of hand-rolled code: toasts, command menu, OTP input, accessible dialogs and menus, charts, drag and drop, virtualized lists, animated numbers, state, conditional classNames, dark mode switching. Triggers: /pick-ui-library, which library for toasts in React, what should I use for drag and drop on the web, jakou knihovnu pouzit. React and web only: Quickshell, QML, Hyprland and terminal UI never use it. Motion method is animate, CSS is css-ui, React behaviour is react-ui."
+description: "Use only when explicitly invoked as /pick-ui-library or by name, never through automatic task matching. Recommends one maintained library for a React or web frontend task: primitives, toasts, charts, drag and drop, virtualized lists, animation, state or styling helpers. React and web only, not Quickshell, QML, Hyprland or terminal UI. Motion method is animate, CSS is css-ui, React behaviour is react-ui."
 disable-model-invocation: true
 ---
 

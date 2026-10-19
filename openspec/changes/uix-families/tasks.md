@@ -21,4 +21,11 @@
 - [x] 2.2 Revise the uix-emil-motion, uix-emil-polish, uix-emil-stress and uix-emil-stacks deltas so
   their "how it lands on each stack" clauses point to the families and the stack skills requirement
   is modified only here; README lists the families (owns those spec files and
-  `plugins/qsm-uix/README.md`; proof: `openspec validate --strict`)
+   `plugins/qsm-uix/README.md`; proof: `openspec validate --strict`)
+
+## 3. Bounded handoff corrections
+
+- [x] 3.1 Research inherited numeric rules and verify round-5 findings against the current skills
+  and named sources. Correct confirmed defects, keep refuted findings unchanged, and reconcile
+  source credits and delta specs. Proof: targeted source checks, prompt-size and description gates,
+  markdownlint and strict OpenSpec validation. No eval runs or further whole-branch review loop.

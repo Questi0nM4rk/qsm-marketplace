@@ -24,12 +24,14 @@ None.
 
 ### Modified Capabilities
 
-- `qsm-uix`: adds the motion skills requirement; the UX audit requirement hands motion to it.
+- `qsm-uix`: adds the motion skills requirement; the UX audit requirement hands motion to it;
+  the UI audit requirement leaves motion to review-animations and checks product-defined scales.
 
 ## Impact
 
 - `plugins/qsm-uix/skills/<six names>/SKILL.md`: new.
 - `plugins/qsm-uix/skills/ux-audit/SKILL.md`: motion check shrinks to a hand-off.
+- `plugins/qsm-uix/skills/ui-audit/SKILL.md`: static visuals remain its scope.
 - `plugins/qsm-uix/evals/`: one fire case per new skill.
 - `plugins/qsm-uix/README.md`: the skill list.
 

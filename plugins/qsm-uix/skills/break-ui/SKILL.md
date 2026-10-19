@@ -92,7 +92,8 @@ not part of the piece, off in daily use, leaving the component untouched. Its fo
 A break is named by its cause and fixed by the property that causes it: the shrinking child, the
 missing break opportunity, the proportional figures, the raw number, the hardcoded plural, the
 missing error fallback, the wrong escaping layer. The table of causes and fixes is the family's
-(web-harness for a page; desktop-ui and tui-ui for the stress hook and the width breaks).
+(web-harness for a page; qml-ui for the shell's stress hook and width breaks, with desktop-ui
+defining the surface expectation; cli-ui and tui-ui for the terminal).
 
 **Truncate, wrap, or clamp,** per field, never globally. Wrap what the user needs whole to
 identify something (names, titles; two lines fine, four means the column is too narrow). Truncate

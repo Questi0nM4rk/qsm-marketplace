@@ -1,6 +1,6 @@
 ---
 name: tui-ui
-description: "Use when building or fixing a full-screen terminal program that takes over the screen: panes, lists, forms, dashboards, a picker, keybindings and a key hint bar, focus, layout that follows the terminal size, resize, the alternate screen, a plain mode. Triggers: build a TUI, ratatui, bubbletea, lipgloss, ink, textual, TUI keybinding bar, TUI help screen, TUI alt screen, terminal left in raw mode, terminal layout breaks when I resize, TUI too small, TUI redraw flicker, TUI screen reader plain mode, udelej TUI, klavesove zkratky, rozlozeni v terminalu. A command that prints and exits (colour, streams, exit codes, errors, progress, help, Ctrl-C, pipes, secrets) is cli-ui."
+description: "Use when building or fixing a full-screen terminal program: panes, lists, forms, dashboards, a picker, keybindings, focus, resize, the alternate screen and plain mode. Triggers: build a TUI, ratatui TUI, Bubble Tea TUI, Lip Gloss TUI, Ink TUI, Textual TUI, TUI keybinding bar, TUI help screen, TUI alt screen, terminal left in raw mode, terminal layout breaks when I resize, TUI too small, TUI redraw flicker, TUI screen reader plain mode, udelej TUI, klavesove zkratky v TUI, rozlozeni v terminalu. A command that prints and exits (streams, colour, exit codes, errors, progress, help, signals, pipes, secrets) is cli-ui."
 ---
 
 # Full-screen terminal programs
@@ -74,7 +74,7 @@ A display-width helper is already a dependency of the framework; use it, add no 
 - Keep width and height in state and recompute from them on each resize event. Coalesce events
   only if layout is expensive enough that dragging the window stutters. Cap content width on a huge
   terminal; prose measure about 72 to 100 cells.
-- Truncate by grapheme and by kind as cli-ui's Width does. Centre only a splash, an empty state
+- Truncate with cli-ui's Width rule. Centre only a splash, an empty state
   or a dialog.
 - Right-to-left text goes in its own field; terminals disagree on bidi, so never reverse by hand.
 
@@ -93,9 +93,8 @@ A display-width helper is already a dependency of the framework; use it, add no 
   single-line field keeps the first line of a multi-line paste or refuses it, never submits it,
   because a pasted newline can run as Enter.
 - Validate a field on blur or submit, not on each keystroke.
-- A destructive action: undo first (act, show the result, offer undo in a toast); a confirm only
-  when it cannot be undone, with focus on Cancel. The question's wording, the default No and the
-  typed name for data loss are cli-ui's.
+- Apply ux-audit's reversibility rule on screen; focus an irreversible action's confirm on Cancel.
+  The question's wording, the default No and the typed name for data loss are cli-ui's.
 
 ## Look and states
 
@@ -104,8 +103,8 @@ A display-width helper is already a dependency of the framework; use it, add no 
   every row marks nothing.
 - Design the empty, loading and error views as states with a next action, never as a crash.
 - Waits: the thresholds are cli-ui's Progress. On screen the indicator is a row in the frame,
-  never a print into it. Esc cancels an in-flight request. Not "Loading...", not "An error
-  occurred".
+  never a print into it. Esc cancels an in-flight request. Loading text names the work, and an
+  error names the cause and remedy (cli-ui's Messages).
 - Motion in a terminal is a redraw, not a composite: animate's curves, durations and property
   rules do not apply. No animation on a keyboard action. A spinner or loop is stepped, never
   carries information alone, and stops when motion is off (cli-ui). One frame clock for the app;
@@ -115,8 +114,8 @@ A display-width helper is already a dependency of the framework; use it, add no 
   and case, never colour alone. The font is the person's.
 - Stress it: an environment variable (`APP_DATA=worst`, `empty`, `one`) swaps the data source where
   rows load, and `APP_VARIANT=2` picks a design variant there; one binary prints each, nothing is
-  edited. Check at 40 columns and below the minimum. The breaks: sizing by `.length` misaligns on
-  wide glyphs, so truncate by display width; a table that no longer fits folds to record blocks.
+  edited. Check the narrow 60-to-80-column band and below the application's minimum
+  (gfargo `visual-patterns.md`). Width and table folding follow cli-ui.
 
 ## Plain mode
 
@@ -140,7 +139,8 @@ TTY, so CI runs it. Snapshot per size, not once.
 - No restore on panic or signal: add the guard, because the shell stays raw.
 - A footer that lists keys by hand: derive it from the key table.
 - A mouse-only action, or an action missing from plain mode: add the keyboard path.
-- Width by `.length`, rows of W+1 cells, a spinner on an idle screen: fix each, they tear the frame.
+- Rows of W+1 cells or a spinner on an idle screen: fix each, they tear the frame.
+  Text-width defects follow cli-ui's Width rule.
 - A confirm on every delete: offer undo and confirm only the irreversible.
 
 ## Say it in the reply

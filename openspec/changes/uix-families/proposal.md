@@ -43,10 +43,13 @@ None.
 
 ## Impact
 
-- New: `plugins/qsm-uix/skills/desktop-ui/SKILL.md`, `plugins/qsm-uix/skills/cli-ui/SKILL.md`.
-- Changed: qml-ui, tui-ui, css-ui, react-ui, and every general skill with an "On each stack"
+- New: `plugins/qsm-uix/skills/desktop-ui/SKILL.md`, `plugins/qsm-uix/skills/cli-ui/SKILL.md`,
+  `plugins/qsm-uix/skills/web-motion/SKILL.md`, `plugins/qsm-uix/skills/web-harness/SKILL.md`.
+- Changed: qml-ui, tui-ui, css-ui, react-ui, mobile-native, pick-ui-library, and every general skill
+  with an "On each stack"
   section; plugins/qsm-uix/README.md.
-- Sources: the Qt review checklist, the KDE and GNOME HIGs, clig.dev, the TUI skills and the Vercel
+- Sources: the Qt review checklist and QML coding conventions, the KDE and GNOME HIGs, the Hyprland
+  wiki, clig.dev, the TUI skills and the Vercel
   web interface guidelines, each named by URL in the design and by repository path in each skill.
 
 ## Critiques

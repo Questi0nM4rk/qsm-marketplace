@@ -1,6 +1,6 @@
 ---
 name: cli-ui
-description: "Use when writing or fixing a command that prints and exits: what goes to stdout and stderr, exit codes, coloured status lines, a progress bar or spinner, tables that must fit the terminal, error messages, --help, Ctrl-C, a closed pipe, a token the command needs. Triggers: CLI NO_COLOR, CLI ANSI colours, piped output has escape codes, CLI progress bar fills the log, stack trace on head, CLI exit code, CLI --help text, CLI Ctrl-C twice, broken pipe, secret in a flag, CLI output looks bad, barvy v terminalu, chybova hlaska, tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
+description: "Use when writing or fixing a CLI command that prints and exits: streams, exit codes, colours, progress, terminal tables, errors, help, signals, pipes and credentials. Triggers: CLI NO_COLOR, CLI ANSI colours, piped CLI output has escape codes, CLI progress bar fills the log, CLI stack trace on head, CLI exit code, CLI --help text, CLI Ctrl-C twice, CLI broken pipe, CLI secret in a flag, CLI output looks bad, CLI barvy v terminalu, CLI chybova hlaska, CLI tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
 ---
 
 # Command-line output
@@ -34,8 +34,10 @@ outside qsm.
   record per line that `grep` and `awk` can split. The human view may change between releases; the
   machine shape may not. A script that reads numbers pins `LC_NUMERIC=C`.
 - Prompt only when stdin and stdout are a terminal and `CI` is unset. Otherwise fail and name the
-  flag that supplies the answer, because a prompt in a pipeline hangs it. With `--no-input`, never
-  prompt.
+  flag that supplies the answer, because a prompt in a pipeline hangs it. The explicit exception
+  is a composable picker: open `/dev/tty` for interactive input and chrome, reserve stdout for the
+  selected value, and fail if that TTY is unavailable. In CI or with `--no-input`, never prompt,
+  through either channel (gfargo `cli-basics.md`).
 - Long output to a person on a TTY may go through a pager, never to a pipe.
 
 ## Libraries
@@ -79,7 +81,8 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 - Use the 16 base colours and the default foreground: the theme maps them to a palette that is
   readable on its own background, while a fixed 256 or truecolor value is readable on one background
   and invisible on the other. Truecolor only where the colour is the content (a swatch, a heatmap),
-  at depth 24. Set no background colour; it fights the theme.
+  at depth 24. In a command's scrollback and plain output set no background colour; it fights the
+  theme. Full-screen depth is tui-ui's.
 - Colour is never the only carrier (WCAG 1.4.1): every coloured status also has a word or glyph
   (`ok`, `fail`, `warn`), and piped output gets `[ok]`, `[!]`, `[x]`. The glyph adds to the word,
   because a limited font draws it as a box.
@@ -90,14 +93,17 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   for a pipe, and re-read on `resize`.
 - Measure display width (`Bun.stringWidth` or `string-width` in TypeScript), never `.length`: a wide
   glyph takes two cells, an escape sequence none. Pad and cut by cells.
-- Truncate by kind and reserve one cell for the `…`: a path from the start or the middle, prose
-  from the tail, never the column the row is found by. Wrap only prose, never a table cell.
+- Truncate by kind and reserve one cell for the `…`: a path from the start or the middle, prose from
+  the tail, never the column the row is found by. Keep whole grapheme clusters within the
+  display-cell budget, so emoji and combining marks are not split. Wrap only prose, never a table
+  cell.
 - Narrower than 80 columns, a table folds to one record per block (`label: value`).
 - Number columns right-aligned, dates fixed-width ISO.
 
 ## Progress
 
-- Say something within 100 ms of starting work that touches the network or disk at length.
+- Acknowledge long-running work promptly; direct-response timing is ux-audit's and wait thresholds
+  are ui-design's.
 - A spinner or bar appears only after 150 to 300 ms, on stderr, on a TTY, and once shown stays 300
   to 500 ms. Every wait over 1 s has feedback; past about 1 to 2 s the spinner shows elapsed time
   (gfargo `visual-patterns.md`), and a known total past about 10 s becomes a bar with `done/total`.
@@ -118,10 +124,11 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   command is the final line. Group repeated errors under one header with a flag to list all.
 - A "did you mean" suggests and never runs. A traceback appears only under `--debug`; an
   unexpected failure writes a log file and names its path.
-- Success is past tense with the object (`rolled back api to v2.3.9`); say what changed, and
-  suggest the next command. Never "Successfully", never "Loading...".
+- Success names the completed action and object (`rolled back api to v2.3.9`); an error names its
+  cause and remedy. Loading text names the work in progress, because an unnamed status says little.
 - No emoji decoration, no banners; every extra line is cost.
-- A destructive action is made reversible when it can be (trash, backup) and then asks nothing.
+- Reversibility follows ux-audit's rule. In a command, make the act reversible (trash, backup)
+  and ask nothing when that succeeds.
   Otherwise the ladder: moderate asks y/N or offers `--dry-run`, severe needs the object's name
   typed; `--force` or `--yes` skips it, and with no TTY the command refuses without `--force`.
   Default answer No; the question names the verb and the object, never "Are you sure?".
@@ -151,7 +158,8 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
   consumer gets every redraw.
 - A secret in a flag, an environment variable or an echo: change it to a file, stdin or the store.
 - A stack trace on `| head`: handle `EPIPE`.
-- Your own `--json` or exit codes in a qsm binary: use `lib/cli-base.ts`.
+- Your own exit-code mapping in a qsm binary: use `exitOf` in `lib/outcome.ts`;
+  `lib/cli-base.ts` owns the `--json` and `--no-input` flags.
 
 ## Say it in the reply
 
@@ -160,5 +168,6 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 - The width used for a table and what happens when it is unknown or narrow.
 - What Ctrl-C and a closed pipe do, from a run. Anything unverified: a terminal you did not run in.
 
-Sources: clig.dev (CC-BY-SA-4.0, paraphrased), gfargo/tui-design-skill (MIT,
-`ecosystem-typescript.md` and `visual-patterns.md`), pageton/tui-design-skill (MIT).
+Sources: clig.dev (CC-BY-SA-4.0, paraphrased), gfargo/tui-design-skill (MIT, `cli-basics.md`,
+`ecosystem-typescript.md` and `visual-patterns.md`), pageton/tui-design-skill (MIT). Wait thresholds
+are ui-design's.

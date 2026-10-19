@@ -19,7 +19,7 @@ stack syntax, and SHALL end with a pointer to the families that write each rule 
   properties (transform and opacity; clip-path for reveals and the tab indicator; height only for
   an accordion; a blur under 20 px for a crossfade), start from a per-element scale (dropdown
   0.95, modal 0.96, tooltip 0.97) and never from zero, and SHALL leave writing the curve to the
-  family skill of the stack (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
+  family skill of the stack (desktop-ui, qml-ui, web-motion), which holds it in the stack's form
 
 #### Scenario: A longer or keyword-eased animation is named
 
@@ -27,7 +27,8 @@ stack syntax, and SHALL end with a pointer to the families that write each rule 
 - **THEN** animate SHALL allow its named exception only: a drawer at 500 ms, a modal up to 500 ms,
   an accordion animating height, a reveal animating clip-path, and the keyword ease for the toast
   and for a hover colour change (a hover that moves uses ease-out); review-animations SHALL flag any
-  other duration over 300 ms, an exit longer than 60 to 70 percent of its enter, any other keyword
+  other duration over 300 ms without a reason, an exit that does not follow the approximately
+  20-percent-shorter-than-entry guideline, any other keyword
   easing and more than one or two animated elements per view
 
 #### Scenario: ux-audit measures a transition
@@ -73,6 +74,12 @@ Hypotheses list, and a Not examined list.
 - **WHEN** a spec and the live UI imply different expected values for the same element
 - **THEN** the skill SHALL file one finding citing both sources, tagged source-conflict, and SHALL
   NOT silently prefer one
+
+#### Scenario: A product uses its own spacing and type scales
+
+- **WHEN** the design source defines spacing and type steps different from another design system
+- **THEN** ui-audit SHALL measure against the product's steps and SHALL NOT invent a fixed type
+  ratio, grouping ratio or empty-space cutoff to reject that design
 
 #### Scenario: A UI has a light and a dark theme
 

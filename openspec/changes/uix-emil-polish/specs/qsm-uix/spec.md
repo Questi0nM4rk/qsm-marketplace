@@ -37,6 +37,12 @@ put accessibility first among the concerns it orders. It SHALL NOT ship
 palettes, font pairings, or style catalogues, SHALL NOT name a framework, and SHALL NOT audit a
 running UI.
 
+#### Scenario: A spacing or type scale is chosen
+
+- **WHEN** ui-design defines the product's spacing and typography
+- **THEN** it SHALL use the existing design source or name the adopted system, and SHALL treat
+  numeric examples from other systems as choices rather than universal requirements
+
 #### Scenario: A colour is defined without its on-pair
 
 - **WHEN** the design source defines a fill colour

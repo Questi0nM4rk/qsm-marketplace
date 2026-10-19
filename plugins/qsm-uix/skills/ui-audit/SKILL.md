@@ -35,15 +35,16 @@ resting frame is not an audit.
 ## The passes
 
 1. **Structure and grouping.** Elements meant to share an axis match within 1px, read from the
-   tree. The gap inside a group is at least 1.5 times smaller than the gap between groups, or the
-   grouping is noise. Derive the container rule in one sentence ("interactive elements get a
+   tree. Where spacing carries grouping, related items sit closer than separate groups
+   (NN/g's proximity principle); measure against the design source, not a universal ratio.
+   Derive the container rule in one sentence ("interactive elements get a
    capsule, readouts stay bare") and file what breaks it. A glyph with its weight off-centre, a
    play triangle or power mark, wants optical centring when the zoom shows the imbalance.
 2. **Spacing rhythm.** Take every horizontal and vertical gap from the tree, no sampling, and
-   cluster them: two to four values, each a token or a grid multiple, is a rhythm; more is drift.
+   cluster them against the design source's spacing tokens and documented exceptions.
    Report the clusters and each outlier beside its neighbours. Paired margins and paddings on one
-   axis match within 1px unless the source declares otherwise. An empty run over three times the
-   largest between-group gap is deliberate (the source says so) or a finding.
+   axis match within 1px unless the source declares otherwise. Check empty runs against the source's
+   layout intent; size alone is not a defect without a broken relationship or source constraint.
 3. **Geometry detail.** Every radius and border width comes from the token set or is a finding.
    Nested rounded containers follow inner radius about equal to outer radius minus the inset,
    because equal radii on nested corners read as a seam. Zoom each edge at 4x to 8x: a 1px smear
@@ -62,11 +63,10 @@ resting frame is not an audit.
    rendered pixel, never the colour the code names, because opacity stacks and blending change what
    reaches the screen.
 5. **Type and icons.** Inventory every text item with family, rendered size, weight. Sizes form a
-   scale, each step about 1.125 times the one below, because a scale makes hierarchy legible
-   without reading. Rank items by size, weight, and contrast; the most glance-critical readouts
-   belong at the top. Text in a row shares a baseline within 1px. Icons in one cluster share a
-   bounding size within 1px and an optical weight (a hairline icon among filled ones is a
-   finding).
+   scale defined in the design source, not an imposed ratio. Rank items by size, weight, and
+   contrast; the most glance-critical readouts belong at the top. Text in a row shares a baseline
+   within 1px. Icons in one cluster share a bounding size within 1px and an optical weight (a
+   hairline icon among filled ones is a finding).
 6. **Token sets.** Elevation, layer (z-order) and icon size are sets of a few named values, like
    spacing. Collect each observed shadow, stacking order and icon box from the tree and capture;
    a value outside the set is a finding, and two overlays whose order contradicts the layer scale
@@ -132,4 +132,6 @@ How each rule is built and exposed on a stack is its family: desktop (desktop-ui
 terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
 Source: the polish rules of emil-design-eng and the README in github.com/emilkowalski/skills (MIT,
-Emil Kowalski).
+Emil Kowalski). Grouping:
+[NN/g, Proximity Principle in Visual Design](https://www.nngroup.com/articles/gestalt-proximity/).
+Scale selection is ui-design's; the audit checks the adopted product scale.

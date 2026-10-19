@@ -54,9 +54,9 @@ by the audits, follow css-ui "Make it checkable".
    is the hard part.
 8. **JS-driven motion honours reduced motion.** CSS handles its own (css-ui). For animation run
    from JS, read `matchMedia("(prefers-reduced-motion: reduce)")` and subscribe to `change`; with
-   an animation library use its switch (`MotionConfig reducedMotion="user"`). Replace movement
-   with an instant state change or a fade, never remove the state change itself. How the motion
-   is written and kept fast is web-motion.
+    an animation library follow web-motion's reduced-motion form. Replace movement with an instant
+    state change or a fade, never remove the state change itself. How the motion is written and
+    kept fast is web-motion.
 9. **A hover card or popover opens by click and by keyboard too.** It still opens on hover and
    closes after the delay in ux-audit (the owner's ruling), but the trigger is a `button` with
    `aria-expanded`, Enter and Space open it, Escape closes it and returns focus, and every action
@@ -84,9 +84,10 @@ From the Vercel web interface guidelines, in our words:
   Back and Forward restore scroll. Navigation is `<a>` or the router's `Link`, so Cmd, Ctrl and
   middle click work; never a `div` with `onClick`.
 - **Feedback.** Update optimistically and reconcile on the response, rolling back or offering Undo
-  on failure. A destructive action is undoable first: a toast or inline message with Undo, and a
-  confirm dialog naming the verb ("Delete 3 files") only when it cannot be undone.
-  A toast and inline validation use a polite live region (rule 4).
+  on failure. Destructive actions follow ux-audit's reversibility rule; React renders Undo in a
+  toast or inline action and uses a dialog only when that rule requires one.
+  Routine status and non-blocking validation use a polite live region; errors that block use the
+  pre-mounted alert region from rule 4. Do not announce the same message through both.
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
   rendering against a server and client mismatch; `suppressHydrationWarning` only where truly
   needed.

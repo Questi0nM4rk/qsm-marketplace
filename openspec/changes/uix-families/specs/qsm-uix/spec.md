@@ -50,7 +50,8 @@ source's tokens on its stack, SHALL say how to expose geometry and state so the 
 it (an item-tree dump for QML, the DOM and its accessibility tree for web, none for a terminal), and
 SHALL point to the core skills for the reasons instead of restating them. react-ui SHALL cover only
 what React leaves to the author (focus, announcements, forms, loading, URL state, hydration,
-feedback, gestures, a virtualisation pointer, layout reads in render) and point to css-ui for the
+feedback, gestures, custom widgets, JS reduced motion, hover popover keyboard paths, autoFocus,
+a virtualisation pointer, layout reads in render) and point to css-ui for the
 CSS half. Each SHALL name the maintained libraries for its stack (css-ui and react-ui by pointing to
 pick-ui-library, the one owner of the web list) and SHALL carry its stack's conventions, paraphrased
 from named sources: the Vercel web interface guidelines for css-ui and react-ui; Qt's QML coding
@@ -79,3 +80,9 @@ content.
 - **WHEN** the user asks for an interactive list in a terminal tool
 - **THEN** tui-ui SHALL name the maintained library for the project's language before writing a
   hand-rolled one
+
+#### Scenario: A picker is used in command substitution
+
+- **WHEN** a picker reserves stdout for the selected value
+- **THEN** the terminal skills SHALL permit an explicitly opened interactive `/dev/tty` for input
+  and chrome, SHALL keep prompts off stdout, and SHALL refuse interaction in CI or with `--no-input`

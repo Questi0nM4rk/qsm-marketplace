@@ -39,8 +39,8 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
    real press. **Hover motion is gated** by `@media (hover: hover) and (pointer: fine)`, the CSS
    form of ui-design's fine hovering pointer. Reason: a touch screen fires hover on tap and the
    effect sticks.
-6. **Reduced motion ships with the animation.** `@media (prefers-reduced-motion: reduce)` zeroes
-   the movement durations on `:root` (css-ui rule 7) and keeps the opacity and colour changes that
+6. **Reduced motion ships with the animation.** `@media (prefers-reduced-motion: reduce)` uses
+   css-ui rule 7's movement-duration tokens and keeps the opacity and colour changes that
    explain the change: gentler, not zero. A muted decorative loop stops under it. Vercel's README
    states the autoplay rule: motion that plays on its own for over 5 s beside other content has
    a pause, stop or hide control.
@@ -48,8 +48,7 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
    restarts from zero. Use transitions for anything the user can fire twice in a second (toast,
    toggle, menu); WAAPI (`element.animate()`) when script must control it with CSS performance;
    a keyframe only for predetermined motion that must stay smooth while the page is busy.
-8. **Motion library only where CSS cannot.** Springs, layout and exit animations, gesture-driven
-   values (pick-ui-library names the library). In it write `animate={{ transform:
+8. **The library choice is pick-ui-library's.** Its Motion component writes `animate={{ transform:
    "translateX(100px)" }}`, not `x: 100`, when the page is busy: Emil's cause is that the `x`,
    `y` and `scale` shorthands run on the main thread through `requestAnimationFrame` and drop
    frames under load. Reduced motion is
@@ -69,12 +68,10 @@ scales) are animate's tables; here are only the three curves and the CSS forms o
 - **Tiers** are animation-performance's table. In CSS: `scale()` for a size and `translate()`
   for `top`, `left` or `margin`.
 - **Blur under 20 px**; an animated `blur()` is expensive. The crossfade recipe is animate's.
-- **`will-change: transform` only after you see a 1 px shift or measure dropped frames**, on the
-  animated element, never on `*` or a large container. Reason: every promoted layer costs GPU
-  memory, and engines already promote what animates `transform` or `opacity`.
-- **Confirm with a recording**: the Performance panel for dropped frames and long tasks, the
-  Animations panel slowed down, a real mid-range device (CPU throttling models a slow CPU, not a
-  weak GPU). Without one, a claim is "from code".
+- **Layer hints follow animation-performance's promotion rule.** The CSS form is
+  `will-change: transform` on the measured element, never `*` or a container.
+- **Recordings follow animation-performance's verification rule.** On the web, use the browser's
+  Performance panel for dropped frames and long tasks, and the Animations panel for slow playback.
 
 ## Judge it: the web findings
 
@@ -93,10 +90,10 @@ Each is a finding in review-animations' tiers, with the fix beside it:
 
 ## Survey it
 
-Recon for a web codebase: `transition`, `animation`, `@keyframes`, `motion.`, `useSpring`,
+Use improve-animations for the survey workflow and plan format. Web search terms: `transition`,
+`animation`, `@keyframes`, `motion.`, `useSpring`,
 `ease-in`, `transition: all`, `scale(0)`, `prefers-reduced-motion`, `transform-origin`,
-`will-change`, `@starting-style`. A plan names each target as the file and the rewritten CSS line,
-with the values copied from animate in full. A suggestion about hover carries the hover gate.
+`will-change`, `@starting-style`. A web plan includes the rewritten CSS or component line.
 
 ## Name it
 

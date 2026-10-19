@@ -6,12 +6,12 @@ Sources, each cited by repository URL:
 | --- | --- | --- |
 | emilkowalski/skills mobile-native, pick-ui-library (commit 2d22863) | MIT | new skills |
 | emilkowalski/skills README.md (a solid border over a shadow is an agent mistake) | MIT | ui-design |
-| vercel-labs/web-interface-guidelines | MIT | css-ui, react-ui |
+| vercel-labs/web-interface-guidelines | MIT | css-ui, react-ui, web-motion, web-harness, ui-design |
 | TheQtCompanyRnD/agent-skills qt-qml-review | BSD-3 option | qml-ui |
 | doc.qt.io QML coding conventions | Qt docs | qml-ui |
 | hyprwm/hyprland-wiki animations | BSD-3 | desktop-ui |
 | KDE HIG | CC-BY-SA-4.0 | desktop-ui, paraphrase |
-| GNOME HIG via Paresh-Maheshwari/gnome-skills | no licence stated; paraphrase only, credit | desktop-ui, paraphrase |
+| GNOME HIG, <https://developer.gnome.org/hig/> | no content licence found in its COPYING.md; link and paraphrase, do not copy | desktop-ui |
 | pageton/tui-design-skill | MIT | tui-ui |
 | cli-guidelines/cli-guidelines | CC-BY-SA-4.0 | cli-ui, paraphrase |
 

@@ -16,7 +16,8 @@ the web side; a web search found rule sets for the other stacks (epic qsm-d0c).
     URL state.
   - qml-ui: Qt's QML coding conventions and TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3).
   - desktop-ui: desktop layout, navigation and feedback rules paraphrased from the KDE and GNOME
-    HIGs (CC-BY-SA-4.0, paraphrase only), and the Hyprland wiki (BSD-3).
+     HIGs (KDE: CC-BY-SA-4.0; GNOME primary documentation: no content licence found, link and
+     paraphrase without copying), and the Hyprland wiki (BSD-3).
   - cli-ui: clig.dev (CC-BY-SA-4.0, paraphrase only).
   - tui-ui: pageton/tui-design-skill (MIT) for bubbletea, ink, ratatui and textual.
 - Where a source contradicts Emil (ibelick/ui-skills: never add animation unless asked), Emil wins
@@ -47,5 +48,5 @@ None.
   HIG and clig.dev rules are paraphrased in our words and the source named, never copied.
 - Future archaeologist: why are KDE and GNOME rules in desktop-ui? Fixed: the design says
   desktop-ui owns what a shell surface is and does, and ui-design stays stack-neutral.
-- Scope sniper: pageton's skill is 25 KB and tui-ui is 7.7 KB. Fixed: only rules a TUI breaks
+- Scope sniper: the source TUI skills exceed the prompt budget. Fixed: only rules a TUI breaks
   without (resize, colour fallback, keybinding display, layout by width) are taken.

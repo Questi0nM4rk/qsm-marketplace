@@ -37,7 +37,7 @@ sweep terms are the family skill's (web-motion, desktop-ui, tui-ui).
 | --- | --- |
 | Purpose and frequency | animation on keyboard actions, palettes, constant hover; more than 1 to 2 animated elements per view; fix is often delete |
 | Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms; a keyword outside animate's exceptions; targets are animate's curve and duration tables; tooltips after the first open instantly |
-| Physicality and origin | a scale from zero, pure fades, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt |
+| Physicality and origin | a scale from zero, pure-fade entrances, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt from trigger anchoring, not the start-scale rule; a backdrop fade is allowed |
 | Interruptibility | keyframes on toasts and toggles, tweened gestures, distance-only drag dismiss (velocity, per animate), hard drag stops; targets transitions or springs (animate's values) |
 | Performance | a transition on every property, animated layout properties, a property outside animate's whitelist, a busy thread driving the motion, an inherited value driving a child's transform, blur over 20 px |
 | Accessibility | movement with no reduced-motion branch, ungated hover, reduced motion that removes all feedback (it must be gentler, not zero) |

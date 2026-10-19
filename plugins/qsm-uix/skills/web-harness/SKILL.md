@@ -31,8 +31,12 @@ file. In a framework the picker is the same classes and structure with state ins
 
 ## The picker
 
-A floating dark pill, bottom-centre. Dark glass reads on any page, so it is not theme-aware.
-Verbatim: no project fonts, brand colours, theme switching, extra shadows or borders.
+A floating dark pill, bottom-centre. Dark glass reads on any page, so it is not theme-aware. Adapted
+from Emil's PICKER.md, with these departures: a transform-only highlight instead of animating width;
+no permanent layer hint without measured need (animation-performance); a fine-pointer hover gate and
+colour `ease` exception; a solid reduced-transparency variant; and the data toggle moving to the top
+when both harnesses appear. Names and variant count are examples. Keep this adapted contract fixed:
+no project fonts, brand colours, theme switching, extra shadows or borders.
 
 ```html
 <nav class="proto-picker" aria-label="Prototype variants">
@@ -48,13 +52,12 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
 .proto-picker { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   z-index: 2147483647; display: flex; align-items: center; gap: 2px; padding: 4px;
   border-radius: 999px; background: rgba(10,10,10,.82);
-  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
   box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 24px rgba(0,0,0,.24), 0 2px 6px rgba(0,0,0,.12);
   font: 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  user-select: none; }
+  -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
 .proto-picker-highlight { position: absolute; top: 4px; left: 0; width: 1px; height: 28px;
-  transform-origin: left; border-radius: 999px; background: rgba(255,255,255,.12);
-  will-change: transform; }
+  transform-origin: left; border-radius: 999px; background: rgba(255,255,255,.12); }
 .proto-picker[data-ready] .proto-picker-highlight {
   transition: transform 250ms cubic-bezier(.23,1,.32,1); }
 @media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
@@ -70,12 +73,12 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
 .proto-picker-replay { padding: 0 10px; font-size: 14px; }
 .proto-picker[data-position="top"] { bottom: auto; top: 24px; }
 @media (prefers-reduced-transparency: reduce) {
-  .proto-picker { background: rgb(10,10,10); backdrop-filter: none; } }
+  .proto-picker { background: rgb(10,10,10); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 ```
 
 The highlight moves between items with `transform` only (`translateX` and `scaleX`, never `left` or
 `width`); the variant swap stays instant. The picker is throwaway chrome and holds literals on
-purpose: it is deleted when a variant is promoted. The one allowed change:
+purpose: it is deleted when a variant is promoted. The allowed per-project placement change:
 `data-position="top"` when a variant occupies the bottom-centre (toast stack, sheet, dock).
 Render replay and its divider only when a variant has motion to re-trigger.
 

@@ -5,13 +5,10 @@ description: "Use when a UI is to be designed, specified, or restyled before it 
 
 # UI Design
 
-A UI built from taste drifts: every component picks its own grey, its own gap, its own dark
-values, and the first person to find out is the one who cannot read it. This skill serves the
-person who builds and publishes interfaces and answers for their accessibility. Its outcome is one
-written design source, made before the first component, that every build follows and every audit
-measures against. It does not audit a running UI, name a framework, or ship palettes, font
-pairings, or a catalogue of looks: it produces the numbers and constraints, and the maintainer's
-taste picks the hues.
+A UI built from taste drifts: components choose their own greys, gaps and dark values. This skill
+serves the person who builds accessible interfaces. It writes one design source before the first
+component, for builders to follow and audits to measure. It chooses constraints, not palettes,
+font pairings or frameworks; the maintainer picks the hues. It does not audit a running UI.
 
 ## Decide in this order
 
@@ -27,12 +24,10 @@ Work top-down, because a late concern costs a rebuild and an early one costs a s
 
 ## Detect before you ask
 
-Never assume the stack. Look for an existing `design/` folder, a theme file, tokens in code, a
-screenshot. If a design source exists, read it whole before writing: extend it, do not regenerate
-it. Ask one question only when the answer changes the source: the surfaces (bar, page, CLI), the
-audience, any fixed brand colour. The source stays stack-neutral; the stack skill maps it later.
-Do not stop at the question: state the assumption and still write the source with tokens, pairs
-and ratios, because a draft the person can correct is worth more than a questionnaire.
+Find the existing design folder, theme, tokens or screenshot before assuming a stack. Read and
+extend an existing design source, never regenerate it. Ask only what changes it: surfaces,
+audience, fixed brand colours. Keep the source stack-neutral and mark assumptions in the draft,
+so the person can correct concrete tokens, pairs and ratios rather than a questionnaire.
 
 ## The design source
 
@@ -64,9 +59,10 @@ Use these headings, because the audits and the stack skills look for them:
   fills glare, and light borders turn into holes. Parity means every pair passes in each theme
   and a border, divider, or state visible in one is visible in the other. High contrast, if
   wanted, is a third column.
-- **Every dimension is a scale, and a component picks a step.** Space on a 4/8 grid with two to
-  four clusters in use; type steps of about 1.125; one set each for radius, elevation, layer
-  (z-order), icon size, motion (duration and easing, exit shorter than enter), density. Why: a
+- **Every dimension is a scale, and a component picks a step.** Use the product's spacing and type
+  scales, naming the adopted system. Carbon's 2/4/8 spacing multiples and Modular Scale's 1.125
+  major-second ratio are choices, not universal floors; USWDS uses non-geometric type steps.
+  Define one set each for radius, elevation, layer (z-order), icon size, motion and density. Why: a
   literal in a component is a decision nobody reviewed, and a scale is how one change reaches
   every surface. Density is an axis of the scale (compact, regular), not a second design.
 - **Every pressable has a pressed state, and no state moves its neighbours.** The press shrinks
@@ -154,8 +150,7 @@ with the stack skill, then run ui-audit against this file, which is the expected
   token roles and constraints, because the person picks the look and the source holds its rules.
 - When a surface's page file contradicts the master, keep the page file and note the override
   and its reason, because the page wins by design.
-- When the person gives no accessibility requirement, write the floor above anyway and say so,
-  because silence in the source becomes a defect in the product.
+- With no stated accessibility requirement, write the floor above and name the assumption.
 
 ## Say it in the reply
 
@@ -169,5 +164,9 @@ with the stack skill, then run ui-audit against this file, which is the expected
 How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
 terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
-The polish rules follow Emil Kowalski's emil-design-eng and README (github.com/emilkowalski/skills,
-MIT).
+Sources: polish follows Emil Kowalski's emil-design-eng and README
+(github.com/emilkowalski/skills, MIT); waits and touch targets follow
+vercel-labs/web-interface-guidelines (MIT). Scale examples:
+[Carbon spacing](https://carbondesignsystem.com/elements/spacing/overview/),
+[Modular Scale ratios](https://github.com/modularscale/modularscale-sass/blob/3.x/stylesheets/modularscale/_vars.scss),
+[USWDS type tokens](https://designsystem.digital.gov/design-tokens/typesetting/font-size/).

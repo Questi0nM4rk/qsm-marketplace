@@ -37,10 +37,13 @@ input while they work, because stealing focus costs more than the audit finds.
 1. **Discoverability.** For every hidden surface list its invocation paths: hover zone, keybind,
    control socket, click. A surface reachable only by keybind or socket with no visual hint is a
    finding, severity by how core it is. Measure each hint against its backdrop with
-   `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: a hint that is the only way in needs 3 or better,
-   and under 1.5 it is decoration. More than one hint style for one behaviour class is a finding.
-2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Waits follow
-   ui-design's wait values. A state that changes the layout bounds is a finding (the rule is
+   `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: a hint that is the only way in needs 3 or better
+   (WCAG 1.4.11). Decoration is defined by its role, never by an invented lower contrast cutoff.
+   More than one hint style for one behaviour class is a finding.
+2. **Affordance and feedback.** Direct manipulation and selection feedback start within about
+   100 ms (NN/g, Response Times: The 3 Important Limits). This is a responsiveness guideline, not a
+   requirement to finish every operation in that time. Waits follow ui-design's wait values.
+   A state that changes the layout bounds is a finding (the rule is
    ui-design's), because moving the target under the cursor makes the click miss.
    Interactive elements separate from passive readouts without hovering; state the rule and check it
    sorts every element. A stateful control shows it: its states are told apart at a glance.
@@ -50,18 +53,16 @@ input while they work, because stealing focus costs more than the audit finds.
    ruling). Measure the zone from that union, never from the painted trigger: a hit zone equal to
    the painted shape needs pixel-perfect aim and is a finding. Measure the hit area, padding and
    hover zones included. The floor is 44 px on touch, and 24 by 24 px for a desktop pointer (the
-   WCAG 2.5.8 floor). Screen edges and corners are effectively infinitely deep, so a rect touching
-   the boundary inherits that and a 2px inset throws it away. Adjacent targets sit at least 8px
-   apart edge to edge, or the closest pair carries a mis-click finding. A corner spent on a
-   destructive action is a finding.
+   WCAG 2.5.8 floor). Measure adjacent target spacing against the design source and trace the
+   closest pair for mis-clicks; do not invent a universal gap or inset threshold.
 4. **Mode and state visibility.** From any single frame a viewer can name the current mode: which
    surface is open, which workspace, which suppression is on. Capture each mode and name the pixel
    that distinguishes it; none is a finding. A fact shown in two places agrees in every captured
    pair.
 5. **Interruption cost.** Inventory everything that appears unbidden. Per item: occluded area,
    position against the likely focus zone, auto-dismiss timing from the source, and the manual
-   dismiss path with that target's measured size. Measured lifetime matches the documented timeout
-   within 10 percent. Where a suppression mode exists, trigger something during it: suppressed
+   dismiss path with that target's measured size. Record the measured lifetime beside the documented
+   timeout. Where a suppression mode exists, trigger something during it: suppressed
    items must land somewhere recoverable. An interruption never moves keyboard focus.
 6. **Vocabulary consistency.** Build the gesture table: each input (left, right, middle click,
    scroll, hover, drag) against each surface. One input means one class of thing everywhere, the
@@ -73,7 +74,7 @@ input while they work, because stealing focus costs more than the audit finds.
    click on its leading part, the rest of the row being its action, with no hover-expand inside a
    scrolled list. Check: scroll with an expandable row under the pointer; the list must move.
 7. **Motion.** Every animation, its purpose, timing, curve and interruption, is judged by
-   review-animations; run it for this surface and file its verdict here, never a second ruling.
+   review-animations; link its verdict for this surface, never issue a second ruling.
    This audit adds only the measurement on a running surface:
    - Read the duration and easing tokens from the source first, then poll the introspection
      surface across the transition and build the timeline from mid-flight values.
@@ -128,8 +129,14 @@ as a pass) and **Not examined** (what was not reached, and why).
 
 The state-space map, the table, the three lists, then one line on how the interface was driven and
 what could not be, so the reader knows which half the audit saw. With no running UI, still give the
-standards with their numbers (24 px WCAG floor, 44 px touch, 100 ms feedback) as the check to run,
+standards and guidelines with their sources (24 px WCAG floor, 44 px touch, about 100 ms direct
+feedback) as the check to run,
 the human-trial steps with a pass criterion, and what was not examined.
 
 How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
 terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
+
+Response guideline:
+[NN/g, Response Times: The 3 Important Limits](https://www.nngroup.com/articles/response-times-3-important-limits/).
+Required non-text cues:
+[WCAG 1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html).

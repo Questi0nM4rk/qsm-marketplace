@@ -31,7 +31,7 @@ screen halves the budget. It does not pick curves or judge whether the motion sh
 | Stutters | animate the whitelisted properties (animate), not size, margin or position |
 | Shadow animation choppy | animate a cheaper shadow form, or fade a prepared one |
 | Janks only during navigation or loading | move it off the thread that is busy then |
-| A shorthand drops frames on a busy thread | write the full transform on the element |
+| A library shorthand drops frames on a busy thread | inspect what drives it and move the work off that thread; web-motion holds the Motion-specific form |
 | Hand-rolled animation drops frames | no state per frame: write the value, not a re-render |
 | Drag gets laggier as the list grows | stop animating an inherited value; set it on the element |
 | Blur transition lags | keep animated blur under 20 px (2 px softens a crossfade) |
