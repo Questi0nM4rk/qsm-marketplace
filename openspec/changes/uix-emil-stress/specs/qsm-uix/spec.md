@@ -8,7 +8,7 @@ names, missing fields, huge counts, zero items, non-Latin script, emoji, extreme
 render it behind a toggle between demo and worst-case data, and SHALL report every break with its
 fix. prototype SHALL build several genuinely different versions of one UI piece behind a switcher
 and SHALL fire only when invoked. Both SHALL name no stack syntax: they say what the toggle or
-switcher is and point to the families that build it (desktop-ui and qml-ui, tui-ui, web-harness),
+switcher is and point to the families that build it (desktop-ui, tui-ui, web-harness),
 and SHALL fit 12 KB with no extra file.
 
 #### Scenario: A bar module meets a long window title

@@ -1,6 +1,6 @@
 ## Context
 
-Sources, cloned under ~/Clonned and digested in the session scratchpad:
+Sources, cloned locally and digested in the session scratchpad:
 
 | Source | Licence | Digest |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Sources, cloned under ~/Clonned and digested in the session scratchpad:
 2. **Families own syntax.** A general skill names a rule and its value; how it is written on a
    stack lives only in that family's skill. A general skill's last part points to the families
    by name: desktop (desktop-ui, qml-ui), terminal (cli-ui, tui-ui), web (css-ui, react-ui,
-   web-motion).
+   web-motion); break-ui and prototype name web-harness as the web form.
 3. **desktop-ui versus qml-ui.** desktop-ui owns what a shell surface is and does (bar, popout,
    OSD, notification, tray, launcher, the HIG rules, Hyprland config, desktop motion forms).
    qml-ui owns how QML is written (structure, bindings, delegates, layouts, Loader, the Qt
@@ -33,3 +33,9 @@ Sources, cloned under ~/Clonned and digested in the session scratchpad:
    review and survey terms) and web-harness (the break-ui toggle, the prototype picker, the CSS
    fixes for the breaks).
 6. **Each family skill fits 12 KB**; a family that needs more splits by the same cut as 3 and 4.
+7. **One owner per terminal rule.** cli-ui owns the line form (streams, colour roles, display
+   width, default No, cursor restore); tui-ui owns the screen form and points to cli-ui for the
+   shared ones. Libraries live in qml-ui for desktop and in cli-ui and tui-ui for terminal.
+8. **The stack skills requirement is modified here, once.** The family owners (desktop-ui for the
+   HIGs and Hyprland, qml-ui, cli-ui for clig.dev, tui-ui) are named in this change's MODIFIED
+   block; uix-emil-stacks adds only the web-only skills.

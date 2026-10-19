@@ -6,19 +6,28 @@ The plugin SHALL provide six motion skills adapted from emilkowalski/skills (MIT
 animate (build one animation), review-animations (judge motion code, default to flagging),
 improve-animations (survey a codebase's motion and write prioritized plans, never edits source),
 find-animation-opportunities (propose motion where it helps and reject the rest, read-only),
-animation-vocabulary (turn a vague description into the exact term), and animation-performance
-(keep motion inside the frame budget). Each SHALL state its rules once with their values, SHALL name
-no stack syntax, and SHALL end with a pointer to the families that write each rule on a stack:
-desktop (desktop-ui, qml-ui), terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
-Each SHALL fit 12 KB with no extra file and SHALL name its source
-file and licence.
+animation-vocabulary (turn a vague description into the exact term), and animation-performance (keep
+motion inside the frame budget). Each SHALL state its rules once with their values, SHALL name no
+stack syntax, and SHALL end with a pointer to the families that write each rule on a stack: desktop
+(desktop-ui, qml-ui), terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion). Each SHALL fit
+12 KB with no extra file and SHALL name its source file and licence.
 
 #### Scenario: An enter animation is built
 
 - **WHEN** the user asks to animate a popout, dropdown, or panel opening on any stack
-- **THEN** animate SHALL pick an ease-out curve, a duration under 300 ms, transform and opacity
-  only, a start from a scale near 0.95 and never from 0, and SHALL leave writing the curve to the
-  family skill of the stack (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
+- **THEN** animate SHALL pick an ease-out curve, a duration under 300 ms, and only whitelisted
+  properties (transform and opacity; clip-path for reveals and the tab indicator; height only for
+  an accordion), start from a scale near 0.95 and never from zero, and take an exit at 60 to 70
+  percent of the enter duration, and SHALL leave writing the curve to the family skill of the stack
+  (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
+
+#### Scenario: A longer or keyword-eased animation is named
+
+- **WHEN** the animation is a drawer, a modal, an accordion or a toast
+- **THEN** animate SHALL allow its named exception only: a drawer at 500 ms, a modal up to 500 ms,
+  an accordion animating height, a reveal animating clip-path, and the keyword ease for the toast
+  and for a hover colour change; review-animations SHALL flag any other duration over 300 ms, any
+  other keyword easing and more than one or two animated elements per view
 
 #### Scenario: A keyboard action is animated
 
@@ -38,13 +47,12 @@ file and licence.
 The plugin SHALL trigger the ui-audit skill when asked to audit, review, or critique the static
 visual design of a UI: layout, spacing, geometry, colour, contrast, typography, iconography,
 elevation and layer order, reserved space, theme and variant parity, or multi-monitor consistency.
-The skill SHALL require measured evidence, a captured image, live UI geometry from an
-introspection surface, and a design source, before filing any finding, and SHALL NOT file a finding
-based on visual impression alone. It SHALL cite WCAG 2.2 for contrast and non-text contrast. It
-SHALL leave motion to review-animations and every other accessibility criterion to a11y-audit,
-pointing to
-them. It SHALL output one severity-ranked findings table (blocker, major, minor, polish), a
-separate Hypotheses list, and a Not examined list.
+The skill SHALL require measured evidence, a captured image, live UI geometry from an introspection
+surface, and a design source, before filing any finding, and SHALL NOT file a finding based on
+visual impression alone. It SHALL cite WCAG 2.2 for contrast and non-text contrast. It SHALL leave
+motion to review-animations and every other accessibility criterion to a11y-audit, pointing to them.
+It SHALL output one severity-ranked findings table (blocker, major, minor, polish), a separate
+Hypotheses list, and a Not examined list.
 
 #### Scenario: No live geometry source is reachable
 
@@ -67,14 +75,15 @@ separate Hypotheses list, and a Not examined list.
 ### Requirement: UX audit skill reports measured interaction findings
 
 The plugin SHALL trigger the ux-audit skill when asked to evaluate how a UI behaves or feels:
-discoverability, affordance and feedback, target ergonomics, mode and state visibility,
-interruption cost, gesture-vocabulary consistency, reversibility, error recovery, or forms.
-The skill SHALL require an enumerated state-space map and traced interactions as evidence, and
-SHALL NOT judge behaviour from a single resting screenshot. It SHALL hand every motion
-judgement to review-animations and SHALL NOT judge timing, curve, or interruption itself. It SHALL
-point to a11y-audit for the
-keyboard-only path, focus, and reduced-motion criteria. It SHALL output one severity-ranked
-findings table, a Needs human trial list carrying the exact trial to run, and a Not examined list.
+discoverability, affordance and feedback, target ergonomics, mode and state visibility, interruption
+cost, gesture-vocabulary consistency, reversibility, error recovery, or forms. The skill SHALL
+require an enumerated state-space map and traced interactions as evidence, and SHALL NOT judge
+behaviour from a single resting screenshot. It SHALL hand every motion judgement to
+review-animations and SHALL NOT judge timing, curve, or interruption itself; it SHALL record each
+measured duration beside its token and leave the verdict to review-animations. It SHALL point to
+a11y-audit for the keyboard-only path, focus, and reduced-motion criteria. It SHALL output one
+severity-ranked findings table, a Needs human trial list carrying the exact trial to run, and a Not
+examined list.
 
 #### Scenario: A hidden surface was never opened
 
@@ -92,3 +101,9 @@ findings table, a Needs human trial list carrying the exact trial to run, and a 
 - **WHEN** a traced action destroys user data and the UI offers neither undo nor a confirmation
 - **THEN** the skill SHALL file a reversibility finding naming the action and the missing recovery
   path
+
+#### Scenario: A confirm guards an act that can be undone
+
+- **WHEN** a dialog asks for confirmation before an act that undo could reverse
+- **THEN** the skill SHALL file it as a finding, and a confirm that remains SHALL name the verb and
+  the object and appear only where undo cannot reverse the act

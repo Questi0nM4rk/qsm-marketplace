@@ -9,11 +9,12 @@ as the source of truth for qsm-uix (epic qsm-d0c).
 ## What Changes
 
 - ui-design takes the non-motion half of emil-design-eng as rules, replacing any qsm rule that
-  says the same thing differently.
+  says the same thing differently, plus the shadow-over-solid-border rule that emilkowalski/skills
+  README.md names as an agent mistake.
 - ui-audit checks those rules on a running UI.
 - A new apple-design skill, under his name, carries Apple's interface and fluid-motion principles
-  translated for QML, Hyprland, CSS/React and TUI where they apply; its motion parts point to
-  animate.
+  as foundations with no stack syntax; its motion parts point to animate and its stack forms to
+  the families.
 
 ## Capabilities
 

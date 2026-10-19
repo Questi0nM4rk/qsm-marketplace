@@ -26,8 +26,13 @@ colours, scales for spacing, type, radius, elevation, layer order, icon size, mo
 light and dark themes designed separately, a style stated as a constraint set with the
 accessibility requirements it brings, and a master with per-surface overrides in which the
 override wins. It SHALL carry the polish rules of emilkowalski/skills emil-design-eng (pressed
-states, hover only on hover-capable pointers, tooltip delay, popover origin, defaults over options,
-one component personality) and the README's shadow-over-solid-border rule as its own rules. It SHALL
+states, hover only for a fine hovering pointer, tooltip delay, popover origin, defaults over
+options, one component personality) and the shadow-over-solid-border rule of emilkowalski/skills
+README.md as its own rules, and SHALL state the wait values (no busy indicator under 150 to 300 ms,
+feedback over 1 s, an indicator kept at least 300 to 500 ms, a progress bar with a count past about
+10 s when the length is known), the icon rule (alone only where everyone reads it the same, never
+icon and label on one button) and the touch target (44 px on touch, 24 px as the WCAG 2.5.8 floor)
+as its own rules. It SHALL
 put accessibility first among the concerns it orders. It SHALL NOT ship
 palettes, font pairings, or style catalogues, SHALL NOT name a framework, and SHALL NOT audit a
 running UI.
@@ -47,5 +52,6 @@ running UI.
 #### Scenario: A card is separated from its background
 
 - **WHEN** the design separates a raised surface from what is under it
-- **THEN** the skill SHALL use a semi-transparent shadow by his README's rule, or a low-alpha
-  border (qsm), not a solid opaque border
+- **THEN** the skill SHALL use a semi-transparent shadow by the rule in emilkowalski/skills
+  README.md, not a solid opaque border, and in a dark theme SHALL add a 1 px low-alpha light edge
+  to an overlay, never an opaque one
