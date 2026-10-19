@@ -18,6 +18,7 @@ When designs carry their source and their numbers by default, this plugin can go
 | Kind | Name | What it does |
 | --- | --- | --- |
 | Skill | `ui-design` | Writes a stack-neutral design source: tokens, on-pairs, light and dark themes, a style with its accessibility rules |
+| Skill | `apple-design` | Apple's interface foundations (response, materials and depth, typography, principles) for QML, Hyprland, CSS and React, TUI; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `ui-audit` | Measures static visuals: spacing, geometry, colour, contrast, type, icons, elevation, theme parity |
 | Skill | `ux-audit` | Traces behaviour: discoverability, feedback, targets, motion, reversibility, error recovery, forms |
 | Skill | `a11y-audit` | Drives the UI by keyboard and the accessibility tree, and fills a per-criterion conformance table |
