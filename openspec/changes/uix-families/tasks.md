@@ -1,6 +1,6 @@
 ## 1. Families (in parallel, one worktree each)
 
-- [ ] 1.1 desktop: new desktop-ui; qml-ui narrowed to QML code with the Qt checklist digest;
+- [x] 1.1 desktop: new desktop-ui; qml-ui narrowed to QML code with the Qt checklist digest;
       desktop forms of the motion, apple-design, break-ui and prototype rules moved in (owns
       `skills/desktop-ui/`, `skills/qml-ui/`; proof: under 12 KB, `bun run validate`)
 - [ ] 1.2 terminal: new cli-ui from tui-ui's output half and the clig.dev digest; tui-ui narrowed
