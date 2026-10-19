@@ -5,7 +5,7 @@ description: "Use when an animation is janky, choppy, stutters or drops frames, 
 
 # Animation Performance
 
-Imagine Sonner at 30 fps: same easing, same durations, same code, and nobody would care.
+Imagine a toast at 30 fps: same easing, same durations, same code, and nobody would care.
 Performance is not a polish pass after the motion is good; it is what lets good motion register at
 all. This skill serves the person whose animation drops frames: the question is never "does it look
 right" but "does each frame finish in time". The developer's own machine is the least
@@ -34,7 +34,7 @@ screen halves the budget. It does not pick curves or judge whether the motion sh
 | A shorthand drops frames on a busy thread | write the full transform on the element |
 | Hand-rolled animation drops frames | no state per frame: write the value, not a re-render |
 | Drag gets laggier as the list grows | stop animating an inherited value; set it on the element |
-| Blur transition lags | keep animated blur under 20 px (2 to 5 px softens a crossfade) |
+| Blur transition lags | keep animated blur under 20 px (2 px softens a crossfade) |
 | Unexpected properties animate | name the properties instead of a catch-all |
 | 1 px shift when motion starts or ends | promote the element to its own layer, only once you see it |
 

@@ -39,21 +39,21 @@ input while they work, because stealing focus costs more than the audit finds.
    finding, severity by how core it is. Measure each hint against its backdrop with
    `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: a hint that is the only way in needs 3 or better,
    and under 1.5 it is decoration. More than one hint style for one behaviour class is a finding.
-2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Anything over
-   1 s gets a progress affordance, and one shown stays at least 300 ms; a wait under 150 ms must not
-   flash a spinner (ui-design's wait values). A state that changes the layout bounds is a finding
-   (the rule is ui-design's), because moving the target under the cursor makes the click miss.
+2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Waits follow
+   ui-design's wait values. A state that changes the layout bounds is a finding (the rule is
+   ui-design's), because moving the target under the cursor makes the click miss.
    Interactive elements separate from passive readouts without hovering; state the rule and check it
    sorts every element. A stateful control shows it: its states are told apart at a glance.
-3. **Target ergonomics.** A surface that opens on hover opens on entry with no delay, stays open
-   inside the union of its trigger, its panel and the straight path between them, and closes 180 ms
-   after leaving that union. Measure the zone from that union, never from the painted trigger: a hit
-   zone equal to the painted shape needs pixel-perfect aim and is a finding. Measure the hit area,
-   padding and hover zones included. The floor is 44 px on touch, and 24 by 24 px for a desktop
-   pointer (the WCAG 2.5.8 floor). Screen edges and corners are effectively infinitely deep, so a
-   rect touching the boundary inherits that and a 2px inset throws it away. Adjacent targets sit at
-   least 8px apart edge to edge, or the closest pair carries a mis-click finding. A corner spent on
-   a destructive action is a finding.
+3. **Target ergonomics.** A surface that opens on hover opens on entry with no delay (a tooltip is
+   the exception: ui-design's one-delay rule), stays open inside the union of its trigger, its panel
+   and the straight path between them, and closes 180 ms after leaving that union (the owner's
+   ruling). Measure the zone from that union, never from the painted trigger: a hit zone equal to
+   the painted shape needs pixel-perfect aim and is a finding. Measure the hit area, padding and
+   hover zones included. The floor is 44 px on touch, and 24 by 24 px for a desktop pointer (the
+   WCAG 2.5.8 floor). Screen edges and corners are effectively infinitely deep, so a rect touching
+   the boundary inherits that and a 2px inset throws it away. Adjacent targets sit at least 8px
+   apart edge to edge, or the closest pair carries a mis-click finding. A corner spent on a
+   destructive action is a finding.
 4. **Mode and state visibility.** From any single frame a viewer can name the current mode: which
    surface is open, which workspace, which suppression is on. Capture each mode and name the pixel
    that distinguishes it; none is a finding. A fact shown in two places agrees in every captured
@@ -77,9 +77,8 @@ input while they work, because stealing focus costs more than the audit finds.
    This audit adds only the measurement on a running surface:
    - Read the duration and easing tokens from the source first, then poll the introspection
      surface across the transition and build the timeline from mid-flight values.
-   - Record each measured duration beside its token; open and close land within the token plus
-     10 percent and settle on the resting geometry. Whether the value is right is the verdict of
-     review-animations.
+   - Record each measured duration beside its token; open and close settle on the resting
+     geometry. Whether the value is right is the verdict of review-animations.
    - With pixels only, `qsm-uix burst --count 8 --interval 120 --out-dir frames/` gives frames with
      real elapsed time, honest to 100ms to 200ms per step and no finer. Say that limit.
    - `qsm-uix diff a.png b.png` (distortion under 0.001) works only on a frozen scene; on a live

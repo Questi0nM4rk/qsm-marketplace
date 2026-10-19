@@ -17,17 +17,25 @@ stack syntax, and SHALL end with a pointer to the families that write each rule 
 - **WHEN** the user asks to animate a popout, dropdown, or panel opening on any stack
 - **THEN** animate SHALL pick an ease-out curve, a duration under 300 ms, and only whitelisted
   properties (transform and opacity; clip-path for reveals and the tab indicator; height only for
-  an accordion), start from a scale near 0.95 and never from zero, and take an exit at 60 to 70
-  percent of the enter duration, and SHALL leave writing the curve to the family skill of the stack
-  (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
+  an accordion; a blur under 20 px for a crossfade), start from a per-element scale (dropdown
+  0.95, modal 0.96, tooltip 0.97) and never from zero, and SHALL leave writing the curve to the
+  family skill of the stack (desktop-ui, tui-ui, web-motion), which holds it in the stack's form
 
 #### Scenario: A longer or keyword-eased animation is named
 
 - **WHEN** the animation is a drawer, a modal, an accordion or a toast
 - **THEN** animate SHALL allow its named exception only: a drawer at 500 ms, a modal up to 500 ms,
   an accordion animating height, a reveal animating clip-path, and the keyword ease for the toast
-  and for a hover colour change; review-animations SHALL flag any other duration over 300 ms, any
-  other keyword easing and more than one or two animated elements per view
+  and for a hover colour change (a hover that moves uses ease-out); review-animations SHALL flag any
+  other duration over 300 ms, an exit longer than 60 to 70 percent of its enter, any other keyword
+  easing and more than one or two animated elements per view
+
+#### Scenario: ux-audit measures a transition
+
+- **WHEN** ux-audit meets an animated surface
+- **THEN** it SHALL read the duration and easing tokens from the source, record each measured
+  duration beside its token, and file no verdict on whether the value is right, which belongs to
+  review-animations
 
 #### Scenario: A keyboard action is animated
 

@@ -130,3 +130,6 @@ which themes were available. Missing live geometry goes first: it changes how ev
 
 How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
 terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
+
+Source: the polish rules of emil-design-eng and the README in github.com/emilkowalski/skills (MIT,
+Emil Kowalski).

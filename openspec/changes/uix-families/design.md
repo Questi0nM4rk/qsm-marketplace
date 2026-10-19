@@ -1,15 +1,16 @@
 ## Context
 
-Sources, cloned locally and digested in the session scratchpad:
+Sources, each cited by URL:
 
-| Source | Licence | Digest |
+| Source | Licence | URL |
 | --- | --- | --- |
-| clig.dev (cli-guidelines) | CC-BY-SA-4.0, paraphrase only | digest.tui.md |
-| gfargo/tui-design-skill, jrschumacher/skill-bubbletea-tui, pageton/tui-design-skill | MIT | digest.tui.md, research pages |
-| TheQtCompanyRnD/agent-skills qt-qml-review | BSD-3-Clause | digest.qml.md |
-| KDE HIG | CC-BY-SA-4.0, paraphrase only | digest.desktop.md |
-| GNOME HIG | no licence stated, paraphrase only, credit | digest.desktop.md |
-| emilkowalski/skills | MIT | the motion and polish skills |
+| clig.dev (cli-guidelines) | CC-BY-SA-4.0, paraphrase only | <https://clig.dev> |
+| gfargo/tui-design-skill, jrschumacher/skill-bubbletea-tui, pageton/tui-design-skill | MIT | <https://github.com/gfargo/tui-design-skill>, <https://github.com/jrschumacher/skill-bubbletea-tui>, <https://github.com/pageton/tui-design-skill> |
+| TheQtCompanyRnD/agent-skills qt-qml-review | BSD-3-Clause | <https://github.com/TheQtCompanyRnD/agent-skills> |
+| KDE HIG | CC-BY-SA-4.0, paraphrase only | <https://develop.kde.org/hig/> |
+| GNOME HIG | no licence stated; paraphrase only, credit | <https://developer.gnome.org/hig/> |
+| vercel-labs/web-interface-guidelines | MIT | <https://github.com/vercel-labs/web-interface-guidelines> |
+| emilkowalski/skills | MIT | <https://github.com/emilkowalski/skills> |
 
 ## Decisions
 

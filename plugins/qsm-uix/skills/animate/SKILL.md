@@ -45,10 +45,11 @@ it. A spring or a library only for springs, layout and exit animations, or gestu
 ### 4. Pick the properties
 
 - The whitelist, one owner here: `transform` and `opacity`; `clip-path` for reveals and the tab
-  indicator; height only for an accordion. Size, margin, padding and position trigger layout and
-  paint, so animation-performance and the web-motion family point here for the list.
-- Never scale from zero. Start from a scale of 0.9 to 0.97 with opacity 0, because nothing real
-  appears from nothing.
+  indicator; height only for an accordion; a blur under 20 px for a crossfade. Size, margin, padding
+  and position trigger layout and paint, so animation-performance and the web-motion family point
+  here for the list.
+- Never scale from zero. Start from a scale of 0.95 for a dropdown, 0.96 for a modal and 0.97 for
+  a tooltip, with opacity 0, because nothing real appears from nothing.
 - Transform origin at the trigger for popover, dropdown, menu, tooltip. A modal is exempt and stays
   centred.
 - A translate in percent is relative to the element's own size: 100 percent of its height moves it
@@ -63,7 +64,8 @@ it. A spring or a library only for springs, layout and exit animations, or gestu
 | --- | --- |
 | Entering or exiting | ease-out |
 | Moving or morphing on screen | ease-in-out |
-| Hover or colour change | ease |
+| Colour change on hover | ease |
+| A hover that moves something | ease-out |
 | Constant motion (marquee, progress) | linear |
 | Default | ease-out |
 
@@ -91,8 +93,8 @@ along). Any other keyword is a finding.
 
 UI stays under 300 ms: a 180 ms dropdown feels more responsive than a 400 ms one. Speed is
 perception too: a faster spinner makes loading feel faster at the same load time. The one named
-duration exception is the toast at 400 ms with `ease` (Sonner reads as elegant that way), not the
-generic UI budget. An exit takes 60 to 70 percent of its enter duration.
+duration exception is the toast at 400 ms with `ease` (its motion is tuned to the component's
+personality), not the generic UI budget. The exit duration is review-animations' standard 4.
 
 A spring instead for a drag with momentum, an element that should feel alive, a reversible
 gesture, or decorative mouse tracking: duration 0.5 s with bounce 0.2 (easier to reason about)
@@ -132,10 +134,10 @@ ui-design's rule for a fine hovering pointer.
 | Tab indicator with colour change | duplicate the tab list styled active, clip the copy to the active tab, animate the clip 250 ms ease-in-out |
 | Crossfade that shows two objects | a blur of 2 px with opacity 0.7 for 200 ms; blur under 20 px |
 
-Drag to dismiss: springs, not durations. Dismiss on a flick, not only distance: velocity
-`abs(distance) / elapsedMs` above 0.11. Capture the pointer once the drag starts, ignore extra
-touch points, damp the movement past an edge (friction, not a wall), and settle with a spring so an
-interrupted drag keeps its velocity.
+Drag to dismiss: springs, not durations. Dismiss on a flick, not only distance: velocity (distance
+travelled divided by elapsed milliseconds) above 0.11. Capture the pointer once the drag starts,
+ignore extra touch points, damp the movement past an edge (friction, not a wall), and settle with a
+spring so an interrupted drag keeps its velocity.
 
 ## Never ship
 
@@ -149,7 +151,7 @@ variant; everything entering at once.
 
 The code, then at most three lines: the gate result (frequency tier, named purpose, anything
 rejected and why), the ingredients (tool, properties, curve, duration or spring), and what to
-feel-check because code cannot show it: play it at 2 to 5 times the duration, step it frame by
+feel-check because code cannot show it: raise its duration to 2 to 5 times, step it frame by
 frame, test gestures on the real device, look again the next day.
 
 How each rule is written on a stack is its family: desktop (desktop-ui, qml-ui), terminal

@@ -24,7 +24,7 @@ right thing. It names, it does not design or build.
 
 ## Glossary
 
-Performance terms (jank, dropped frame, compositing, `will-change`, layout thrashing) are
+Performance terms (jank, dropped frame, compositing, layout thrashing) are
 animation-performance's.
 
 ### Entrances & Exits — how elements appear and disappear
@@ -58,7 +58,7 @@ animation-performance's.
 - **Scale** — Make an element bigger or smaller.
 - **Rotate** — Spin an element around a point.
 - **Skew** — Slant an element along the X or Y axis, shearing it out of its rectangular shape.
-- **3D tilt / Flip** — Rotate in 3D space (rotateX / rotateY) to add depth.
+- **3D tilt / Flip** — Rotate around a horizontal or vertical axis in 3D space to add depth.
 - **Perspective** — How strong the 3D effect looks — a lower value exaggerates depth, like the
   viewer is closer.
 - **Transform origin** — The anchor point a scale or rotation grows or spins from.

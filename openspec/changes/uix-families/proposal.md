@@ -38,16 +38,16 @@ None.
 ### Modified Capabilities
 
 - `qsm-uix`: adds the families requirement; modifies the stack skills requirement (the family
-  owners, libraries and conventions per skill); the motion, apple-design and stress requirements
-  point to the families instead of carrying stack syntax.
+  owners, libraries and conventions per skill). It modifies nothing else: the motion, apple-design
+  and stress changes carry their own pointers to the families.
 
 ## Impact
 
 - New: `plugins/qsm-uix/skills/desktop-ui/SKILL.md`, `plugins/qsm-uix/skills/cli-ui/SKILL.md`.
 - Changed: qml-ui, tui-ui, css-ui, react-ui, and every general skill with an "On each stack"
   section; plugins/qsm-uix/README.md.
-- Sources: the digests of the Qt review checklist, the KDE and GNOME HIGs, clig.dev and the TUI
-  skills, kept under the session scratchpad and cited by repository path in each skill.
+- Sources: the Qt review checklist, the KDE and GNOME HIGs, clig.dev, the TUI skills and the Vercel
+  web interface guidelines, each named by URL in the design and by repository path in each skill.
 
 ## Critiques
 

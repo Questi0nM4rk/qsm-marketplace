@@ -16,7 +16,8 @@
 - [x] 2.1 Remove every per-stack section from the general skills; each points to the families (owns
   the general skills; proof: `grep -nE` over the 14 general skills for `scale(`, `translate[XY]?(`,
   `blur(`, `margin-left`, `prefers-reduced`, `charAt`, `maxLength`, `AT-SPI`, `GTK`, `magick`,
-  `hl.`, `Easing.`, `cubic-bezier` and `ratatui` returns nothing; blocked by 1.1-1.3)
+  `hl.`, `Easing.`, `cubic-bezier`, `ratatui`, `QML`, `Sonner`, `will-change`, `rotate[XYZ]` and
+  `abs(` returns nothing; blocked by 1.1-1.3)
 - [x] 2.2 Revise the uix-emil-motion, uix-emil-polish, uix-emil-stress and uix-emil-stacks deltas so
   their "how it lands on each stack" clauses point to the families and the stack skills requirement
   is modified only here; README lists the families (owns those spec files and
