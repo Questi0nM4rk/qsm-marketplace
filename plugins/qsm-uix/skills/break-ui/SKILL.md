@@ -56,7 +56,7 @@ Use `example.com`, `example.org` or `.test` for addresses so a fixture never poi
 
 - **Names:** `Aleksandra Wisniewska-Kowalczyk` (long, hyphen is a break point); `Christopher
   Alexander Montgomery III` (naive initials give `CI`); `Jo` and `J` (empty column, initial `J`);
-  `Dang Thi Ngoc Han` with stacked diacritics (clipped by tight line height); `王秀英` (no spaces);
+  `Đặng Thị Ngọc Hân` with stacked diacritics (clipped by tight line height); `王秀英` (no spaces);
   an RTL name (icons land on the wrong side); `🦊 Fox` (`charAt(0)` is half a surrogate pair);
   "  Sam   Lee " (leading, trailing and repeated spaces); a missing name, only an email.
 - **Unbreakable strings:** the long email above; `a@b.co`; a long URL with query; a UUID; a file
@@ -87,9 +87,9 @@ The toggle swaps data at the boundary and is chrome, plain and out of the way. P
 
 **CSS / React.** A segmented control labelled Demo data / Worst case (plus Empty, One, 1,000 rows),
 fixed bottom-centre, small, gray track and white pill, system font, no animation on the content. In
-a project with a dev server: a `?data=worst` URL param read where the fixture is chosen (it
-survives reload), or a prototype route per fixture. No project: one self-contained HTML file with
-the component and both datasets inline.
+a project with a dev server: a `?data=worst` URL param read where the fixture is chosen, only
+behind the build's dev flag (it survives reload), or a prototype route per fixture. No project:
+one self-contained HTML file with the component and both datasets inline.
 
 **Quickshell QML.** No browser, so the toggle is a property on a debug singleton
 (`pragma Singleton`, `property string data: "demo"`) that every model reads through one binding,
@@ -107,7 +107,8 @@ middle for paths) and does the bar hold its layout (a `Layout.fillWidth` text wi
 
 **TUI.** An environment variable swaps the data source (`APP_DATA=worst`, `empty`, `one`) at the
 one place the rows are loaded, so the same binary prints both datasets and nothing is edited.
-Check at a narrow width (`COLUMNS=40`) and piped. The breaks: `.length` sizing misaligns on wide
+Check at a narrow width (a pty sized with `stty cols 40`; the binary reads the terminal's
+columns) and piped. The breaks: `.length` sizing misaligns on wide
 glyphs, so truncate by display width; a table that no longer fits becomes record blocks.
 
 ## Failure signatures

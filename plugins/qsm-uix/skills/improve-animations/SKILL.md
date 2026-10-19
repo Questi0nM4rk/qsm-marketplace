@@ -14,8 +14,9 @@ taste to execute. It plans; it never applies. "The motion here is already right"
 
 ## Hard rules
 
-1. Never modify source. The only files written live in `plans/` (`animation-plans/` when `plans/`
-   is taken). Asked to "just fix it", decline and point to running the plan with any agent.
+1. Never modify source. The only files written live in `plans/`; if `plans/` exists for something
+   else, stop and name it. Asked to "just fix it", decline and point to running the plan with any
+   agent.
 2. No mutating operation: no install, no build with side effects, no commit, no formatter.
 3. A plan is self-contained. The executor has none of this conversation: inline the exact curve,
    duration, file path and code excerpt; never "the easing discussed above".
@@ -38,12 +39,12 @@ hit 100+ times a day, what occasionally, what rarely. Sweeps: `transition`, `ani
 | Category | Hunt for, and the target |
 | --- | --- |
 | Purpose and frequency | animation on keyboard actions, palettes, constant hover; fix is often delete |
-| Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms; targets ease-out `0.23, 1, 0.32, 1`, ease-in-out `0.77, 0, 0.175, 1`, drawer `0.32, 0.72, 0, 1`; press 100 to 160, tooltip 125 to 200, dropdown 150 to 250, modal and drawer 200 to 500 ms; tooltips after the first open instantly |
-| Physicality and origin | `scale(0)`, pure fades, centre origin on a trigger-anchored element, no press feedback; targets `scale(0.9` to `0.97)` plus opacity, press `scale(0.97)`; modals are exempt |
-| Interruptibility | keyframes on toasts and toggles, tweened gestures, distance-only drag dismiss (velocity above about 0.11), hard drag stops; targets transitions or springs (`duration 0.5, bounce 0.2`, bounce 0.1 to 0.3) |
+| Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms (the toast `ease` exception aside); targets are animate's curve and duration tables; tooltips after the first open instantly |
+| Physicality and origin | `scale(0)`, pure fades, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt |
+| Interruptibility | keyframes on toasts and toggles, tweened gestures, distance-only drag dismiss (velocity, per animate), hard drag stops; targets transitions or springs (animate's values) |
 | Performance | `transition: all`, animated layout properties, Motion shorthand on a busy page, a parent's variable driving a child's transform, blur over 20 px |
 | Accessibility | movement with no reduced-motion branch, ungated hover, reduced motion that removes all feedback (it must be gentler, not zero) |
-| Cohesion and tokens | near-duplicate curves and durations, one bouncy component in a crisp app, entrances with no 30 to 80 ms stagger, double-exposed crossfades (`blur(2px)`) |
+| Cohesion and tokens | near-duplicate curves and durations, one bouncy component in a crisp app, entrances with no stagger, double-exposed crossfades (`blur(2px)`) |
 | Missed opportunities | state that teleports, panels with no origin story, flat rare moments; at most a handful, grounded in a seen seam |
 
 Depth by effort, default standard: quick is high-traffic components, about five HIGH findings;
@@ -82,19 +83,17 @@ refreshes stale file:line and retires fixed findings.
 
 ## On each stack
 
-The plan names targets in the stack's own form; the numbers never change.
+The plan names targets in the stack's own form; the curve, duration and scale numbers are animate's
+tables, written out in full in each plan, and the per-stack curve forms are animate's stack section.
 
-- **QML**: `Behavior on opacity { NumberAnimation { duration: Motion.<token>; easing.type:
-  Easing.BezierSpline; easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`, a `Motion` token for
-  every duration, a `Behavior` where a fixed-`from` animation restarts, `opacity` and `scale` where
-  `width` and `height` animate, clamping in `Motion` for reduced motion.
-- **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
-  and, for a surface with no trigger, the `layersIn` leaf at `speed = 2, bezier = "easeOut", style =
-  "fade"` (animate owns which surface gets which; 2 is 200 ms), `workspaces` off or very short for
-  keybind switching, `hl.config({ animations = { enabled = false } })` is motion off, not reduced
-  motion.
-- **CSS and React**: tokens `--ease-out`, `--ease-in-out`, `--ease-drawer`, `@starting-style`,
-  `prefers-reduced-motion`, hover gating, the full `transform` string in Motion.
+- **QML**: a `Behavior` with `Easing.BezierSpline`, a token for every duration, a `Behavior` where a
+  fixed-`from` animation restarts, `opacity` and `scale` where `width` and `height` animate,
+  clamping in the token singleton for reduced motion.
+- **Hyprland**: `hl.curve` and `hl.animation` per animate; for a surface with no trigger the
+  `layersIn` leaf (animate owns which surface gets which), `workspaces` off for keybind switching;
+  `hl.config({ animations = { enabled = false } })` is motion off, not reduced motion.
+- **CSS and React**: the `--ease-*` tokens, `@starting-style`, `prefers-reduced-motion`, hover
+  gating, the full `transform` string in Motion.
 - **TUI**: audit only spinner use (TTY only, none in piped output) and keyboard-driven redraw; the
   other categories do not apply and the report says so.
 

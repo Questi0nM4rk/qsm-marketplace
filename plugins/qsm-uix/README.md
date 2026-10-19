@@ -29,10 +29,10 @@ When designs carry their source and their numbers by default, this plugin can go
 | Skill | `animation-performance` | Finds why an animation drops frames and keeps it inside the frame budget; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `a11y-audit` | Drives the UI by keyboard and the accessibility tree, and fills a per-criterion conformance table |
 | Skill | `a11y-conformance` | Gives the WCAG 2.2 A and AA criteria and the law behind them (European Accessibility Act, EN 301 549) |
-| Skill | `qml-ui` | Quickshell and QML on Hyprland: Theme singleton, item-tree dump, qmllint and qmlformat |
-| Skill | `css-ui` | Plain CSS and HTML, with a short Tailwind section |
-| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, libraries and conventions (Vercel web interface guidelines) |
-| Skill | `tui-ui` | Terminal output: colour tiers, NO_COLOR, width, non-TTY output, progress |
+| Skill | `qml-ui` | Quickshell and QML on Hyprland: Theme singleton, item-tree dump, qmllint and qmlformat, libraries and conventions (Qt QML conventions, KDE and GNOME HIG) |
+| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions (Vercel web interface guidelines) |
+| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions (Vercel web interface guidelines) |
+| Skill | `tui-ui` | Terminal output: colour tiers, NO_COLOR, width, non-TTY output, progress, libraries and conventions (clig.dev, no-color.org) |
 | Skill | `break-ui` | Feeds a UI piece worst-case data behind a demo or worst-case toggle and reports each break with its fix; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `prototype` | Builds several genuinely different versions of one UI piece behind a switcher, only when invoked; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `mobile-native` | Makes a web app feel native on a phone: hover, tap highlight, viewport height, input zoom, safe areas, scroll; web only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
@@ -73,3 +73,32 @@ qsm-uix region-stats shot.png --rect 120,40,60,24 --top 8
 - A region past the image edge is refused, not clipped. `region-stats` caps at 65536 pixels.
 - `diff` reports SSIM distortion, where 0 means identical.
 - Files go to a `qsm-uix` temp directory unless `QSM_UIX_DIR` or `--out` says otherwise.
+
+## Sources
+
+The skills named "adapted from emilkowalski/skills" carry Emil Kowalski's work under his licence,
+given here in full.
+
+```text
+MIT License
+
+Copyright (c) 2026 Emil Kowalski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

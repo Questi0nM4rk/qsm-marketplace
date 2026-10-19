@@ -9,8 +9,9 @@ Sources, each saved with its URL and fetch date under the session's research fil
 | vercel-labs/web-interface-guidelines | MIT | 2026-10-05 | css-ui, react-ui |
 | TheQtCompanyRnD/agent-skills qt-qml-review | BSD-3 option | 2026-10-08 | qml-ui |
 | doc.qt.io QML coding conventions | Qt docs | Qt 6.12.0 | qml-ui |
-| hyprwm/hyprland-wiki animations | BSD-3 | 2026-10-14 | qml-ui |
-| KDE HIG, GNOME HIG | CC-BY-SA-4.0 | fetched 2026-10-19 | qml-ui, paraphrase |
+| hyprwm/hyprland-wiki animations | BSD-3 | 2026-10-14 | animate's Hyprland section |
+| KDE HIG | CC-BY-SA-4.0 | fetched 2026-10-19 | qml-ui, paraphrase |
+| GNOME HIG via Paresh-Maheshwari/gnome-skills | CC-BY-SA-4.0; official HIG licence not verified | fetched 2026-10-19 | qml-ui, paraphrase |
 | pageton/tui-design-skill | MIT | 2026-09-24 | tui-ui |
 | cli-guidelines/cli-guidelines | CC-BY-SA-4.0 | 2026-05-16 | tui-ui, paraphrase |
 

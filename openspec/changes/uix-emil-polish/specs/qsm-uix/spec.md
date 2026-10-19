@@ -12,7 +12,8 @@ SHALL fit 12 KB with no extra file.
 
 - **WHEN** the user asks for a translucent or blurred panel on Hyprland
 - **THEN** apple-design SHALL give the material and depth rule and SHALL say how it lands as
-  Hyprland blur and layer rules and as the QML surface's colour and opacity
+  the Hyprland blur setting, with a shell surface's blur set at runtime and never as a standing
+  layer rule, and as the QML surface's colour and opacity
 
 ## MODIFIED Requirements
 
@@ -46,6 +47,5 @@ running UI.
 #### Scenario: A card is separated from its background
 
 - **WHEN** the design separates a raised surface from what is under it
-- **THEN** the skill SHALL use a semi-transparent shadow or a low-alpha border by his README's rule,
-  not a
-  solid opaque border
+- **THEN** the skill SHALL use a semi-transparent shadow by his README's rule, or a low-alpha
+  border (qsm), not a solid opaque border

@@ -20,16 +20,20 @@ Sizes of the source files, against the 12 KB cap of Iron Law 4:
 2. **Rules once, stacks after.** Each skill states his rule stack-neutral with its value, then one
    section "On each stack" with a line per stack only where the rule applies:
    - QML: `Behavior on`, `NumberAnimation`, `Easing.BezierSpline` with his cubic-bezier points,
-     `SpringAnimation`, the Theme singleton's motion tokens.
-   - Hyprland: `bezier = name, x1, y1, x2, y2` and `animation = windows, 1, speed, name, style`;
-     speed is in deciseconds.
+     `SpringAnimation`; durations and curves come from the `Motion` singleton when the shell has
+     one, else the `Theme` singleton.
+   - Hyprland (Lua config):
+     `hl.curve(name, { type = "bezier", points = { { x1, y1 }, { x2, y2 } } })` and
+     `hl.animation({ leaf, enabled, speed, bezier, style })`; speed is in deciseconds.
    - CSS/React: his original form.
    - TUI: spinners and redraw only; most motion rules do not apply and the skill says so.
 3. **Over the cap is a cut, not a split.** animation-vocabulary and animation-performance drop
    web-only depth first (Framer Motion internals, React re-render detail) to fit 12 KB, because the
-   cap is a law and a second skill per source breaks decision 1.
+   cap is a law and a second skill per source breaks decision 1. His skills are dense, so the 12 KB
+   cap, not the 8 KB aim, is the bound; the cut order is web-only depth first.
 4. **Motion has one owner.** review-animations owns the motion review bar; ux-audit's check 7
-   becomes one line handing to it, so no two voices judge one animation.
+   hands the judgement to it and keeps only the measurement method, so no two voices judge one
+   animation.
 5. **Credit.** Each skill's last line names the source file and licence; the README's skill list
    says the motion set is adapted from his repository.
 

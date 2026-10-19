@@ -46,8 +46,7 @@ ux-audit (feedback, forms). Motion is animate and review-animations.
    element. When a custom widget is unavoidable (combobox, tabs), give it the role, `aria-*`
    state, arrow-key handling and visible focus, in that order; an icon-only button gets
    `aria-label`, an icon beside text gets `aria-hidden`. Prefer a maintained headless library
-   (base-ui, or Radix or React Aria when the project has them) over writing the pattern: the
-   keyboard contract is the hard part.
+   (pick-ui-library) over writing the pattern: the keyboard contract is the hard part.
 8. **JS-driven motion honours reduced motion.** CSS handles its own (css-ui). For animation run
    from JS, read `matchMedia("(prefers-reduced-motion: reduce)")` and subscribe to `change`; with
    an animation library use its switch (`MotionConfig reducedMotion="user"`). Replace movement
@@ -76,8 +75,8 @@ From the Vercel web interface guidelines, in our words:
   polite live region (rule 4).
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
   rendering against a server and client mismatch.
-- **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, set `inert` on
-  the dragged element and disable text selection.
+- **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, disable text
+  selection and set `inert` on dragged elements, as the Vercel rule says.
 
 ## Red flags
 

@@ -82,15 +82,21 @@ inline, not on submit. Every screen answers where am I, where can I go, what is 
 get out. Proximity implies relation; a control sits near what it affects, and a label needed to
 explain a control means weak mapping. Name navigation for its contents, not "Home".
 
-## On each stack
+## 6. Reduced motion
 
-Reduced motion is `animate`'s rule on every stack below; this table adds nothing to it.
+Reduced motion means a gentler equivalent, not no feedback: a short opacity cross-fade in place of
+slides, springs and parallax, no overshoot, and the opacity and colour changes that aid
+comprehension stay. Durations and curves are `animate`'s. Large moving things turn semi-transparent
+while they travel, no background moves across the whole viewport, and a light-to-dark switch eases
+instead of jumping in brightness.
+
+## On each stack
 
 | Stack | Materials and depth | Response, type |
 | --- | --- | --- |
-| Hyprland | The compositor owns blur and shadow: `hl.config({ decoration = { rounding = 14, blur = { enabled, size, passes, vibrancy }, shadow = { enabled, range, render_power, color } } })` (Lua). A shell surface blurs only when a layer rule targets its namespace `hl.layer_rule({ name = "blur-bar", match = { namespace = "bar" }, blur = true, ignore_alpha = 0.3 })`, where `ignore_alpha` keeps fully transparent pixels unblurred; confirm the key names against `hyprctl version` and the wiki before writing one | Rounding is one value, so the shell's radii follow it (ui-audit's nested radius line). Heavy blur costs every frame: size and passes stay small on weak GPUs |
+| Hyprland | The compositor owns blur and shadow: blur on, with its size, passes and vibrancy, a shadow, and one rounding value. A shell surface's blur is set at runtime while the surface is shown, never as a standing layer rule, because an always-mapped transparent surface would blur the whole desktop for good; qml-ui owns the stack | Rounding is one value, so the shell's radii follow it (ui-audit's nested radius line). Heavy blur costs every frame: size and passes stay small on weak GPUs |
 | Quickshell QML | The window needs `color: "transparent"` and a translucent fill from `Theme`, with the on-pair measured over the blur, not over the fill alone. Opacity belongs to the fill colour, never to the item, because item opacity fades the text with it. Reduced transparency is a `Theme` flag that swaps in the solid fill | Press feedback on the control's own state, from `Motion`. Type sizes and tracking come from `Theme`; `font.letterSpacing` is in pixels, so convert the em value per size |
-| CSS and React | `backdrop-filter: blur() saturate()` on a semi-transparent fill; `@media (prefers-reduced-transparency: reduce)` swaps to a solid fill with the blur dropped, and `prefers-contrast: more` adds a border | Press feedback on `:active`; `letter-spacing` in em per heading step, `font-optical-sizing: auto`, spacing in `rem` |
+| CSS and React | A backdrop blur with saturation on a semi-transparent fill; reduced transparency swaps to a solid fill with the blur dropped, and more contrast adds a border (css-ui writes the queries) | Press feedback on the pressed state; letter-spacing in em per heading step, optical sizing automatic, spacing in `rem` |
 | TUI | No transparency: depth is one step of background shade or a rule line, and a terminal's own opacity is the person's. Where the terminal gives 256 or truecolor, a panel is one shade off the base | Response is output before the work finishes (a prompt echo, a spinner at once). Type is the terminal's font; hierarchy is bold, dim and case, never colour alone |
 
 ## Red flags

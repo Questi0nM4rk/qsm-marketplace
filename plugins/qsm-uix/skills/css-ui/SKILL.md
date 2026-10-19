@@ -1,6 +1,6 @@
 ---
 name: css-ui
-description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, dark theme, dark mode, hover animation, sticky header covers content, layout shifts, 100vh on mobile, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
+description: "Use when writing or fixing plain CSS and HTML for a page or component, or wiring Tailwind to a set of colours. Triggers: write the CSS for, style this card, dark theme, dark mode, hover animation, sticky header covers content, layout shifts, no framework, vanilla CSS, container query, Tailwind colours consistent, Tailwind theme config, napis CSS, tmavy rezim, stylovani. Builds the design source in CSS; how to audit it is ui-audit, why the values are what they are is ui-design."
 ---
 
 # CSS UI
@@ -41,13 +41,14 @@ design source is the expected column), measuring the result (ui-audit), criteria
    Adjacent states differ by a contrast ratio of 1.2 or more.
 6. **Targets are at least 24 px, 32 px when frequent.** `min-block-size` and `min-inline-size`
    on the control, padding for the rest; a 16 px icon button gets padding, not a bigger icon.
-7. **Motion comes from tokens, and gentles on request.** `--dur-in` and `--dur-out` for opacity and
-   colour (exit shorter than enter; review-animations judges it), `--dur-move` for transform and
-   position; transitions name the properties (`transition: opacity var(--dur-in) var(--ease)`,
-   never `all`). Animate `opacity` and `transform` only. Then
-   `@media (prefers-reduced-motion: reduce) { :root { --dur-move: 0.01ms } }`: movement is
-   zeroed, the short fade stays (animate: gentler, not zero), and one switch covers every
-   component. Reason: a per-component override is forgotten in the next component.
+7. **Motion comes from tokens, and gentles on request.** Easing is animate's `--ease-out`,
+   `--ease-in-out` and `--ease-drawer`; durations are the design source's motion tokens (ui-design
+   owns them), written `--dur-<name>` here as assumed. Transitions name the properties
+   (`transition: opacity var(--dur-<name>) var(--ease-out)`, never `all`). Animate `opacity` and
+   `transform` only. Then `@media (prefers-reduced-motion: reduce)` sets the movement durations on
+   `:root` to `0.01ms`: movement is zeroed, the short fade stays (animate: gentler, not zero), and
+   one switch covers every component. Reason: a per-component override is forgotten in the next
+   component.
 8. **Layout does not shift.** `aspect-ratio` or `width`/`height` on images and embeds, a
    reserved block for async content, `font-display: swap` with a metric-matched fallback
    (`size-adjust`). Reason: a late image pushing a button under the pointer is a mis-click.

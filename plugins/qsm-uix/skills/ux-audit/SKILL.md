@@ -39,12 +39,12 @@ input while they work, because stealing focus costs more than the audit finds.
    finding, severity by how core it is. Measure each hint against its backdrop with
    `qsm-uix contrast shot.png --fg X,Y --bg X,Y`: a hint that is the only way in needs 3 or better,
    and under 1.5 it is decoration. More than one hint style for one behaviour class is a finding.
-2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Anything at
-   or over 1 s gets a progress affordance; a near-instant action must not flash a spinner. No state
-   changes the layout bounds (a press scale is a transform and is allowed), because moving the
-   target under the cursor makes the click miss. Interactive elements separate from passive readouts
-   without hovering; state the rule and check it sorts every element. A stateful control shows it,
-   the states differing by a contrast ratio of at least 1.2.
+2. **Affordance and feedback.** Every input gets a visible answer within about 100ms. Anything at or
+   over 1 s gets a progress affordance; a near-instant action must not flash a spinner. A state that
+   changes the layout bounds is a finding (the rule is ui-design's), because moving the target under
+   the cursor makes the click miss. Interactive elements separate from passive readouts without
+   hovering; state the rule and check it sorts every element. A stateful control shows it, the
+   states differing by a contrast ratio of at least 1.2.
 3. **Target ergonomics.** A surface that opens on hover opens on entry with no delay, stays open
    inside the union of its trigger, its panel and the straight path between them, and closes
    180 ms after leaving that union. Measure the zone from that union, never from the painted
@@ -67,8 +67,8 @@ input while they work, because stealing focus costs more than the audit finds.
 6. **Vocabulary consistency.** Build the gesture table: each input (left, right, middle click,
    scroll, hover, drag) against each surface. One input means one class of thing everywhere, the
    same dismiss gesture works on every dismissible surface, the same concept carries the same label
-   and icon, and every transition takes its duration and easing from a motion token (a literal
-   is a finding; whether the tokens are cohesive is review-animations'). Navigation keeps one
+   and icon, and every transition's duration and easing are traced to a motion token in the source
+   (whether the values are right is review-animations'). Navigation keeps one
    placement, marks the current location, and keeps state when the user goes back. The wheel over
    a scrolling list scrolls that list: a row that expands never takes the wheel for its own body,
    and expands by click on its leading part, the rest of the row being its action, with no
@@ -79,6 +79,8 @@ input while they work, because stealing focus costs more than the audit finds.
    This audit adds only the measurement on a running surface:
    - Read the duration and easing tokens from the source first, then poll the introspection
      surface across the transition and build the timeline from mid-flight values.
+   - Open and close land within the motion token plus 10 percent and settle on the resting
+     geometry.
    - With pixels only, `qsm-uix burst --count 8 --interval 120 --out-dir frames/` gives frames with
      real elapsed time, honest to 100ms to 200ms per step and no finer. Say that limit.
    - `qsm-uix diff a.png b.png` (distortion under 0.001) works only on a frozen scene; on a live

@@ -41,8 +41,9 @@ does not move for style.
 CSS transition for hover, press, colour, a state you toggle. `@starting-style` for entry on mount.
 CSS animation for predetermined motion that must stay smooth while the page is busy. WAAPI
 (`element.animate()`) for JS control with CSS performance. A motion library only for springs,
-layout and exit animations, or gesture-driven values. A component (toast, drawer, menu) is a
-library's job, not a hand-rolled `<div>`.
+layout and exit animations, or gesture-driven values. On the web a toast,
+drawer or menu is a library's job (pick-ui-library), not a hand-rolled `<div>`; in QML it is reuse
+before building (qml-ui, "Reuse before building").
 
 ### 4. Pick the properties
 
@@ -54,10 +55,9 @@ library's job, not a hand-rolled `<div>`.
   centred.
 - `translate` percentages are relative to the element's own size: `translateY(100%)` moves by its
   own height whatever the content. Prefer them to pixels.
-- `scale()` scales children too; on a press that is the point.
 - No state changes layout bounds. A press is a `transform: scale()` on `:active` or pressed, which
-  keeps the box (the one owner of this rule); hover, focus and disabled change colour, opacity or
-  shadow only.
+  keeps the box; hover, focus and disabled change colour, opacity or shadow only (ui-design owns the
+  no-layout-change rule).
 - Write `transform` on the element itself, never through a variable on its parent.
 
 ### 5. Easing and duration, or a spring
@@ -88,13 +88,14 @@ A curve that is not here comes from easing.dev or easings.co, never hand-rolled.
 | Tooltip, small popover | 125 to 200 ms |
 | Dropdown, select | 150 to 250 ms |
 | Modal, drawer | 200 to 500 ms |
-| Marketing, explanatory | longer allowed |
 
 UI stays under 300 ms: a 180 ms dropdown feels more responsive than a 400 ms one. Speed is
-perception too: a faster spinner makes loading feel faster at the same load time.
+perception too: a faster spinner makes loading feel faster at the same load time. The one named
+exception is the toast: `ease` at 400 ms, because its motion is tuned to the component's
+personality (Sonner reads as elegant that way), not to the generic UI budget.
 
-A spring instead when the motion is a drag with momentum, an element that should feel alive, a
-gesture the user can reverse, or decorative mouse tracking: `{ type: "spring", duration: 0.5,
+A spring instead for a drag with momentum, an element that should feel alive, a reversible
+gesture, or decorative mouse tracking: `{ type: "spring", duration: 0.5,
 bounce: 0.2 }` (easier to reason about) or `{ mass: 1, stiffness: 100, damping: 10 }` (more
 control). Bounce 0.1 to 0.3, and none in most UI: drag-to-dismiss and playful moments only.
 
@@ -123,12 +124,11 @@ a real pointer hovers.
 | Tooltip | as a popover, 125 ms, from `scale(0.97)`; once one is open, neighbours open with 0 ms and no delay |
 | Modal | centred origin; `scale(0.96)` + opacity 0, 250 ms ease-out; backdrop opacity on the same 250 ms |
 | Drawer, sheet | `translateY(100%)` to 0, 500 ms ease-drawer; with drag it becomes a gesture (below) |
-| Toast | enters from `translateY(100%)` with opacity 0, 400 ms `ease` (slower, tuned to its character); `@starting-style` or a mounted flag |
+| Toast | enters from `translateY(100%)` with opacity 0, 400 ms `ease` (the exception above); `@starting-style` or a mounted flag |
 | Accordion | `height` + opacity, 200 ms ease-out, content height measured, never animated to `auto` |
 | Stagger a group | 30 to 80 ms between items, `translateY(8px)` + opacity, 300 ms ease-out; only for a view seen occasionally, never blocks input |
 | Hold to confirm | `clip-path: inset(0 100% 0 0)` to `inset(0)`: press 2 s linear, release 200 ms ease-out, plus the press scale |
 | Tab indicator with colour change | duplicate the tab list styled active, clip the copy to the active tab, animate the clip 250 ms ease-in-out |
-| Scroll reveal | marketing only; `inset(0 0 100% 0)` to `inset(0)`, 600 ms ease-in-out, once |
 | Crossfade that shows two objects | `blur(2px)` with opacity 0.7 for 200 ms; blur under 20 px |
 
 Drag to dismiss: springs, not durations. Dismiss on a flick, not only distance: velocity
@@ -138,12 +138,14 @@ interrupted drag keeps its velocity.
 
 ## On each stack
 
-**Quickshell QML.** Durations and curves are `Motion.*` tokens (qml-ui owns the singleton); write
-the values above as tokens, never literals in a component.
+**Quickshell QML.** Durations and curves are tokens as qml-ui step 2 defines them: `Motion` when
+the shell has one, else `Theme`; with no singleton, say so and ask. Examples write `Motion.<name>`,
+listed as assumed; never a literal in a component.
 
-- `Behavior on opacity { NumberAnimation { duration: Motion.fast; easing.type: Easing.BezierSpline;
-  easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`. The array is his x1, y1, x2, y2, then `1, 1`.
-  ease-in-out is `[0.77, 0, 0.175, 1, 1, 1]`, drawer `[0.32, 0.72, 0, 1, 1, 1]`.
+- `Behavior on opacity { NumberAnimation { duration: Motion.<name>;
+  easing.type: Easing.BezierSpline; easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`. The array
+  is his x1, y1, x2, y2, then `1, 1`. ease-in-out is `[0.77, 0, 0.175, 1, 1, 1]`, drawer
+  `[0.32, 0.72, 0, 1, 1, 1]`.
 - A Behavior retargets from the current value, so it is the transition; a `NumberAnimation` with
   fixed `from` restarts and is the keyframe. Use Behavior for anything triggered rapidly.
 - Enter: `opacity` and `scale` from 0.95 with `transformOrigin` or a `Scale { origin }` at the
@@ -163,7 +165,7 @@ namespace gets no compositor animation (`hl.layer_rule({ match = { namespace = "
 true })`). A surface with no trigger (notification, OSD, a bar appearing) may use the compositor
 instead: the `layersIn` leaf with `speed = 2, style = "fade"` and a faster `layersOut`. Never both.
 A launcher or palette toggle gets neither (step 1). Workspace switches are keyboard-driven and
-constant: the `workspaces` leaf with `enabled = false`, or at most a 2 to 3 decisecond `slide`.
+constant: the `workspaces` leaf with `enabled = false`.
 Motion off entirely is `hl.config({ animations = { enabled = false } })`.
 
 **CSS and React.** His form: custom properties `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`,
@@ -173,9 +175,9 @@ then `@starting-style`, `@media (prefers-reduced-motion: reduce)` and `@media (h
 "translateX(100px)" }}`, not `x: 100`, when the page is busy.
 
 **TUI.** Most of this does not apply: a terminal redraws, it does not composite. What applies: no
-animation for a keyboard-driven action, a spinner only on a TTY and never in piped output (tui-ui
-owns the cadence rules), and a faster spinner reads as faster work. Easing, springs, origin and
-stagger do not exist there.
+animation for a keyboard-driven action, a spinner only on a TTY and never in piped output
+(animation-performance owns the redraw cost), and a faster spinner reads as faster work. Easing,
+springs, origin and stagger do not exist there.
 
 ## Never ship
 

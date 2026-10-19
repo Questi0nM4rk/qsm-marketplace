@@ -24,30 +24,28 @@ of high-conviction ones beats a wishlist. It reports and never implements.
    never animate. Tens a day (hover, list navigation, frequent toggle): reject, or
    near-imperceptible motion only. Occasional (modal, drawer, toast, settings): eligible. Rare or
    first-time (onboarding, empty state, success, celebration): eligible, the delight budget. A
-   keyboard- initiated action is a disqualifier, not a judgment call.
+   keyboard-initiated action is a disqualifier, not a judgment call.
 2. **Purpose**, named: feedback, spatial consistency, state indication, preventing a jarring change,
    explanation (marketing and onboarding only), delight (rare tier only). No name, reject.
-3. **Speed.** It must fit the budget: press 100 to 160, tooltip and small popover 125 to 200,
-   dropdown and select 150 to 250, modal and drawer 200 to 500 ms, UI under 300. A moment that only
-   works as a slow showy animation fails.
+3. **Speed.** It must fit animate's duration table, UI under 300 ms. A moment that only works as a
+   slow showy animation fails.
 4. **Function.** Decoration on dense, functional UI hinders. Data the user reads or acts on does not
    move for style: a mouse-tracking effect is fine on a landing page and wrong on a banking graph.
 
 ## Where to hunt
 
-- **Feedback gaps.** A pressable with no `:active` state gets `scale(0.97)`, 160 ms ease-out. A
-  destructive action behind a plain click gets hold-to-confirm: `clip-path: inset(0 100% 0 0)`
-  overlay, 2 s linear on press, 200 ms ease-out on release.
-- **Teleporting state.** Content that appears or vanishes: enter from `scale(0.95` to `0.97)` plus
+- **Feedback gaps.** A pressable with no pressed state gets animate's press scale. A destructive
+  action behind a plain click gets hold-to-confirm (animate's recipe).
+- **Teleporting state.** Content that appears or vanishes: enter from animate's start scale plus
   opacity 0, ease-out, never `scale(0)`; a collapse that snaps gets height plus opacity; a list that
   adds and removes rows (not a high-frequency one) gets transitions, not keyframes.
 - **No spatial story.** A panel or menu with no tie to its trigger scales from the trigger's origin
   (a modal stays centred). A surface that exits another way than it entered gets symmetric paths,
   with percentage translates, not pixels.
-- **Group entrances.** A grid that pops in all at once on an occasional view: 30 to 80 ms stagger,
-  decorative, never blocking input.
-- **Gesture seams.** A draggable that snaps with no physics: a spring (`duration 0.5, bounce 0.2`,
-  bounce 0.1 to 0.3), velocity dismissal above about 0.11, rising friction at the edge.
+- **Group entrances.** A grid that pops in all at once on an occasional view: a stagger (animate's
+  gap), decorative, never blocking input.
+- **Gesture seams.** A draggable that snaps with no physics: a spring, velocity dismissal, rising
+  friction at the edge (animate's values).
 - **The delight budget.** Rare, high-emotion moments rendered flat: the only place bounce and a
   longer beat are welcome.
 
@@ -67,18 +65,14 @@ drag handlers, entering lists, empty-state and success components; in QML a `vis
 
 ## On each stack
 
-The recipe is written in the stack's form; the values are the same.
+The recipe is written in the stack's form (animate's stack section); the values are animate's.
 
-- **QML**: a `Behavior on opacity` and `scale` with `Easing.BezierSpline` and
-  `bezierCurve: [0.23, 1, 0.32, 1, 1, 1]`, durations from `Motion` tokens, origin at the trigger.
-- **Hyprland**: `hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })`
-  for a surface with no trigger, the `layersIn` leaf at `speed = 2, bezier = "easeOut", style =
-  "fade"` (animate owns which surface gets which; deciseconds); never workspace motion on a
-  keybind-driven switch.
-- **CSS and React**: `--ease-out: cubic-bezier(0.23, 1, 0.32, 1)`, `--ease-in-out:
-  cubic-bezier(0.77, 0, 0.175, 1)`, `--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)`,
-  `@starting-style`, reduced-motion handling (gentler, not zero) and hover gating on every
-  suggestion that involves hover.
+- **QML**: a `Behavior on opacity` and `scale` with `Easing.BezierSpline`, durations from the token
+  singleton, origin at the trigger.
+- **Hyprland**: for a surface with no trigger, the `layersIn` leaf (animate owns which surface gets
+  which); never workspace motion on a keybind-driven switch.
+- **CSS and React**: the `--ease-*` tokens, `@starting-style`, reduced-motion handling (gentler, not
+  zero) and hover gating on every suggestion that involves hover.
 - **TUI**: opportunities are few: a spinner or count where work passes a second (TTY only). The
   rest does not apply.
 

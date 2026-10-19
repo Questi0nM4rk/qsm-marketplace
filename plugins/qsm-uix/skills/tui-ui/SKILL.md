@@ -41,10 +41,11 @@ of lines into a log.
 ## Colour
 
 - Plain by default; colour is an addition. Off when `NO_COLOR` is set and not empty (any value,
-  per no-color.org: an empty string does not count), when stdout is not a TTY, when `TERM=dumb`,
-  and under `--no-color`. `FORCE_COLOR` turns it on for a non-TTY and loses to `NO_COLOR`.
-  Order: `--no-color`, `NO_COLOR`, `FORCE_COLOR`, then TTY. Why: the user's explicit choice
-  outranks detection, and the flag outranks the environment.
+  per no-color.org: an empty string does not count) and under `--no-color`. Order: `--no-color`,
+  `NO_COLOR`, `FORCE_COLOR`, then `TERM=dumb` and a non-TTY turn colour off. `FORCE_COLOR` turns it
+  on for a non-TTY, loses to `NO_COLOR`, and wins over `TERM=dumb` only when the user set it
+  explicitly (force-color.org). Why: the user's explicit choice outranks detection, and the flag
+  outranks the environment.
 - Read `NO_COLOR`, `FORCE_COLOR` and `TERM=dumb` from the environment once, in the one decision
   function, because `getColorDepth` is absent off a TTY and cannot express `FORCE_COLOR`. Use
   `process.stdout.getColorDepth()` (1, 4, 8, 24) only for depth, on a TTY; do not parse `COLORTERM`

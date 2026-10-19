@@ -72,8 +72,8 @@ IpcHandler { target: "proto"; function pick(n: int): void { Debug.variant = n; }
 
 `qs ipc -p <shell.qml> call proto pick 2`. Variants are separate QML files in a prototype
 directory the production shell does not import; the harness loads the surface in the real bar or
-popout position so the neighbours are real. Replay is a `pick` of the same number (the `Loader`
-re-creates the item). Tokens come from `Theme` and `Motion`; see qml-ui.
+popout position so the neighbours are real. Replay sets the `Loader`'s `active` to false, then
+true, which re-creates the item. Tokens come from `Theme` and `Motion`; see qml-ui.
 
 **TUI.** An environment variable picks the variant (`APP_VARIANT=2`), read where output is
 rendered, so one binary prints each version and nothing is edited. A keypress switcher only in an
@@ -112,13 +112,16 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
 .proto-picker-item { position: relative; display: flex; align-items: center; height: 28px;
   padding: 0 12px; border: 0; border-radius: 999px; background: transparent;
   color: rgba(255,255,255,.55); font: inherit; cursor: pointer; transition: color 150ms ease-out; }
-.proto-picker-item:hover { color: rgba(255,255,255,.85); }
+@media (hover: hover) and (pointer: fine) {
+  .proto-picker-item:hover { color: rgba(255,255,255,.85); } }
 .proto-picker-item:active { transform: scale(.97); }
 .proto-picker-item:focus-visible { outline: 2px solid rgba(255,255,255,.4); outline-offset: 2px; }
 .proto-picker-item[data-active] { color: #fff; }
 .proto-picker-divider { width: 1px; height: 16px; margin: 0 4px; background: rgba(255,255,255,.12); }
 .proto-picker-replay { padding: 0 10px; font-size: 14px; }
 .proto-picker[data-position="top"] { bottom: auto; top: 24px; }
+@media (prefers-reduced-transparency: reduce) {
+  .proto-picker { background: rgb(10,10,10); backdrop-filter: none; } }
 ```
 
 The highlight moves between items with `transform` only (`translateX` and `scaleX`, never `left` or

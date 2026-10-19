@@ -55,10 +55,11 @@ Use these headings, because the audits and the stack skills look for them:
 ## Rules
 
 - **Every colour is a token, and a fill token never travels alone.** Define `primary` with
-  `on-primary` and record the ratio per theme: 4.5 for text, 3 for large text, icons, borders and
-  focus indicators (WCAG 1.4.3, 1.4.11). Why: contrast belongs to a pair, so a colour checked alone
-  is checked against nothing. Compute the ratio with the WCAG relative-luminance formula, never
-  estimate it (`qsm-uix contrast` reads pixels of an image, so it verifies the built pair later).
+  `on-primary` and record the ratio per theme: 4.5 for text, 3 for large text, icons, control
+  borders and focus indicators (WCAG 1.4.3, 1.4.11). Why: contrast belongs to a pair, so a colour
+  checked alone is checked against nothing. Compute the ratio with the WCAG relative-luminance
+  formula, never estimate it (`qsm-uix contrast` reads pixels of an image, so it verifies the built
+  pair later).
 - **Design each theme on its own column.** Write dark values by choosing them against dark
   surfaces, then check them; an inverted light palette fails because shadows vanish, saturated
   fills glare, and light borders turn into holes. Parity means every pair passes in each theme
@@ -70,7 +71,7 @@ Use these headings, because the audits and the stack skills look for them:
   literal in a component is a decision nobody reviewed, and a scale is how one change reaches
   every surface. Density is an axis of the scale (compact, regular), not a second design.
 - **Every pressable has a pressed state, and no state moves its neighbours.** The press shrinks
-  the element to 0.95 to 0.98 of its size at once, as a transform on `:active` or pressed that does
+  the element to 0.95 to 0.98 of its size at once, as a transform on the pressed state that does
   not change layout bounds (animate owns it); hover, focus and disabled change colour, opacity or
   elevation and keep the box. Adjacent states of a control differ by a contrast ratio
   of at least 1.2, and the focus indicator reaches 3:1 against its neighbours. Why: a press with
@@ -125,9 +126,9 @@ Use these headings, because the audits and the stack skills look for them:
   one brings keyboard, focus, scaling and screen reader behaviour for free.
 - **A style is a constraint set, never a name.** Write what the look requires (for example "raised
   surfaces separate by a low-alpha border or a soft shadow, never an opaque border"), the
-  accessibility it
-  brings, and where it must not be used (dense data, small text, high-contrast users). Why: a
-  named fad such as "glass" says nothing the audit can measure; a constraint can fail a pair.
+  accessibility it brings, and where it must not be used (dense data, small text, high-contrast
+  users). Why: a named fad such as "glass" says nothing the audit can measure; a constraint can
+  fail a pair.
 
 ## Output
 

@@ -47,7 +47,7 @@ what you animate (work per frame) and where it runs (whether other work can bloc
 
 | Tier | Properties |
 | --- | --- |
-| Composite only, cheapest | `transform`, `opacity`; in current engines also `filter`, `clip-path`, `background-color` (test across devices, support is uneven) |
+| Composite only, cheapest | `transform`, `opacity`, and in current Chrome/Firefox also `filter`, `clip-path`, `background-color` (gaining support) |
 | Paint and composite | `box-shadow`, `border-radius`, `color` |
 | Layout, paint and composite | `width`, `height`, `padding`, `margin`, `top`, `left`, `border-width` |
 
@@ -61,9 +61,10 @@ beside it every frame, `translateX` does not.
 components) competes with everything else and its frame is late when the thread is busy. WAAPI and
 CSS transitions and keyframes can be hardware-accelerated and stay smooth whatever JS is doing.
 Watch for motion that plays while the page does heavy work (page transitions, a tab indicator during
-navigation, anything beside fetching or hydration): Vercel's tab indicator, a shared layout
-animation, dropped frames while the next page loaded, and a CSS animation fixed it. Acceleration is
-progressive enhancement: percentage transforms are the right call for unknown sizes even where an
+navigation, anything beside fetching or hydration): Vercel's dashboard animated its active tab
+indicator with a Framer Motion shared layout animation, the browser was loading the next page at
+exactly that moment, so it dropped frames, and moving it to a CSS animation fixed it. Acceleration
+is progressive enhancement: percentage transforms are the right call for unknown sizes even where an
 engine declines to accelerate them, because correctness beats a best-effort optimisation.
 
 ## Three traps that look correct

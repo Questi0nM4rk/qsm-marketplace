@@ -24,22 +24,24 @@ A violation of any is a finding.
 3. **Responsive easing.** Enter and exit use ease-out or a strong custom curve; moving on screen
    uses ease-in-out; hover and colour use ease; constant motion is linear. Ease-in on UI blocks,
    because it delays the moment watched. Built-in keywords are too weak for a deliberate animation.
-4. **Under 300 ms.** Press 100 to 160, tooltip and small popover 125 to 200, dropdown and select 150
-   to 250, modal and drawer 200 to 500 ms; marketing may run longer. Over 300 on a UI element needs
-   a stated reason.
+   The one named exception is the toast: `ease` at 400 ms, because its motion is tuned to the
+   component's personality, not to the generic UI budget (animate).
+4. **Under 300 ms.** Each element's duration is in animate's table; marketing may run longer. Over
+   300 on a UI element needs a stated reason, and the toast exception above is one.
 5. **Origin and physicality.** A popover, dropdown or tooltip scales from its trigger, not its
-   centre (a modal stays centred). Never from `scale(0)`: start at 0.9 to 0.97 with opacity 0. Press
-   feedback is `scale(0.97)`, 0.95 to 0.98, 160 ms ease-out.
+   centre (a modal stays centred). Never from `scale(0)`: start from animate's start scale with
+   opacity 0. Press feedback is a scale per animate's recipe. An exit leaves the way it entered (a
+   toast in from the bottom leaves through the bottom).
 6. **Interruptible.** What is triggered rapidly or by a gesture (toast, toggle, drag) retargets from
-   the current value: transitions or springs, not keyframes that restart from zero.
+   the current value: transitions or springs, not keyframes that restart from zero. Decoration
+   (a stagger) never blocks input while it plays.
 7. **Cheap properties.** `transform` and `opacity` only; `width`, `height`, `margin`, `padding`,
    `top`, `left` are performance findings. `transition: all` is always a finding.
 8. **Accessible.** Reduced motion is honoured and means gentler, not zero: keep opacity and colour,
    drop movement. Hover motion is gated to a real hovering pointer.
 9. **Asymmetric where deciding.** Deliberate phases (press, hold, destructive confirm) run
-   slower, the system's answer snaps (hold 2 s linear, release 200 ms ease-out). Symmetric timing on
-   a press-and-release is a finding. A common exit is the enter's mirror, quicker; an exit as slow
-   as its enter is a finding (his example: enter 2 s, exit 200 ms).
+   slower, the system's answer snaps (animate's hold-to-confirm recipe). Symmetric timing on a
+   press-and-release is a finding.
 10. **Cohesive.** Motion matches the component's character and the rest of the product: playful may
     bounce, a dashboard stays crisp. Five hand-typed near-identical curves is a consolidation
     finding. A crossfade that shows two overlapping objects is bridged with `blur(2px)`. When unsure
@@ -47,12 +49,8 @@ A violation of any is a finding.
 
 ## Reference values
 
-Curves (cubic-bezier points): ease-out `0.23, 1, 0.32, 1`; ease-in-out `0.77, 0, 0.175, 1`; drawer
-`0.32, 0.72, 0, 1`. Springs: `duration 0.5, bounce 0.2` (bounce 0.1 to 0.3, almost none in UI) or
-`mass 1, stiffness 100, damping 10`. Stagger 30 to 80 ms between items, decorative, never blocks
-input. Drag dismiss by velocity (`abs(distance) / elapsedMs` above about 0.11), damped past an edge,
-pointer captured, extra touch points ignored. Blur under 20 px. Pull a value from here, never
-approximate one.
+Curves, durations, press scale, springs, stagger, drag-dismiss velocity and the blur limit are
+animate's tables. Pull a value from there, never approximate one.
 
 ## Escalate on sight
 
@@ -71,11 +69,11 @@ stagger, `@starting-style`, a spring for "alive". 9. Reduced motion, hover gatin
 
 ## On each stack
 
-Read the values from the source, then compare; the numbers above carry over unchanged.
+Read the values from the source, then compare against animate's tables.
 
 **QML.** Find `Behavior on`, `NumberAnimation`, `SequentialAnimation`, `SpringAnimation` and the
 `Motion` tokens. Ease-in is `Easing.InQuad` or `InCubic`: a finding on UI. The strong curves are
-`easing.type: Easing.BezierSpline` with `bezierCurve: [0.23, 1, 0.32, 1, 1, 1]`. Check: a literal
+`Easing.BezierSpline` with the points from animate. Check: a literal
 `duration:` instead of a `Motion` token; animated `width` or `height`; a fixed-`from` animation
 where a Behavior belongs (restarts instead of retargeting); a layer-shell window with no exit
 because `visible` flips at once; hover that changes the hit area; reduced motion not clamped in
@@ -83,9 +81,9 @@ because `visible` flips at once; hover that changes the hit area; reduced motion
 
 **Hyprland.** Read each `hl.curve` against the curve list and each
 `hl.animation({ leaf, enabled, speed, bezier, style })` with speed in deciseconds (3 is 300 ms, the
-limit). Findings: a built-in `default` or `ease` curve on a window or layer; speed over 3 with no
-reason; an animation on `workspaces` for keybind-driven switching (keyboard-initiated, so none or a
-very short `slide`); `popin` starting below 90 percent.
+limit). Findings: the built-in `default` curve on a window or layer; speed over 3 with no
+reason; an animation on `workspaces` for keybind-driven switching (keyboard-initiated, so none);
+`popin` starting below 90 percent.
 `hl.config({ animations = { enabled = false } })` is motion off, not the reduced-motion form.
 
 **CSS and React.** The ten standards in their original form, including `@starting-style`,

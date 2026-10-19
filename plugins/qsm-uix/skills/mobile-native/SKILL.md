@@ -64,10 +64,11 @@ from code and which need a device.
    `click` fire at once) and feedback on release instead of press. Keep press feedback at 100 to
    160ms, `ease-out`, using the codebase's animate tokens rather than a new curve:
    `.button:active { transform: scale(0.97) }`.
-6. **Overscroll.** `none` on the root, `contain` on children (a sheet's content, a chat list): it
-   keeps the container's bounce and stops the page behind it. Never `touchmove` plus
-   `preventDefault()`: it blocks scrolling and makes the listener non-passive. Drop the root rule
-   when pull-to-refresh is welcome on a scrolling document.
+6. **Overscroll.** `contain` on children (a sheet's content, a chat list): it keeps the
+   container's bounce and stops the page behind it. Root `overscroll-behavior: none` only when
+   pull-to-refresh hijacks an app shell's scroll, never on a scrolling document where it is
+   welcome. Never `touchmove` plus `preventDefault()`: it blocks scrolling and makes the listener
+   non-passive.
 7. **Notch.** Meta `width=device-width, initial-scale=1, viewport-fit=cover`, then
    `padding-top: env(safe-area-inset-top)` on a fixed header, `padding-bottom:
    calc(1rem + env(safe-area-inset-bottom))` on a sheet or bottom bar. Without the meta tag every
@@ -100,9 +101,10 @@ The floor before the first component:
 ```
 
 ```css
-html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
 input, textarea, select { font-size: 16px; }
-button, a, [role="button"] { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+button, a, [role="button"] { touch-action: manipulation; }
+button, [role="button"] { user-select: none; -webkit-user-select: none; }
 @media (hover: hover) and (pointer: fine) { /* all :hover rules live here */ }
 ```
 

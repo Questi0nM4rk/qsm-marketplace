@@ -16,9 +16,10 @@ motion half of `skills/emil-design-eng/SKILL.md`.
 
 ## 2. Hand-off and wiring
 
-- [x] 2.1 ux-audit check 7 becomes one line handing motion to review-animations; ui-audit's
-      pointer moves from ux-audit to review-animations (owns `skills/ux-audit/SKILL.md`,
-      `skills/ui-audit/SKILL.md`; proof: `grep -n motion` shows the hand-off only)
+- [x] 2.1 ux-audit check 7 hands the judgement to review-animations and keeps only the
+      measurement method; ui-audit's pointer moves from ux-audit to review-animations (owns
+      `skills/ux-audit/SKILL.md`, `skills/ui-audit/SKILL.md`; proof: `grep -n motion` shows the
+      hand-off and the measurement only)
 - [ ] 2.2 One fire case per new skill in `plugins/qsm-uix/evals/` (owns those six case
       directories; proof: `bun run eval qsm-uix` passes the six fire cases; blocked by 1.x)
 - [x] 2.3 README skill list names the six and credits the source (owns

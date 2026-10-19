@@ -15,8 +15,9 @@ motion: a11y-audit. Motion: animate and review-animations.
 1. **Confirm the stack.** `shell.qml` with `import Quickshell` in the project, and `qs list --all`
    shows the running instance with its config path. Anything else is not this skill.
 2. **Find the token source.** The shell's `Theme` singleton (`pragma Singleton`, usually under
-   `theme/`) plus any `Motion` singleton, and the design source if one exists. Read both fully and
-   the nearest existing component to the one you build. Match its structure, because the shell is
+   `theme/`), the `Motion` singleton when it has one (durations and curves come from `Motion`,
+   else from `Theme`), and the design source if one exists. Read them fully and the nearest
+   existing component to the one you build. Match its structure, because the shell is
    one product and a second dialect is a defect. With no singleton, say so and ask for the design
    source; do not invent tokens inside a component. Shell unreadable: write `Theme.<role>`
    and list those names as assumed.
@@ -38,15 +39,16 @@ motion: a11y-audit. Motion: animate and review-animations.
 - **Pairs travel together.** A fill token and its on-token (`primary` / `onPrimary`) are read
   together in one item. Colours are bindings to the singleton so a theme swap reaches every
   consumer; never copy a colour into a local `property color`.
-- **Durations come from `Motion`, easing from its curves.** If the `Motion` singleton clamps
-  durations for reduced motion, use it, because a component that bypasses it breaks the setting
-  for the whole shell; if it does not clamp, add the clamp there, not in components.
-  No state changes the hit area's bounds (animate: a press scale is a transform and is allowed),
-  because moving bounds under the pointer flicker the state.
+- **Durations and easing come from the motion tokens** (`Motion`, else `Theme`). If the singleton
+  clamps durations for reduced motion, use it, because a component that bypasses it breaks the
+  setting for the whole shell; if it does not clamp, add the clamp there, not in components.
+  No state changes the hit area's bounds, because moving bounds under the pointer flicker the
+  state. Every tappable item shows a pressed state (`TapHandler.pressed`), a transform scale per
+  animate.
 - **A hover surface** opens on entry, stays open while the pointer is inside the union of its
   trigger, panel and the path between them, and closes 180 ms after leaving it (ux-audit check 3).
   Name the state by what the pointer does (`hovered`), never `held`, and never delay the opening,
-  because the owner ruled this and a delayed rollout reads as broken.
+  because a delayed rollout reads as broken.
 - **Integer geometry.** A fractional `x`/`y`/`width` blurs a 1 px edge. Round computed sizes
   (`Math.round`, `Math.ceil` for text-driven ones). Position with `anchors` or `Layout`, never
   both on one item, and use `Layout` where the content
@@ -75,8 +77,7 @@ motion: a11y-audit. Motion: animate and review-animations.
 - `Quickshell.Hyprland` for workspaces, the focused client, and `GlobalShortcut`; `hyprctl` only for
   what it does not expose.
 - `Quickshell.Io` for `Process`, `FileView`, sockets and `IpcHandler`; `Quickshell.Wayland` for
-  layer-shell options and toplevels; `Quickshell.Widgets` for `IconImage`, `ClippingRectangle`,
-  `WrapperItem`.
+  layer-shell options and toplevels.
 - Qt Quick Controls and Layouts for controls and sizing, `MultiEffect` (Qt 6.5+) for blur and
   shadow, never `QtGraphicalEffects`; pointer handlers (`TapHandler`, `HoverHandler`,
   `DragHandler`) over `MouseArea` when touch or multi-device input matters.

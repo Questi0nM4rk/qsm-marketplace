@@ -4,7 +4,7 @@
 
 The plugin SHALL provide six motion skills adapted from emilkowalski/skills (MIT) under his names:
 animate (build one animation), review-animations (judge motion code, default to flagging),
-improve-animations (survey a codebase's motion and write prioritized plans, read-only),
+improve-animations (survey a codebase's motion and write prioritized plans, never edits source),
 find-animation-opportunities (propose motion where it helps and reject the rest, read-only),
 animation-vocabulary (turn a vague description into the exact term), and animation-performance
 (keep motion inside the frame budget). Each SHALL state its rules once with their values, then
