@@ -26,6 +26,8 @@ When designs carry their source and their numbers by default, this plugin can go
 | Skill | `css-ui` | Plain CSS and HTML, with a short Tailwind section |
 | Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states |
 | Skill | `tui-ui` | Terminal output: colour tiers, NO_COLOR, width, non-TTY output, progress |
+| Skill | `break-ui` | Feeds a UI piece worst-case data behind a demo or worst-case toggle and reports each break with its fix; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `prototype` | Builds several genuinely different versions of one UI piece behind a switcher, only when invoked; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Agent | `visualizer` | Renders findings or other structured data as one self-contained HTML page |
 | CLI | `qsm-uix` | 9 verbs that turn a screen into numbers, see [USAGE.md](USAGE.md) |
 
