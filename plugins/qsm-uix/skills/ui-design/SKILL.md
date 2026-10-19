@@ -1,6 +1,6 @@
 ---
 name: ui-design
-description: "Use when a UI is to be designed, specified, or restyled before it is built: choosing colours, spacing, type or a look, setting up dark mode, writing down what two products must share, or deciding what a new panel, page, or CLI output should follow. Triggers: design the UI, decide colours and spacing, dark mode, design tokens, style guide, make it look like the rest, same look on web and desktop, navrhni vzhled, design system, jak ma vypadat. Writes the design source that builds and audits read. Measuring a running UI is ui-audit and ux-audit; accessibility criteria are a11y-audit; syntax is the stack skills."
+description: "Use when a UI is to be designed, specified, or restyled before it is built: choosing colours, spacing, type or a look, setting up dark mode, writing down what two products must share, or deciding what a new panel, page, or CLI output should follow. Triggers: design the UI, decide colours and spacing, dark mode, design tokens, style guide, make it look like the rest, same look on web and desktop, navrhni vzhled, design system, jak ma vypadat. Writes the design source that builds and audits read. Measuring a running UI is ui-audit and ux-audit; accessibility criteria are a11y-audit; syntax is the family skills."
 ---
 
 # UI Design
@@ -162,6 +162,9 @@ with the stack skill, then run ui-audit against this file, which is the expected
 - What was assumed and what was asked, and the open decisions left for the person.
 - What is not covered: no running UI was measured, so nothing here is verified until ui-audit
   runs against it.
+
+How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
 The polish rules follow Emil Kowalski's emil-design-eng and README (github.com/emilkowalski/skills,
 MIT).

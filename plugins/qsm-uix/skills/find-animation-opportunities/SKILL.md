@@ -49,9 +49,9 @@ of high-conviction ones beats a wishlist. It reports and never implements.
 - **The delight budget.** Rare, high-emotion moments rendered flat: the only place bounce and a
   longer beat are welcome.
 
-Sweep for conditional renders with no transition, `onClick` with no press style, accordion markup,
-drag handlers, entering lists, empty-state and success components; in QML a `visible:` flip with no
-`Behavior`, in Hyprland a leaf with `enabled = false`.
+Sweep for state that changes with no transition, actions with no press style, accordions, drag
+handlers, entering lists, empty-state and success components. The stack's own sweep terms are the
+family's.
 
 ## Workflow
 
@@ -63,19 +63,6 @@ drag handlers, entering lists, empty-state and success components; in QML a `vis
 3. Gate every candidate, ruthlessly.
 4. Report. Nothing surviving is a good result, said plainly.
 
-## On each stack
-
-The recipe is written in the stack's form (animate's stack section); the values are animate's.
-
-- **QML**: a `Behavior on opacity` and `scale` with `Easing.BezierSpline`, durations from the token
-  singleton, origin at the trigger.
-- **Hyprland**: for a surface with no trigger, the `layersIn` leaf (animate owns which surface gets
-  which); never workspace motion on a keybind-driven switch.
-- **CSS and React**: the `--ease-*` tokens, `@starting-style`, reduced-motion handling (gentler, not
-  zero) and hover gating on every suggestion that involves hover.
-- **TUI**: opportunities are few: a spinner or count where work passes a second (TTY only). The
-  rest does not apply.
-
 ## Say it in the reply
 
 Part 1, an opportunities table, ordered by leverage: location, today, purpose, frequency, suggested
@@ -85,6 +72,9 @@ launcher toggle ("keyboard-initiated, 100+ a day, never animate") or a live data
 data being read"). Part 3, one short paragraph: how much motion this interface needs, whether it is
 already close, the single highest-leverage suggestion, and the hand-off to
 `improve-animations plan`.
+
+How each rule is written and read on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
 Adapted from skills/find-animation-opportunities/SKILL.md in github.com/emilkowalski/skills, MIT
 licence, Emil Kowalski.

@@ -150,6 +150,13 @@ The numbers are animate's; this is how they land here.
   does not import, and load in the real bar or popout position so the neighbours are real.
   Replay sets the `Loader`'s `active` to false, then true.
 
+## Driving it for a11y-audit
+
+- Focus the window with `hyprctl dispatch focuswindow <selector>`, then send keys with
+  `wtype -k Tab`, `wtype -M shift -k Tab -m shift`, `wtype -k Escape`.
+- A Qt or QML app (Quickshell included) is absent from the accessibility tree unless launched
+  with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`: relaunch with it before calling the tree unreachable.
+
 ## Red flags
 
 - When a popout's content exists only on hover, add the click and key route first, because a

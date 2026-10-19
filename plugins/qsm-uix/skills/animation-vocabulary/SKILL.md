@@ -22,18 +22,6 @@ right thing. It names, it does not design or build.
    effect in glossary words. A term not in the glossary is said to be missing, never invented.
 5. Lead with the term; expand only when asked.
 
-## On each stack
-
-The term is stack-neutral; only its config name differs. Add one line when the stack is known. QML:
-`Behavior`, `NumberAnimation`, `SpringAnimation`, `Easing.BezierSpline` (a cubic-bezier is
-`bezierCurve: [x1, y1, x2, y2, 1, 1]`), `SequentialAnimation` for orchestration, `PauseAnimation`
-for delay. Hyprland (Lua):
-`hl.curve(name, { type = "bezier", points = { { x1, y1 }, { x2, y2 } } })` is the cubic-bezier,
-`hl.animation({ leaf, enabled, speed, bezier, style })` sets duration (speed in deciseconds) and the
-style (`popin` scale in, `slide`, `fade`). Web: CSS `transition`, `@keyframes`, WAAPI, Motion. TUI:
-only spinner, loop, stepped animation and tabular numbers apply; the rest has no meaning on a redraw
-surface, and the answer says so.
-
 ## Glossary
 
 Performance terms (jank, dropped frame, compositing, `will-change`, layout thrashing) are
@@ -50,7 +38,7 @@ animation-performance's.
 
 ### Sequencing & Timing — coordinating multiple elements or moments
 
-- **Keyframes** — Defined points in an animation (0%, 50%, 100%) that the browser fills the gaps
+- **Keyframes** — Defined points in an animation (0%, 50%, 100%) that the renderer fills the gaps
   between.
 - **Interpolation / Tween** — Generating all the in-between frames between a start and end value, so
   motion is continuous.
@@ -75,7 +63,7 @@ animation-performance's.
   viewer is closer.
 - **Transform origin** — The anchor point a scale or rotation grows or spins from.
 - **Origin-aware animation** — An element animates out of its trigger, like a popover growing from
-  the button that opened it instead of from its own center which is the default in CSS.
+  the button that opened it instead of from its own center, the usual default.
 
 ### Transitions Between States — connecting one state, view, or element to another
 
@@ -98,7 +86,7 @@ animation-performance's.
 - **Scroll-driven animation** — An animation whose progress is tied directly to scroll position.
 - **Parallax** — Background and foreground move at different speeds while scrolling, creating depth.
 - **Page transition** — An animation that plays when navigating from one page or route to another.
-- **View transition** — The browser morphs between two states or pages, connecting shared elements.
+- **View transition** — The platform morphs between two states or pages, connecting shared elements.
 
 ### Feedback & Interaction — responding to the user's actions
 
@@ -122,7 +110,7 @@ animation-performance's.
 - **Ease-in** — Starts slow, ends fast. Usually avoided; can feel sluggish.
 - **Ease-in-out** — Slow, fast, slow. Good for elements already on screen moving from A to B.
 - **Linear** — Constant speed. Avoid for UI; reserve for spinners or marquees.
-- **Cubic-bezier** — A custom easing curve you define for precise control.
+- **Cubic bezier curve** — A custom easing curve you define for precise control.
 - **Asymmetric easing** — A curve that accelerates and decelerates at different rates. Feels more
   alive than a symmetric one.
 
@@ -189,6 +177,9 @@ animation-performance's.
 - **Hardware acceleration** — Animating transform and opacity lets the GPU keep motion smooth.
 - **Reduced motion** — Respecting the user's prefers-reduced-motion setting by toning down or
   removing motion.
+
+The config name of a term on a stack is its family: desktop (desktop-ui, qml-ui), terminal
+(cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
 Adapted from skills/animation-vocabulary/SKILL.md in github.com/emilkowalski/skills, MIT licence,
 Emil Kowalski.

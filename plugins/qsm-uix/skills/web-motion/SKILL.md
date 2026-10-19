@@ -60,6 +60,11 @@ scales) are animate's tables; they are not repeated here beyond the three curves
 - **No inherited variable for a drag.** A drag distance in a CSS variable that a child's
   `translateY()` reads recalculates every descendant each frame (a drawer lagged past about 20
   items). Set `transform` on the element itself.
+- **Tiers by name.** Composite only: `transform`, `opacity`, and in current Chrome and Firefox
+  `filter`, `clip-path`, `background-color`. Paint: `box-shadow`, `border-radius`, `color`.
+  Layout: `width`, `height`, `padding`, `margin`, `top`, `left`, `border-width`. Swap down:
+  `scale()` for a size, `translate()` for `top`, `left` or `margin`, `filter: drop-shadow()` for
+  `box-shadow`.
 - **Blur under 20 px**; an animated `blur()` is expensive. A crossfade of two objects is `blur(2px)`
   with opacity 0.7 for 200 ms.
 - **`will-change: transform` only after you see a 1 px shift or measure dropped frames**, on the

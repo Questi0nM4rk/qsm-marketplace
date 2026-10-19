@@ -136,3 +136,6 @@ products or services. When the reading is contested, say a lawyer decides it.
 The criterion by number and level, its test, and the chain: in WCAG, in EN 301 549 (clause number),
 in scope of the Act (article). Name the one link you could not confirm, and close with "a lawyer
 decides contested readings" when the question was legal.
+
+How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).

@@ -25,14 +25,11 @@ taste to execute. It plans; it never applies. "The motion here is already right"
 
 ## Workflow
 
-**1. Recon.** Map the motion before judging it: stack and motion libraries (CSS, Motion, WAAPI,
-QML `Behavior`, Hyprland `animation` lines), where motion lives (global tokens, Theme and `Motion`
-singletons, keyframe definitions, gesture handlers), existing easing and duration tokens (plans
-extend them, never fork), the product's character (playful or crisp), and a frequency map: what is
-hit 100+ times a day, what occasionally, what rarely. Sweeps: `transition`, `animation`,
-`@keyframes`, `motion.`, `useSpring`, `ease-in`, `transition: all`, `scale(0)`,
-`prefers-reduced-motion`, `transform-origin`; in QML `Behavior on`, `NumberAnimation`, `Easing.`,
-`duration:`; in Hyprland `hl.animation`, `hl.curve`.
+**1. Recon.** Map the motion before judging it: stack and motion libraries, where motion lives
+(global tokens, theme and motion singletons, keyframe definitions, gesture handlers), existing
+easing and duration tokens (plans extend them, never fork), the product's character (playful or
+crisp), and a frequency map: what is hit 100+ times a day, what occasionally, what rarely. The
+sweep terms are the family skill's (web-motion, desktop-ui, tui-ui).
 
 **2. Audit** against eight categories, each with its target values:
 
@@ -42,7 +39,7 @@ hit 100+ times a day, what occasionally, what rarely. Sweeps: `transition`, `ani
 | Easing and duration | any ease-in on UI; bare ease or linear on enters; over 300 ms (the toast `ease` exception aside); targets are animate's curve and duration tables; tooltips after the first open instantly |
 | Physicality and origin | `scale(0)`, pure fades, centre origin on a trigger-anchored element, no press feedback; targets are animate's start scale plus opacity and press scale; modals are exempt |
 | Interruptibility | keyframes on toasts and toggles, tweened gestures, distance-only drag dismiss (velocity, per animate), hard drag stops; targets transitions or springs (animate's values) |
-| Performance | `transition: all`, animated layout properties, Motion shorthand on a busy page, a parent's variable driving a child's transform, blur over 20 px |
+| Performance | a transition on every property, animated layout properties, a busy thread driving the motion, an inherited value driving a child's transform, blur over 20 px |
 | Accessibility | movement with no reduced-motion branch, ungated hover, reduced motion that removes all feedback (it must be gentler, not zero) |
 | Cohesion and tokens | near-duplicate curves and durations, one bouncy component in a crisp app, entrances with no stagger, double-exposed crossfades (`blur(2px)`) |
 | Missed opportunities | state that teleports, panels with no origin story, flat rare moments; at most a handful, grounded in a seen seam |
@@ -81,26 +78,13 @@ Variants: bare runs all four phases; `quick` and `deep` set the depth; a categor
 it; `plan <description>` skips the audit and writes one plan; `reconcile` marks done plans,
 refreshes stale file:line and retires fixed findings.
 
-## On each stack
-
-The plan names targets in the stack's own form; the curve, duration and scale numbers are animate's
-tables, written out in full in each plan, and the per-stack curve forms are animate's stack section.
-
-- **QML**: a `Behavior` with `Easing.BezierSpline`, a token for every duration, a `Behavior` where a
-  fixed-`from` animation restarts, `opacity` and `scale` where `width` and `height` animate,
-  clamping in the token singleton for reduced motion.
-- **Hyprland**: `hl.curve` and `hl.animation` per animate; for a surface with no trigger the
-  `layersIn` leaf (animate owns which surface gets which), `workspaces` off for keybind switching;
-  `hl.config({ animations = { enabled = false } })` is motion off, not reduced motion.
-- **CSS and React**: the `--ease-*` tokens, `@starting-style`, `prefers-reduced-motion`, hover
-  gating, the full `transform` string in Motion.
-- **TUI**: audit only spinner use (TTY only, none in piped output) and keyboard-driven redraw; the
-  other categories do not apply and the report says so.
-
 ## Say it in the reply
 
 The vetted table, the missed opportunities, the plans written with their paths, and which findings
 were not chosen. State what could not be judged from code and needs a recording or a person's eye.
+
+How each rule is written and read on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).
 
 Adapted from skills/improve-animations/SKILL.md, AUDIT.md and PLAN-TEMPLATE.md in
 github.com/emilkowalski/skills, MIT licence, Emil Kowalski.

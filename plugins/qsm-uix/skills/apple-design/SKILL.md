@@ -1,14 +1,14 @@
 ---
 name: apple-design
-description: "Use when an interface should feel the way Apple's do and the question is the design, not the stack: translucent or blurred materials and depth, feedback that answers the press at once, typography by optical size (tracking, leading), reduced transparency and contrast, and Apple's design principles (purpose, agency, familiarity, simplicity, craft). Triggers: make it feel like macOS, Apple style, frosted glass panel, blurred bar, translucent popup, letter-spacing for headings, vibrancy, Apple HIG principles, nechci to genericke, pocitem jako Apple, pruhledny panel. Foundations by Apple's WWDC talks; each stack's syntax is qml-ui, css-ui, react-ui, tui-ui; tokens and numbers are ui-design; curves, springs, gestures and momentum are animate, checking them is review-animations."
+description: "Use when an interface should feel the way Apple's do and the question is the design, not the stack: translucent or blurred materials and depth, feedback that answers the press at once, typography by optical size (tracking, leading), reduced transparency and contrast, and Apple's design principles (purpose, agency, familiarity, simplicity, craft). Triggers: make it feel like macOS, Apple style, frosted glass panel, blurred bar, translucent popup, letter-spacing for headings, vibrancy, Apple HIG principles, nechci to genericke, pocitem jako Apple, pruhledny panel. Foundations by Apple's WWDC talks; how it lands on a stack is its family skill (desktop-ui, css-ui, tui-ui); tokens and numbers are ui-design; curves, springs, gestures and momentum are animate, checking them is review-animations."
 ---
 
 # Apple Design
 
 An interface feels Apple-made when it answers before the person finishes acting, keeps things
 where they came from, layers material so that structure shows without shouting, and sets type
-for its size. This skill serves the person who builds interfaces on a Hyprland desktop or the
-web and wants that feel, and gives the foundations and how each lands on their stacks. It does
+for its size. This skill serves the person who builds interfaces on a desktop, in a terminal or on
+the web and wants that feel, and gives the foundations. It does
 not write stack syntax, choose the design's numbers (ui-design), or carry motion: curves,
 durations, springs, gestures, momentum and rubber-banding are `animate`, and `review-animations`
 checks them. Say so when a question is about them.
@@ -90,15 +90,6 @@ comprehension stay. Durations and curves are `animate`'s. Large moving things tu
 while they travel, no background moves across the whole viewport, and a light-to-dark switch eases
 instead of jumping in brightness.
 
-## On each stack
-
-| Stack | Materials and depth | Response, type |
-| --- | --- | --- |
-| Hyprland | The compositor owns blur and shadow: blur on, with its size, passes and vibrancy, a shadow, and one rounding value. A shell surface's blur is set at runtime while the surface is shown, never as a standing layer rule, because an always-mapped transparent surface would blur the whole desktop for good; qml-ui owns the stack | Rounding is one value, so the shell's radii follow it (ui-audit's nested radius line). Heavy blur costs every frame: size and passes stay small on weak GPUs |
-| Quickshell QML | The window needs `color: "transparent"` and a translucent fill from `Theme`, with the on-pair measured over the blur, not over the fill alone. Opacity belongs to the fill colour, never to the item, because item opacity fades the text with it. Reduced transparency is a `Theme` flag that swaps in the solid fill | Press feedback on the control's own state, from `Motion`. Type sizes and tracking come from `Theme`; `font.letterSpacing` is in pixels, so convert the em value per size |
-| CSS and React | A backdrop blur with saturation on a semi-transparent fill; reduced transparency swaps to a solid fill with the blur dropped, and more contrast adds a border (css-ui writes the queries) | Press feedback on the pressed state; letter-spacing in em per heading step, optical sizing automatic, spacing in `rem` |
-| TUI | No transparency: depth is one step of background shade or a rule line, and a terminal's own opacity is the person's. Where the terminal gives 256 or truecolor, a panel is one shade off the base | Response is output before the work finishes (a prompt echo, a spinner at once). Type is the terminal's font; hierarchy is bold, dim and case, never colour alone |
-
 ## Red flags
 
 - When a blurred panel's text passes against its fill but was never measured over the blur, run the
@@ -111,8 +102,11 @@ instead of jumping in brightness.
 
 ## Say it in the reply
 
-The foundation rule applied, how it lands on the stack in use, and the solid variant. Name what was
+The foundation rule applied, the solid variant, and the family skill that writes it. Name what was
 handed to `animate`.
+
+How each rule lands on a stack is its family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
+tui-ui), web (css-ui, react-ui).
 
 Source: Apple's WWDC talks (Designing Fluid Interfaces, Details of UI Typography, Principles of
 Great Design) as distilled in emilkowalski/skills apple-design, github.com/emilkowalski/skills,

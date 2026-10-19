@@ -128,3 +128,6 @@ screens, passes skipped, and why), so the reader does not assume there were no g
 
 The table, then Hypotheses and Not examined, then one line naming which evidence channels and
 which themes were available. Missing live geometry goes first: it changes how every row reads.
+
+How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).

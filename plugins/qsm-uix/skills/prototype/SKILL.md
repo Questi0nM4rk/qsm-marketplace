@@ -1,6 +1,6 @@
 ---
 name: prototype
-description: "Use only when the person explicitly invokes it (the prototype skill, /prototype): build several genuinely different versions of one described UI piece behind a switcher, flip through them live, promote the chosen one. Does not trigger on its own, and not when someone merely asks to build one piece. Triggers: use the prototype skill for this toast, prototype three versions of the pricing card, /prototype a hold-to-delete button, prototype variants of this popout, prototypuj varianty. Reviewing existing UI is ui-audit and ux-audit; stack syntax is css-ui, react-ui, qml-ui, tui-ui."
+description: "Use only when the person explicitly invokes it (the prototype skill, /prototype): build several genuinely different versions of one described UI piece behind a switcher, flip through them live, promote the chosen one. Does not trigger on its own, and not when someone merely asks to build one piece. Triggers: use the prototype skill for this toast, prototype three versions of the pricing card, /prototype a hold-to-delete button, prototype variants of this popout, prototypuj varianty. Reviewing existing UI is ui-audit and ux-audit; stack syntax is its family skill (desktop-ui, qml-ui, cli-ui, tui-ui, web-harness)."
 disable-model-invocation: true
 ---
 
@@ -45,7 +45,7 @@ direction.
    comparison. List a name and an axis for each before any code. Names describe the direction
    ("Quiet", "Editorial", "Dense"), never "Option A". Two directions that differ only in accent or
    copy are one: replace one with a real alternative.
-4. **Build the harness** on the stack (next section): one variant at a time, full size, in
+4. **Build the harness** in the family's form (below): one variant at a time, full size, in
    realistic surroundings (a toast needs a page behind it, a card needs siblings, a button needs a
    form), never thumbnails. Switching is instant, no animation on the swap.
 5. **Verify and hand off.** Flip through every variant yourself: all render, interactions respond,
@@ -56,92 +56,18 @@ direction.
    direction they gravitated to. `x5` sets the count; `keep <variant>, leave the picker` keeps the
    surface.
 
-## On each stack
+## The harness
 
-**CSS / React.** In a project with a dev server, an isolated route (`/prototypes/<slug>`), one file
-per variant plus a small harness; nothing in production imports from it. No project: one
-self-contained HTML file. The picker is the spec in the next section, kept in a framework as the
-same classes and structure with state instead of `innerHTML` and a keyed re-mount.
-
-**Quickshell QML.** The switcher is a `property int variant` on a debug singleton, read by a
-`Loader` that picks one component per variant, flipped over IPC with no restart:
-
-```qml
-IpcHandler { target: "proto"; function pick(n: int): void { Debug.variant = n; } }
-```
-
-`qs ipc -p <shell.qml> call proto pick 2`. Variants are separate QML files in a prototype
-directory the production shell does not import; the harness loads the surface in the real bar or
-popout position so the neighbours are real. Replay sets the `Loader`'s `active` to false, then
-true, which re-creates the item. Tokens come from `Theme` and `Motion`; see qml-ui.
-
-**TUI.** An environment variable picks the variant (`APP_VARIANT=2`), read where output is
-rendered, so one binary prints each version and nothing is edited. A keypress switcher only in an
-interactive screen; otherwise the person reruns with the next number. Width and colour follow
-tui-ui, and each variant is checked narrow and piped.
-
-## The picker (CSS / React)
-
-A floating dark pill, bottom-centre. Dark glass reads on any page, so it is not theme-aware.
-Verbatim: no project fonts, brand colours, theme switching, extra shadows or borders.
-
-```html
-<nav class="proto-picker" aria-label="Prototype variants">
-  <span class="proto-picker-highlight" aria-hidden="true"></span>
-  <button class="proto-picker-item" data-active aria-current="true">Quiet</button>
-  <button class="proto-picker-item">Editorial</button>
-  <span class="proto-picker-divider" aria-hidden="true"></span>
-  <button class="proto-picker-item proto-picker-replay" aria-label="Replay animation (R)">↻</button>
-</nav>
-```
-
-```css
-.proto-picker { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 2147483647; display: flex; align-items: center; gap: 2px; padding: 4px;
-  border-radius: 999px; background: rgba(10,10,10,.82);
-  backdrop-filter: blur(12px) saturate(1.4);
-  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 24px rgba(0,0,0,.24), 0 2px 6px rgba(0,0,0,.12);
-  font: 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  user-select: none; }
-.proto-picker-highlight { position: absolute; top: 4px; left: 0; width: 1px; height: 28px;
-  transform-origin: left; border-radius: 999px; background: rgba(255,255,255,.12);
-  will-change: transform; }
-.proto-picker[data-ready] .proto-picker-highlight {
-  transition: transform 250ms cubic-bezier(.23,1,.32,1); }
-@media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
-.proto-picker-item { position: relative; display: flex; align-items: center; height: 28px;
-  padding: 0 12px; border: 0; border-radius: 999px; background: transparent;
-  color: rgba(255,255,255,.55); font: inherit; cursor: pointer; transition: color 150ms ease-out; }
-@media (hover: hover) and (pointer: fine) {
-  .proto-picker-item:hover { color: rgba(255,255,255,.85); } }
-.proto-picker-item:active { transform: scale(.97); }
-.proto-picker-item:focus-visible { outline: 2px solid rgba(255,255,255,.4); outline-offset: 2px; }
-.proto-picker-item[data-active] { color: #fff; }
-.proto-picker-divider { width: 1px; height: 16px; margin: 0 4px; background: rgba(255,255,255,.12); }
-.proto-picker-replay { padding: 0 10px; font-size: 14px; }
-.proto-picker[data-position="top"] { bottom: auto; top: 24px; }
-@media (prefers-reduced-transparency: reduce) {
-  .proto-picker { background: rgb(10,10,10); backdrop-filter: none; } }
-```
-
-The highlight moves between items with `transform` only (`translateX` and `scaleX`, never `left` or
-`width`); the variant swap stays instant. The picker is throwaway chrome and holds literals on
-purpose: it is deleted when a variant is promoted. The one allowed change:
-`data-position="top"` when a variant occupies the bottom-centre (toast stack, sheet, dock).
-Render replay and its divider only when a variant has motion to re-trigger.
-
-Behaviour: keys `1` to `N` and arrows switch, `R` replays, ignored in an input, textarea, select,
-contenteditable or with a modifier held. Exactly one item carries `data-active` and
-`aria-current="true"`. The choice persists in `?v=2`, default 1. `data-ready` is added after two
-animation frames so load does not animate the highlight; set the highlight's `scaleX` and
-`translateX` from the active item's `offsetWidth` and `offsetLeft`, again on resize. A switch
-re-mounts the variant (clear, render next frame) so entrance animations re-run; replay re-mounts
-without switching.
+A switcher that is plain, throwaway and apart from production: variants live where nothing in
+production imports them, one shows at a time, and the choice is switched live (a URL, a key, a
+command, an environment variable) with no restart. The switcher is chrome in its own fixed look,
+not the project's, because it is deleted when a variant is promoted. Its form is the family's:
+desktop (desktop-ui, qml-ui), terminal (cli-ui, tui-ui), web (web-harness).
 
 ## Say it in the reply
 
-The set as a table, never with a favourite pre-picked, then where the switcher runs (URL, file, or
-the `qs ipc` or environment command) and the keys:
+The set as a table, never with a favourite pre-picked, then where the switcher runs (URL, file, key,
+or command) and the keys:
 
 | # | Variant | Axis | When it is right | Its cost |
 | --- | --- | --- | --- | --- |
@@ -160,6 +86,9 @@ distinct directions beat three padded.
   loses on execution, not direction.
 - When production code is edited before a pick, revert it, because exploration lives on its own
   surface.
+
+How each rule is built on a stack is its family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
+tui-ui), web (css-ui, react-ui, web-harness).
 
 Source: skills/prototype/SKILL.md and PICKER.md in github.com/emilkowalski/skills (MIT, Emil
 Kowalski).

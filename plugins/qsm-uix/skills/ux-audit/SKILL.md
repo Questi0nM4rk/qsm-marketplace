@@ -131,3 +131,6 @@ The state-space map, the table, the three lists, then one line on how the interf
 what could not be, so the reader knows which half the audit saw. With no running UI, still give
 the standards with their numbers (24 px floor, 32 frequent, 100 ms feedback) as the check to run,
 the human-trial steps with a pass criterion, and what was not examined.
+
+How each rule is built and exposed on a stack is its family: desktop (desktop-ui, qml-ui),
+terminal (cli-ui, tui-ui), web (css-ui, react-ui, web-motion).

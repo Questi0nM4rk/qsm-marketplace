@@ -10,13 +10,13 @@ announces, and what survives without colour, motion or default text size. A scre
 that, so an unaided agent reads the code, says "looks accessible", and files nothing measured. This
 skill serves the person who publishes interfaces and answers for their accessibility: it drives and
 reads the UI, and fills a conformance table where every verdict has evidence or says it has none. It
-does not judge static visuals (ui-audit), judge motion (review-animations), fix the UI (the stack
+does not judge static visuals (ui-audit), judge motion (review-animations), fix the UI (the family
 skills), or give legal advice. Criterion numbers, levels and legal status are in a11y-conformance.
 
 ## First line: what you can see
 
 Name the evidence channels you have before any verdict: the platform accessibility tree, a way to
-send keys (`wtype`, Wayland), captures (`qsm-uix screenshot`), the design source. A criterion that
+send keys, captures (`qsm-uix screenshot`), the design source. A criterion that
 needs a channel you lack is `not tested`, said up front, because a pass without the channel measures
 nothing and `not tested` is the honest cell. Never write `pass` for what you only inferred from
 code.
@@ -25,9 +25,8 @@ code.
 
 1. **Announce, then drive.** Keys are synthetic input; say which surfaces you will drive and do not
    send them while someone is working in the window. Focus the window first
-   (`hyprctl dispatch focuswindow <selector>`), then `wtype -k Tab`,
-   `wtype -M shift -k Tab -m shift`, `wtype -k Escape`. If `qsm-uix doctor` says `wtype` is missing,
-   the keyboard path goes to Needs human trial with exact steps.
+   then send Tab, Shift+Tab and Escape. If `qsm-uix doctor` says the key tool is missing, the
+   keyboard path goes to Needs human trial with exact steps.
 2. **Keyboard path.** From a fresh surface press Tab (Shift+Tab back) until focus repeats; record
    the stops in order. Check: the order follows the visual order (2.4.3), nothing reachable by
    pointer is missing from it (2.1.1), focus leaves every widget (2.1.2), Esc closes what opened.
@@ -52,9 +51,8 @@ code.
      depth of 32 covers GTK4 apps, whose trees are deep. `qsm-uix doctor` says whether the bus
      answers; if it does not, name the doctor's remedy and mark tree-bound criteria `not tested`.
      Verified live against a GTK4 app (pavucontrol): the tree reads and Tab moves `focused`.
-     A Qt or QML application (Quickshell included) is absent from the tree unless launched with
-     `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1` (verified with a `qml6` window: absent without it,
-     present with it), so relaunch it with the variable before calling the tree unreachable.
+     A toolkit app that is absent from the tree is the family skill's case before it is called
+     unreachable.
    - Web: the browser's accessibility tree, not the DOM.
 6. **Colour not the only carrier.** For each state shown by colour (error, selected, status, chart
    series) capture it, convert to grayscale (`magick in.png -colorspace Gray out.png`) and look: the
@@ -104,3 +102,6 @@ cannot be summed up as "conformant"; say which surfaces the table covers.
 The evidence-channel line first, then the table with its three lists, then one sentence on which
 surfaces were driven and which half of the criteria the tree could not test. Point the reader to
 a11y-conformance for what each criterion means in law.
+
+How to drive and expose each stack is its family: desktop (desktop-ui, qml-ui), terminal
+(cli-ui, tui-ui), web (css-ui, react-ui).

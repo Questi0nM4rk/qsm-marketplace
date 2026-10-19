@@ -1,6 +1,6 @@
 ---
 name: break-ui
-description: "Use when asked to stress-test, break, or find edge cases in a UI piece by feeding it worst-case data: long and unbreakable strings, one-letter names, missing fields, huge counts, zero items, non-Latin text, emoji, extreme numbers. Triggers: try to break this, stress test this component, worst case data, what if the name is very long, empty state, edge cases for this list, long window title in my bar, rozbij to, nejhorsi pripad, dlouhy nazev. Reports every break with its fix and stops. How to fix it is css-ui, react-ui, qml-ui, tui-ui; design taste is ui-design; motion is review-animations."
+description: "Use when asked to stress-test, break, or find edge cases in a UI piece by feeding it worst-case data: long and unbreakable strings, one-letter names, missing fields, huge counts, zero items, non-Latin text, emoji, extreme numbers. Triggers: try to break this, stress test this component, worst case data, what if the name is very long, empty state, edge cases for this list, long window title in my bar, rozbij to, nejhorsi pripad, dlouhy nazev. Reports every break with its fix and stops. How to fix it is its family skill (desktop-ui, qml-ui, cli-ui, tui-ui, web-harness); design taste is ui-design; motion is review-animations."
 ---
 
 # Breaking UI
@@ -41,7 +41,7 @@ your workspace has 1,284 members. All of them exist in production somewhere.
 2. **Build the worst case** from the catalogue below, shaped exactly like the demo data. Also cover
    what is not one dataset: empty (zero items), one (every count at 1), huge (1,000+ rows if
    unpaginated, a performance break as well).
-3. **Wire the toggle** on the stack (next section): Demo, Worst case, Empty, One, Huge.
+3. **Wire the toggle** in the family's form (below): Demo, Worst case, Empty, One, Huge.
 4. **Break it** at the piece's real container width, then the narrowest and widest it supports,
    with text scaled to 200%, in dark mode and right-to-left if the product has either. Screenshot
    if tooling exists; else say which findings you saw and which you inferred.
@@ -81,63 +81,17 @@ Use `example.com`, `example.org` or `.test` for addresses so a fixture never poi
 - **Environment:** 320px or a 280px column; 2560px; 200% text; dark mode; right-to-left; touch
   (hover-only actions unreachable).
 
-## On each stack
+## The toggle
 
-The toggle swaps data at the boundary and is chrome, plain and out of the way. Pick by stack.
-
-**CSS / React.** A segmented control labelled Demo data / Worst case (plus Empty, One, 1,000 rows),
-fixed bottom-centre, small, gray track and white pill, system font, no animation on the content. In
-a project with a dev server: a `?data=worst` URL param read where the fixture is chosen, only
-behind the build's dev flag (it survives reload), or a prototype route per fixture. No project:
-one self-contained HTML file with the component and both datasets inline.
-
-**Quickshell QML.** No browser, so the toggle is a property on a debug singleton
-(`pragma Singleton`, `property string data: "demo"`) that every model reads through one binding,
-and a flip over IPC so the shell swaps data without a restart:
-
-```qml
-IpcHandler { target: "debug"; function data(mode: string): void { Debug.data = mode; } }
-```
-
-`qs ipc -p <shell.qml> call debug data worst`. Gate it on an environment variable so it is not
-exposed in daily use. Check a bar module by feeding a title wider than the module and an empty one:
-does it elide (`elide: Text.ElideRight` with a bounded `Layout.maximumWidth`, or `elide` in the
-middle for paths) and does the bar hold its layout (a `Layout.fillWidth` text with no
-`Layout.minimumWidth: 0` pushes siblings off). Read geometry back with qml-ui's tree dump.
-
-**TUI.** An environment variable swaps the data source (`APP_DATA=worst`, `empty`, `one`) at the
-one place the rows are loaded, so the same binary prints both datasets and nothing is edited.
-Check at a narrow width (a pty sized with `stty cols 40`; the binary reads the terminal's
-columns) and piped. The breaks: `.length` sizing misaligns on wide
-glyphs, so truncate by display width; a table that no longer fits becomes record blocks.
+It swaps data at the boundary and is chrome, plain and out of the way: a control or switch that is
+not part of the piece, off in daily use, leaving the component untouched. Its form is the family's.
 
 ## Failure signatures
 
-The fix names the property; the stack skill holds the how (css-ui, react-ui, qml-ui, tui-ui).
-
-| What you see | Cause | Fix |
-| --- | --- | --- |
-| Avatar squished to an oval | flex child shrinking | `flex-shrink: 0` on fixed-size boxes |
-| Text overflows its box | flex/grid child `min-width: auto` | `min-width: 0`, `minmax(0, 1fr)` |
-| Email or URL runs past the edge | no break opportunity | `overflow-wrap: anywhere` |
-| Trailing action pushed off or clipped | middle took all the space | `min-width: 0` middle, `flex-shrink: 0` action |
-| Badge wraps to two lines | badge may shrink | `white-space: nowrap; flex-shrink: 0`, decide what yields |
-| Avatar adrift beside a three-line name | rows of varying height centred | top-align once text can wrap |
-| Last row cut mid-glyph | fixed height, no fade or scroll cue | visible scrollbar or fade mask |
-| Heading breaks mid-word | `word-break: break-all` | `overflow-wrap: anywhere` |
-| Wrong initials | `split(' ')[0][0]` | grapheme clusters (`Intl.Segmenter`), first plus last word, icon fallback |
-| Orphan dash where a field was missing | placeholder for absent optional | omit the line or reserve its height |
-| "1 members" | hardcoded plural | `Intl.PluralRules` |
-| Digits jitter or misalign | proportional figures | `font-variant-numeric: tabular-nums` |
-| `NaN`, `undefined`, raw `1284` | raw number | `Intl.NumberFormat`, guard null |
-| Translated button overflows | fixed width | `min-width`, never fixed `width` |
-| Tall scripts clipped | tight line height with `overflow: hidden` | looser line height |
-| Broken-image icon | no error fallback | initials fallback, `object-fit: cover` |
-| Truncated text nobody can read | ellipsis and nothing else | tooltip or `title`, full value in a detail view |
-| 1,000 rows stutter | every row rendered | virtualize or paginate, say which |
-| Raw `<b>` or `&amp;` shown | wrong escaping layer | escape once at render |
-| QML text runs over its neighbour | no `elide`, no width bound | `elide` and `Layout.maximumWidth` |
-| TUI columns misalign on CJK | width by `.length` | display width (`Bun.stringWidth`) |
+A break is named by its cause and fixed by the property that causes it: the shrinking child, the
+missing break opportunity, the proportional figures, the raw number, the hardcoded plural, the
+missing error fallback, the wrong escaping layer. The table of causes and fixes is the family's
+(web-harness for a page; desktop-ui and tui-ui for the stress hook and the width breaks).
 
 **Truncate, wrap, or clamp,** per field, never globally. Wrap what the user needs whole to
 identify something (names, titles; two lines fine, four means the column is too narrow). Truncate
@@ -164,6 +118,9 @@ with field, worst-case value, what happens, the fix and its `file:line`. Decisio
 with several right answers, each with a recommendation. What held up: the worst cases it already
 survives. Say which findings you saw and which you inferred. Close with where the toggle is, its
 states, and "Say `fix all` or `fix 1, 3` and I'll apply them."
+
+The toggle and the fixes are written per family: desktop (desktop-ui, qml-ui), terminal (cli-ui,
+tui-ui), web (web-harness, css-ui, react-ui).
 
 Source: skills/break-ui/SKILL.md and CATALOG.md in github.com/emilkowalski/skills (MIT, Emil
 Kowalski).
