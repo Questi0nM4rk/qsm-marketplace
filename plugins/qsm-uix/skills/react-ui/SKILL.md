@@ -41,16 +41,25 @@ ux-audit (feedback, forms). Motion is animate and review-animations.
    typed. What the label, the error text and the validation timing must say is ux-audit.
 6. **Loading keeps old content on screen.** Wrap navigation and refetch in `startTransition` so a
    `Suspense` fallback does not replace content already on screen; the old content staying visible
-   is the loading state. The delay and skeleton thresholds are ux-audit.
+   is the loading state. A wait shows feedback (a busy state or spinner) by 1 s at the latest and
+   none for an instant action; a known length that passes about 10 s gets
+   `<progress value max>` with a count. Skeleton thresholds are ux-audit.
 7. **A custom control carries name, role and state.** `div onClick` is a defect: use the native
    element. When a custom widget is unavoidable (combobox, tabs), give it the role, `aria-*`
-   state, arrow-key handling and visible focus, in that order; an icon-only button gets
-   `aria-label`, an icon beside text gets `aria-hidden`. Prefer a maintained headless library
+   state, arrow-key handling and visible focus, in that order. An icon stands alone only where
+   everyone reads it the same (close, play, volume), with a tooltip and `aria-label`; any other
+   button gets a text label, never icon and label together, and an icon beside text gets
+   `aria-hidden`. Prefer a maintained headless library
    (pick-ui-library) over writing the pattern: the keyboard contract is the hard part.
 8. **JS-driven motion honours reduced motion.** CSS handles its own (css-ui). For animation run
    from JS, read `matchMedia("(prefers-reduced-motion: reduce)")` and subscribe to `change`; with
    an animation library use its switch (`MotionConfig reducedMotion="user"`). Replace movement
-   with an instant state change or a fade, never remove the state change itself.
+   with an instant state change or a fade, never remove the state change itself. How the motion
+   is written and kept fast is web-motion.
+9. **A hover card or popover opens by click and by keyboard too.** It still opens on hover and
+   stays 180 ms after the pointer leaves, but the trigger is a `button` with `aria-expanded`,
+   Enter and Space open it, Escape closes it and returns focus, and every action and fact inside
+   is reachable that way. Reason: touch and keyboard users never hover.
 
 ## Libraries
 
@@ -64,17 +73,30 @@ From the Vercel web interface guidelines, in our words:
 - **Forms.** Enter submits a focused input, and in a `textarea` Cmd or Ctrl plus Enter. Accept free
   text and validate after, never block typing, and let an incomplete form submit so validation can
   show. Never block paste (password managers and 2FA codes depend on it); trim values; use
-  `autocomplete`, a meaningful `name`, the right `type` and `inputmode`. Keep submit enabled until
-  the request starts, then disable it with a spinner and keep the original label. Warn before
-  navigating away from unsaved changes.
+  `autocomplete`, a meaningful `name`, the right `type` and `inputmode`. Disable spellcheck on
+  emails, codes and usernames, give a placeholder an example ending in `…`, and set
+  `autocomplete="off"` on non-auth fields so a password manager stays out. Show the error inline
+  next to its field. Keep submit enabled until the request starts, then disable it with a spinner
+  and keep the original label; a loading label ends in `…`. Warn before navigating away from unsaved
+  changes.
 - **State lives in the URL.** Filters, tabs, pagination and an expanded panel are deep-linkable;
   Back and Forward restore scroll. Navigation is `<a>` or the router's `Link`, so Cmd, Ctrl and
   middle click work; never a `div` with `onClick`.
 - **Feedback.** Update optimistically and reconcile on the response, rolling back or offering Undo
-  on failure. A destructive action is confirmed or undoable. A toast and inline validation use a
-  polite live region (rule 4).
+  on failure. A destructive action is undoable first: a toast or inline message with Undo, and a
+  confirm dialog naming the verb ("Delete 3 files") only when it cannot be undone.
+  A toast and inline validation use a polite live region (rule 4).
 - **Hydration.** An input with `value` needs `onChange`, or use `defaultValue`; guard date and time
-  rendering against a server and client mismatch.
+  rendering against a server and client mismatch; `suppressHydrationWarning` only where truly
+  needed.
+- **Performance.** Virtualize a list over 50 items (`virtua`, or `content-visibility: auto`). No
+  layout read in render (`getBoundingClientRect`, `offsetHeight`, `scrollTop`); batch DOM reads
+  then writes. Prefer uncontrolled inputs; a controlled one must be cheap per keystroke. Prefer
+  flex or grid to measuring in JS, and `<link rel="preconnect">` for asset hosts.
+- **Locale.** Dates and numbers go through `Intl.DateTimeFormat` and `Intl.NumberFormat`, never a
+  hard-coded format; language comes from `Accept-Language` or `navigator.languages`, not the IP.
+- **Interaction.** `autoFocus` only on desktop and on the single primary input. Meaningful media
+  has captions or a transcript, and its controls work from the keyboard.
 - **Gestures.** A drag or swipe has a click and keyboard alternative; during a drag, disable text
   selection and set `inert` on dragged elements, as the Vercel rule says.
 

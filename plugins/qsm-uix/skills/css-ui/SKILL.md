@@ -41,17 +41,16 @@ design source is the expected column), measuring the result (ui-audit), criteria
    Adjacent states differ by a contrast ratio of 1.2 or more.
 6. **Targets are at least 24 px, 32 px when frequent.** `min-block-size` and `min-inline-size`
    on the control, padding for the rest; a 16 px icon button gets padding, not a bigger icon.
-7. **Motion comes from tokens, and gentles on request.** Easing is animate's `--ease-out`,
-   `--ease-in-out` and `--ease-drawer`; durations are the design source's motion tokens (ui-design
-   owns them), written `--dur-<name>` here as assumed. Transitions name the properties
-   (`transition: opacity var(--dur-<name>) var(--ease-out)`, never `all`). Animate `opacity` and
-   `transform` only. Then `@media (prefers-reduced-motion: reduce)` sets the movement durations on
-   `:root` to `0.01ms`: movement is zeroed, the short fade stays (animate: gentler, not zero), and
-   one switch covers every component. Reason: a per-component override is forgotten in the next
-   component.
+7. **Motion comes from tokens, and gentles on request.** Easing and duration are custom
+   properties, and `@media (prefers-reduced-motion: reduce)` sets the movement durations on
+   `:root` to `0.01ms`, so one switch covers every component. Reason: a per-component override is
+   forgotten in the next component. Curves, `@starting-style`, hover gating and the rest are
+   web-motion's.
 8. **Layout does not shift.** `aspect-ratio` or `width`/`height` on images and embeds, a
    reserved block for async content, `font-display: swap` with a metric-matched fallback
-   (`size-adjust`). Reason: a late image pushing a button under the pointer is a mis-click.
+   (`size-adjust`), and the critical font preloaded. Below-fold images get `loading="lazy"`, the
+   hero `fetchpriority="high"`; a video replaces an animated GIF.
+   Reason: a late image pushing a button under the pointer is a mis-click.
 9. **Size by the container and the content.** `min()`, `max()`, `clamp()` for fluid type and
    width; `@container` (set `container-type: inline-size`) so a card adapts to its slot, not
    the viewport; `min-height: 100dvh` for full height on mobile, not `100vh`. `dvh` follows
@@ -62,12 +61,21 @@ design source is the expected column), measuring the result (ui-audit), criteria
     height (so anchors and focused fields are not hidden under it), `padding-bottom` for a fixed
     footer, `env(safe-area-inset-*)` on notch devices. Reason: a focused control under a sticky
     header fails 2.4.11, and the user cannot see where they are.
-11. **Icons next to text are decorative, alone they are named.** `aria-hidden="true"` on the
-    icon beside a label; an icon-only button carries `aria-label` or visually hidden text. Icon
-    boxes are 12 px or more, text 10 px or more.
+11. **An icon stands alone only where everyone reads it the same** (close, play, volume), and it
+    then has a tooltip and an `aria-label`; any other action gets a text label. Never icon and
+    label on one button; an icon beside other text is `aria-hidden="true"`. Icon boxes are 12 px
+    or more, text 10 px or more.
 12. **Features: container queries, `dvh`, `:focus-visible`, `:has`, `color-scheme` are
     Baseline and safe to use; anything newer is checked on MDN before use**, and gets an
     `@supports` fallback. The page works without it.
+13. **A surface that opens on hover is also reachable without hover.** It opens on entry, stays
+    for 180 ms after the pointer leaves, and every action and fact in it is reachable by click
+    and by keyboard: a `button` with `aria-expanded` (or `popovertarget`) toggles it, `Escape`
+    closes it. Reason: touch and keyboard users never hover. `:focus-within` keeps a compound
+    control open while focus is inside.
+14. **A dark overlay carries a soft shadow and a light edge.** Menus, popovers and dialogs always
+    get a layered shadow; in the dark theme also a `1px` low-alpha light border (never opaque),
+    because a shadow vanishes on a dark fill.
 
 ## Libraries
 
@@ -86,19 +94,26 @@ From the Vercel web interface guidelines, in our words:
 - Increase contrast on `:hover`, `:active` and `:focus`, never lower it. Make focus rings clear
   sticky bars (rule 10), and keep a visible replacement for any removed outline.
 - Layered shadows (an ambient one and a direct one), crisp edges from a semi-transparent border
-  plus a shadow, nested radii where the child is never larger than the parent, and borders and
-  shadows tinted toward the background hue so greys do not look pasted on.
-- Animate from where the thing physically comes from (`transform-origin`), list SVG transforms on
-  a `<g>` with `transform-box: fill-box`, and keep animations interruptible. Animate only to show
-  cause and effect; how and how much is animate.
+  plus a shadow (rule 14), nested radii where the child is never larger than the parent, and
+  borders and shadows tinted toward the background hue so greys do not look pasted on.
 - Text: `text-wrap: balance` on headings, `…` not `...`, a non-breaking space inside `10 MB` and
   `⌘ K`, curly quotes, `scroll-margin-top` on headings, and a skip link.
 - Content survives short, average and very long user text, and empty, sparse, dense and error states
   are designed; a skeleton mirrors the final content so nothing shifts.
+- Brand names and code tokens get `translate="no"`; `user-scalable=no` and `maximum-scale=1` are
+  never set, because they block zoom.
 - If it looks clickable it is clickable; the label and its checkbox or radio share one hit target
   with no dead zone; a tooltip is the last resort after inline help.
 - Verify at phone, laptop and ultra-wide widths (50% zoom simulates the last), and with CPU
   throttling before claiming performance.
+
+## Materials
+
+A translucent surface is a `backdrop-filter: blur()` with saturation on a semi-transparent fill,
+designed solid first. `@media (prefers-reduced-transparency: reduce)` swaps in the solid fill and
+drops the blur, `@media (prefers-contrast: more)` adds a border, and the text pair is measured
+over the blur, not over the fill. Never stack a translucent surface on another. Press feedback
+starts on `:active` (pointer-down), letter-spacing is in `em` per heading step, spacing in `rem`.
 
 ## Make it checkable
 
@@ -149,4 +164,5 @@ ui-audit measures it). List the states and what bounds they hold. Say which rule
 design source you could not apply because it was absent, and which you assumed. Never claim a
 contrast ratio you did not compute.
 
-Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT).
+Sources: vercel-labs/web-interface-guidelines (MIT); emilkowalski/skills (MIT), including its
+apple-design distillation of Apple WWDC talks.
