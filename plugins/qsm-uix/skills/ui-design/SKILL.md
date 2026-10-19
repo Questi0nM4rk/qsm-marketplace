@@ -69,10 +69,28 @@ Use these headings, because the audits and the stack skills look for them:
   (z-order), icon size, motion (duration and easing, exit shorter than enter), density. Why: a
   literal in a component is a decision nobody reviewed, and a scale is how one change reaches
   every surface. Density is an axis of the scale (compact, regular), not a second design.
-- **State changes colour, opacity, or elevation, never bounds.** Hover, press, focus and disabled
-  stay in the same box. Adjacent states of a control differ by a contrast ratio of at least 1.2,
-  and the focus indicator reaches 3:1 against its neighbours. Why: a state that moves layout
-  jitters the neighbours and a state that cannot be told apart is not a state.
+- **Every pressable has a pressed state, and no state moves its neighbours.** The press shrinks
+  the element to 0.95 to 0.98 of its size at once; hover, focus and disabled change colour,
+  opacity or elevation and keep the box. Adjacent states of a control differ by a contrast ratio
+  of at least 1.2, and the focus indicator reaches 3:1 against its neighbours. Why: a press with
+  no response feels like the UI did not hear the person, a scaled press leaves layout alone, and
+  a state that cannot be told apart is not a state.
+- **Hover is for pointers that hover.** A hover effect is gated to hover-capable pointers,
+  because a touch screen fires hover on tap and shows it as a false positive.
+- **A tooltip delays once, then follows at once.** The first waits so a passing pointer does not
+  trigger it; while one is open its neighbours show instantly, which makes the whole row feel
+  faster without losing the delay's purpose.
+- **A popover grows from its trigger, a modal from the centre.** Anchored content that appears
+  from nowhere loses the link to what opened it. Curves, durations and springs are `animate`'s,
+  checking them is `review-animations`.
+- **Defaults carry the design; options are for the few.** Most people never change a setting, so
+  the default look, spacing and timing must already be the best the design has.
+- **A component's character is one personality.** Spacing, type, and feel agree with the
+  product's mood: a professional dashboard is crisp and dense, a playful tool may be looser.
+  Why: a rule right in isolation still reads wrong beside a neighbour of another character.
+- **Handle edge cases where nobody looks.** A hover that must survive the gap between stacked
+  items, a timer that pauses when the view is hidden, a drag that continues outside its box.
+  These are details nobody notices, and that is what correct looks like.
 - **Sizes carry a floor.** Target 24 px minimum (WCAG 2.5.8), 32 px for anything used often;
   icon box at least 12 px, text at least 10 px. These are defaults, and the source records any
   override per project with its reason, because a threshold silently changed is a regression
@@ -137,3 +155,5 @@ with the stack skill, then run ui-audit against this file, which is the expected
 - What was assumed and what was asked, and the open decisions left for the person.
 - What is not covered: no running UI was measured, so nothing here is verified until ui-audit
   runs against it.
+
+The polish rules follow Emil Kowalski's emil-design-eng (github.com/emilkowalski/skills, MIT).

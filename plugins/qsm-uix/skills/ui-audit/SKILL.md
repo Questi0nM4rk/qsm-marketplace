@@ -86,6 +86,14 @@ resting frame is not an audit.
    so expect a zero gap at each. Capture every output, because the focused one alone is a coverage
    gap; toggle a per-screen state on one output and capture the other, since state must not leak.
 
+9. **Polish.** Reasons are ui-design's. Hold each pressable down and capture it:
+   - A pressed state exists and differs from rest: same bounds in the tree, or scaled to 0.95 to
+     0.98 of them, with a measured pixel difference.
+   - Hover, focus and disabled keep the box: the neighbours' x, y, width, height are unchanged
+     in the tree.
+   - A popover's anchor edge sits on its trigger, and a modal is centred in the viewport.
+   - Every control with a pressed state in one theme has it in the other.
+
 ## The findings table
 
 | id | pass | element | evidence (measured) | expected (source) | actual | severity |
