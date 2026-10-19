@@ -1,13 +1,13 @@
 ---
 name: qml-ui
-description: "Use when writing or changing QML in a Quickshell shell: a new component, bindings, delegates, layouts, Loader, the Theme singleton, exclusive zone and layer-shell windows, and when a QML surface must be made checkable by the audits. Triggers: new QML component, add a popout to my Quickshell bar, my panel overlaps maximized windows, exclusive zone, Theme singleton, qmllint, qmlformat, delegate, Loader, dump the item tree, make this match the rest of the shell, udelej komponentu v quickshellu, panel prekryva okna. QML code only: what a bar, popout or OSD is and does, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
+description: "Use when writing or changing QML in a Quickshell shell: a new component, bindings, delegates, layouts, Loader, the Theme singleton, exclusive zone and layer-shell windows, and when a QML surface must be made checkable by the audits. Triggers: new QML component, add a popout to my Quickshell bar, my panel overlaps maximized windows, exclusive zone, Theme singleton, qmllint, qmlformat, QML delegate, QML Loader, dump the item tree, udelej komponentu v quickshellu, panel prekryva okna. QML code only: what a bar, popout or OSD is and does, desktop rules, Hyprland config and motion forms are desktop-ui; token values are ui-design; measuring is ui-audit."
 ---
 
 # QML UI
 
 Quickshell is niche and moves fast, so an unaided model hard-codes a colour, guesses an exclusive
 zone, or leaves nothing to measure. This skill builds on the shell's tokens, reserves the right
-space, and leaves a way to read real geometry back. It is how QML is written; what a bar, popout
+space, and leaves a way to read geometry back. It is how QML is written; what a bar, popout
 or OSD is and does, the desktop rules and the Hyprland config are desktop-ui. Values: ui-design.
 Names, keyboard, reduced motion: a11y-audit.
 
@@ -16,19 +16,18 @@ Names, keyboard, reduced motion: a11y-audit.
 1. **Confirm the stack.** `shell.qml` with `import Quickshell` in the project, and `qs list --all`
    shows the running instance with its config path. Anything else is not this skill.
 2. **Find the token source.** The shell's `Theme` singleton (`pragma Singleton`, usually under
-   `theme/`), the `Motion` singleton when it has one (durations and curves come from `Motion`,
-   else from `Theme`), and the design source if one exists. Read them and the nearest
-   existing component to the one you build; match its structure, because a second dialect is a
-   defect. With no singleton, say so and ask for the design
-   source; do not invent tokens inside a component. Shell unreadable: write `Theme.<role>`
-   and list those names as assumed.
+   `theme/`), the `Motion` singleton when it has one, and the design source if one exists. Read
+   them and the nearest existing component to the one you build; match its structure, because a
+   second dialect is a defect. With no singleton, say so and ask for the design source; never
+   invent tokens inside a component. Shell unreadable: write `Theme.<role>` and list those names
+   as assumed.
 3. **Reuse before building.** Search the shared component library by concept before writing any
    visible control, in a consumer of the library too, then Qt Quick Controls. When a type already
    does the concept, use it and add the missing slot to it. A consumer never defines a control
    named after where it is used (`PopoutRow`, `OsdSlider`), because that is a second copy that
    drifts, and a system control brings focus and keyboard handling a custom one must redo.
-4. **Open every file the owner named** (plugin, PDF, spec) before the first edit. If one is
-   missing, say so in the first reply, because an answer built without it is rebuilt.
+4. **Open every file the owner named** (plugin, PDF, spec) before the first edit; if one is
+   missing, say so in the first reply, or the answer is rebuilt.
 
 ## Rules
 
@@ -39,14 +38,13 @@ Names, keyboard, reduced motion: a11y-audit.
 - **Pairs travel together.** A fill token and its on-token (`primary` / `onPrimary`) are read
   together in one item. Colours bind to the singleton; never copy one into a local
   `property color`, or a theme swap misses it.
-- **Durations and easing come from the motion tokens** (`Motion`, else `Theme`). If the singleton
-  clamps durations for reduced motion, use it, because a component that bypasses it breaks the
-  setting for the whole shell; if it does not clamp, add the clamp there, not in components.
-  How a surface animates is desktop-ui. A tappable item reads `TapHandler.pressed`.
+- **Durations and easing come from the motion tokens** (`Motion`, else `Theme`; with none, say so
+  and ask). Reduced motion is clamped in the singleton, nowhere else, because a component that
+  bypasses it breaks the setting for the whole shell. How a surface animates is desktop-ui. A
+  tappable item reads `TapHandler.pressed`.
 - **Integer geometry.** A fractional `x`/`y`/`width` blurs a 1 px edge. Round computed sizes
-  (`Math.round`, `Math.ceil` for text-driven ones). Position with `anchors` or `Layout`, never
-  both on one item, and use `Layout` where the content
-  size drives the parent.
+  (`Math.round`, `Math.ceil` for text). Position with `anchors` or `Layout`, never
+  both on one item; `Layout` where the content size drives the parent.
 - **Reserved space is an exclusive zone, never a margin.** A bar or dock is a `PanelWindow` anchored
   to its edge. `exclusionMode: ExclusionMode.Auto` (the default) derives the zone from the window's
   size and anchors; setting `exclusiveZone` switches the window to `Normal`, which reads that
@@ -57,34 +55,32 @@ Names, keyboard, reduced motion: a11y-audit.
   `required property var modelData`, and `screen: modelData` on the window. A window made once
   lands on one monitor, which is the usual reason a panel overlaps maximized windows on the
   second.
-- **Scale is per output.** Tree coordinates are logical pixels and a screenshot is physical:
-  divide by the output's `scale` (`hyprctl monitors -j`) before comparing.
+- **Scale is per output.** Tree coordinates are logical, a screenshot is physical: divide by the
+  output's `scale` (`hyprctl monitors -j`) before comparing.
 - **Expose what an assistive tool needs.** Interactive custom items get `Accessible.role`,
-  `Accessible.name`, and a keyboard path (`activeFocusOnTab`, `Keys.onReturnPressed`,
-  visible focus), because a bare `MouseArea` is invisible to both.
+  `Accessible.name`, and a keyboard path (`activeFocusOnTab`, `Keys.onReturnPressed`, visible
+  focus), because a bare `MouseArea` is invisible to both.
 
 ## Libraries
 
 - `Quickshell.Services.*` for system state: Pipewire (volume, devices), Mpris (players), UPower
   (battery), SystemTray, Notifications. Not `pactl`, `playerctl` or `upower` in a `Process`.
-- `Quickshell.Hyprland` for workspaces, the focused client, `GlobalShortcut`; `hyprctl` only for
-  what it does not expose. `Quickshell.Io` for `Process`, `FileView`, sockets and `IpcHandler`;
-  `Quickshell.Wayland` for layer-shell options and toplevels.
+- `Quickshell.Hyprland` for workspaces, the focused client, `GlobalShortcut` (`hyprctl` only for
+  the rest); `Quickshell.Io` for `Process`, `FileView`, sockets, `IpcHandler`; `Quickshell.Wayland`
+  for layer-shell options and toplevels.
 - Qt Quick Controls and Layouts for controls and sizing, `MultiEffect` (Qt 6.5+) for blur and
   shadow, never `QtGraphicalEffects`; pointer handlers (`TapHandler`, `HoverHandler`,
   `DragHandler`) over `MouseArea`, because `MouseArea` takes exclusive grabs that steal touch.
 - A customised `contentItem`, `background`, `indicator` or `handle` needs a named style import
-  (`QtQuick.Controls.Basic`), because the default style layer can render over the change.
+  (`QtQuick.Controls.Basic`), or the default style can render over it.
 
 ## Conventions
 
-Qt's QML coding conventions and the qt-qml-review checklist, in our words, the stricter form
-where they differ:
+Qt's QML coding conventions and the qt-qml-review checklist, the stricter form where they differ:
 
 - **Declaration order in an object:** `id` first (`id: root` on a component's top item), then
   properties, signals, signal handlers, attached properties, states and transitions, child
-  objects (visual first), then functions. Group related properties (`anchors { }`, `font { }`);
-  spell out a handler's parameters, so a thing is found by position.
+  objects (visual first), then functions. Group related properties (`anchors { }`, `font { }`).
 - **Bindings:** never assign a property in JavaScript when it has a binding, because the
   assignment replaces the binding for good and `qmllint` does not catch it; restore reactivity
   with `Qt.binding(() => expr)`. Typed properties (`int`, `string`, `color`), never
@@ -107,18 +103,30 @@ where they differ:
   `Qt.createComponent` with a string URL (not type-safe): use a `Component` or a typed URL. Hold
   a `createObject()` result in a variable or give it a parent, or the GC can take it, and destroy
   it when done.
-- **Hiding:** `visible: false` removes an item from rendering and input; `opacity: 0` keeps it
-  rendering and focusable, so a closed popout would still take the pointer.
+- **Hiding:** `visible: false` removes an item from rendering and input; `opacity: 0` keeps both,
+  so a closed popout would still take the pointer.
 - **States:** a `Transition` states its `from` and `to`, or it fires on every state change. A
   reusable component with states uses `StateGroup`, not top-level `states`.
 - **Cost:** `Image` gets `sourceSize` and `asynchronous: true`; `Text.PlainText` unless rich text
   is needed; avoid a transparent `Rectangle`, `clip` and `layer.enabled` unless measured.
 
+## Stress and variants
+
+- Worst-case data: a debug singleton every model reads through one binding, flipped over IPC and
+  gated on an environment variable: `IpcHandler { target: "debug"; function data(mode: string):
+  void { Debug.data = mode; } }`, then `qs ipc -p <shell.qml> call debug data worst`. A bar module
+  fed a title wider than itself elides (`elide: Text.ElideRight`, bounded `Layout.maximumWidth`);
+  a `Layout.fillWidth` text needs `Layout.minimumWidth: 0` or it pushes siblings off.
+- Variants: a `variant` property on that singleton read by a `Loader` per component, flipped by
+  `IpcHandler { target: "proto"; ... }` (`call proto pick 2`). Variants live outside the
+  production import path; replay sets the `Loader`'s `active` to false, then true.
+- `font.letterSpacing` is in pixels: convert tracking from em per size.
+
 ## Make it checkable
 
-Quickshell has no built-in item-tree dump, so the shell exposes one through an `IpcHandler`; if
-the shell already has one (`qs ipc -p <shell.qml> show` lists targets and functions; look for
-`inspect`), use it. If not, add this and nothing more:
+Quickshell has no item-tree dump, so the shell exposes one through an `IpcHandler`; use the
+shell's own if it has one (`qs ipc -p <shell.qml> show` lists targets; look for `inspect`), else
+add this and nothing more:
 
 ```qml
 function dump(item: var): var {
@@ -132,14 +140,15 @@ function dump(item: var): var {
     if (kids.length) e.children = kids;
     return e;
 }
-IpcHandler { target: "probe"; function tree(): string { return JSON.stringify(dump(win.contentItem)); } }
+IpcHandler { target: "probe"
+             function tree(): string { return JSON.stringify(dump(win.contentItem)); } }
 ```
 
 `win` is a window's `id`. Read it with `qs ipc -p <shell.qml> call probe tree | jq`; use `-p` or
-`-c` because a bare `qs ipc` looks for a `default` config. Positions are window-relative logical
-pixels. Give the items under test an `objectName` so the audit finds them. Reserved space on screen:
-`hyprctl monitors -j | jq '.[] | {name, scale, reserved}'` (`reserved` is left, top, right, bottom).
-Hand the tree and the reserved numbers to ui-audit as live geometry.
+`-c`, because a bare `qs ipc` looks for a `default` config. Positions are window-relative logical
+pixels. Give the items under test an `objectName`. Reserved space: `hyprctl monitors -j | jq '.[]
+| {name, scale, reserved}'` (`reserved` is left, top, right, bottom). Hand both to ui-audit as
+live geometry.
 
 ## Gates, in this order
 
@@ -149,29 +158,26 @@ Hand the tree and the reserved numbers to ui-audit as live geometry.
    silence them.
 3. Run the shell only when the owner asked (`qs -p <shell.qml>`, then dump the tree). Otherwise end
    with "Not verified on the composed surface" and list each owner check as surface, route,
-   expected state. Lint proves syntax only: never write "works" for pointer, hover, focus or
-   animation behaviour.
+   expected state: geometry read from code is a hypothesis, and lint proves syntax only, so never
+   write "works" for pointer, hover, focus or animation behaviour.
 
 ## Red flags
 
-- When you type `#` followed by hex, or a number next to `radius`, `spacing`, `duration`, or
-  `margins`, stop and use a token, because the literal is the defect the audits will measure.
-- When a panel overlaps windows on one monitor, read `reserved` and the window's anchors and
-  `exclusionMode` for that output before touching a margin, because the cause is nearly always a
-  zone or a missing per-output window.
-- When `qmllint` is clean but the surface renders empty, read `qs log`, because lint does not
-  see runtime type failures.
-- When a property or id is named `on<Capital>` or `size`, `radius`, `live` on an Item, rename it,
-  because it crashes the load or drops the config silently.
-- When there is no running shell to dump, say the geometry is unverified, because a layout read
-  from code is a hypothesis.
+- When you type `#` and hex, or a number beside `radius`, `spacing`, `duration` or `margins`,
+  use a token: the literal is the defect the audits measure.
+- When a panel overlaps windows on one monitor, read `reserved`, the window's anchors and
+  `exclusionMode` for that output before touching a margin: the cause is nearly always a zone or
+  a missing per-output window.
+- When `qmllint` is clean but the surface renders empty, read `qs log`: lint misses runtime type
+  failures.
+- When a property or id is named `on<Capital>`, or `size`, `radius`, `live` on an Item, rename
+  it: it crashes the load or drops the config silently.
 
 ## Say it in the reply
 
-- Which tokens the change uses and any token it added, with the file.
+- The tokens used and any added, with the file.
 - The `qmlformat` / `qmllint` result, whether the surface was run (or the owner checks), and the
   dump target and `objectName`.
-- For a reserved-space change: the `reserved` numbers before and after, or that they were not
-  read.
+- For reserved space: the `reserved` numbers before and after, or that they were not read.
 
 Sources: TheQtCompanyRnD/agent-skills qt-qml-review (BSD-3-Clause), Qt QML coding conventions.

@@ -1,6 +1,6 @@
 ---
 name: desktop-ui
-description: "Use when building, reviewing or deciding the behaviour of a Quickshell/Hyprland desktop shell surface (bar, popout, OSD, notification, tray, launcher, settings pane) or the Hyprland Lua config for its animation, blur and layer rules. Triggers: Quickshell popout, Hyprland layer rule, hl.layer_rule no_anim, OSD, shell notification, system tray, app launcher, hover popout, blur behind my panel, layersIn, animate a popout in my shell, undo or confirm in a panel, Hyprland animation curve, oznameni v shellu, animace panelu. Shell surface behaviour and Hyprland only: QML code is qml-ui, tokens are ui-design, motion values are animate, audits are ui-audit, ux-audit and a11y-audit."
+description: "Use when building, reviewing or deciding the behaviour of a Quickshell/Hyprland desktop shell surface (bar, popout, OSD, notification, tray, launcher, settings pane) or the Hyprland Lua config for its animation, blur and layer rules. Triggers: Quickshell popout, Hyprland layer rule, hl.layer_rule no_anim, Quickshell OSD, shell notification, shell system tray, Quickshell app launcher, Quickshell hover popout, Hyprland blur behind my panel, layersIn, animate a popout in my shell, undo or confirm in a shell panel, Hyprland animation curve, oznameni v shellu, animace panelu. Shell surface behaviour and Hyprland only: QML code is qml-ui, tokens are ui-design, motion values are animate, audits are ui-audit, ux-audit and a11y-audit."
 ---
 
 # Desktop UI
@@ -9,20 +9,21 @@ A shell is the part of the desktop every other program sits in, so a wrong surfa
 day: a popout that vanishes under the pointer, an OSD that steals focus, a blur that never
 switches off. An unaided model builds each surface as a web card. This skill says what each
 surface is for, the rules that keep it quiet, and the Hyprland config around it. It builds
-nothing alone: QML syntax is qml-ui, the numbers are ui-design and animate.
+nothing alone: QML syntax (Layout, Loader, IpcHandler, letterSpacing, tokens) is qml-ui; this
+skill keeps the motion forms; the numbers are ui-design and animate.
 
 ## Surfaces
 
-- **Bar:** state at a glance and the entry to the rest. Never a form or a long text.
-- **Popout:** detail or a quick action from one bar module. Under a third of the screen, few
-  control types, no Close or Done button.
+- **Bar:** state at a glance and the entry to the rest.
+- **Popout:** detail or a quick action from one bar module. Under a third of its parent window,
+  few control types, no Close or Done button.
 - **OSD:** the new state after the person changed a system value (volume, brightness). Never for
-  an automatic event, never takes focus, never stays.
-- **Notification:** an event needed while away from its source. Never repeats, never fires
-  while the source is focused, always has an off switch.
+  an automatic event.
+- **Notification:** an event needed while away from its source. Rate-limited, none while the
+  source is focused, always has an off switch.
 - **Tray:** a status with no other home, shown when abnormal, opt-in. Never an app's default home.
-- **Launcher:** one query box and a ranked list. No second step before the first result.
-- **Settings pane:** a stored choice applied at once. No Apply for a reversible setting.
+- **Launcher:** one query box and a ranked list.
+- **Settings pane:** a stored choice that takes effect at once.
 
 ## Rules
 
@@ -34,7 +35,8 @@ nothing alone: QML syntax is qml-ui, the numbers are ui-design and animate.
   message. A confirm dialog is only for what cannot be undone, and its button names the verb
   ("Delete 3 files"), never "OK" or "Yes". Cancel comes first, Escape cancels, Return activates
   unless the action is destructive.
-- **Waits.** Feedback (spinner or busy state) from 1 s. Past about 10 s with a known length, a
+- **Waits.** No busy state for a wait under 150 to 300 ms. Every wait over 1 s shows a spinner or
+  busy state, which once shown stays 300 to 500 ms. A known length past about 10 s gets a
   progress bar with a count.
 - **Errors say what happened and what to do next.** Nothing fails silently. Invalid input disables
   the confirm button and says why beside the field.
@@ -51,11 +53,12 @@ nothing alone: QML syntax is qml-ui, the numbers are ui-design and animate.
 - **Dark overlays.** A soft shadow always. In a dark theme the overlay also gets a 1 px low-alpha
   light edge, never opaque, because a shadow vanishes on dark and an opaque border reads as a box.
 - **Keyboard.** Every action works from the keyboard. Focus starts on the first operable control
-  and is distinct from selection. Popouts close on Escape and on a click outside; a popover
-  has no Close button. Super belongs to the compositor: a shell binding never takes it alone.
+  and is distinct from selection. Popouts close on Escape; a popover has no Close button. Super
+  belongs to the compositor: a shell binding never takes it alone.
 - **Text** sizes come from the system font scale. Test at a large text size: nothing clips.
 - **Launcher search** is live, global, tolerant of typos, ordered by relevance, and says "No
-  results" in text. An empty list shows an icon, a sentence and the action that fills it.
+  results" in text. An empty list shows an icon, a sentence and the action that fills it (KDE
+  `simple_by_default.md`).
 - **One primary action per surface.** A destructive one sits apart from it.
 
 ## Hyprland config
@@ -68,6 +71,9 @@ hl.curve("easeOut", { type = "bezier", points = { { 0.23, 1 }, { 0.32, 1 } } })
 hl.animation({ leaf = "windows", enabled = true, speed = 2, bezier = "easeOut",
                style = "popin 95%" })
 hl.animation({ leaf = "workspaces", enabled = false })
+hl.animation({ leaf = "layersIn", enabled = true, speed = 2, bezier = "easeOut", style = "fade" })
+hl.animation({ leaf = "layersOut", enabled = true, speed = 1.5, bezier = "easeOut",
+               style = "fade" })
 hl.layer_rule({ match = { namespace = "shell-popout" }, no_anim = true })
 hl.config({ decoration = { rounding = 14, blur = { enabled = true, size = 6, passes = 2,
             vibrancy = 0.16 }, shadow = { enabled = true, range = 14, render_power = 3 } } })
@@ -75,14 +81,16 @@ hl.config({ decoration = { rounding = 14, blur = { enabled = true, size = 6, pas
 
 - **One owner per surface.** A surface opened from a trigger (popout, menu, tooltip) animates in
   QML with its origin at the trigger, and its namespace gets `no_anim = true`. A surface with no
-  trigger (notification, OSD, a bar appearing) may use the compositor: the `layersIn` leaf with
-  `speed = 2, style = "fade"` and a faster `layersOut`. Never both. A launcher toggle gets
-  neither.
+  trigger (notification, OSD, a bar appearing) may use the compositor: the `layersIn` leaf
+  and a faster `layersOut`, both naming the `bezier` defined above. Never both. A launcher
+  toggle gets neither.
 - **Workspace switches** are keyboard-driven and constant: `workspaces` off.
 - **Blur of a shell surface is set at runtime while it is shown, never a standing layer rule.**
   An always-mapped transparent surface (a session backdrop) is blurred behind its region whatever
-  its alpha, so a standing rule blurs the whole desktop for good. The shell adds the rule when
-  the surface appears, removes it when it hides, and clears any leftover at startup.
+  its alpha, so a standing rule blurs the whole desktop for good. At runtime the shell
+  runs `hyprctl eval` with a named rule, `hl.layer_rule({ name = "shell-blur", match = { namespace
+  = "shell-backdrop" }, blur = true })`, when the surface appears, and the same name with `blur =
+  false` when it hides; the startup clear is the same write.
 - **Rounding is one value** in `decoration`, and the shell's radii follow it. Blur size and
   passes stay small: heavy blur costs every frame on a weak GPU.
 - **Motion off** is `hl.config({ animations = { enabled = false } })`. It is a test for whether
@@ -95,8 +103,8 @@ hl.config({ decoration = { rounding = 14, blur = { enabled = true, size = 6, pas
 
 The numbers are animate's; this is how they land here.
 
-- Durations and curves are tokens (`Motion`, else `Theme`; with none, say so and ask). Never a
-  literal in a component. Reduced motion is clamped in `Motion`, nowhere else.
+- Durations, curves and reduced motion come from qml-ui's `Motion` rule; a literal `duration:` is
+  its red flag.
 - `Behavior on opacity { NumberAnimation { duration: Motion.<name>; easing.type:
   Easing.BezierSpline; easing.bezierCurve: [0.23, 1, 0.32, 1, 1, 1] } }`: the array is x1, y1,
   x2, y2, then `1, 1`. ease-in-out `[0.77, 0, 0.175, 1, 1, 1]`, drawer `[0.32, 0.72, 0, 1, 1, 1]`.
@@ -109,7 +117,7 @@ The numbers are animate's; this is how they land here.
   motion ends: `visible: open || content.opacity > 0`.
 - No state changes the hit area's bounds; a press scale is a transform and is allowed. Every
   tappable item shows a pressed state.
-- Review checks: ease-in (`Easing.InQuad`, `InCubic`) on UI; a literal `duration:`; animated
+- Review checks: ease-in (`Easing.InQuad`, `InCubic`) on UI; animated
   `width` or `height`; a fixed-`from` animation where a `Behavior` belongs; a hidden window with
   no exit; a hover that changes the hit area; reduced motion not clamped. On Hyprland: the
   built-in `default` curve on a window or layer; speed over 3 without reason; any animation on
@@ -131,29 +139,24 @@ The numbers are animate's; this is how they land here.
   measured over the blur, not over the fill alone. Opacity belongs to the fill colour, never to
   the item, because item opacity fades the text with it.
 - Reduced transparency is a `Theme` flag that swaps in the solid fill.
-- Press feedback is the control's own state, timed from `Motion`. `font.letterSpacing` is in
-  pixels, so convert tracking from em per size.
+- Press feedback is the control's own state, timed from `Motion`.
 
 ## Stress and variants
 
-- Worst-case data: a property on a debug singleton every model reads through one binding, flipped
-  over IPC:
-  `IpcHandler { target: "debug"; function data(mode: string): void { Debug.data = mode; } }`, then
-  `qs ipc -p <shell.qml> call debug data worst`. Gate it on an environment variable. Feed a bar
-  module a title wider than itself and an empty one: it elides (`elide: Text.ElideRight` with a
-  bounded `Layout.maximumWidth`, middle for paths) and the bar holds. A `Layout.fillWidth` text
-  without `Layout.minimumWidth: 0` pushes siblings off. Text running over a neighbour means no
-  `elide` and no width bound.
-- Variants: a `property int variant` on the debug singleton read by a `Loader` that picks one
-  component per variant, flipped by `IpcHandler { target: "proto"; ... }` and
-  `qs ipc -p <shell.qml> call proto pick 2`. Variants live in a directory the production shell
-  does not import, and load in the real bar or popout position so the neighbours are real.
-  Replay sets the `Loader`'s `active` to false, then true.
+A debug property every model reads through one binding, flipped from outside the shell and gated
+on an environment variable, swaps worst, empty and one datasets; a bar module fed a title wider
+than itself must elide and the bar hold. Variants load in the real bar or popout position from a
+directory the production shell does not import. The QML for both is qml-ui.
 
 ## Driving it for a11y-audit
 
 - Focus the window with `hyprctl dispatch focuswindow <selector>`, then send keys with
   `wtype -k Tab`, `wtype -M shift -k Tab -m shift`, `wtype -k Escape`.
+- `qsm-uix a11y-tree <app-name> [--depth N]` prints each node as indent, role, name and the AT-SPI
+  states `[focused,focusable,showing]`; the default depth of 32 covers GTK4 apps, whose trees are
+  deep.
+- Colour-only states: capture the state, run `magick in.png -colorspace Gray out.png`, and look; it
+  must still differ by text, icon or shape.
 - A Qt or QML app (Quickshell included) is absent from the accessibility tree unless launched
   with `QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1`: relaunch with it before calling the tree unreachable.
 
@@ -161,8 +164,8 @@ The numbers are animate's; this is how they land here.
 
 - When a popout's content exists only on hover, add the click and key route first, because a
   touch, keyboard or screen-reader user cannot see it.
-- When a standing layer rule mentions blur, remove it and set it at runtime, because it blurs the
-  desktop behind a surface that is mapped but empty.
+- When a standing layer rule mentions blur, remove it and write the named rule at runtime, because
+  it blurs the desktop behind a surface that is mapped but empty.
 - When both QML and a layer leaf animate one surface, give it to one owner, because the two
   fight and the exit flickers.
 
@@ -173,5 +176,6 @@ The numbers are animate's; this is how they land here.
 - What was run and what was not: "Not verified on the composed surface" with each owner check as
   surface, route, expected state.
 
-Sources: KDE HIG (CC-BY-SA-4.0) and GNOME HIG, paraphrased; hyprwm/hyprland-wiki
-(BSD-3-Clause); emilkowalski/skills (MIT); Apple WWDC design talks.
+Sources, paraphrased: KDE HIG, invent.kde.org/documentation/develop-kde-org `content/hig`
+(CC-BY-SA-4.0); GNOME HIG, gitlab.gnome.org/Teams/Websites/developer.gnome.org-hig `source`;
+hyprwm/hyprland-wiki (BSD-3-Clause); emilkowalski/skills (MIT).

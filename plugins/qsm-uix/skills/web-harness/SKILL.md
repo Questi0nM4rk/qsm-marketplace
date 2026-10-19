@@ -1,6 +1,6 @@
 ---
 name: web-harness
-description: "Use when break-ui or prototype is run on a web page or React app: a Demo data or Worst case toggle for a component, a ?data=worst fixture switch, a CSS fix for a break the stress test found (squished avatar, text overflowing its box, badge wrapping), or a floating picker to flip between prototype variants in a browser. Triggers: worst-case data toggle in React, long name breaks my card, flex child overflows, min-width 0, overflow-wrap anywhere, variant switcher on a web page, /prototypes route, picker pill, data toggle v Reactu, prepinac variant. Web form only: what to feed and judge is break-ui, which variants to build is prototype, component CSS is css-ui."
+description: "Use when break-ui or prototype is run on a web page or React app: the Demo data or Worst case toggle, a ?data=worst fixture switch, or the floating picker that flips between prototype variants in a browser. Triggers: worst-case data toggle in React, ?data=worst, variant switcher on a web page, /prototypes route, picker pill, data toggle v Reactu, prepinac variant. Web form only: what to feed and judge is break-ui, which variants to build is prototype, component CSS is css-ui."
 ---
 
 # Web Harness
@@ -58,7 +58,7 @@ Verbatim: no project fonts, brand colours, theme switching, extra shadows or bor
 @media (prefers-reduced-motion: reduce) { .proto-picker[data-ready] .proto-picker-highlight { transition: none; } }
 .proto-picker-item { position: relative; display: flex; align-items: center; height: 28px;
   padding: 0 12px; border: 0; border-radius: 999px; background: transparent;
-  color: rgba(255,255,255,.55); font: inherit; cursor: pointer; transition: color 150ms ease-out; }
+  color: rgba(255,255,255,.55); font: inherit; cursor: pointer; transition: color 150ms ease; }
 @media (hover: hover) and (pointer: fine) {
   .proto-picker-item:hover { color: rgba(255,255,255,.85); } }
 .proto-picker-item:active { transform: scale(.97); }
@@ -88,7 +88,8 @@ without switching.
 ## Fixes for the web breaks
 
 The fix names the property; the rules around it are css-ui's. Where the picker's own colours break
-css-ui's token rule, that is intended: it is deleted when a variant is promoted.
+css-ui's token rule, that is intended: it is deleted when a variant is promoted. Its colour
+change uses animate's `ease` exception for colour.
 
 | What you see | Cause | Fix |
 | --- | --- | --- |
@@ -101,6 +102,8 @@ css-ui's token rule, that is intended: it is deleted when a variant is promoted.
 | Last row cut mid-glyph | fixed height, no fade or scroll cue | visible scrollbar or fade mask |
 | Heading breaks mid-word | `word-break: break-all` | `overflow-wrap: anywhere` |
 | Wrong initials | `split(' ')[0][0]` | grapheme clusters (`Intl.Segmenter`), first plus last word, icon fallback |
+| Emoji initial is half a character | `charAt(0)` cuts a surrogate pair | first grapheme via `Intl.Segmenter` |
+| Typed text past the stored limit | `maxLength` and the schema disagree | one limit from the schema; feed limit + 1 |
 | Orphan dash where a field was missing | placeholder for absent optional | omit the line or reserve its height |
 | "1 members" | hardcoded plural | `Intl.PluralRules` |
 | Digits jitter or misalign | proportional figures | `font-variant-numeric: tabular-nums` |
