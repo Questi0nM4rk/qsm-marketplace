@@ -6,5 +6,6 @@ max_turns: 6
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
 
-My CLI prints coloured status lines and a progress bar, and people pipe it into files where it is
-garbage. The code is not in this sandbox. I write it in TypeScript on Bun.
+I am building a full-screen terminal dashboard in Rust with ratatui: a list pane, a detail pane and
+a key hint bar at the bottom. The layout breaks when I resize the terminal. The code is not in this
+sandbox.
