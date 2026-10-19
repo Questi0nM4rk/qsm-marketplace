@@ -1,6 +1,6 @@
 ---
 name: cli-ui
-description: "Use when writing or fixing a command that prints and exits: what goes to stdout and stderr, exit codes, coloured status lines, a progress bar or spinner, tables that must fit the terminal, error messages, --help, Ctrl-C, a closed pipe, a token the command needs. Triggers: NO_COLOR, ANSI colours, piped output has escape codes, CLI progress bar fills the log, stack trace on head, CLI exit code, --help text, CLI Ctrl-C twice, broken pipe, secret in a flag, CLI output looks bad, barvy v terminalu, chybova hlaska, tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
+description: "Use when writing or fixing a command that prints and exits: what goes to stdout and stderr, exit codes, coloured status lines, a progress bar or spinner, tables that must fit the terminal, error messages, --help, Ctrl-C, a closed pipe, a token the command needs. Triggers: CLI NO_COLOR, CLI ANSI colours, piped output has escape codes, CLI progress bar fills the log, stack trace on head, CLI exit code, CLI --help text, CLI Ctrl-C twice, broken pipe, secret in a flag, CLI output looks bad, barvy v terminalu, chybova hlaska, tabulka se nevejde. A program that takes over the whole screen (panes, keybindings, alternate screen) is tui-ui. In a qsm binary the result envelope, --json, exit codes and --no-input already exist."
 ---
 
 # Command-line output
@@ -88,9 +88,8 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 
 - `process.stdout.columns` is undefined off a TTY. Use 80 for a TTY of unknown size, no wrapping
   for a pipe, and re-read on `resize`.
-- Measure display width (`Bun.stringWidth` or `string-width` in TypeScript, `unicode-width` in
-  Rust), never `.length`: a wide glyph takes two cells, an escape sequence none. Pad and cut by
-  cells.
+- Measure display width (`Bun.stringWidth` or `string-width` in TypeScript), never `.length`: a wide
+  glyph takes two cells, an escape sequence none. Pad and cut by cells.
 - Truncate by kind and reserve one cell for the `…`: a path from the start or the middle, prose
   from the tail, never the column the row is found by. Wrap only prose, never a table cell.
 - Narrower than 80 columns, a table folds to one record per block (`label: value`).
@@ -99,10 +98,11 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 ## Progress
 
 - Say something within 100 ms of starting work that touches the network or disk at length.
-- A spinner or bar appears only after 150 to 300 ms, on stderr, on a TTY, and once shown stays
-  300 to 500 ms. Every wait over 1 s has feedback; past about 3 s the spinner shows elapsed time,
-  and a known total past about 10 s becomes a bar with `done/total`. A spinner names its subject.
-  animate's motion rules do not apply to a spinner: it is a stepped redraw.
+- A spinner or bar appears only after 150 to 300 ms, on stderr, on a TTY, and once shown stays 300
+  to 500 ms. Every wait over 1 s has feedback; past about 1 to 2 s the spinner shows elapsed time
+  (gfargo `visual-patterns.md`), and a known total past about 10 s becomes a bar with `done/total`.
+  A spinner names its subject. animate's motion rules do not apply to a spinner: it is a stepped
+  redraw.
 - Steps that succeed fold their logs away; the step that fails prints its log, because the
   person needs it exactly then.
 - Finish by overwriting the line with the result. Leave the terminal clean (cursor shown, line
@@ -161,4 +161,4 @@ stdout does not make the stderr diagnostics unreadable. Pass the answer down.
 - What Ctrl-C and a closed pipe do, from a run. Anything unverified: a terminal you did not run in.
 
 Sources: clig.dev (CC-BY-SA-4.0, paraphrased), gfargo/tui-design-skill (MIT,
-`ecosystem-typescript.md`), pageton/tui-design-skill (MIT), no-color.org, force-color.org.
+`ecosystem-typescript.md` and `visual-patterns.md`), pageton/tui-design-skill (MIT).
