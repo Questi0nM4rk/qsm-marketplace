@@ -22,9 +22,9 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `ui-design` | Writes a stack-neutral design source: tokens, on-pairs, light and dark themes, a style with its accessibility rules |
+| Skill | `ui-design` | Writes a stack-neutral design source: tokens, on-pairs, light and dark themes, a style with its accessibility rules; rules from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `apple-design` | Apple's interface foundations: response, materials and depth, typography, principles; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
-| Skill | `ui-audit` | Measures static visuals: spacing, geometry, colour, contrast, type, icons, elevation, theme parity |
+| Skill | `ui-audit` | Measures static visuals: spacing, geometry, colour, contrast, type, icons, elevation, theme parity; its polish pass checks the rules of [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `ux-audit` | Traces behaviour: discoverability, feedback, targets, reversibility, error recovery, forms; motion is review-animations |
 | Skill | `a11y-audit` | Drives the UI by keyboard and the accessibility tree, and fills a per-criterion conformance table |
 | Skill | `a11y-conformance` | Gives the WCAG 2.2 A and AA criteria and the law behind them (European Accessibility Act, EN 301 549) |
@@ -41,24 +41,24 @@ its stack's syntax, libraries and design rules; a general skill ends by pointing
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `desktop-ui` | Shell surfaces (bar, popout, OSD, notification, tray, launcher), Hyprland config for animation, blur and layer rules, desktop motion, stress and variant forms (KDE and GNOME HIG) |
-| Skill | `qml-ui` | Quickshell and QML: tokens, exclusive zone, per-output windows, scale, Accessible, item-tree dump, qmllint and qmlformat (Qt QML conventions) |
+| Skill | `desktop-ui` | Shell surfaces (bar, popout, OSD, notification, tray, launcher), Hyprland config for animation, blur and layer rules, desktop motion, stress forms; sources: KDE HIG (CC-BY-SA-4.0), GNOME HIG, hyprland-wiki (BSD-3-Clause), [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
+| Skill | `qml-ui` | Quickshell and QML: tokens, exclusive zone, per-output windows, scale, Accessible, item-tree dump, qmllint and qmlformat; source: Qt's qt-qml-review (BSD-3-Clause) |
 
 ### Terminal
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `cli-ui` | A command that prints and exits: streams, colour, exit codes, errors, signals, secrets, help (clig.dev, no-color.org) |
-| Skill | `tui-ui` | A full-screen terminal program: frameworks, keys, focus, layout by width, resize, plain mode, motion, stress and variants |
+| Skill | `cli-ui` | A command that prints and exits: streams, colour, exit codes, errors, signals, secrets, help; sources: clig.dev (CC-BY-SA-4.0), gfargo and pageton tui-design-skill (MIT), no-color.org |
+| Skill | `tui-ui` | A full-screen terminal program: frameworks, keys, focus, layout by width, resize, plain mode, motion, stress and variants; sources: gfargo and pageton tui-design-skill, jrschumacher skill-bubbletea-tui (MIT), clig.dev (CC-BY-SA-4.0) |
 
 ### Web
 
 | Kind | Name | What it does |
 | --- | --- | --- |
-| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions (Vercel web interface guidelines) |
-| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions (Vercel web interface guidelines) |
-| Skill | `web-motion` | Motion on a web page: curves as custom properties, compositor-only properties, reduced motion, the Motion library, performance, review and survey terms |
-| Skill | `web-harness` | The browser side of break-ui and prototype: a Demo data or Worst case toggle, the variant picker, the CSS fixes for the breaks |
+| Skill | `css-ui` | Plain CSS and HTML with a short Tailwind section, libraries and conventions; source: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
+| Skill | `react-ui` | What React leaves to you: focus and aria, forms, loading states, feedback, gestures, libraries and conventions; source: [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
+| Skill | `web-motion` | Motion on a web page: curves as custom properties, compositor-only properties, reduced motion, the Motion library, performance, review and survey terms; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) and [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) (MIT) |
+| Skill | `web-harness` | The browser side of break-ui and prototype: a Demo data or Worst case toggle, the variant picker, the CSS fixes for the breaks; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `mobile-native` | Makes a web app feel native on a phone: hover, tap highlight, viewport height, input zoom, safe areas, scroll; web only; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 | Skill | `pick-ui-library` | Picks a maintained library for a React or web task instead of a hand-rolled one, only when invoked; adapted from [emilkowalski/skills](https://github.com/emilkowalski/skills) (MIT) |
 
@@ -105,8 +105,8 @@ qsm-uix region-stats shot.png --rect 120,40,60,24 --top 8
 
 ## Sources
 
-The skills named "adapted from emilkowalski/skills" carry Emil Kowalski's work under his licence,
-given here in full.
+The skills named "adapted from emilkowalski/skills" (and `web-motion`, `web-harness`, `ui-design`,
+`ui-audit`'s polish pass) carry Emil Kowalski's work under his licence, given here in full.
 
 ```text
 MIT License
