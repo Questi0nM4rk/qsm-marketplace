@@ -70,11 +70,13 @@ describe("qsm-web opensrc get update", () => {
   test("a successful update is ok and runs git pull --ff-only", () => {
     const tree = clonedTree();
     const r = run({}, tree.root);
-    expect(r.exit).toBe(0);
-    const envelope = envelopeOf(r.stdout);
-    expect(envelope.code).toBe("ok");
-    expect(envelope.data).toBeDefined();
-    expect(r.stdout).toContain("update");
+    // The one contract of a successful update: exit 0, an ok envelope whose
+    // data is the fetch result with mode "update" — not the word anywhere.
+    expect({ ...envelopeOf(r.stdout), exit: r.exit }).toMatchObject({
+      exit: 0,
+      code: "ok",
+      data: { mode: "update" },
+    });
     expect(readFileSync(r.log, "utf8")).toContain("pull --ff-only");
   });
 
