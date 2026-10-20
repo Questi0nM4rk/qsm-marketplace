@@ -1,0 +1,17 @@
+{
+  "name": "qsm-worktrunk",
+  "qsm": {
+    "bin": {
+      "qsm-worktrunk": "scripts/cli.ts"
+    },
+    "noun": "worktrunk",
+    "commands": {
+      "qsm-worktrunk doctor": {
+        "description": "Report whether wt and git are on PATH"
+      },
+      "qsm-worktrunk ahead": {
+        "description": "List the local branches that hold commits the working branch does not, one name per line"
+      }
+    }
+  }
+}

@@ -99,7 +99,10 @@ is no case where that is right.
 
 The main agent makes a subagent's worktree before dispatch, reviews the branch there (the
 subagents skill says how), merges by merge commit or cherry-pick, then deletes worktree and
-branch. A worker never merges, rebases, pushes, or deletes; a leftover worktree is a defect.
+branch. A worker never merges, rebases, pushes, or deletes; a leftover worktree is a defect. Any
+branch an agent opens, the main agent's own included, is merged into the working branch or deleted
+before the turn that finished its work ends, because an unmerged branch is finished work the
+working tree does not have; the session-end hook names every branch still ahead.
 
 ## Workflows
 

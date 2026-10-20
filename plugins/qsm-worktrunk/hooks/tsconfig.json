@@ -4,6 +4,8 @@
     "../../../.claude/types",
     "register.tsx",
     "register.test.ts",
+    "noun.generated.ts",
+    "../types",
     "../lib/doctor.ts",
     "../lib/git-worktree-block.ts",
     "../lib/workspace.ts",

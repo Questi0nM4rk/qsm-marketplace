@@ -7,6 +7,7 @@ import { denialFor } from "../lib/git-worktree-block.ts";
 import { gitReader, readWorkspace, workspaceContext } from "../lib/workspace.ts";
 import type { Runner } from "../lib/wt.ts";
 import { setMarker } from "../lib/wt.ts";
+import { registerNoun } from "./noun.generated.ts";
 
 type Engine = EngineInterface;
 
@@ -57,11 +58,18 @@ function registerMarker(on: On): void {
 
   on("session.end", async ($, e, next) => {
     await setMarker(runner($), "cleared");
+    // The branches the working branch has not absorbed are finished work it does not have.
+    const ahead: unknown = await $.worktrunk.ahead();
+    if (Array.isArray(ahead) && ahead.length > 0) {
+      const names = ahead.join(", ");
+      $.ui.toast(`qsm-worktrunk: branches ahead of the working branch: ${names}`.slice(0, 200));
+      $.ui.log(`branches ahead of the working branch: ${names}`);
+    }
     return next(e);
   }).catch(($, e, next) => {
     const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
     $.ui.toast(`qsm-worktrunk ERROR: session.end: ${reason}`);
-    $.ui.log(`clearing the marker failed (${next.error.kind})`);
+    $.ui.log(`clearing the marker or listing the branches ahead failed (${next.error.kind})`);
     return next(e);
   });
 }
@@ -99,6 +107,7 @@ function registerDoctor(on: On): void {
 }
 
 export function register(on: On): void {
+  registerNoun(on);
   registerBlock(on);
   registerMarker(on);
   registerDoctor(on);
