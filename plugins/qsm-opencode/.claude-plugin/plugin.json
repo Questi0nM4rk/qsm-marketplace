@@ -1,0 +1,6 @@
+{
+  "name": "qsm-opencode",
+  "description": "Claude Code supervises a bounded OpenCode V2 worker: headless or watchable, with explicit model selection, scoped work and reviewed take-back.",
+  "author": { "name": "qsm" },
+  "keywords": ["opencode", "worker", "delegation", "tmux"]
+}

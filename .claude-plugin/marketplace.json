@@ -69,6 +69,10 @@
       "source": "./plugins/qsm-openspec"
     },
     {
+      "name": "qsm-opencode",
+      "source": "./plugins/qsm-opencode"
+    },
+    {
       "name": "qsm-plan",
       "source": "./plugins/qsm-plan"
     },

@@ -32,7 +32,7 @@ to verify or shorter to read, it has no reason to exist.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/lens-banner-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/lens-banner-light.svg">
-  <img alt="qsm-marketplace: A minimal marketplace of specialist plugins for Claude Code. 27 plugins." src="assets/lens-banner-light.svg">
+  <img alt="qsm-marketplace: A minimal marketplace of specialist plugins for Claude Code. 28 plugins." src="assets/lens-banner-light.svg">
 </picture>
 <!-- markdownlint-enable MD013 MD033 -->
 
@@ -74,7 +74,8 @@ flowchart LR
 ```
 
 These plugins need no other plugin and no plugin needs them: `qsm-book-to-skill`, `qsm-index`,
-`qsm-secrets`, `qsm-statusline`, `qsm-usage`, `qsm-toolbox`, `qsm-uix`, `qsm-web`, `qsm-worktrunk`.
+`qsm-opencode`, `qsm-secrets`, `qsm-statusline`, `qsm-usage`, `qsm-toolbox`, `qsm-uix`, `qsm-web`,
+`qsm-worktrunk`.
 
 ## Catalog
 
@@ -123,6 +124,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-book-to-skill`
 | [qsm-builder](plugins/qsm-builder/README.md) | This marketplace has rules that are easy to state and easy to break in the moment of adding something, and prompts that are easy to write and hard to write well. | 7 skills, CLI, 3 hooks |
 | [qsm-forge](plugins/qsm-forge/README.md) | The harness default for review threads is raw `gh api`, `glab api` and `curl` calls, several per step: a GraphQL listing, a lookup of the thread behind a comment, then the mutation. | 1 skill, CLI, 1 hook |
 | [qsm-index](plugins/qsm-index/README.md) | Grep finds words, and an agent that navigates a codebase by words misses what the code means and how it hangs together. | 1 skill, CLI, 4 hooks |
+| [qsm-opencode](plugins/qsm-opencode/README.md) | Claude Code is the main harness, but a bounded task can sometimes be handed to an OpenCode worker without moving the whole session there. | 1 skill |
 | [qsm-setup](plugins/qsm-setup/README.md) | A marketplace is useful only when a machine reaches it in one step, and an agent works with it properly only when it knows, in every session, who it works for, where things live and where feedback goes. | 1 skill, CLI, 1 hook |
 | [qsm-statusline](plugins/qsm-statusline/README.md) | Claude Code's default status line shows little beyond the model, so the human cannot see what the session costs until it is too late to change course. | 1 skill, CLI |
 | [qsm-usage](plugins/qsm-usage/README.md) | A developer who works beside an agent every day pays for habits nobody measures: the same instruction typed into every session, context loaded on every turn and never read, a hook that injects noise into every call, a tool on the machine the agent never reaches for. | 8 skills, CLI, 15 hooks |

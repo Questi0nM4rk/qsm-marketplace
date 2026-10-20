@@ -304,10 +304,10 @@ free-text line.
 #### Scenario: A plugin with npm dependencies
 
 - **WHEN** the install base runs for a plugin that has a `package.json`
-- **THEN** it SHALL run `bun install --frozen-lockfile` in the plugin root as its own step before
-  it compiles, and SHALL report an error step naming the cause and the fix, compiling nothing, when
-  that install fails; root `lib/` imports no third-party package, so every package a plugin imports is
-  in that plugin's own `package.json`
+- **THEN** it SHALL run `bun install --frozen-lockfile` in the plugin root as its own step before it
+  compiles, and SHALL report an error step naming the cause and the fix, compiling nothing, when
+  that install fails; root `lib/` imports no third-party package, so every package a plugin imports
+  is in that plugin's own `package.json`
 
 #### Scenario: A compilable command with no build step
 
@@ -429,16 +429,17 @@ qsm-setup owns the marked area and takes no responsibility for anything outside 
 recognised by its prefix, so a file written with the older bare `<!-- qsm-setup-begin -->` is read
 as marked. A marker line may be indented and may be followed by text after its `-->`, which is not
 part of the marker and stays; a line inside a code fence counts as a marker line too, so a fence in
-the person's text must not contain one. When the plugin's source of a file opens with a YAML frontmatter (the output style's
-`name` and `description`, which Claude Code reads only as the first thing in the file), that
-frontmatter is generated too, and the marker text says so: it SHALL stay the first bytes of the
-file, the marked area SHALL follow it, and a frontmatter that differs from the source's SHALL be
-replaced with the result naming the file as `replaced the frontmatter`. Line endings of `\n` and
-`\r\n` are both read; a `\r\n` after the end line is not left behind. All five files go through one merge, and the choice applies to each of them the same way:
+the person's text must not contain one. When the plugin's source of a file opens with a YAML
+frontmatter (the output style's `name` and `description`, which Claude Code reads only as the first
+thing in the file), that frontmatter is generated too, and the marker text says so: it SHALL stay
+the first bytes of the file, the marked area SHALL follow it, and a frontmatter that differs from
+the source's SHALL be replaced with the result naming the file as `replaced the frontmatter`. Line
+endings of `\n` and `\r\n` are both read; a `\r\n` after the end line is not left behind. All five
+files go through one merge, and the choice applies to each of them the same way:
 
-- `replace`, the default, because the plugin is the source of the instructions: SHALL rewrite exactly
-  the marked area (and the leading frontmatter, when the source has one) and SHALL keep every byte
-  outside it.
+- `replace`, the default, because the plugin is the source of the instructions: SHALL rewrite
+  exactly the marked area (and the leading frontmatter, when the source has one) and SHALL keep
+  every byte outside it.
 - `overwrite`, only when the person asks for it: SHALL rewrite the whole file to the frontmatter
   and the marked area alone.
 - `skip`: SHALL leave all five files, `settings.json` and the Claude home's git history alone: no
@@ -446,14 +447,14 @@ replaced with the result naming the file as `replaced the frontmatter`. Line end
 
 A file without any marker line is migrated by one rule. When its content is recognised as qsm's own
 whole-file install, either byte-equal to the plugin's current source or byte-equal to what any
-`qsm-setup activate:` commit in the Claude home's history wrote to that path, it SHALL be
-replaced by the frontmatter and the marked area. Any other content is the person's: it SHALL be kept
-whole, its own frontmatter included, the marked area SHALL follow it, and the result SHALL name the
-file as `kept your text` and say that an old generated copy among it now repeats the area, so
-nothing is ever dropped silently. A file whose markers are broken (a begin without an end, an end
-without a begin, an end before the begin, or more than one of either) SHALL fail the step as an
-`error` naming the file and the fault, and no file SHALL be written in that run; the status read SHALL fail with the same cause instead of
-reporting `differs`.
+`qsm-setup activate:` commit in the Claude home's history wrote to that path, it SHALL be replaced
+by the frontmatter and the marked area. Any other content is the person's: it SHALL be kept whole,
+its own frontmatter included, the marked area SHALL follow it, and the result SHALL name the file as
+`kept your text` and say that an old generated copy among it now repeats the area, so nothing is
+ever dropped silently. A file whose markers are broken (a begin without an end, an end without a
+begin, an end before the begin, or more than one of either) SHALL fail the step as an `error` naming
+the file and the fault, and no file SHALL be written in that run; the status read SHALL fail with
+the same cause instead of reporting `differs`.
 
 It SHALL remove a block between `<!-- qsm-essentials-begin -->` and `<!-- qsm-essentials-end -->`
 before it writes, and keep the rest of the file. The activation SHALL be idempotent: a second run
@@ -557,6 +558,20 @@ it at most in one line.
 - **WHEN** the ask sizes as a fix and every one of the six questions already has an answer
 - **THEN** the agent restates in one line what it understood and the size, and acts without
   waiting for a go
+
+### Requirement: The marketplace can be read from OpenCode V2
+
+The setup plugin's README SHALL state how the marketplace maps onto OpenCode V2: one `skills` entry
+that points at the checkout's `plugins/` directory and loads every skill from its canonical file,
+one thin `agents` wrapper per agent that names its canonical body and its permissions,
+`AGENTS.md` as the only instruction file V2 reads, and no Claude hook running under V2. It SHALL
+carry no machine path.
+
+#### Scenario: A consumer reads the marketplace from OpenCode V2
+
+- **WHEN** a consumer follows the setup plugin's README to read this marketplace from OpenCode V2
+- **THEN** the README names the skills entry, the agent wrappers, the instruction file V2 reads, and
+  that Claude hooks do not run
 
 ### Requirement: Dependencies
 

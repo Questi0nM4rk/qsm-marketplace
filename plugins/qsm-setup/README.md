@@ -50,6 +50,38 @@ qsm-setup tools --fetch
 
 Or ask: "set up qsm on this machine" loads the `setup` skill.
 
+## Using this marketplace from OpenCode V2
+
+Claude Code stays the canonical harness. OpenCode V2 reads the same files without a runtime plugin
+and without a second catalog: one config entry per kind of content.
+
+| Marketplace | OpenCode V2 | What the consumer does |
+| --- | --- | --- |
+| `plugins/<name>/skills/<id>/SKILL.md` | `skills` entry | Points at the checkout's `plugins/` directory; every skill loads from its canonical file, and its ID is the path-derived directory name, so that name must be unique across plugins |
+| `plugins/<name>/agents/<id>.md` | `agents` entry | One thin wrapper per agent: the ID `<plugin>/<agent>`, the canonical body it must read, and the permissions it runs with |
+| `AGENTS.md` | read natively | V2 reads `AGENTS.md` only; `CLAUDE.md` is not a fallback |
+| `plugins/<name>/hooks/` | none | Claude hooks do not run; an OpenCode port needs its own `ctx.session.hook` registration |
+| `plugins/<name>/commands/` | `.opencode/commands/` | The marketplace ships none, so nothing to map |
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": ["/path/to/qsm-marketplace/plugins"]
+}
+```
+
+The instruction files this plugin writes are Claude-shaped, and V2 neither reads `CLAUDE.md` nor
+reads a plugin's `instructions/` directory. Point the `instructions` array at the files a session
+should load, or keep a short global `AGENTS.md` that names them and says which of their claims do
+not hold outside Claude. The repository's own `AGENTS.md` is the file that reaches an OpenCode
+session. V2 also reads `~/.claude/skills` for compatibility, but not the skills inside Claude's
+plugin cache.
+
+Claude's model aliases (`sonnet`, `haiku`) and its tool allowlists are not OpenCode definitions: an
+OpenCode agent inherits the session's model and runs with the permissions its wrapper declares. The
+wrappers are per-consumer configuration; this repository does not generate them. The runtime plugin
+in `qsm-opencode` controls those agents' models once they exist.
+
 ## Caveats
 
 - The bin directory must already be on `PATH`.
