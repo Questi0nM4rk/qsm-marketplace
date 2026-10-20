@@ -192,11 +192,10 @@ describe("install without uv or a download", () => {
         env: {
           ...ctx.env,
           QSM_SEARXNG_INSTANCE: "",
-          QSM_SEARXNG_CONFIG: "/nonexistent/config.json",
         },
       });
       const tier = (result.steps ?? []).find((s) => s.name === "web tier");
-      expect(tier?.detail).toContain("qsm-web searxng setup");
+      expect(tier?.detail).toContain("QSM_SEARXNG_INSTANCE");
     },
     COMPILE_MS,
   );

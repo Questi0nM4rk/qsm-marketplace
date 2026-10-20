@@ -1,10 +1,7 @@
 #!/usr/bin/env bun
 // The shared install base compiles the one bin and writes its completion.
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { installScript } from "../../../lib/install-base.ts";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
-import { home } from "../../../lib/paths.ts";
 import {
   CONTEXT7_SETUP_LINE,
   claudeSkillsDir,
@@ -36,12 +33,10 @@ function browserDownloadNote(ctx: InstallContext): string {
   return "shot-scraper install ok (browser download)";
 }
 
+/** The search rung needs an instance, and the address comes from the environment. */
 function searchConfigured(env: InstallContext["env"]): boolean {
   const instance = env.QSM_SEARXNG_INSTANCE;
-  if (instance !== undefined && instance.length > 0) {
-    return true;
-  }
-  return existsSync(env.QSM_SEARXNG_CONFIG ?? join(home(env), ".config/qsm-searxng/config.json"));
+  return instance !== undefined && instance.length > 0;
 }
 
 /** Report what the tier is still missing. */
@@ -59,7 +54,7 @@ function webTier(ctx: InstallContext): Step {
     runtime === undefined ? `no container runtime: ${RUNTIME_HINT}` : `${runtime} on PATH`,
     ...(searchConfigured(ctx.env)
       ? []
-      : ["qsm-web searxng has no instance yet: qsm-web searxng setup"]),
+      : ["qsm-web searxng has no instance yet: set QSM_SEARXNG_INSTANCE"]),
     browserDownloadNote(ctx),
   ];
   const detail = notes.join("; ");

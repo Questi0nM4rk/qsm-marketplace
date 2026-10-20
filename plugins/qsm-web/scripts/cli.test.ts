@@ -96,19 +96,19 @@ describe("qsm-web doctor", () => {
 });
 
 describe("qsm-web searxng", () => {
-  test("--help lists search and setup", () => {
+  test("--help lists search, and setup is gone", () => {
     const r = run(["searxng", "--help"]);
     expect(r.exit).toBe(0);
     expect(r.stdout).toContain("  search");
-    expect(r.stdout).toContain("  setup");
+    expect(r.stdout).not.toContain("setup");
   });
 
-  test("No instance configured, or unreachable", () => {
+  test("No instance configured", () => {
     const r = run(["searxng", "search", "typed", "ast", "--json"]);
     expect(r.exit).toBe(4);
     const envelope = Envelope.parse(JSON.parse(r.stdout));
     expect(envelope.code).toBe("missing");
-    expect(envelope.message).toContain("no instance configured");
+    expect(envelope.message).toContain("QSM_SEARXNG_INSTANCE");
   });
 
   // The envelope owns the output format, so the flag that named it is gone.

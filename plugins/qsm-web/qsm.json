@@ -27,7 +27,7 @@
         "description": "Report each web bin's health, and whether the Tavily CLI, the Tavily skills and the Context7 skill are present, naming the fix for each that is not"
       },
       "qsm-web searxng search": {
-        "description": "Search the configured instance and print the results as one JSON array",
+        "description": "Search the instance named by --instance or QSM_SEARXNG_INSTANCE and print the results as one JSON array",
         "args": [
           {
             "name": "query",
@@ -40,12 +40,12 @@
           {
             "name": "numResults",
             "type": "number",
-            "description": "how many results to keep (default from the config)"
+            "description": "how many results to keep (default 10)"
           },
           {
             "name": "engines",
             "type": "string",
-            "description": "restrict to these engines, comma separated"
+            "description": "restrict to these engines, comma separated; an empty value sends none"
           },
           {
             "name": "category",
@@ -72,13 +72,14 @@
           {
             "name": "instance",
             "type": "string",
-            "description": "query this instance instead of the configured one"
+            "description": "the instance to query (default $QSM_SEARXNG_INSTANCE)"
+          },
+          {
+            "name": "timeout",
+            "type": "number",
+            "description": "milliseconds before the request is given up on (default 10000)"
           }
         ]
-      },
-      "qsm-web searxng setup": {
-        "description": "Ask for the instance and the default engines and write them to the config file",
-        "noNoun": true
       },
       "qsm-web browserbox start": {
         "description": "Start one container instance holding its own browser and live view",

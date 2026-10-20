@@ -20,7 +20,7 @@ export interface VerbRow {
 export const verbs: Readonly<Record<string, VerbRow>> = {
   opensrcGet: { words: ["qsm-web","opensrc","get"], args: [{ name: "target", flag: null }, { name: "project", flag: "--project" }] },
   doctor: { words: ["qsm-web","doctor"], args: [] },
-  searxngSearch: { words: ["qsm-web","searxng","search"], args: [{ name: "query", flag: null }, { name: "numResults", flag: "--num-results" }, { name: "engines", flag: "--engines" }, { name: "category", flag: "--category" }, { name: "timeRange", flag: "--time-range" }, { name: "language", flag: "--language" }, { name: "safesearch", flag: "--safesearch" }, { name: "instance", flag: "--instance" }] },
+  searxngSearch: { words: ["qsm-web","searxng","search"], args: [{ name: "query", flag: null }, { name: "numResults", flag: "--num-results" }, { name: "engines", flag: "--engines" }, { name: "category", flag: "--category" }, { name: "timeRange", flag: "--time-range" }, { name: "language", flag: "--language" }, { name: "safesearch", flag: "--safesearch" }, { name: "instance", flag: "--instance" }, { name: "timeout", flag: "--timeout" }] },
   browserboxStart: { words: ["qsm-web","browserbox","start"], args: [{ name: "out", flag: "--out" }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
   browserboxLs: { words: ["qsm-web","browserbox","ls"], args: [{ name: "dryRun", flag: "--dry-run", boolean: true }] },
   browserboxStop: { words: ["qsm-web","browserbox","stop"], args: [{ name: "name", flag: null }, { name: "all", flag: "--all", boolean: true }, { name: "dryRun", flag: "--dry-run", boolean: true }] },

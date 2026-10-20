@@ -16,6 +16,7 @@ export type Web = {
     language?: string;
     safesearch?: "0" | "1" | "2";
     instance?: string;
+    timeout?: number;
   }): Promise<unknown>;
   browserboxStart(options: {
     out?: string;

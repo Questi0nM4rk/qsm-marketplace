@@ -8,64 +8,82 @@ qsm-web owns web research: one loop, a skill for each tool it uses, and the CLI 
 
 ### Requirement: qsm-web searxng queries the configured instance
 
-The `search` verb SHALL query the instance named by an instance flag, an
-environment variable, or a config file, in that order, and return the
-results as its outcome data: one array, each entry carrying URL, title,
-snippet, engine or engines, category, score, and published date when
-supplied.
+The `search` verb SHALL select its instance from `--instance`, then `QSM_SEARXNG_INSTANCE`, and
+SHALL NOT read or write a client config file. It SHALL return one result array as its outcome
+data, retaining URL, title, content, engine, engines, category, score and published date, with
+optional `img_src`, `thumbnail_src` and `iframe_src` values when supplied.
 
-#### Scenario: A query returns results from multiple engines
+#### Scenario: Server defaults are used without overrides
 
-- **WHEN** a query is issued with no engine restriction
-- **THEN** the outcome data SHALL be an array where each result's engines
-  field lists every engine that returned it
+- **WHEN** a nonblank query is issued with an instance and no search-policy flags
+- **THEN** the request SHALL contain only the query and JSON format parameters, leaving engine
+  and other policy defaults to the server
+- **AND** each result SHALL retain every supplying engine in its engines array
 
-#### Scenario: No instance configured, or unreachable
+#### Scenario: Missing or invalid address
 
-- **WHEN** no instance URL is configured
-- **THEN** the verb SHALL return `missing` naming the three ways to set one
+- **WHEN** neither address input is present
+- **THEN** the verb SHALL return `missing` naming the two supported inputs
+- **WHEN** an explicit address is not absolute HTTP(S) or contains credentials, query or fragment
+- **THEN** the verb SHALL return `usage` without making a request or exposing those values
 
-#### Scenario: The instance is unreachable
+#### Scenario: Transport or response failure
 
-- **WHEN** the configured instance refuses the connection, times out,
-  answers with an error status, or answers with text that is not JSON
-- **THEN** the verb SHALL return `failed` naming which of those it was
+- **WHEN** the instance is unreachable, times out, returns an HTTP error, non-JSON text or an
+  invalid response shape
+- **THEN** the verb SHALL return `failed` identifying the kind of failure without exposing the
+  response body
+- **AND** the response SHALL require a results array whose entries have nonblank URLs
+
+#### Scenario: Images remain usable evidence
+
+- **WHEN** an image result supplies an image URL and thumbnail URL
+- **THEN** its outcome entry SHALL retain those values as `img_src` and `thumbnail_src` in
+  addition to its source-page URL
 
 ### Requirement: qsm-web searxng keeps warnings off stdout
 
-qsm-web searxng SHALL carry every warning and diagnostic as a warning of its
-outcome, never as result data, so a caller reading the data never receives
-a diagnostic among the results.
+The search verb SHALL carry every engine diagnostic as an outcome warning, not as result data.
+Text mode SHALL print one JSON result array to stdout and warnings to stderr. JSON mode SHALL
+print one shared outcome envelope with the result array only in data and a short count message.
 
 #### Scenario: An engine is suspended
 
-- **WHEN** one queried engine reports itself suspended while others succeed
-- **THEN** the suspension notice SHALL be a warning of the outcome, and the
-  data SHALL hold the successful engines' results
+- **WHEN** other engines return useful results while an engine reports an error, including
+  Google CSE rate limiting
+- **THEN** the verb SHALL succeed with those results and retain the warning without retrying or
+  suppressing it
+
+#### Scenario: No results and engine failures
+
+- **WHEN** no results are returned and one or more engines report failures
+- **THEN** the verb SHALL return `failed` and retain those warnings without claiming that every
+  engine or the whole instance is down
+
+#### Scenario: Legitimate empty result
+
+- **WHEN** the response has an empty results array without reported engine failures
+- **THEN** the verb SHALL succeed with an empty data array and a no-results warning
 
 ### Requirement: qsm-web searxng scopes a query
 
-qsm-web searxng SHALL accept flags narrowing a query by engine list, category,
-time range, result language, safesearch level, and result count, each
-applied as a stricter restriction than the instance's default.
+The verb SHALL accept explicit engine, category, time-range, language and safesearch overrides.
+The local result-count ceiling SHALL default to 10 and the transport timeout SHALL default to
+10000 milliseconds, overridable with `--num-results` and `--timeout`. Count and timeout SHALL be
+positive safe integers. Safesearch SHALL be 0, 1 or 2. Query, category and language SHALL not be
+blank when supplied.
 
-#### Scenario: Restricting to two engines
+#### Scenario: Explicit overrides reach the server
 
-- **WHEN** a query is issued with an engine list naming two engines
-- **THEN** the outcome data SHALL hold results only from those two engines
+- **WHEN** valid search-policy flags are given
+- **THEN** their values SHALL be sent as server query parameters without adding other policy
+  defaults
+- **AND** `--engines ''` SHALL omit the engines parameter
 
-### Requirement: qsm-web searxng interactive setup writes instance config
+#### Scenario: Invalid explicit input
 
-qsm-web searxng SHALL offer interactive setup that prompts for the instance
-URL and default engines, write the answers to the config file, and SHALL
-NOT overwrite an existing one unless the user confirms.
-
-#### Scenario: Setup run with an existing config
-
-- **WHEN** interactive setup runs while a config file is already present,
-  whatever that file holds
-- **THEN** qsm-web searxng SHALL ask before replacing it and leave the file
-  untouched if the user declines
+- **WHEN** a count, timeout, safesearch, query or supplied text filter violates its constraint
+- **THEN** the verb SHALL return `usage` before making a request
 
 ### Requirement: qsm-web opensrc acquires a package spec
 

@@ -1,9 +1,7 @@
-// The search rung: one instance, one query, one JSON array on stdout.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+// The search rung: one instance, one query, one JSON array on stdout. The server owns the search
+// policy; the client sends the query, the format and only the overrides it was asked for.
 import { z } from "zod";
-import { messageOf } from "../../../lib/outcome.ts";
-import { home } from "../../../lib/paths.ts";
+import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
 export interface SearchResult {
@@ -15,138 +13,72 @@ export interface SearchResult {
   readonly score: number;
   readonly category: string;
   readonly publishedDate: string | null;
-}
-
-export interface SearxngConfig {
-  readonly instance: string;
-  readonly defaultEngines: readonly string[];
-  readonly defaultNumResults: number;
-  readonly timeoutMs: number;
-  readonly defaultLanguage?: string;
-  readonly defaultSafesearch?: number;
+  /** the media the instance offers beside the page, under the names it sent them in */
+  readonly img_src?: string;
+  readonly thumbnail_src?: string;
+  readonly iframe_src?: string;
 }
 
 export interface SearchOptions {
   readonly query: string;
   readonly numResults: number;
-  readonly engines: readonly string[];
+  readonly engines?: readonly string[];
   readonly timeRange?: string;
   readonly category?: string;
   readonly language?: string;
   readonly safesearch?: number;
 }
 
-/** What `runSetup` returns when no instance URL was given. */
-export const EXIT = { noInstance: 2 } as const;
+/** How many results the client keeps when nothing else is asked for. */
+export const DEFAULT_NUM_RESULTS = 10;
 
-export const DEFAULT_CONFIG: SearxngConfig = {
-  instance: "",
-  // duckduckgo leads: best signal on technical queries. bing is left out on purpose, it reads short
-  // dev terms as unrelated words and the language flag does not fix it.
-  defaultEngines: ["duckduckgo", "google"],
-  defaultNumResults: 10,
-  timeoutMs: 10_000,
-};
+/** How long one request may take when nothing else is asked for. */
+export const DEFAULT_TIMEOUT_MS = 10_000;
 
-const CONFIG_FILE = z.object({
-  instance: z.string().exactOptional(),
-  defaultEngines: z.array(z.string()).exactOptional(),
-  defaultNumResults: z.number().exactOptional(),
-  timeoutMs: z.number().exactOptional(),
-  defaultLanguage: z.string().exactOptional(),
-  defaultSafesearch: z.number().exactOptional(),
-});
-
-export function configPath(overridePath?: string, homeDir: string = home(process.env)): string {
-  if (overridePath !== undefined && overridePath.length > 0) {
-    return overridePath;
-  }
-  return join(homeDir, ".config", "qsm-searxng", "config.json");
-}
-
-export interface LoadedConfig {
-  readonly config: SearxngConfig;
-  /** Diagnostics for stderr; never printed to stdout. */
-  readonly warnings: readonly string[];
-}
-
-export function loadConfig(path: string): LoadedConfig {
-  if (!existsSync(path)) {
-    return {
-      config: DEFAULT_CONFIG,
-      warnings: [`no config at ${path}; falling back to the environment`],
-    };
-  }
-  try {
-    const parsed = CONFIG_FILE.parse(JSON.parse(readFileSync(path, "utf8")));
-    return { config: { ...DEFAULT_CONFIG, ...parsed }, warnings: [] };
-  } catch (err: unknown) {
-    return {
-      config: DEFAULT_CONFIG,
-      warnings: [`config at ${path} is not readable JSON: ${messageOf(err)}`],
-    };
-  }
-}
-
-export function writeConfig(cfg: SearxngConfig, path: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
-}
-
-export interface SetupIo {
-  /** One prompt, one answer. Injected so a test never opens a terminal. */
-  readonly ask: (prompt: string) => Promise<string>;
-  /** Diagnostics for stderr; setup prints nothing to stdout. */
-  readonly note: (line: string) => void;
-}
-
-/** Interactive setup: ask for the instance and the default engines, and write them. */
-export async function runSetup(path: string, io: SetupIo): Promise<number> {
-  const { config } = loadConfig(path);
-  if (existsSync(path)) {
-    const answer = (await io.ask(`${path} already exists. Replace it? [y/N] `))
-      .trim()
-      .toLowerCase();
-    if (answer !== "y" && answer !== "yes") {
-      io.note("left the existing config untouched\n");
-      return 0;
-    }
-  }
-  const instance = (await io.ask("instance URL: ")).trim() || config.instance;
-  if (instance.length === 0) {
-    io.note("an instance URL is required; nothing written\n");
-    return EXIT.noInstance;
-  }
-  const enginesHint = config.defaultEngines.join(",");
-  const enginesInput = (await io.ask(`default engines [${enginesHint}]: `)).trim();
-  const defaultEngines =
-    enginesInput.length > 0
-      ? enginesInput
-          .split(",")
-          .map((e) => e.trim())
-          .filter(Boolean)
-      : config.defaultEngines;
-  writeConfig({ ...config, instance, defaultEngines }, path);
-  io.note(`wrote ${path}\n`);
-  return 0;
-}
-
-/** The instance to query. */
-export function resolveInstance(config: SearxngConfig, flag?: string, env?: string): string {
-  if (flag !== undefined && flag.length > 0) {
+/** The instance to query: the flag, then the environment. */
+export function resolveInstance(flag?: string, env?: string): string | undefined {
+  if (flag !== undefined) {
     return flag;
   }
-  if (env !== undefined && env.length > 0) {
+  if (env !== undefined && env.trim().length > 0) {
     return env;
   }
-  return config.instance;
+  return undefined;
 }
 
-export function buildSearchUrl(instance: string, opts: SearchOptions): string {
+/**
+ * The instance as the base address of its search endpoint: absolute http(s), a reverse-proxy path
+ * kept, and no credentials, query or fragment, which would carry secrets into a log or a URL.
+ * Throws a UsageError: the address is the caller's own input, and the message never repeats it.
+ */
+export function parseInstance(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new UsageError("the instance must be an absolute http(s) address");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new UsageError("the instance must be an absolute http(s) address");
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new UsageError("the instance address must not carry credentials");
+  }
+  if (url.search !== "") {
+    throw new UsageError("the instance address must not carry a query");
+  }
+  if (url.hash !== "") {
+    throw new UsageError("the instance address must not carry a fragment");
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+}
+
+/** The request: the query, the format, and only the policy the caller asked for. */
+function buildSearchUrl(instance: string, opts: SearchOptions): string {
   const params = new URLSearchParams();
   params.set("q", opts.query);
   params.set("format", "json");
-  if (opts.engines.length > 0) {
+  if (opts.engines !== undefined && opts.engines.length > 0) {
     params.set("engines", opts.engines.join(","));
   }
   if (opts.timeRange !== undefined) {
@@ -161,13 +93,12 @@ export function buildSearchUrl(instance: string, opts: SearchOptions): string {
   if (opts.safesearch !== undefined) {
     params.set("safesearch", String(opts.safesearch));
   }
-  params.set("pageno", "1");
-  return `${instance.replace(/\/$/, "")}/search?${params.toString()}`;
+  return `${instance}/search?${params.toString()}`;
 }
 
 // A field an instance sends as null is as absent as one it leaves out.
 const RAW_RESULT = z.object({
-  url: z.string().nullish(),
+  url: z.string().trim().min(1),
   title: z.string().nullish(),
   content: z.string().nullish(),
   engine: z.string().nullish(),
@@ -175,15 +106,18 @@ const RAW_RESULT = z.object({
   score: z.number().nullish(),
   category: z.string().nullish(),
   publishedDate: z.string().nullish(),
+  img_src: z.string().nullish(),
+  thumbnail_src: z.string().nullish(),
+  iframe_src: z.string().nullish(),
 });
 
 const RESPONSE = z.object({
-  results: z.array(RAW_RESULT).optional(),
+  results: z.array(RAW_RESULT),
   unresponsive_engines: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
 
 type RawResult = z.infer<typeof RAW_RESULT>;
-export type SearxngResponse = z.infer<typeof RESPONSE>;
+type SearxngResponse = z.infer<typeof RESPONSE>;
 
 export interface SearchOutcome {
   readonly results: readonly SearchResult[];
@@ -193,19 +127,6 @@ export interface SearchOutcome {
 /** A text field of a raw result: sent as null or left out, it reads as empty. */
 const text = (value: string | null | undefined): string => value ?? "";
 
-function toResult(r: RawResult): SearchResult {
-  return {
-    url: text(r.url),
-    title: text(r.title),
-    content: text(r.content),
-    engine: text(r.engine),
-    engines: engineList(r),
-    score: r.score ?? 0,
-    category: r.category ?? "general",
-    publishedDate: r.publishedDate ?? null,
-  };
-}
-
 function engineList(r: RawResult): string[] {
   if (r.engines) {
     return r.engines;
@@ -213,39 +134,95 @@ function engineList(r: RawResult): string[] {
   return r.engine === undefined || r.engine === null || r.engine === "" ? [] : [r.engine];
 }
 
+/** An optional text field: absent, null or empty reads as no value at all. */
+const optional = (value: string | null | undefined): string | undefined =>
+  value === undefined || value === null || value === "" ? undefined : value;
+
+/** The media a result carries, kept under the names the instance sent them in. */
+function media(r: RawResult): Pick<SearchResult, "img_src" | "thumbnail_src" | "iframe_src"> {
+  const img = optional(r.img_src);
+  const thumbnail = optional(r.thumbnail_src);
+  const iframe = optional(r.iframe_src);
+  return {
+    ...(img === undefined ? {} : { img_src: img }),
+    ...(thumbnail === undefined ? {} : { thumbnail_src: thumbnail }),
+    ...(iframe === undefined ? {} : { iframe_src: iframe }),
+  };
+}
+
+function toResult(r: RawResult): SearchResult {
+  return {
+    url: r.url,
+    title: text(r.title),
+    content: text(r.content),
+    engine: text(r.engine),
+    engines: engineList(r),
+    score: r.score ?? 0,
+    category: r.category ?? "general",
+    publishedDate: r.publishedDate ?? null,
+    ...media(r),
+  };
+}
+
 /** Turn one instance response into results and warnings. */
-export function readResponse(body: SearxngResponse, numResults: number): SearchOutcome {
+function readResponse(body: SearxngResponse, numResults: number): SearchOutcome {
   const warnings = (body.unresponsive_engines ?? []).map(
     ([engine, reason]) => `engine suspended: ${engine} (${reason})`,
   );
-  const results = (body.results ?? []).slice(0, numResults).map(toResult);
+  const results = body.results.slice(0, numResults).map(toResult);
   return { results, warnings };
 }
 
+/**
+ * The instance's answer, read: the results and the warnings it carries. A body that is not JSON and
+ * a body this client cannot read are two different faults, and neither is echoed.
+ */
+function readOutcome(instance: string, raw: string, numResults: number): SearchOutcome {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new QsmError("failed", `${instance} answered with text that is not JSON`, { cause: err });
+  }
+  const body = RESPONSE.safeParse(parsed);
+  if (!body.success) {
+    throw new QsmError("failed", `${instance} answered with a JSON shape this client cannot read`);
+  }
+  return readResponse(body.data, numResults);
+}
+
+/**
+ * One request against one instance. Every way it can end badly keeps its own name: the transport
+ * that gave up, the status the server answered, a body that is not JSON, and a JSON shape this
+ * client cannot read. No response body is echoed.
+ *
+ * The deadline covers the whole exchange, the body included: an instance that answers with headers
+ * and then stalls its body is given up on like any other silence.
+ */
 export async function search(
   instance: string,
   opts: SearchOptions,
   timeoutMs: number,
 ): Promise<SearchOutcome> {
   const url = buildSearchUrl(instance, opts);
-  let resp: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`no answer within ${timeoutMs} ms`));
+  }, timeoutMs);
   try {
-    resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    const resp = await fetch(url, { signal: controller.signal });
+    if (!resp.ok) {
+      throw new QsmError("failed", `${instance} answered HTTP ${resp.status}`);
+    }
+    return readOutcome(instance, await resp.text(), opts.numResults);
   } catch (err: unknown) {
+    if (err instanceof QsmError) {
+      throw err;
+    }
     throw new QsmError("failed", `could not reach ${instance}: ${messageOf(err)}`, { cause: err });
+  } finally {
+    clearTimeout(timer);
   }
-  if (!resp.ok) {
-    throw new QsmError("failed", `${instance} answered HTTP ${resp.status}`);
-  }
-  let body: SearxngResponse;
-  try {
-    body = RESPONSE.parse(await resp.json());
-  } catch (err: unknown) {
-    throw new QsmError("failed", `${instance} answered with text that is not JSON`, {
-      cause: err,
-    });
-  }
-  return readResponse(body, opts.numResults);
 }
 
 export function formatResults(results: readonly SearchResult[]): string {

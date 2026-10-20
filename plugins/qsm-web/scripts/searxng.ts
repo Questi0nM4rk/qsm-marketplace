@@ -1,5 +1,5 @@
-// qsm-web searxng: the search rung.
-import { createInterface } from "node:readline";
+// qsm-web searxng: the search rung. The instance comes from the flag or the environment; the
+// server owns the search policy, and only the overrides the caller asked for are sent.
 import {
   type Call,
   type Handler,
@@ -7,40 +7,66 @@ import {
   optionalString,
   stringList,
 } from "../../../lib/cli-base.ts";
-import { fail, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, messageOf, type Outcome, ok, UsageError } from "../../../lib/outcome.ts";
 import {
-  configPath,
-  EXIT,
+  DEFAULT_NUM_RESULTS,
+  DEFAULT_TIMEOUT_MS,
   formatResults,
-  loadConfig,
+  parseInstance,
   resolveInstance,
-  runSetup,
   type SearchOptions,
+  type SearchOutcome,
+  type SearchResult,
   search,
 } from "../lib/searxng.ts";
 
-const NO_INSTANCE =
-  "no instance configured; set QSM_SEARXNG_INSTANCE, pass --instance, or run qsm-web searxng setup";
+const NO_INSTANCE = "no instance to query; set QSM_SEARXNG_INSTANCE or pass --instance <url>";
 
-function searchOptions(
-  call: Call,
-  defaults: ReturnType<typeof loadConfig>["config"],
-): SearchOptions {
+/** A count or a timeout: a positive whole number, or the default. */
+function positive(value: number | undefined, fallback: number, flag: string): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new UsageError(`${flag} must be a positive whole number`);
+  }
+  return value;
+}
+
+/** A text filter that reaches the server: given, and not blank. */
+function filter(call: Call, name: string, flag: string): string | undefined {
+  const value = optionalString(call, name);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value.trim().length === 0) {
+    throw new UsageError(`${flag} must not be blank`);
+  }
+  return value.trim();
+}
+
+/** The request the caller asked for, with every value checked before the first byte moves. */
+function searchOptions(call: Call): SearchOptions {
+  const query = stringList(call, "query").join(" ").trim();
+  if (query.length === 0) {
+    throw new UsageError("the query must not be blank");
+  }
   const engines = optionalString(call, "engines");
+  const list =
+    engines === undefined
+      ? undefined
+      : engines
+          .split(",")
+          .map((e) => e.trim())
+          .filter(Boolean);
   const timeRange = optionalString(call, "timeRange");
-  const category = optionalString(call, "category");
-  const language = optionalString(call, "language") ?? defaults.defaultLanguage;
-  const safesearch = optionalNumber(call, "safesearch") ?? defaults.defaultSafesearch;
+  const category = filter(call, "category", "--category");
+  const language = filter(call, "language", "--language");
+  const safesearch = optionalNumber(call, "safesearch");
   return {
-    query: stringList(call, "query").join(" ").trim(),
-    numResults: optionalNumber(call, "numResults") ?? defaults.defaultNumResults,
-    engines:
-      engines === undefined
-        ? defaults.defaultEngines
-        : engines
-            .split(",")
-            .map((e) => e.trim())
-            .filter(Boolean),
+    query,
+    numResults: positive(optionalNumber(call, "numResults"), DEFAULT_NUM_RESULTS, "--num-results"),
+    ...(list === undefined || list.length === 0 ? {} : { engines: list }),
     ...(timeRange === undefined ? {} : { timeRange }),
     ...(category === undefined ? {} : { category }),
     ...(language === undefined ? {} : { language }),
@@ -48,62 +74,51 @@ function searchOptions(
   };
 }
 
-async function searchVerb(call: Call): Promise<Outcome> {
-  const { config, warnings } = loadConfig(configPath(process.env.QSM_SEARXNG_CONFIG));
-  const instance = resolveInstance(
-    config,
-    optionalString(call, "instance"),
-    process.env.QSM_SEARXNG_INSTANCE,
-  );
-  if (instance.length === 0) {
-    return { ...fail("missing", NO_INSTANCE), warnings };
+/** Text mode prints the array itself; the JSON envelope carries it in data and a count here. */
+function message(call: Call, results: readonly SearchResult[]): string {
+  if (!call.json) {
+    return formatResults(results).trimEnd();
   }
-  const opts = searchOptions(call, config);
-  try {
-    const outcome = await search(instance, opts, config.timeoutMs);
-    const all = [...warnings, ...outcome.warnings];
-    if (outcome.results.length === 0) {
-      all.push("no results");
-    }
-    return {
-      ...ok(outcome.results, formatResults(outcome.results).trimEnd()),
-      warnings: all,
-    };
-  } catch (err: unknown) {
-    // Every way a search can end badly, unreachable instance, an HTTP status, a body that is not
-    // JSON, is the same answer to the caller: the search did not succeed, and the message says
-    // which it was.
-    return { ...fail("failed", messageOf(err)), warnings };
-  }
+  const count = results.length;
+  return `${count} ${count === 1 ? "result" : "results"}`;
 }
 
-/**
- * Interactive setup over the terminal: the decisions live in the library, this is the question
- * asked out loud.
- */
-async function setupVerb(): Promise<Outcome> {
-  const path = configPath(process.env.QSM_SEARXNG_CONFIG);
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  let code: number;
-  try {
-    code = await runSetup(path, {
-      ask: (prompt) =>
-        new Promise((done) => {
-          rl.question(prompt, done);
-        }),
-      note: (line) => {
-        process.stderr.write(line);
-      },
-    });
-  } finally {
-    rl.close();
+async function searchVerb(call: Call): Promise<Outcome> {
+  const raw = resolveInstance(optionalString(call, "instance"), process.env.QSM_SEARXNG_INSTANCE);
+  if (raw === undefined) {
+    return fail("missing", NO_INSTANCE);
   }
-  return code === EXIT.noInstance
-    ? fail("missing", "an instance URL is required; nothing was written")
-    : ok({ config: path }, `configuration at ${path}`);
+  // Both throw a UsageError, which the CLI turns into a usage outcome: no request is made.
+  const instance = parseInstance(raw);
+  const opts = searchOptions(call);
+  const timeout = positive(optionalNumber(call, "timeout"), DEFAULT_TIMEOUT_MS, "--timeout");
+
+  let outcome: SearchOutcome;
+  try {
+    outcome = await search(instance, opts, timeout);
+  } catch (err: unknown) {
+    if (err instanceof UsageError) {
+      throw err;
+    }
+    return fail("failed", messageOf(err));
+  }
+
+  // Useful results and a failed engine are a success with a warning: the answer is there.
+  if (outcome.results.length === 0 && outcome.warnings.length > 0) {
+    return {
+      ...fail("failed", "no results; the instance reported engine failures"),
+      warnings: outcome.warnings,
+    };
+  }
+  if (outcome.results.length === 0) {
+    return { ...ok([], message(call, [])), warnings: ["no results"] };
+  }
+  return {
+    ...ok(outcome.results, message(call, outcome.results)),
+    warnings: outcome.warnings,
+  };
 }
 
 export const handlers: Readonly<Record<string, Handler>> = {
   "searxng search": searchVerb,
-  "searxng setup": setupVerb,
 };

@@ -20,7 +20,7 @@ loop and clears its own walls, it has no reason to exist.
 | Kind | Name | What it does |
 | --- | --- | --- |
 | Skill | `web-ladder` | Runs the loop: searxng search, up to three keyword rounds, Context7 for a library, Tavily when the keywords will not come, one page in a browser, the person on a wall. |
-| Skill | `searxng` | Searches through your own SearXNG instance and narrows by engine, category, time range or language. |
+| Skill | `searxng` | Searches through your own SearXNG instance, named by a flag or the environment, and narrows by engine, category, time range or language. |
 | Skill | `browserbox` | Opens one page in a real browser, scripts a sequence, and hands a captcha to the person. |
 | Skill | `opensrc` | Puts a library's source on disk at the version the project pins, to read. |
 | Agent | `web-research` | Runs the loop away from the main context, handles a wall itself, and returns an answer with sources. |
@@ -40,7 +40,7 @@ qsm-web doctor
 
 `install.ts` compiles `qsm-web` into `$QSM_BIN_DIR` (default `~/.local/bin`), installs `opensrc`,
 `shot-scraper`, the Tavily CLI (`tvly`) and Tavily's skills when missing, and prints the two
-interactive steps for you. It does not set up search or the browser image. See
+interactive steps for you. It does not choose a search instance or build the browser image. See
 [INSTALL.md](INSTALL.md).
 
 ## Use
@@ -60,7 +60,8 @@ qsm-web browserbox stop "$name"
 
 ## Caveats
 
-- Search needs an instance: `qsm-web searxng setup` or `QSM_SEARXNG_INSTANCE`.
+- Search needs an instance: `--instance <url>` or `QSM_SEARXNG_INSTANCE`. The instance owns the
+  engine and policy defaults; only the flags you pass are sent.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.

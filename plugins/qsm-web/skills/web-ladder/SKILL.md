@@ -14,9 +14,14 @@ the main context; one known page is read directly.
 
 ## The loop
 
-1. **Search.** `qsm-web searxng search "<query>"` (the searxng skill has the flags). When it errors
-   or returns nothing, use the harness's `WebSearch` instead, and say so, because a silent switch
-   hides that the instance is down.
+1. **Search.** `qsm-web searxng search "<query>"` (the searxng skill has the flags). When the whole
+   request fails or returns nothing, use the harness's `WebSearch` instead, and say why, because
+   the caller needs to know which search produced no usable evidence.
+   Google CSE HTTP 429, `too many requests`, and `Suspended: too many requests` are expected
+   partial failures when other engines return useful results, not proof the instance is down.
+   Continue with those results, report the warning, and respect the engine's cooldown. Do not
+   retry or switch tools just to clear a warning. If the remaining results are insufficient, use
+   another search tool. Parsing or configuration errors are not covered by this exception.
 2. **Keywords.** From what came back, collect the words the answer pages use: the library's own
    name for the thing, the error text verbatim, the version. Build two or three cases from them:
    the exact phrase in quotes, the concept in plain words, the concept plus the library name.
