@@ -67,7 +67,7 @@ function registerMarker(on: On): void {
     }
     return next(e);
   }).catch(($, e, next) => {
-    const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
+    const reason = failure(next.error);
     $.ui.toast(`qsm-worktrunk ERROR: session.end: ${reason}`);
     $.ui.log(`clearing the marker or listing the branches ahead failed (${next.error.kind})`);
     return next(e);
@@ -89,7 +89,7 @@ function registerDoctor(on: On): void {
     }
     return next(e);
   }).catch(($, e, next) => {
-    const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
+    const reason = failure(next.error);
     $.ui.toast(`qsm-worktrunk ERROR: session.start: ${reason}`);
     $.ui.log(`registering /qsm-worktrunk failed (${next.error.kind})`);
     return next(e);
@@ -99,7 +99,7 @@ function registerDoctor(on: On): void {
     const report = await doctor(runner($));
     return { text: report.text };
   }).catch(($, _e, next) => {
-    const reason = `${next.error.kind}${next.error.message === undefined ? "" : `: ${next.error.message.slice(0, 120)}`}`;
+    const reason = failure(next.error);
     $.ui.toast(`qsm-worktrunk ERROR: command.run: ${reason}`);
     $.ui.log(`the doctor check failed (${next.error.kind})`);
     return { text: "qsm-worktrunk: the doctor check could not run" };

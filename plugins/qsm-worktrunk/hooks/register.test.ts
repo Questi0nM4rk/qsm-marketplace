@@ -69,30 +69,62 @@ function bashCall(command: string) {
   return { tool: "Bash", command } as const;
 }
 
-test("a raw git worktree call is denied, and the wt command named", async ($, on) => {
+/** A tool.call bottom that counts what reached it. */
+function stubToolCall(on: On) {
   let bottomRan = 0;
   on("tool.call", () => {
     bottomRan += 1;
     return { result: "ran" };
   });
+  return () => bottomRan;
+}
+
+/** A prompt.submit bottom that counts what reached it and passes the text on. */
+function stubPromptSubmit(on: On) {
+  let bottomRan = 0;
+  on("prompt.submit", (_$, e) => {
+    bottomRan += 1;
+    return { text: e.text };
+  });
+  return () => bottomRan;
+}
+
+/** A ui.toast bottom that keeps what it was told. */
+function stubToasts(on: On) {
+  const toasts: string[] = [];
+  on("ui.toast", (_$, e) => {
+    toasts.push(e.text);
+    return { value: undefined };
+  });
+  return toasts;
+}
+
+/** The command call the doctor answers. */
+function doctorCommand() {
+  return {
+    command: "qsm-worktrunk",
+    args: "",
+    origin: { kind: "composer" as const },
+    presentation: { isFullscreen: false, columns: 80 },
+  };
+}
+
+test("a raw git worktree call is denied, and the wt command named", async ($, on) => {
+  const bottomRan = stubToolCall(on);
   on("ui.log", () => ({ value: undefined }));
 
   const result = await $.tool.call(bashCall("git worktree list"));
 
-  expect(bottomRan).toBe(0);
+  expect(bottomRan()).toBe(0);
   expect(result.deny).toContain("wt list");
 });
 
 test("a git call that is not git worktree reaches the tool untouched", async ($, on) => {
-  let bottomRan = 0;
-  on("tool.call", () => {
-    bottomRan += 1;
-    return { result: "ran" };
-  });
+  const bottomRan = stubToolCall(on);
 
   const result = await $.tool.call(bashCall("git status"));
 
-  expect(bottomRan).toBe(1);
+  expect(bottomRan()).toBe(1);
   expect(result.deny).toBeUndefined();
 });
 
@@ -141,28 +173,20 @@ test("a prompt submitted in the main checkout carries no workspace context", asy
 });
 
 test("A new turn starts", async ($, on) => {
-  let bottomRan = 0;
   const argvs: string[] = [];
-  on("prompt.submit", (_$, e) => {
-    bottomRan += 1;
-    return { text: e.text };
-  });
+  const bottomRan = stubPromptSubmit(on);
   stubOperations(on, { onRun: (argv) => argvs.push(argv.join(" ")) });
 
   await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
-  expect(bottomRan).toBe(1);
+  expect(bottomRan()).toBe(1);
   expect(argvs.some((argv) => argv.startsWith("wt config state marker set "))).toBe(true);
 });
 
 test("The session ends", async ($, on) => {
   const argvs: string[] = [];
-  const toasts: string[] = [];
+  const toasts = stubToasts(on);
   on("session.end", (_$, e) => ({ sessionId: e.sessionId }));
-  on("ui.toast", (_$, e) => {
-    toasts.push(e.text);
-    return { value: undefined };
-  });
   stubOperations(on, { onRun: (argv) => argvs.push(argv.join(" ")) });
 
   await $.session.end({ reason: "other", sessionId: "sess-1", resume: { id: "sess-1" } });
@@ -186,12 +210,7 @@ test("the declared command answers with the doctor's report", async ($, on) => {
   stubOperations(on);
 
   await $.session.start(SESSION_INPUT);
-  const result = await $.command.run({
-    command: "qsm-worktrunk",
-    args: "",
-    origin: { kind: "composer" },
-    presentation: { isFullscreen: false, columns: 80 },
-  });
+  const result = await $.command.run(doctorCommand());
 
   expect(result.text).toContain("healthy");
   expect(result.text).toContain("v0.68.0");
@@ -212,29 +231,16 @@ test("a wt that cannot create workspaces is reported unhealthy, not healthy", as
     return done("/home/someone/.cargo/bin/wt\n");
   });
 
-  const result = await $.command.run({
-    command: "qsm-worktrunk",
-    args: "",
-    origin: { kind: "composer" },
-    presentation: { isFullscreen: false, columns: 80 },
-  });
+  const result = await $.command.run(doctorCommand());
 
   expect(result.text).toContain("cannot create a workspace");
   expect(result.text).toContain("0.22.0");
 });
 
 test("a prompt submitted toasts and still lets the prompt through when process.run has no stub", async ($, on) => {
-  let bottomRan = 0;
-  const toasts: string[] = [];
-  on("prompt.submit", (_$, e) => {
-    bottomRan += 1;
-    return { text: e.text };
-  });
+  const bottomRan = stubPromptSubmit(on);
+  const toasts = stubToasts(on);
   on("ui.log", () => ({ value: undefined }));
-  on("ui.toast", (_$, e) => {
-    toasts.push(e.text);
-    return { value: undefined };
-  });
   // process.run is left unstubbed: the harness throws "no implementation
   // for process.run" into the hook, which reaches `.catch`.
 
@@ -244,7 +250,7 @@ test("a prompt submitted toasts and still lets the prompt through when process.r
     origin: { kind: "composer" },
   });
 
-  expect(bottomRan).toBe(1);
+  expect(bottomRan()).toBe(1);
   expect(result.text).toBe("hello");
   expect(toasts.length).toBe(1);
   expect(toasts[0]).toMatch(/^qsm-worktrunk ERROR: prompt\.submit:/);
