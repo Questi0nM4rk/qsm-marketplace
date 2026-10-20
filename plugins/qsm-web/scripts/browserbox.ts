@@ -129,7 +129,10 @@ function redact(job: Record<string, unknown>): Record<string, unknown> {
 }
 
 function instances(box: Box): Instance[] {
-  const { stdout } = box.run(listDefinition());
+  const { status, stdout } = box.run(listDefinition());
+  if (status !== 0) {
+    throw new QsmError("failed", `listing the running instances failed (exit ${status})`);
+  }
   const lines = stdout.split("\n").map((line) => {
     const name = line.trim().split(/\s+/)[0] ?? "";
     const port = name.startsWith("bbox-") ? name.slice("bbox-".length) : "";
@@ -189,10 +192,16 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
     throw new QsmError("failed", `the instance would not start (exit ${started.status})`);
   }
   if (!ready(box, name)) {
-    box.run(stopDefinition(name));
+    const removed = box.run(stopDefinition(name));
+    if (removed.status !== 0) {
+      throw new QsmError(
+        "failed",
+        `${name} started but its browser never answered; its removal exited ${removed.status}; check for a possible leftover container`,
+      );
+    }
     throw new QsmError(
       "failed",
-      `${name} started but its browser never answered; nothing was left running`,
+      `${name} started but its browser never answered; its container was removed`,
     );
   }
   return { name, port, liveView, out: where };
@@ -216,7 +225,10 @@ function stop(call: Call, box: Box): Outcome {
   }
   if (name === undefined) {
     for (const i of instances(box)) {
-      box.run(stopDefinition(i.name));
+      const { status } = box.run(stopDefinition(i.name));
+      if (status !== 0) {
+        throw new QsmError("failed", `${i.name} could not be stopped (exit ${status})`);
+      }
     }
     return ok({ stopped: "all" }, "stopped every instance");
   }

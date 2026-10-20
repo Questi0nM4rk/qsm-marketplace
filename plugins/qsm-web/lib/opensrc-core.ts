@@ -18,6 +18,11 @@ export function classifyTarget(s: string): TargetKind {
   if (t.endsWith(".git")) {
     return "address";
   }
+  // An explicit filesystem path is a local repository address; a bare
+  // `owner/repo` stays a spec.
+  if (t.startsWith("/") || t.startsWith("./") || t.startsWith("../")) {
+    return "address";
+  }
   return "spec";
 }
 

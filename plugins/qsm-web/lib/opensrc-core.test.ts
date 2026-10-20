@@ -18,6 +18,8 @@ describe("classifyTarget", () => {
     expect(classifyTarget("ssh://example.test/a/b")).toBe("address");
     expect(classifyTarget("git@example.test:a/b")).toBe("address");
     expect(classifyTarget("example.test/a/b.git")).toBe("address");
+    expect(classifyTarget("/srv/sources/a")).toBe("address");
+    expect(classifyTarget("./a/qsm-demo")).toBe("address");
   });
 
   test("every other shape is a spec", () => {

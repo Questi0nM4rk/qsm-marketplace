@@ -120,8 +120,21 @@ re-cloning.
 
 - **WHEN** the library already has a cloned source directory
 - **THEN** qsm-web opensrc SHALL update it in place rather than clone again,
-  keeping the tree and warning rather than failing on a non-fast-forward
-  update
+  and SHALL report success only when the update succeeds
+
+#### Scenario: Updating an existing source tree fails
+
+- **WHEN** the update command fails, including a refused non-fast-forward update
+- **THEN** qsm-web opensrc SHALL return `failed` without result data
+- **AND** it SHALL retain the existing tree and name the failed update without guessing its cause
+
+#### Scenario: A cached directory belongs to a different repository
+
+- **WHEN** an existing source directory has a missing or different origin from the requested address
+- **THEN** the verb SHALL fail before pulling or returning source data and retain the directory
+- **AND** it SHALL name the cache conflict without printing the other origin or changing it
+- **AND** repository URLs and SCP addresses SHALL match exactly, while local paths SHALL be resolved
+  before comparison so repeating a relative local address still selects the same repository
 
 ### Requirement: qsm-web opensrc refuses an ambiguous bare name
 
@@ -142,18 +155,24 @@ package of the same name.
 Every successful `qsm-web opensrc get` run SHALL return one object as its outcome
 data: library name, absolute path to its acquired source, original spec or
 address given, resolved version or `null`, whether that version was
-exact, and which acquisition path produced it.
+exact, and which acquisition path produced it. Git progress and status text SHALL NOT reach stdout.
 
 #### Scenario: Successful spec fetch
 
 - **WHEN** a package spec fetch succeeds
 - **THEN** the outcome data SHALL be one object with all six fields
 
+#### Scenario: Git prints status text during a successful acquisition
+
+- **WHEN** Git writes status or progress text while a clone or update succeeds
+- **THEN** stdout SHALL still contain only the CLI result, or one outcome envelope with `--json`
+- **AND** Git diagnostics SHALL be captured or directed to stderr, never mixed with the result
+
 ### Requirement: qsm-web opensrc failure behaviour
 
 `qsm-web opensrc get` SHALL return no data when the target is missing, the
 upstream resolver is missing or fails, the resolver reports a missing path,
-or a clone fails. A missing target SHALL be `usage`; a resolver that is not
+or a clone or update fails. A missing target SHALL be `usage`; a resolver that is not
 installed SHALL be `missing` naming the command that installs it; every
 other failure SHALL be `failed`.
 
@@ -229,10 +248,31 @@ the start with a reported error, not a hang.
 
 #### Scenario: Container runtime unavailable
 
-- **WHEN** an agent starts an instance and the container runtime cannot be
-  reached
+- **WHEN** an agent starts an instance and no supported container runtime executable is available
 - **THEN** qsm-web browserbox SHALL report `missing` with the cause and SHALL
   NOT leave a partially started instance
+
+#### Scenario: Listing instances fails
+
+- **WHEN** the container runtime fails to list instances
+- **THEN** the verb SHALL return `failed` rather than a successful empty list
+
+#### Scenario: Stopping every instance fails
+
+- **WHEN** removal of an instance fails during `stop --all`
+- **THEN** the verb SHALL return `failed` naming that instance and the removal failure
+- **AND** it SHALL NOT claim that every instance was stopped
+
+#### Scenario: Failed startup cannot confirm cleanup
+
+- **WHEN** a started browser does not become ready and its removal command fails
+- **THEN** the verb SHALL return `failed` naming the instance and the removal failure
+- **AND** it SHALL say that a leftover container needs checking, not that nothing is running
+
+#### Scenario: Failed startup is cleaned up
+
+- **WHEN** a started browser does not become ready and its removal command succeeds
+- **THEN** the verb SHALL return `failed` for startup and state that its container was removed
 
 #### Scenario: Stop an instance
 
