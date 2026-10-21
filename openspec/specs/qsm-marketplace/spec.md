@@ -373,9 +373,12 @@ never return a silent null. The gate SHALL fail on a plugin with
 ### Requirement: Every hook is a function hook, and a classic hook is a measured exception
 
 A plugin's hooks SHALL be function hooks in `hooks/register.tsx`, on `tool.call`,
-`session.start`, `session.end`, `session.compact` or `prompt.submit`. They SHALL NOT use
-`classic.*` or `prompt.section`, `prompt.context`, `prompt.compose`: under managed settings
-the engine's `cc-plugin-sec-default` bypasses a user-tier plugin there. A Bash guard SHALL
+`session.start`, `session.end` or `prompt.submit`, and `session.append` on any door but
+`attachment`, `hook-context` and `compaction`. They SHALL NOT use `classic.*`, `prompt.section`,
+`prompt.context`, `prompt.attachment`, `prompt.compose`, `skill.prompt`, `attribution.text`,
+`session.compact`, `settings.read` or `session.append` on those three doors: under managed settings
+(or an organization plan) the engine's `cc-plugin-sec-default` seats outermost and passes a
+user-tier plugin over on each of them. A Bash guard SHALL
 be a `tool.call` hook that answers `{ deny }`. A classic command hook SHALL exist only for
 an event the engine has no function event for, and its source `hooks/<name>.ts` SHALL open
 with a comment `classic: <event> has no function event`. Four exist: `qsm-langdev`
