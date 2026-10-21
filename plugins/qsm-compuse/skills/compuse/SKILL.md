@@ -31,5 +31,6 @@ Measure before hand-over: `drive geom insets|overlap|inside|centre|target|dump` 
 with PASS/FAIL from the live item tree; `drive contrast A B` prints the WCAG ratio of two screen
 regions.
 
-Captures land under `${XDG_RUNTIME_DIR:-/tmp}/drive-shots` (override with `DRIVE_OUT_DIR`); hand
-them to `ui-audit` for judgment.
+Motion and routes: `drive record SECS [OUT|X,Y,WxH] [--fps N]` measures real cadence (read the
+gaps, never trust a constant-rate encode); `drive frames VIDEO DIR` extracts frames;
+`drive route FILE` runs a scripted step list on workspace 10 and restores the pointer.

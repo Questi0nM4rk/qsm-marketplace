@@ -227,7 +227,12 @@ cmd_doctor() {
     fi
   }
   in_input_group() { id -nG | tr ' ' '\n' | grep -qx input; }
-  cursor_dispatch() { hyprctl dispatch 'hl.dsp.cursor.move({x=10,y=10})' 2>&1 | grep -q '^ok'; }
+  # Warps onto the current position: proves the lua dispatcher runs without moving the pointer.
+  cursor_dispatch() {
+    local x y
+    x="$(hyprctl cursorpos -j | jq -er '.x | floor')" && y="$(hyprctl cursorpos -j | jq -er '.y | floor')" \
+      && hyprctl dispatch "hl.dsp.cursor.move({x=$x,y=$y})" 2>&1 | grep -q '^ok'
+  }
   keymap() { keycode SUPER && keycode XF86AudioPlay; }
   chk hyprctl MISSING command -v hyprctl
   chk 'cursor dispatch' 'FAIL (lua dialect? see USAGE.md)' cursor_dispatch
@@ -273,15 +278,23 @@ drive — sudo-free computer use on Hyprland/Wayland
 
   FLOW
     until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
+    record SECS [OUT|X,Y,WxH] [--fps N]  real-frame video + measured cadence (never CFR)
+    frames VIDEO DIR [--every N]         extract real frames as PNGs
+    route FILE [--workspace-ok]          run a step script; shots per step; pointer restored
     doctor                   check every dependency and permission
 
   ENV: DRIVE_OUT_DIR (default $XDG_RUNTIME_DIR/drive-shots), DRIVE_SETTLE (0.35)
 USAGE
 }
 
+# record, frames and route live beside this file (resolved through the bin symlink).
+# shellcheck source=drive-motion
+MOTION_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+source "$MOTION_DIR/drive-motion"
+
 dispatch() {
   case "${1:-}" in
-    move | warp | nudge | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
+    move | warp | nudge | record | frames | route | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
       local verb="cmd_$1"
       shift
       "$verb" "$@"

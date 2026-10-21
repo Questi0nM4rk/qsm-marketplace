@@ -147,5 +147,6 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive l2p N [MON]` | Logical length to physical pixels. |
 | `drive geom CHECK ...` | Measure the live item tree with equations and PASS/FAIL: `insets`, `overlap`, `inside`, `centre`, `target`, `dump` (selectors: `Rail/RailEntry[2]`, `*[type=Slider]`; run `drive geom`). |
 | `drive contrast A B` | Grim the output, median colour of two rects (`SEL`, `SEL@ink` for the glyph pixel, or `X,Y`), WCAG ratio. |
-
-Env: `DRIVE_OUT_DIR` (default `$XDG_RUNTIME_DIR/drive-shots`), `DRIVE_SETTLE` (default `0.35`).
+| `drive record SECS [OUT\|X,Y,WxH] [--fps N]` | Real-frame video (`--fps` is the target period the gaps are judged against; wf-recorder does not cap the rate) plus cadence from frame timestamps (effective fps, max gap, gaps over 1.5 periods); never constant-rate. |
+| `drive frames VIDEO DIR [--every N]` | Extract the real frames as PNGs. |
+| `drive route FILE [--workspace-ok]` | Run steps (`move-to X Y`, `hover-wait MS`, `press`, `release`, `click`, `key COMBO`, `wheel DY`, `shot NAME`) with before/after shots; workspace 10 only; pointer restored on exit. |

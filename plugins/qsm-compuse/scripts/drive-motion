@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2154 # OUT_DIR is set in drive
+# Sourced by drive: the motion and route verbs. Uses die, need and the cmd_* helpers defined there.
+
+# Real-frame capture. wf-recorder asks the compositor for a frame only on
+# damage and, without -r, stamps each frame with its capture time, so the
+# file's pts are the real cadence. -r would force a constant rate by
+# duplicating frames, which is exactly what must never be reported as fps.
+# wf-recorder selection args, one per line: a logical region "X,Y,WxH" or an output.
+record_target() {
+  if [[ "$1" =~ ^(-?[0-9]+),(-?[0-9]+),([0-9]+x[0-9]+)$ ]]; then
+    printf '%s\n' -g "${BASH_REMATCH[1]},${BASH_REMATCH[2]} ${BASH_REMATCH[3]}"
+  else
+    local out="${1:--}"
+    [[ "$out" != "-" ]] || out="$(cmd_focused)"
+    printf '%s\n' -o "$out"
+  fi
+}
+
+# Run wf-recorder for SECS seconds, then stop it with SIGINT so it finalises the file.
+record_capture() {
+  local secs="$1" file="$2" pid
+  shift 2
+  wf-recorder -y "$@" -f "$file" >/dev/null 2>&1 &
+  pid=$!
+  sleep "$secs"
+  kill -INT "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+}
+
+cmd_record() {
+  [[ $# -ge 1 && "$1" =~ ^[0-9]+$ ]] || die "record needs SECONDS [OUTPUT|X,Y,WxH] [--fps N]"
+  need wf-recorder
+  need ffprobe
+  local secs="$1" target="" fps=60 file args
+  shift
+  while (($#)); do
+    if [[ "$1" == --fps ]]; then
+      fps="${2:-}"
+      shift 2
+    else
+      target="$1"
+      shift
+    fi
+  done
+  [[ "$fps" =~ ^[1-9][0-9]*$ ]] || die "--fps must be a positive integer"
+  mapfile -t args < <(record_target "$target")
+  mkdir -p "$OUT_DIR"
+  file="$OUT_DIR/rec-$(date +%H%M%S).mkv"
+  record_capture "$secs" "$file" -B "$fps" "${args[@]}"
+  [[ -s "$file" ]] || die "wf-recorder wrote no video (output/region valid?)"
+  printf '%s\n' "$file"
+  cmd_cadence "$file" "$fps"
+}
+
+# Cadence from the real frame timestamps: no resampling, no assumptions.
+cmd_cadence() {
+  [[ $# -ge 1 ]] || die "cadence needs VIDEO [target-fps]"
+  need ffprobe
+  ffprobe -v error -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 "$1" \
+    | awk -F, -v fps="${2:-60}" -f "$MOTION_DIR/cadence.awk"
+}
+
+# Extract the real frames (no fps filter, no duplication) as PNGs.
+cmd_frames() {
+  [[ $# -ge 2 ]] || die "frames needs VIDEO DIR [--every N]"
+  need ffmpeg
+  local video="$1" dir="$2" every=1
+  [[ "${3:-}" == "--every" ]] && every="${4:-}"
+  [[ "$every" =~ ^[1-9][0-9]*$ ]] || die "--every must be a positive integer"
+  mkdir -p "$dir"
+  ffmpeg -v error -y -i "$video" -fps_mode passthrough -vf "select=not(mod(n\,$every))" "$dir/frame-%04d.png" || die "ffmpeg failed"
+  printf '%s frames in %s\n' "$(find "$dir" -name 'frame-*.png' | wc -l)" "$dir"
+}
+
+# "SUPER SHIFT B" -> mods "SUPER SHIFT", key B; a lone key has no mods.
+route_key() {
+  local -a combo
+  read -ra combo <<<"$*"
+  if ((${#combo[@]} > 1)); then cmd_key "${combo[*]::${#combo[@]}-1}" "${combo[-1]}" 0.3; else cmd_key "${combo[0]}" 0.3; fi
+}
+
+# One route step; a `shot` step only names the capture, the caller shoots.
+route_step() {
+  local verb="$1" a="$2" b="$3" rest="$4"
+  case "$verb" in
+    move-to) cmd_move "$a" "$b" >/dev/null ;;
+    hover-wait) sleep "$(awk -v ms="${a:-0}" 'BEGIN{print ms/1000}')" ;;
+    press) ydotool click 0x40 >/dev/null 2>&1 || die "press failed" ;;
+    release) ydotool click 0x80 >/dev/null 2>&1 || die "release failed" ;;
+    click) cmd_click ;;
+    key) route_key "$a" "$b" "$rest" ;;
+    wheel) cmd_scroll "$a" ;;
+    shot) ;;
+    *) return 1 ;;
+  esac
+}
+
+# Scripted route. One step per line: move-to X Y | hover-wait MS | press |
+# release | click | key COMBO | wheel DY | shot NAME. '#' starts a comment.
+# Each step is shot before and after as <route>-<nn>-<step>-before/after.png.
+# The pointer is restored on exit, success or failure.
+# Refuse unless the focused workspace is 10 or the caller passed --workspace-ok.
+route_guard() {
+  local ws
+  ws="$(hyprctl activeworkspace -j | jq -r '.id')" || die "could not read the workspace"
+  [[ "$1" == "--workspace-ok" || "$ws" == 10 ]] || die "focused workspace is $ws, not 10 (pass --workspace-ok to override)"
+}
+
+# Put the pointer back where it is now when the shell exits, success or failure.
+route_restore_on_exit() {
+  local saved sx sy
+  saved="$(hyprctl cursorpos)" || die "cursorpos failed"
+  sx="${saved%%,*}"
+  sy="${saved##*, }"
+  # shellcheck disable=SC2064
+  trap "cmd_move $sx $sy 0 >/dev/null 2>&1" EXIT
+}
+
+cmd_route() {
+  [[ $# -ge 1 && -f "$1" ]] || die "route needs a FILE (and optional --workspace-ok)"
+  local route="$1" base
+  base="$(basename "$route")"
+  base="${base%.*}"
+  route_guard "${2:-}"
+  route_restore_on_exit
+  local n=0 verb a b rest name
+  while read -r verb a b rest; do
+    [[ -z "$verb" || "$verb" == \#* ]] && continue
+    n=$((n + 1))
+    name="$base-$(printf '%02d' "$n")-$verb"
+    [[ "$verb" != shot ]] || name="$base-$(printf '%02d' "$n")-${a:-shot}"
+    cmd_shot - "$name-before" >/dev/null
+    route_step "$verb" "$a" "$b" "$rest" || die "route line $n: unknown step '$verb'"
+    cmd_shot - "$name-after" >/dev/null
+    printf 'step %02d %s ok\n' "$n" "$verb"
+  done <"$route"
+  printf '%s\n' "$OUT_DIR"
+}
