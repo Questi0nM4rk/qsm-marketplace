@@ -25,7 +25,10 @@ first and stop on the first failed line. Setup and the background of every rule 
 6. Wait for state, not time: `drive until 'CMD'` beats a blind sleep. Read geometry from the
    app's own item tree rather than from the screenshot.
 7. Operate on workspace 10 and only when the owner asks. Announce pointer use before it starts,
-   stop input afterwards and say what the owner should inspect.
+   stop input afterwards and say what the owner should inspect. A capture or input outside a
+   slot needs `DRIVE_LIVE=1`; a subagent never sets it and never calls grim, wf-recorder or
+   `hyprctl dispatch|reload|eval` itself, because a screencopy cut short crashed the owner's
+   Hyprland once.
 
 Measure before hand-over: `drive geom insets|overlap|inside|centre|target|dump` prints equations
 with PASS/FAIL from the live item tree; `drive contrast A B` prints the WCAG ratio of two screen
@@ -39,3 +42,6 @@ Parallel review without the owner's session: `drive slot start NAME` launches a 
 compositor, `drive slot bench NAME ROOT KEY` opens a Workbench story in it, and any verb with
 `--slot NAME` (shot, record, move, click, type, key, geom, route) acts there; `drive slot ls`
 shows the RSS, `drive slot budget` how many more fit, `drive slot stop NAME` removes everything.
+A whole shell runs in a slot too, isolated from the owner's bus and state:
+`XDG_STATE_HOME=DIR dbus-run-session -- drive slot run NAME -- qs --path SHELL`, then reach it with
+`qs ipc --pid PID`.

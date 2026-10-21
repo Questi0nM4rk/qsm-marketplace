@@ -131,7 +131,8 @@ slot_run() {
   [[ -n "$name" && "${2:-}" == "--" && $# -ge 3 ]] || die "slot run needs NAME -- CMD..."
   slot_load "$name"
   shift 2
-  QT_QPA_PLATFORM=wayland exec "$@"
+  # A slot client must never reach the owner's compositor: a Hyprland-aware shell would dispatch to it.
+  QT_QPA_PLATFORM=wayland exec env -u HYPRLAND_INSTANCE_SIGNATURE -u DISPLAY "$@"
 }
 
 # Starts a Workbench session inside the slot; its session file is what `drive geom --slot` reads.

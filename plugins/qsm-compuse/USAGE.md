@@ -4,7 +4,14 @@ Drive the real cursor, keyboard and mouse buttons on a live Hyprland session, th
 what happened. No root, no X11, no `sudo`. Built while driving a live Quickshell desktop shell
 to audit its UI.
 
+Every verb that captures or sends input (`shot`, `record`, `route`, `contrast`, `move`, `click`,
+`key`, `type`, `scroll` and their siblings) refuses on the owner's live session unless it runs in a
+slot (`DRIVE_SLOT=NAME`) or `DRIVE_LIVE=1` is set, because a screencopy cut short crashed the
+owner's Hyprland once (SIGBUS in its shm copy). Read-only verbs (`mons`, `pos`, `focused`, `geom`)
+need neither.
+
 ```bash
+export DRIVE_LIVE=1              # the owner asked for live input on this session
 drive doctor                     # check every dep + permission first
 drive mons                       # outputs, physical AND logical size, scale
 drive move 30 546                # cursor to logical 30,546
@@ -152,7 +159,7 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive frames VIDEO DIR [--every N]` | Extract the real frames as PNGs. |
 | `drive route FILE [--workspace-ok]` | Run steps (`move-to X Y`, `hover-wait MS`, `press`, `release`, `click`, `key COMBO`, `wheel DY`, `shot NAME`) with before/after shots; workspace 10 only; pointer restored on exit. |
 | `drive slot start NAME [--size WxH] [--scale S]` | Headless sway (gles2 on the first non-nvidia render node, pixman if gles2 fails) with its own Wayland socket and a held virtual pointer and keyboard; state in `$XDG_RUNTIME_DIR/drive-slots/NAME`. Never touches the owner's `WAYLAND_DISPLAY`. |
-| `drive slot run NAME -- CMD...` | Run a client inside the slot (`QT_QPA_PLATFORM=wayland`). |
+| `drive slot run NAME -- CMD...` | Run a client inside the slot (`QT_QPA_PLATFORM=wayland`, `HYPRLAND_INSTANCE_SIGNATURE` and `DISPLAY` removed, so it never reaches the owner's compositor). |
 | `drive slot bench NAME ROOT KEY` | Start a Workbench session of story `KEY` of provider `ROOT` in the slot; `drive geom --slot` reads its item tree (scene coordinates, not output pixels). |
 | `drive slot ls` / `drive slot stop NAME` | List slots with process count and summed RSS / kill every process of the slot (found by its `DRIVE_SLOT_ID` marker) and remove its files. |
 | `drive slot budget [--reserve-mb N] [--per-slot-mb N]` | How many more slots fit: (MemAvailable - reserve, default 3072) / per-slot cost: the MemAvailable drop of a probe slot running a Workbench (`--provider ROOT`, default the current directory; `--story KEY`, default `level`), measured once and cached in the slot root (`--remeasure` repeats it, `--per-slot-mb` overrides it). |

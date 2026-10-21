@@ -314,7 +314,8 @@ drive — sudo-free computer use on Hyprland/Wayland
     route FILE [--workspace-ok]          run a step script; shots per step; pointer restored
     doctor                   check every dependency and permission
 
-  ENV: DRIVE_OUT_DIR (default $XDG_RUNTIME_DIR/drive-shots), DRIVE_SETTLE (0.35)
+  ENV: DRIVE_OUT_DIR (default $XDG_RUNTIME_DIR/drive-shots), DRIVE_SETTLE (0.35),
+       DRIVE_LIVE=1 (required for a capture or input on the owner's session outside a slot)
 USAGE
 }
 
@@ -325,8 +326,17 @@ source "$MOTION_DIR/drive-motion"
 # shellcheck source=drive-slot
 source "$MOTION_DIR/drive-slot"
 
+# A capture or an input on the owner's session is opt-in: a screencopy cut short crashed the
+# owner's Hyprland once (SIGBUS in copyShm), and an agent's stray click lands in the owner's work.
+live_gate() {
+  local acting=" move warp nudge record route key sendkey esc click press release rclick mclick type scroll shot contrast "
+  in_slot || [[ "${DRIVE_LIVE:-}" == 1 || "$acting" != *" ${1:-none} "* ]] \
+    || die "'$1' acts on the owner's live session: run it in a slot (DRIVE_SLOT=NAME), or set DRIVE_LIVE=1 when the owner asked for live input"
+}
+
 dispatch() {
   in_slot && slot_refuse "${1:-}"
+  live_gate "${1:-}"
   case "${1:-}" in
     slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | l2p | until)
       local verb="cmd_$1"

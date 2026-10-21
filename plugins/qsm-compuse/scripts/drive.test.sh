@@ -46,6 +46,16 @@ stub_stuck_ydotool() {
 SH
 }
 
+# Without a slot or DRIVE_LIVE=1 a capture or a move never reaches the session; a read still does.
+expect_live_gate() {
+  printf '0 0\n' >"$DRIVE_TEST_POSITION"
+  if DRIVE_LIVE='' "$root/drive" move 30 30 0 >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q "acts on the owner's live session" "$tmp/out"
+  read -r x y <"$DRIVE_TEST_POSITION"
+  [[ "$x" == 0 && "$y" == 0 ]]
+  DRIVE_LIVE='' "$root/drive" pos >/dev/null
+}
+
 # Moves from 0,0 to $1,$2 and expects the cursor to stop at $3,$4.
 expect_move() {
   printf '0 0\n' >"$DRIVE_TEST_POSITION"
@@ -108,6 +118,8 @@ main() {
   stub_ydotool
   chmod +x "$tmp/bin/hyprctl" "$tmp/bin/ydotool"
   export PATH="$tmp/bin:$PATH" DRIVE_TEST_POSITION="$tmp/position" DRIVE_SETTLE=0
+  expect_live_gate
+  export DRIVE_LIVE=1
   expect_move 30 24 29 23
   expect_move -30 -24 -29 -23
   expect_stuck_pointer_fails
