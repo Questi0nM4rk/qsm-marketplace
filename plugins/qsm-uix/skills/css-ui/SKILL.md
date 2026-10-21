@@ -77,6 +77,16 @@ design source is the expected column), measuring the result (ui-audit), criteria
     compound control open while focus is inside.
 14. **A dark overlay follows ui-design's overlay rule.** In CSS: a layered `box-shadow`, and in the
     dark block a `1px` border whose colour token carries alpha.
+15. **The palette holds values, roles point at them, components read roles.** The palette is the
+    named values of rule 3's theme blocks (`--mauve: #8839ef` in light, `#cba6f7` in dark); a role
+    is a `:root` property pointing at one (`--primary: var(--mauve); --on-primary: var(--crust)`),
+    redeclared in the dark block only where ui-design's dark column names another palette value,
+    and in any subtree that switches appearance on its own, because a `var()` resolves where the
+    role is declared. A component reads roles only. A brand theme is a block under its own selector
+    (`:root[data-theme="forest"]`) that sets the palette values it changes and repoints a role with
+    its `--on-` partner, because contrast is proven on the pair (rule 2). Reason: a component that
+    names `--mauve` stays mauve in a theme that should be teal. Check: grep the component styles for
+    palette names; zero hits.
 
 ## Libraries
 
@@ -92,26 +102,14 @@ From the Vercel web interface guidelines, in our words:
 - Modal and drawer scroll containment follows mobile-native's Overscroll rule. A dark theme
   sets `color-scheme: dark` on `html`, a native `select` gets explicit `background-color`
   and `color`, and `theme-color` matches the page background.
-- Increase contrast on `:hover`, `:active` and `:focus`, never lower it. Make focus rings clear
-  sticky bars (rule 10), and keep a visible replacement for any removed outline.
 - Layered shadows (an ambient one and a direct one), crisp edges from a semi-transparent border
   plus a shadow (rule 14), nested radii where the child is never larger than the parent, and
   borders and shadows tinted toward the background hue so greys do not look pasted on.
-- Text: `text-wrap: balance` on headings, `…` not `...`, a non-breaking space inside `10 MB` and
-  `⌘ K`, curly quotes, `scroll-margin-top` on headings, and a skip link.
 - Content survives short, average and very long user text, and empty, sparse, dense and error states
   are designed; a skeleton mirrors the final content so nothing shifts.
-- Dates and numbers go through `Intl.DateTimeFormat` and `Intl.NumberFormat`, never a hard-coded
-  format; language comes from `Accept-Language` or `navigator.languages`, not the IP. Meaningful
-  media has captions or a transcript, and its controls work from the keyboard.
-- Brand names and code tokens get `translate="no"`; `user-scalable=no` and `maximum-scale=1` are
-  never set, because they block zoom.
+- `user-scalable=no` and `maximum-scale=1` are never set, because they block zoom.
 - If it looks clickable it is clickable; the label and its checkbox or radio share one hit target
-  with no dead zone; a tooltip is the last resort after inline help.
-- Performance: `content-visibility: auto` for static rows, flex or grid before measuring in JS,
-  `<link rel="preconnect">` for asset hosts.
-- Verify at phone, laptop and ultra-wide widths (50% zoom simulates the last), and with CPU
-  throttling before claiming performance.
+  with no dead zone.
 
 ## Materials
 
@@ -132,16 +130,17 @@ for ui-audit and a11y-audit; a UI that cannot be read this way is reported as no
 
 Tailwind is the same tokens in another syntax; it adds nothing to the discipline.
 
-- Put tokens in `@theme` (v4) or `theme.extend` (v3) and nowhere else. Define the pair names
+- Keep the palette values in rule 3's `:root` blocks and map the roles once with `@theme inline {
+  --color-primary: var(--primary) }` (v4) or `theme.extend` colours reading `var(--primary)` (v3);
+  a value written in `@theme` has no dark value to flip to. Define the pair names
   (`--color-primary`, `--color-on-primary`) so `bg-primary text-on-primary` is the only way
   to colour a fill.
-- For themes, define the values as plain custom properties flipped by the
-  `prefers-color-scheme` block of rule 3, and reference them with `@theme inline { --color-canvas:
-  var(--canvas) }`. Then no `dark:` variant is needed on each element; a component with a
-  `dark:` colour is a second place the dark value lives.
+- No `dark:` variant is needed on each element, because the `prefers-color-scheme` block of
+  rule 3 flips the values; a component with a `dark:` colour is a second place the dark value lives.
 - No arbitrary values (`bg-[#1a1a1a]`, `p-[13px]`, `duration-[240ms]`): they are literals. A
   missing step means a missing token; add it to the design source first.
-- `motion-reduce:` and `focus-visible:` on every animation and every control, as rules 4 and 7.
+- `focus-visible:` on every control (rule 4); no `motion-reduce:` per animation, because rule 7's
+  `:root` switch covers every duration.
 - Build class names whole (`{ red: 'bg-red-500' }`), never `bg-${color}-500`: the scanner
   cannot see the second.
 

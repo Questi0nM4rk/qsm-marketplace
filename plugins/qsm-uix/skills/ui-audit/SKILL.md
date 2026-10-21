@@ -61,7 +61,11 @@ resting frame is not an audit.
    sit on (1.4.11): control borders, dividers that carry meaning, icons, data marks. A deliberately
    dim resting state passes only if its active state is captured and measured too. Sample the
    rendered pixel, never the colour the code names, because opacity stacks and blending change what
-   reaches the screen.
+   reaches the screen. One hue is a finding too: take each role's top colour from `region-stats` on
+   a rect of that role (when it covers over half the pixels, else Not examined), and when the
+   neutrals carry chroma above 0.02 and the accent sits within 15 degrees of them in hue, file the
+   palette once, because an accent that differs from its ground only by lightness marks nothing.
+   Both numbers are defaults; the design source's own values win.
 5. **Type and icons.** Inventory every text item with family, rendered size, weight. Sizes form a
    scale defined in the design source, not an imposed ratio. Rank items by size, weight, and
    contrast; the most glance-critical readouts belong at the top. Text in a row shares a baseline
