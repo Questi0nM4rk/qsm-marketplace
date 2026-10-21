@@ -276,7 +276,9 @@ Claude Code deletes a transcript after `cleanupPeriodDays` (activate sets 7), an
 only, so `save` SHALL copy every base64 image block of a typed user prompt into the blob store and
 write one `blob_ref` row (session id, turn uuid, sha256, media type). The turn uuid is the image
 block's key, the record uuid plus the block's index, because a prompt of only an image has no turn
-row. A second save of the same transcript SHALL add no row and no blob. Files a prompt names and
+row. A second save of the same transcript SHALL add no row and no blob. Images are kept from saves
+made after this behaviour shipped; a session archived earlier keeps none, and nothing re-reads it
+to backfill, because its transcript may already be deleted. Files a prompt names and
 URLs it contains are not kept.
 
 #### Scenario: a pasted screenshot outlives the transcript

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   appendFileSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   symlinkSync,
   utimesSync,
@@ -11,7 +12,7 @@ import {
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder, testEnv } from "./fixtures/transcript.ts";
-import { blobPath } from "./blobs.ts";
+import { blobDir, blobPath } from "./blobs.ts";
 import { catchUp, listTranscripts, saveTranscript, unsavedTranscripts } from "./save.ts";
 import { applySchema } from "./store.ts";
 
@@ -96,7 +97,12 @@ describe("saveTranscript, pasted images", () => {
     );
 
     saveTranscript(d, path, env);
+    const blobFiles = () =>
+      readdirSync(blobDir(env), { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
+        .length;
+    expect(blobFiles()).toBe(1);
     saveTranscript(d, path, env);
+    expect(blobFiles()).toBe(1);
 
     const refs = d
       .query<{ turn_uuid: string; sha256: string; media_type: string }, []>(
