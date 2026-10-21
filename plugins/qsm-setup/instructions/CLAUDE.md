@@ -88,7 +88,7 @@ copy.
 | LOAD | the notes for this tree, the ready tasks, and the spec that governs the change; a search of past sessions before asking twice | the memory skill and `qsm-memory`, the task-tool skill |
 | PLAN | the six questions, a probe for what already exists, the size (a fix is a commit; anything else is an epic): grilling writes the epic's intent and acceptance criteria, plan splits it into tasks that each get a spec; each gate is the person's yes | `qsm-plan` for intake, sizing, grilling, and the split; `qsm-openspec` for spec-propose |
 | EXECUTE | apply the spec change, claim the task, delegate and take the work back | `qsm-openspec` spec-apply, the task-tool skill, the subagents skill |
-| VERIFY | the real path ran end to end; a skill passes `bun run eval <plugin>` | the run-and-verify and debugging skills, `qsm-review`, the context rule |
+| VERIFY | the real path ran end to end; first a search of the task tool for an open hold on a gate (qsm-aqb8.30 holds evals), because a paused gate gives a verdict nobody checked; then a skill passes `bun run eval <plugin>` unless held | the run-and-verify and debugging skills, `qsm-review`, the context rule |
 | LEARN | a rule found goes into the instruction file or skill it belongs to; a tool defect into a task; a decision's reason into the spec's design or the commit | the writing skill, the task-tool skill, `qsm-openspec` |
 | CLOSE | spec-archive merges the deltas and closes the change's task; the epic closes only when all its tasks are done, its criteria hold, test-it passed, and the work is pushed after review; a note for the next session when work stays open | `qsm-openspec`, the memory skill and `qsm-memory` |
 
