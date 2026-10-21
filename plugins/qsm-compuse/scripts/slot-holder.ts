@@ -7,6 +7,7 @@
 // process keeps one of each alive so the capabilities stay on the seat. Plain wire protocol,
 // no libraries: the protocols are tiny and nothing here may need installing.
 import { createConnection } from "node:net";
+import { runtimeDir } from "../../../lib/paths.ts";
 
 const REGISTRY = 2;
 const CALLBACK = 3;
@@ -77,7 +78,13 @@ function hold(socket: ReturnType<typeof createConnection>): void {
   console.log("holding");
 }
 
-const socket = createConnection(`${process.env.XDG_RUNTIME_DIR}/${process.env.WAYLAND_DISPLAY}`);
+const runtime = runtimeDir(process.env);
+const display = process.env.WAYLAND_DISPLAY;
+if (runtime === undefined || display === undefined) {
+  process.stderr.write("slot-holder: XDG_RUNTIME_DIR and WAYLAND_DISPLAY must be set\n");
+  process.exit(1);
+}
+const socket = createConnection(`${runtime}/${display}`);
 const pending = { buf: Buffer.alloc(0) };
 socket.on("data", (chunk) => {
   onData(socket, pending, Buffer.from(chunk));
