@@ -917,7 +917,7 @@ function surface(p: Plugin, ctx: Ctx): string {
           `${plural(p.hooks.length, "hook")}.`,
           rows(...p.hooks.map((h) => hookRow(p, h, ctx))),
         );
-  return verbs + hooks;
+  return hooks + verbs;
 }
 
 function developer(p: Plugin, ctx: Ctx): string {

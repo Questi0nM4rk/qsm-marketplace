@@ -680,7 +680,7 @@ function requirementsOf(name: string, dir: string): { title: string; scenarios: 
 /** The body of the README's `## Why it exists` section in dir, or null. */
 function whyOf(dir: string): string | null {
   const text = read(join(dir, "README.md"));
-  const m = text?.match(/^## Why it exists\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
+  const m = text?.match(/^## Why it exists\s*\n([\s\S]*?)(?=^## |^<!--|(?![\s\S]))/m);
   return m?.[1]?.trim() ?? null;
 }
 
