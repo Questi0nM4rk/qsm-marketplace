@@ -1,6 +1,6 @@
 // Fills .claude/types/ for the hooks modules' tsconfigs: the engine's API declarations plus each
-// plugin's committed types/index.d.ts. The engine writes its declarations when a session starts, so
-// run `claude` once if the source is missing.
+// plugin's committed types/index.d.ts. The engine extracts them only when its plugin-authoring skill
+// is invoked, so run the command in the error below if the source is missing.
 import {
   copyFileSync,
   existsSync,
@@ -34,7 +34,9 @@ const missing = [
   ...sources.filter((s) => !existsSync(s.from)).map((s) => rel(s.from)),
 ];
 if (engine === undefined || missing.length > 0) {
-  console.error(`plugin-types: missing source:\n  ${missing.join("\n  ")}`);
+  const fix = 'claude -p --model haiku "/plugin-authoring reply ok"';
+  const hint = engine === undefined ? `\nextract the engine declarations once with: ${fix}` : "";
+  console.error(`plugin-types: missing source:\n  ${missing.join("\n  ")}${hint}`);
   process.exit(1);
 }
 
