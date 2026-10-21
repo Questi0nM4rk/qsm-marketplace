@@ -8,6 +8,7 @@
 # is used only to READ state and to park the pointer. See USAGE.md.
 #
 # Nothing here needs root. If a call fails, run `drive doctor` first.
+# shellcheck disable=SC2154 # SLOT_OUTPUT comes from the slot state file
 set -uo pipefail
 
 OUT_DIR="${DRIVE_OUT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/drive-shots}"
@@ -29,6 +30,7 @@ hdisp() { hyprctl dispatch "$1" >/dev/null || die "dispatch failed: $1"; }
 # warp onto a rail cell left its popout closed; the same coordinates via ydotool
 # opened it. If you are testing hover, you need a real motion event.
 cmd_move() {
+  in_slot && slot_move "$@" && return
   [[ $# -ge 2 ]] || die "move needs X Y (layout px)"
   need ydotool
   need jq
@@ -65,6 +67,7 @@ cmd_warp() {
 # Relative nudge, for probing hover thresholds without recomputing absolutes.
 cmd_nudge() {
   [[ $# -ge 2 ]] || die "nudge needs DX DY"
+  in_slot && slot_nudge "$@" && return
   local pos x y
   pos="$(hyprctl cursorpos)" || die "cursorpos failed"
   x="${pos%%,*}"
@@ -108,6 +111,7 @@ keycode() {
 # reverse order.
 cmd_key() {
   [[ $# -ge 1 ]] || die 'key needs [MODS] KEY, e.g. key "SUPER SHIFT" B  |  key Escape'
+  in_slot && slot_key "$@" && return
   need ydotool
   # `key SUPER B` and `key Escape 0.3` are both two arguments, so decide by
   # asking whether the SECOND one names a key: if it does, the first is the
@@ -142,6 +146,7 @@ cmd_key() {
 # toggled it. Use this only to send keys INTO an application.
 cmd_sendkey() {
   [[ $# -ge 1 ]] || die 'sendkey needs MODS KEY (mods may be "")'
+  in_slot && slot_key "$@" && return
   local mods="$1" key="${2:-}"
   if [[ -z "$key" ]]; then
     key="$mods"
@@ -154,26 +159,31 @@ cmd_sendkey() {
 }
 
 cmd_click() {
+  in_slot && slot_click left "${3:-}" && return
   need ydotool
   ydotool click "${2:-0xC0}" >/dev/null 2>&1 || die "click failed"
   sleep "${3:-0.4}"
 }
 cmd_rclick() {
+  in_slot && slot_click right "${1:-}" && return
   need ydotool
   ydotool click 0xC1 >/dev/null 2>&1 || die "rclick failed"
   sleep "${2:-0.4}"
 }
 cmd_mclick() {
+  in_slot && slot_click middle "${1:-}" && return
   need ydotool
   ydotool click 0xC2 >/dev/null 2>&1 || die "mclick failed"
   sleep "${2:-0.4}"
 }
 cmd_type() {
+  in_slot && slot_type "$@" && return
   need ydotool
   ydotool type -- "$1" >/dev/null 2>&1 || die "type failed"
   sleep "${2:-0.4}"
 }
 cmd_scroll() {
+  in_slot && slot_scroll "$@" && return
   need ydotool
   ydotool mousemove -w -x 0 -y "${1:--1}" >/dev/null 2>&1
   sleep "${2:-0.4}"
@@ -188,7 +198,9 @@ cmd_shot() {
   printf '%s\n' "$OUT_DIR/$name.png"
 }
 
-cmd_focused() { hyprctl monitors -j | jq -r '.[]|select(.focused)|.name'; }
+cmd_focused() {
+  if in_slot; then echo "$SLOT_OUTPUT"; else hyprctl monitors -j | jq -r '.[]|select(.focused)|.name'; fi
+}
 
 # Logical size is physical/scale. Cursor moves use LOGICAL px; grim writes PHYSICAL px.
 # Multiply a logical coord by scale to find it in a screenshot.
@@ -276,6 +288,13 @@ drive — sudo-free computer use on Hyprland/Wayland
     geom CHECK ARGS          measure the live item tree: insets overlap inside centre target dump (drive geom)
     contrast A B             WCAG ratio between two rects/points of the live screen (drive contrast)
 
+  SLOT (isolated headless sway per agent; add --slot NAME or DRIVE_SLOT=NAME to shot, record, frames, route, move, nudge, pos, click, rclick, mclick, type, scroll, key, sendkey, geom)
+    slot start NAME [--size WxH] [--scale S]   launch a slot (default 1280x800 @1), print its display
+    slot run NAME -- CMD...                    run a client inside it (QT_QPA_PLATFORM=wayland)
+    slot bench NAME ROOT KEY                   start a Workbench session of story KEY in it (what geom reads)
+    slot ls | slot stop NAME                   list slots with RSS | kill the whole tree, remove its files
+    slot budget [--reserve-mb N] [--per-slot-mb N]   how many more slots fit in MemAvailable
+
   FLOW
     until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
     record SECS [OUT|X,Y,WxH] [--fps N]  real-frame video + measured cadence (never CFR)
@@ -287,20 +306,23 @@ drive — sudo-free computer use on Hyprland/Wayland
 USAGE
 }
 
-# record, frames and route live beside this file (resolved through the bin symlink).
+# record, frames, route and the slot verbs live beside this file (resolved through the bin symlink).
 # shellcheck source=drive-motion
 MOTION_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$MOTION_DIR/drive-motion"
+# shellcheck source=drive-slot
+source "$MOTION_DIR/drive-slot"
 
 dispatch() {
+  in_slot && slot_refuse "${1:-}"
   case "${1:-}" in
-    move | warp | nudge | record | frames | route | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
+    slot | move | warp | nudge | record | frames | route | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
       local verb="cmd_$1"
       shift
       "$verb" "$@"
       ;;
     esc) cmd_key Escape ;;
-    pos) hyprctl cursorpos ;;
+    pos) if in_slot; then slot_pos; else hyprctl cursorpos; fi ;;
     mons) cmd_mons ;;
     geom) exec "$(dirname "$(readlink -f "$0")")/geom" "${@:2}" ;;
     contrast) exec "$(dirname "$(readlink -f "$0")")/contrast" "${@:2}" ;;
@@ -310,4 +332,5 @@ dispatch() {
   esac
 }
 
-dispatch "$@"
+slot_select "$@"
+dispatch "${SLOT_ARGV[@]}"

@@ -75,6 +75,33 @@ expect_route_guard_and_restore() {
   [[ "$x" -ge 4 && "$x" -le 6 && "$y" -ge 4 && "$y" -le 6 ]]
 }
 
+# A slot is a state directory plus a marked process.
+fake_slot() {
+  local dir="$DRIVE_SLOT_DIR/x"
+  mkdir -p "$dir"
+  DRIVE_SLOT_ID="$dir" sleep 60 &
+  SLOT_TEST_PID=$!
+  printf '%s\n' "$SLOT_TEST_PID" >"$dir/pid"
+  printf 'SLOT_PID=%s\nSLOT_DISPLAY=wayland-9\nSLOT_SWAYSOCK=/none\nSLOT_OUTPUT=HEADLESS-1\nSLOT_SIZE=1280x800\nSLOT_SCALE=1\nSLOT_RENDERER=gles2\n' "$SLOT_TEST_PID" >"$dir/state"
+}
+
+# ls finds it, a Hyprland-only verb refuses in it, budget reads the given figure.
+expect_slot_listed_and_refusing() {
+  "$root/drive" slot ls | grep -q '^x display=wayland-9 size=1280x800'
+  if "$root/drive" warp 1 1 --slot x >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q 'no slot form' "$tmp/out"
+  "$root/drive" slot budget --per-slot-mb 500 --reserve-mb 0 | grep -q 'per-slot=500MB (given)'
+}
+
+# stop kills the marked process and removes the directory; a second stop and a dead slot fail.
+expect_slot_stop() {
+  "$root/drive" slot stop x >/dev/null
+  ! kill -0 "$SLOT_TEST_PID" 2>/dev/null && [[ ! -e "$DRIVE_SLOT_DIR/x" ]]
+  if "$root/drive" slot stop x >"$tmp/out" 2>&1; then exit 1; fi
+  if "$root/drive" shot --slot x >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q "slot 'x' is not running" "$tmp/out"
+}
+
 main() {
   mkdir "$tmp/bin"
   stub_hyprctl
@@ -87,6 +114,10 @@ main() {
   stub_ydotool
   chmod +x "$tmp/bin/ydotool"
   expect_route_guard_and_restore
+  export DRIVE_SLOT_DIR="$tmp/slots"
+  fake_slot
+  expect_slot_listed_and_refusing
+  expect_slot_stop
   printf 'drive move behavior tests passed\n'
 }
 

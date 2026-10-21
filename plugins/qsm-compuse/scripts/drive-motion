@@ -25,6 +25,7 @@ record_capture() {
   pid=$!
   sleep "$secs"
   kill -INT "$pid" 2>/dev/null
+  in_slot && slot_wake
   wait "$pid" 2>/dev/null
 }
 
@@ -80,14 +81,19 @@ route_key() {
   if ((${#combo[@]} > 1)); then cmd_key "${combo[*]::${#combo[@]}-1}" "${combo[-1]}" 0.3; else cmd_key "${combo[0]}" 0.3; fi
 }
 
+# wlrctl has no press or release, only a whole click, so a slot route refuses them.
+route_button() {
+  in_slot && die "route step '$1' has no slot form (wlrctl clicks whole); use click"
+  ydotool click "$([[ "$1" == press ]] && echo 0x40 || echo 0x80)" >/dev/null 2>&1 || die "$1 failed"
+}
+
 # One route step; a `shot` step only names the capture, the caller shoots.
 route_step() {
   local verb="$1" a="$2" b="$3" rest="$4"
   case "$verb" in
     move-to) cmd_move "$a" "$b" >/dev/null ;;
     hover-wait) sleep "$(awk -v ms="${a:-0}" 'BEGIN{print ms/1000}')" ;;
-    press) ydotool click 0x40 >/dev/null 2>&1 || die "press failed" ;;
-    release) ydotool click 0x80 >/dev/null 2>&1 || die "release failed" ;;
+    press | release) route_button "$verb" ;;
     click) cmd_click ;;
     key) route_key "$a" "$b" "$rest" ;;
     wheel) cmd_scroll "$a" ;;
@@ -102,6 +108,7 @@ route_step() {
 # The pointer is restored on exit, success or failure.
 # Refuse unless the focused workspace is 10 or the caller passed --workspace-ok.
 route_guard() {
+  in_slot && return
   local ws
   ws="$(hyprctl activeworkspace -j | jq -r '.id')" || die "could not read the workspace"
   [[ "$1" == "--workspace-ok" || "$ws" == 10 ]] || die "focused workspace is $ws, not 10 (pass --workspace-ok to override)"
@@ -109,6 +116,7 @@ route_guard() {
 
 # Put the pointer back where it is now when the shell exits, success or failure.
 route_restore_on_exit() {
+  in_slot && return
   local saved sx sy
   saved="$(hyprctl cursorpos)" || die "cursorpos failed"
   sx="${saved%%,*}"

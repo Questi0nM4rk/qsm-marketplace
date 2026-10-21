@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2154 # SLOT_* come from the state file sourced by slot_load
+# Sourced by drive: the slot verbs, and the slot forms of pointer, keys and tree.
+# A slot is one headless sway with its own Wayland socket and its own virtual pointer
+# and keyboard. sway, not cage, because cage has no way to set the output size or scale.
+# Every process started in a slot carries DRIVE_SLOT_ID=<dir>, so the whole tree is
+# found by environment even after a client detaches from its parent.
+
+SLOT_ROOT="${DRIVE_SLOT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/drive-slots}"
+in_slot() { [[ -n "${DRIVE_SLOT:-}" ]]; }
+slot_dir() { printf '%s/%s\n' "$SLOT_ROOT" "$1"; }
+
+# sway marks itself non-dumpable, so its environ is unreadable: it is listed by its pid file, its clients by the marker.
+slot_pids() {
+  cat "$(slot_dir "$1")/pid" 2>/dev/null
+  grep -alxFz "DRIVE_SLOT_ID=$(slot_dir "$1")" /proc/[0-9]*/environ 2>/dev/null | sed 's|/proc/\([0-9]*\)/environ|\1|'
+}
+
+slot_field() { sed -n "s/^$2=//p" "$(slot_dir "$1")/state"; }
+slot_alive() { [[ -f "$(slot_dir "$1")/state" ]] && kill -0 "$(slot_field "$1" SLOT_PID)" 2>/dev/null; }
+
+# Fills the SLOT_* variables and the wayland env of the current process.
+slot_load() {
+  slot_alive "$1" || die "slot '$1' is not running (drive slot start $1)"
+  # shellcheck disable=SC1090,SC1091
+  source "$(slot_dir "$1")/state"
+  DRIVE_SLOT_ID="$(slot_dir "$1")"
+  export WAYLAND_DISPLAY="$SLOT_DISPLAY" SWAYSOCK="$SLOT_SWAYSOCK" DRIVE_SLOT_ID
+}
+
+# First render node that is not nvidia: the iGPU renders a headless slot, the dGPU stays asleep.
+slot_render_node() {
+  local node
+  for node in /sys/class/drm/renderD*; do
+    [[ "$(basename "$(readlink -f "$node/device/driver")")" != nvidia ]] && printf '/dev/dri/%s\n' "$(basename "$node")" && return
+  done
+}
+
+slot_write_config() {
+  local dir="$1" size="$2" scale="$3"
+  cat >"$dir/sway.conf" <<CFG
+xwayland disable
+default_border none
+output * resolution $size scale $scale
+exec sh -c 'echo \$WAYLAND_DISPLAY > "$dir/display"'
+CFG
+}
+
+# Starts sway with the given renderer; succeeds when it published its display.
+slot_launch() {
+  local dir="$1" renderer="$2" node="$3" i
+  rm -f "$dir/display"
+  env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u SWAYSOCK \
+    WLR_BACKENDS=headless WLR_RENDERER="$renderer" WLR_LIBINPUT_NO_DEVICES=1 \
+    ${node:+WLR_RENDER_DRM_DEVICE="$node"} DRIVE_SLOT_ID="$dir" \
+    setsid sway -c "$dir/sway.conf" >"$dir/sway.log" 2>&1 &
+  echo $! >"$dir/pid"
+  for ((i = 0; i < 50; i++)); do
+    [[ -s "$dir/display" ]] && return 0
+    kill -0 "$(cat "$dir/pid")" 2>/dev/null || return 1
+    sleep 0.2
+  done
+  return 1
+}
+
+slot_publish() {
+  local dir="$1" size="$2" scale="$3" renderer="$4" pid sock out
+  pid="$(cat "$dir/pid")"
+  sock="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$pid.sock"
+  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs | jq -r '.[0].name')" || die "could not read the slot output"
+  printf 'SLOT_PID=%s\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%s\nSLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=%s\n' \
+    "$pid" "$(cat "$dir/display")" "$sock" "$out" "$size" "$scale" "$renderer" >"$dir/state"
+  printf '0 0\n' >"$dir/pos"
+}
+
+# Keeps one virtual pointer and keyboard on the seat: a headless sway advertises neither without a device.
+slot_hold() {
+  need bun
+  local log i
+  log="$(slot_dir "$1")/holder.log"
+  (slot_load "$1" && setsid bun "$MOTION_DIR/slot-holder.ts" >"$log" 2>&1 &)
+  for ((i = 0; i < 25; i++)); do
+    grep -q holding "$log" 2>/dev/null && return 0
+    sleep 0.2
+  done
+  die "slot input holder did not start (see $log)"
+}
+
+slot_start_args() {
+  while (($#)); do
+    case "$1" in
+      --size) printf 'size=%s\n' "${2:?--size needs WxH}" && shift 2 ;;
+      --scale) printf 'scale=%s\n' "${2:?--scale needs a number}" && shift 2 ;;
+      *) die "slot start: unknown option '$1'" ;;
+    esac
+  done
+}
+
+slot_start() {
+  local name="${1:-}" size=1280x800 scale=1 dir renderer=gles2 opt
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slot start needs NAME (lowercase letters, digits, dashes)"
+  shift
+  while read -r opt; do
+    [[ -z "$opt" ]] || printf -v "${opt%%=*}" '%s' "${opt#*=}"
+  done < <(slot_start_args "$@")
+  [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
+  need sway
+  need swaymsg
+  slot_alive "$name" && die "slot '$name' is already running"
+  dir="$(slot_dir "$name")"
+  rm -rf "${SLOT_ROOT:?}/${name:?}"
+  mkdir -p "$dir"
+  slot_write_config "$dir" "$size" "$scale"
+  if ! slot_launch "$dir" gles2 "$(slot_render_node)"; then
+    printf 'drive: gles2 failed in slot %s, falling back to pixman\n' "$name" >&2
+    slot_kill "$name"
+    renderer=pixman
+    slot_launch "$dir" pixman "" || die "sway did not start in slot '$name' (see $dir/sway.log)"
+  fi
+  slot_publish "$dir" "$size" "$scale" "$renderer"
+  slot_hold "$name"
+  printf 'slot %s: display=%s output=%s size=%s scale=%s renderer=%s pid=%s\n' "$name" "$(cat "$dir/display")" \
+    "$(slot_field "$name" SLOT_OUTPUT)" "$size" "$scale" "$renderer" "$(cat "$dir/pid")"
+}
+
+slot_run() {
+  local name="${1:-}"
+  [[ -n "$name" && "${2:-}" == "--" && $# -ge 3 ]] || die "slot run needs NAME -- CMD..."
+  slot_load "$name"
+  shift 2
+  QT_QPA_PLATFORM=wayland exec "$@"
+}
+
+# Starts a Workbench session inside the slot; its session file is what `drive geom --slot` reads.
+slot_bench() {
+  [[ $# -eq 3 ]] || die "slot bench needs NAME PROVIDER_ROOT STORY_KEY"
+  need qsm-workbench
+  local name="$1" dir
+  dir="$(slot_dir "$name")"
+  (slot_run "$name" -- qsm-workbench session start --provider "$2" --story "$3" --session-file "$dir/bench.json" --log "$dir/bench.log") \
+    | jq -r '"workbench in slot '"$name"': pid=\(.session.pid) story=\(.describe.story)"'
+}
+
+# TERM every process of the slot, KILL what is left after 3 s, remove its directory.
+slot_kill() {
+  local name="$1" i
+  # shellcheck disable=SC2046
+  kill $(slot_pids "$name") 2>/dev/null
+  for ((i = 0; i < 30; i++)); do
+    [[ -z "$(slot_pids "$name")" ]] && break
+    sleep 0.1
+  done
+  # shellcheck disable=SC2046
+  kill -9 $(slot_pids "$name") 2>/dev/null
+  rm -rf "${SLOT_ROOT:?}/${name:?}"
+  rmdir "$SLOT_ROOT" 2>/dev/null
+}
+
+slot_stop() {
+  local name="${1:-}"
+  [[ -n "$name" && -d "$(slot_dir "$name")" ]] || die "slot stop needs the NAME of an existing slot (drive slot ls)"
+  slot_kill "$name"
+  printf 'slot %s stopped\n' "$name"
+}
+
+# Sum of resident set sizes (MB) over every process of the slot.
+slot_rss_mb() {
+  local pid total=0 kb
+  for pid in $(slot_pids "$1"); do
+    kb="$(awk '/^VmRSS:/{print $2}' "/proc/$pid/status" 2>/dev/null)"
+    total=$((total + ${kb:-0}))
+  done
+  echo $((total / 1024))
+}
+
+slot_names() {
+  local dir
+  for dir in "$SLOT_ROOT"/*/; do
+    [[ -d "$dir" ]] && basename "$dir"
+  done
+}
+
+slot_ls() {
+  local name
+  for name in $(slot_names); do
+    if slot_alive "$name"; then
+      printf '%s display=%s size=%s scale=%s renderer=%s procs=%s rss=%sMB\n' "$name" "$(slot_field "$name" SLOT_DISPLAY)" \
+        "$(slot_field "$name" SLOT_SIZE)" "$(slot_field "$name" SLOT_SCALE)" "$(slot_field "$name" SLOT_RENDERER)" \
+        "$(slot_pids "$name" | wc -l)" "$(slot_rss_mb "$name")"
+    else printf '%s dead (drive slot stop %s)\n' "$name" "$name"; fi
+  done
+}
+
+# Mean RSS (MB) over the running slots, empty when none runs.
+slot_mean_rss() {
+  local name sum=0 n=0
+  for name in $(slot_names); do
+    slot_alive "$name" && sum=$((sum + $(slot_rss_mb "$name"))) && n=$((n + 1))
+  done
+  ((n == 0)) || echo $((sum / n))
+}
+
+# Slots that fit = (MemAvailable - reserve) / per-slot RSS, the per-slot figure measured on running slots.
+slot_budget() {
+  local reserve=3072 per="" avail how=measured
+  while (($#)); do
+    case "$1" in
+      --reserve-mb) reserve="${2:?--reserve-mb needs a number}" && shift 2 ;;
+      --per-slot-mb) per="${2:?--per-slot-mb needs a number}" && how=given && shift 2 ;;
+      *) die "slot budget: unknown option '$1'" ;;
+    esac
+  done
+  [[ -n "$per" ]] || per="$(slot_mean_rss)"
+  [[ "$per" =~ ^[1-9][0-9]*$ ]] || die "no running slot to measure; start one or pass --per-slot-mb"
+  avail="$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)"
+  printf 'available=%sMB reserve=%sMB per-slot=%sMB (%s) -> %s more slots fit\n' "$avail" "$reserve" "$per" "$how" \
+    "$((avail > reserve ? (avail - reserve) / per : 0))"
+}
+
+# The Workbench item tree of the slot, in the shape geom.jq reads.
+slot_tree() {
+  local pid
+  pid="$(jq -er .pid "$(slot_dir "$1")/bench.json" 2>/dev/null)" || die "no workbench in slot '$1' (drive slot bench $1 ROOT KEY)"
+  qsm-workbench session request --pid "$pid" --json '{"version":1,"op":"inspect"}' | jq -f "$MOTION_DIR/slot-tree.jq" \
+    || die "workbench inspect failed in slot '$1'"
+}
+
+cmd_slot() {
+  local verb="${1:-}"
+  shift || true
+  case "$verb" in
+    start | run | bench | stop | ls | budget | tree) "slot_$verb" "$@" ;;
+    *) die "slot needs start NAME | run NAME -- CMD | bench NAME ROOT KEY | stop NAME | ls | budget | tree NAME" ;;
+  esac
+}
+
+# ---- slot forms of pointer and keys: wlroots virtual pointer and keyboard ----
+
+# Pointer position is TRACKED, not read: neither wlrctl nor sway reports it. A move to X,Y is a
+# large negative relative move (the cursor clamps at the output corner), then an exact relative
+# move, so the tracked value is exact while no other input source exists in the slot.
+slot_move() {
+  [[ $# -ge 2 && "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]] || die "move needs X Y inside the slot output (non-negative integers)"
+  need wlrctl
+  wlrctl pointer move -20000 -20000 || die "wlrctl move failed"
+  wlrctl pointer move "$1" "$2" || die "wlrctl move failed"
+  printf '%s %s\n' "$1" "$2" >"$(slot_dir "$DRIVE_SLOT")/pos"
+  printf 'cursor tracked: %s,%s (slot %s)\n' "$1" "$2" "$DRIVE_SLOT"
+  sleep "${3:-$SETTLE}"
+}
+
+# wf-recorder acts on SIGINT only when the compositor sends it an event, and a still headless
+# output sends none: re-asserting the pointer position damages the output (software cursor).
+slot_wake() {
+  local x y
+  read -r x y <"$(slot_dir "$DRIVE_SLOT")/pos"
+  slot_move "$x" "$y" 0 >/dev/null
+}
+
+slot_pos() { sed 's/ /, /' "$(slot_dir "$DRIVE_SLOT")/pos"; }
+
+slot_nudge() {
+  local x y
+  read -r x y <"$(slot_dir "$DRIVE_SLOT")/pos"
+  slot_move "$((x + $1))" "$((y + $2))" "${3:-$SETTLE}"
+}
+
+slot_click() {
+  need wlrctl
+  wlrctl pointer click "$1" || die "click failed"
+  sleep "${2:-0.4}"
+}
+
+# drive scroll: negative = down. wlrctl: positive = down.
+slot_scroll() {
+  need wlrctl
+  wlrctl pointer scroll "$((-${1:--1}))" 0 || die "scroll failed"
+  sleep "${2:-0.4}"
+}
+
+slot_type() {
+  need wtype
+  wtype -- "$1" || die "type failed"
+  sleep "${2:-0.4}"
+}
+
+# xkb name for a drive key name: specials by table, a lone char lower-case, the rest Capitalised.
+slot_xkb() {
+  case "${1^^}" in
+    ENTER | RETURN) echo Return ;;
+    ESC | ESCAPE) echo Escape ;;
+    SPACE) echo space ;;
+    PAGEUP | PGUP) echo Page_Up ;;
+    PAGEDOWN | PGDN) echo Page_Down ;;
+    BACKSPACE) echo BackSpace ;;
+    ?) echo "${1,,}" ;;
+    F[0-9] | F[0-9][0-9]) echo "${1^^}" ;;
+    *) local low="${1,,}" && echo "${low^}" ;;
+  esac
+}
+
+slot_mod() {
+  case "${1^^}" in
+    SUPER | META | LEFTMETA | MOD) echo logo ;;
+    CTRL | CONTROL | LEFTCTRL) echo ctrl ;;
+    SHIFT | LEFTSHIFT) echo shift ;;
+    ALT | LEFTALT) echo alt ;;
+    *) die "unknown modifier '$1'" ;;
+  esac
+}
+
+# key [MODS] KEY [settle]: wtype holds each modifier around the key, like cmd_key does.
+slot_key() {
+  need wtype
+  local mods="" key="$1" settle="${2:-0.6}" args=() m
+  if [[ $# -ge 2 && -n "$1" && ! "$2" =~ ^[0-9.]+$ ]]; then
+    mods="$1"
+    key="$2"
+    settle="${3:-0.6}"
+  fi
+  for m in $mods; do args+=(-M "$(slot_mod "$m")"); done
+  args+=(-k "$(slot_xkb "$key")")
+  for m in $mods; do args+=(-m "$(slot_mod "$m")"); done
+  wtype "${args[@]}" || die "key failed"
+  sleep "$settle"
+}
+
+# Select the slot from `--slot NAME` (anywhere before a bare --) or DRIVE_SLOT; leaves the rest in SLOT_ARGV.
+slot_select() {
+  SLOT_ARGV=()
+  while (($#)); do
+    case "$1" in
+      --slot) DRIVE_SLOT="${2:?--slot needs a name}" && shift 2 ;;
+      --) SLOT_ARGV+=("$@") && break ;;
+      *) SLOT_ARGV+=("$1") && shift ;;
+    esac
+  done
+  [[ -z "${DRIVE_SLOT:-}" ]] || { slot_load "$DRIVE_SLOT" && export DRIVE_SLOT; }
+}
+
+# In a slot, a verb that would reach the owner's Hyprland refuses instead.
+slot_refuse() {
+  case "$1" in
+    warp | l2p | mons | doctor | contrast) die "'$1' reads or drives the owner's Hyprland; it has no slot form" ;;
+    *) ;;
+  esac
+}

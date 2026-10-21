@@ -20,6 +20,10 @@ fetch_tree() {
     cat "$GEOM_TREE"
     return
   fi
+  if [[ -n "${DRIVE_SLOT:-}" ]]; then
+    "$here/drive" slot tree "$DRIVE_SLOT"
+    return
+  fi
   command -v qs >/dev/null 2>&1 || die "missing qs"
   [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
   qs ipc --path "$QS_PATH" call qsm inspect "$screen" true || die "qs ipc inspect failed for $screen"
@@ -45,6 +49,7 @@ main() {
   shift
   while (($#)); do
     case "$1" in
+      --slot) DRIVE_SLOT="${2:?--slot needs a name}" && export DRIVE_SLOT && shift 2 ;;
       --screen) screen="${2:?--screen needs a value}" && shift 2 ;;
       --tol) tol="${2:?--tol needs a value}" && shift 2 ;;
       --min) min="${2:?--min needs a value}" && shift 2 ;;

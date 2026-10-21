@@ -1,4 +1,4 @@
-drive geom CHECK ARGS [--screen MON] [--tol PX] [--min PX] [--floor PX] [--axis x|y] [--depth N]
+drive geom CHECK ARGS [--slot NAME] [--screen MON] [--tol PX] [--min PX] [--floor PX] [--axis x|y] [--depth N]
 
   insets SEL                 content inset (ignores StateLayer, Surface, MouseArea children) on all 4 sides equal within --tol (1)
   overlap SEL                matched nodes, hover growth applied: no overlap, gap >= --min (2)
