@@ -4,9 +4,22 @@
 import type { Caught, EngineInterface, On } from "claude-code";
 import { registerNoun } from "./noun.generated.ts";
 
-/** Whether the next prompt is owed the briefing: a session start, a /clear and a compaction set
- * it, the first prompt after clears it. The engine has no hidden-context event at those moments. */
+/** Whether the next prompt is owed the briefing: a session start and a /clear set it, the first
+ * prompt after clears it. The engine has no hidden-context event at those moments. */
 let briefingOwed = false;
+
+/** The compaction summary the last briefing followed; a newer one means a compaction removed it. */
+let briefedSummary: string | undefined;
+
+const SUMMARY_OPENING = "This session is being continued from a previous conversation";
+
+/** The newest compaction summary among the conversation's rows. `session.compact` and the
+ * `compact_boundary` notice never reach a plugin the organization's policy module runs ahead of,
+ * so a compaction is read from the rows the next prompt can see. */
+async function latestSummary($: EngineInterface): Promise<string | undefined> {
+  const rows = await $.session.messages();
+  return rows.findLast((row) => row.role === "user" && row.text.startsWith(SUMMARY_OPENING))?.text;
+}
 
 /** The `text` of the orient verb's data; anything else is a failure. */
 function briefingText(data: unknown): string {
@@ -63,18 +76,13 @@ export function register(on: On): void {
     return next(e);
   });
 
-  on("session.compact", async (_$, e, next) => {
-    const r = await next(e);
-    // A precompute installs nothing, and a skip leaves the conversation as it was.
-    briefingOwed ||= e.trigger !== "precompute" && r.skip === undefined;
-    return r;
-  });
-
   on("prompt.submit", async ($, e, next) => {
-    if (!briefingOwed) {
+    const summary = await latestSummary($);
+    if (!briefingOwed && summary === briefedSummary) {
       return next(e);
     }
     briefingOwed = false;
+    briefedSummary = summary;
     const briefing = briefingText(await $.memory.orient({ cwd: await $.session.cwd() }));
     return next({ ...e, context: [...(e.context ?? []), briefing] });
   }).catch(($, e, next) => {
