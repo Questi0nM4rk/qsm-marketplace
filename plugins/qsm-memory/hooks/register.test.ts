@@ -1,9 +1,10 @@
 // `claude plugin test plugins/qsm-memory` drives register.tsx against the engine itself: which
 // native event reaches which verb of $.memory, with which argv, and what the session is told. What
 // each verb does is proved by `bun test` in scripts/hooks.test.ts; nothing here re-tests it.
-// `process.run`, `session.cwd`, `ui.log` and `ui.toast` are host operations the test answers
-// itself, and its own `on('session.*')` and `on('prompt.submit')` are the bottoms of the chains.
-import type { On } from "claude-code";
+// `process.run`, `session.cwd`, `session.messages`, `ui.log` and `ui.toast` are host operations the
+// test answers itself, and its own `on('session.*')` and `on('prompt.submit')` are the bottoms of the
+// chains. A compaction is what the conversation's rows say, so the test edits the rows.
+import type { On, SessionMessage } from "claude-code";
 import { expect, test } from "claude-code/testing";
 
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>;
@@ -14,7 +15,11 @@ const BRIEFING =
   "In progress:\n- qsm-1.2 finish the gate (epic qsm-1 Briefing)\n" +
   "Search: qsm-memory search <words>, then qsm-memory show <id>";
 
-const SUMMARY = { role: "user" as const, text: "summary", toolUses: [] };
+const summary = (n: number) => ({
+  role: "user" as const,
+  text: `This session is being continued from a previous conversation: summary ${n}`,
+  toolUses: [],
+});
 const START = { cwd: "/work", surface: null, isInteractive: false } as const;
 const SAVE = "run qsm-memory save --catch-up --detach --json";
 const ORIENT_RUN = "run qsm-memory orient --cwd /work --json";
@@ -27,13 +32,13 @@ const ENVELOPES: Readonly<
 };
 
 /** Everything the module reached for, in order: `run <argv>`, `log <text>`, `toast <text>`. */
-function record(on: On, envelopes = ENVELOPES): string[] {
+function record(on: On, envelopes = ENVELOPES, rows: SessionMessage[] = []): string[] {
   const trail: string[] = [];
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
   on("session.end", (_$, e) => ({ sessionId: e.sessionId }));
-  on("session.compact", () => ({ messages: [SUMMARY] }));
   on("prompt.submit", (_$, e) => ({ text: e.text, context: e.context }));
   on("session.cwd", () => ({ value: "/work" }));
+  on("session.messages", () => ({ value: rows }));
   on("ui.log", (_$, e) => {
     trail.push(`log ${e.text}`);
     return { value: undefined };
@@ -97,15 +102,22 @@ test("the first prompt after a /clear carries the briefing again", async ($, on)
   expect(runs(trail)).toEqual([SAVE, ORIENT_RUN, SAVE, ORIENT_RUN]);
 });
 
-test("the first prompt after a compaction carries the briefing again", async ($, on) => {
-  record(on);
+test("the first prompt after each compaction carries the briefing again", async ($, on) => {
+  const rows: SessionMessage[] = [];
+  const trail = record(on, ENVELOPES, rows);
 
   await $.session.start(START);
   await prompt($);
-  await $.session.compact({ trigger: "manual", messages: [SUMMARY] });
-  const r = await prompt($);
+  rows.push(summary(1));
+  const afterFirst = await prompt($);
+  const quiet = await prompt($);
+  rows.push(summary(2));
+  const afterSecond = await prompt($);
 
-  expect(r.context?.[0]).toBe(BRIEFING);
+  expect(afterFirst.context?.[0]).toBe(BRIEFING);
+  expect(quiet.context).toBeUndefined();
+  expect(afterSecond.context?.[0]).toBe(BRIEFING);
+  expect(runs(trail).filter((line) => line.includes(" orient "))).toHaveLength(3);
 });
 
 test("a session end of any other reason saves and owes no briefing", async ($, on) => {

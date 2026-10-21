@@ -111,7 +111,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-compuse`, `qsm
 
 | Plugin | Why it exists | Ships |
 | --- | --- | --- |
-| [qsm-memory](plugins/qsm-memory/README.md) | Claude Code's own memory keeps a model-written summary of what mattered and throws the sessions themselves away within weeks, so the only true record of what was tried, what failed and why a decision went the way it did is gone, and the summary drifts from the session it came from. | 1 skill, 1 agent, CLI, 4 hooks |
+| [qsm-memory](plugins/qsm-memory/README.md) | Claude Code's own memory keeps a model-written summary of what mattered and throws the sessions themselves away within weeks, so the only true record of what was tried, what failed and why a decision went the way it did is gone, and the summary drifts from the session it came from. | 1 skill, 1 agent, CLI, 3 hooks |
 | [qsm-book-to-skill](plugins/qsm-book-to-skill/README.md) | A book holds rules, ideas and abstractions the agent could work by, but in a format it cannot carry into a session. | 1 skill, CLI |
 | [qsm-knowledge](plugins/qsm-knowledge/README.md) | Knowledge gathered in one session is lost by the next, because the conversation's memory ends with the session and a web search returns pages nobody can reopen as a set. | 3 skills, 1 agent, CLI |
 | [qsm-web](plugins/qsm-web/README.md) | An agent that needs something from the internet guesses its keywords once, trusts the first page, answers for the wrong version, and stops at the first wall or hands it to whoever is nearest. | 4 skills, 1 agent, CLI |

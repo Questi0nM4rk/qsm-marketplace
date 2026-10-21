@@ -375,9 +375,14 @@ characters. With `--json` the block is `data.text`.
 The plugin SHALL ship one hooks module, `hooks/register.tsx`, with function hooks that call its own
 `$.memory` noun and hold no rule of their own. `session.end` and `session.start` SHALL run
 `save --catch-up --detach`, which saves the ending session too. The first `prompt.submit` of a
-session, and the first after a `/clear` or a `session.compact`, SHALL run `orient --cwd <cwd>` and
-attach its text as hidden `context` on `prompt.submit`, never on a `classic.*` event,
-`prompt.section` or `prompt.compose`. `save --detach` SHALL start the same save in a detached
+session, and the first after a `/clear` or a compaction, SHALL run `orient --cwd <cwd>` and attach
+its text as hidden `context` on `prompt.submit`, never on a `classic.*` event, `prompt.section` or
+`prompt.compose`. A compaction is read on `prompt.submit` from `$.session.messages()`: the newest
+row that opens `This session is being continued from a previous conversation` is a compaction
+summary, and a summary other than the one the last briefing followed means the briefing is owed
+again. The hook SHALL NOT use `session.compact` or a `session.append` notice, because an
+organization's policy plugin that runs first can pass `session.compact` over and never delivers the
+`compact_boundary` notice to a plugin. `save --detach` SHALL start the same save in a detached
 `qsm-memory` process and return at once, the child's outcome appended to `save.log` beside the
 archive, every line led by an ISO timestamp (`save --log`, which stamps no other verb), so the 1.5 s
 the engine gives the session-end chain covers only the start. No hook SHALL block the event: any
@@ -394,6 +399,12 @@ save leaves the transcript for the next start.
 - **WHEN** the first prompt of a session is submitted
 - **THEN** its `context` is the text `orient --cwd <cwd>` answered, once, and the next prompt
   carries none
+
+#### Scenario: the first prompt after a compaction carries the briefing again
+
+- **WHEN** a `/compact` or an automatic compaction runs and the next prompt is submitted
+- **THEN** its `context` is the text `orient --cwd <cwd>` answered, once, and a second compaction
+  brings it back once more
 
 #### Scenario: a briefing that cannot be built toasts and the prompt still enters
 
