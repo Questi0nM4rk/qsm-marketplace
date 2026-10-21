@@ -365,6 +365,18 @@ an older driver that never answers the current one.
 - **WHEN** the image's label equals the hash of the current `docker/` context
 - **THEN** `qsm-web browserbox start` SHALL start the instance without a build
 
+### Requirement: A started instance has an empty output directory
+
+qsm-web browserbox SHALL empty an instance's default output directory before it starts the
+instance, because an artifact an earlier run left there, owned by another user, makes every capture
+into that directory fail. A directory the caller named with `--out` SHALL be left as it is.
+
+#### Scenario: A stale artifact from an earlier run
+
+- **WHEN** the default output directory holds a file the instance's user cannot overwrite and an
+  instance starts for that port
+- **THEN** a screenshot fetch into it SHALL succeed, and a second one SHALL too
+
 ### Requirement: Install places the one bin on PATH
 
 Installing qsm-web SHALL place the one `qsm-web` command on PATH, needing no upstream service beyond
