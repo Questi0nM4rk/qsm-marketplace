@@ -80,7 +80,7 @@ function hold(socket: ReturnType<typeof createConnection>): void {
 const socket = createConnection(`${process.env.XDG_RUNTIME_DIR}/${process.env.WAYLAND_DISPLAY}`);
 const pending = { buf: Buffer.alloc(0) };
 socket.on("data", (chunk) => {
-  onData(socket, pending, chunk);
+  onData(socket, pending, Buffer.from(chunk));
 });
 socket.on("close", () => process.exit(1));
 socket.write(Buffer.concat([message(1, 1, word(REGISTRY)), message(1, 0, word(CALLBACK))]));
