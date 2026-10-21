@@ -15,8 +15,7 @@ rules are written. If the repository ever stops changing, it has nothing left to
 One builder skill per kind of addition, each with its steps, hard rules that name the gate or the
 review that checks them, and a done that ends in the gates, the evals and a strict review. Plus two
 hooks: one refuses a broken `plugin.json`, one tells the agent a plugin's open lens edits and
-feedback. And one slash command, `/lens [plugin]`, that opens a read-only pane of the marketplace,
-or of one plugin: why it exists, skills and agents, dependencies, open tasks.
+feedback.
 
 | Surface | Owns |
 | --- | --- |

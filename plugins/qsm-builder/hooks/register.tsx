@@ -5,7 +5,6 @@ import { isRecord } from "../lib/guards.ts";
 import { pluginOfPath } from "../lib/brief-path.ts";
 import { applyEdit, checkManifest, denial, isManifestPath } from "../lib/manifest-check.ts";
 import { registerNoun } from "./noun.generated.ts";
-import { registerView } from "./view.tsx";
 
 /** The plugins already told about, per session and marketplace: `<session>:<root>:<plugin>`. */
 const told = new Set<string>();
@@ -91,5 +90,4 @@ export function register(on: On): void {
   registerNoun(on);
   registerBrief(on);
   registerManifestCheck(on);
-  registerView(on);
 }
