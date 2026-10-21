@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# contrast — WCAG contrast of two regions of the live screen (`drive contrast A B`).
+# A region is a geom selector (median colour of its rect, shrunk 2 physical px) or
+# a logical "X,Y" point. Append @ink to a selector to take the pixel farthest from
+# the median instead (the glyph colour inside a rect that is mostly background).
+set -uo pipefail
+
+here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+die() {
+  printf 'drive contrast: %s\n' "$*" >&2
+  exit 2
+}
+
+usage() { cat "$here/contrast.usage"; }
+
+# stdin: "r g b" per pixel. Prints "r g b" of the median (mode=median) or of the pixel
+# farthest from the median (mode=ink).
+pick() {
+  gawk -v mode="$1" -f "$here/pick.awk"
+}
+
+# Logical rect "x y w h" -> physical crop "WxH+X+Y", shrunk by 2 physical px per side (never below 1).
+crop_of() {
+  awk -v s="$2" -v pt="${3:-0}" '{
+    x = $1 * s; y = $2 * s; w = $3 * s; h = $4 * s
+    if (!pt) { x += 2; y += 2; w -= 4; h -= 4 }
+    if (w < 1) { x += w / 2; w = 1 }
+    if (h < 1) { y += h / 2; h = 1 }
+    printf "%dx%d+%d+%d\n", w, h, x, y
+  }' <<<"$1"
+}
+
+# Prints "r g b" for one region spec.
+sample() {
+  local spec="$1" png="$2" scale="$3" mode=median rect crop pt=0 screen="$4"
+  if [[ "$spec" == *@ink ]]; then
+    mode=ink
+    spec="${spec%@ink}"
+  fi
+  if [[ "$spec" =~ ^-?[0-9.]+,-?[0-9.]+$ ]]; then
+    rect="${spec%,*} ${spec#*,} 0 0"
+    pt=1
+  else
+    rect="$("$here/geom" rect "$spec" --screen "$screen")" || exit 2
+  fi
+  crop="$(crop_of "$rect" "$scale" "$pt")"
+  printf 'sample %s: logical %s -> crop %s (%s)\n' "$spec" "$rect" "$crop" "$mode" >&2
+  magick "$png" -crop "$crop" +repage -depth 8 txt:- \
+    | sed -n 's/.*(\([0-9]*\),\([0-9]*\),\([0-9]*\).*/\1 \2 \3/p' | pick "$mode"
+}
+
+main() {
+  local pos=() screen="" min=""
+  while (($#)); do
+    case "$1" in
+      --screen) screen="${2:?--screen needs a value}" && shift 2 ;;
+      --min) min="${2:?--min needs a value}" && shift 2 ;;
+      -h | --help) usage && return 0 ;;
+      *) pos+=("$1") && shift ;;
+    esac
+  done
+  ((${#pos[@]} == 2)) || {
+    usage
+    return 2
+  }
+  command -v grim >/dev/null 2>&1 || die "missing grim (see: drive doctor)"
+  command -v magick >/dev/null 2>&1 || die "missing magick (ImageMagick)"
+  [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
+  local scale png a b
+  scale="$(hyprctl monitors -j | jq -r --arg m "$screen" '.[]|select(.name==$m)|.scale')"
+  [[ -n "$scale" ]] || die "no monitor $screen"
+  png="$("$here/drive" shot "$screen" contrast)" || exit 2
+  a="$(sample "${pos[0]}" "$png" "$scale" "$screen")" || exit 2
+  b="$(sample "${pos[1]}" "$png" "$scale" "$screen")" || exit 2
+  awk -v a="$a" -v b="$b" -v pa="${pos[0]}" -v pb="${pos[1]}" -v min="$min" -v scale="$scale" -v png="$png" -f "$here/ratio.awk"
+}
+
+main "$@"

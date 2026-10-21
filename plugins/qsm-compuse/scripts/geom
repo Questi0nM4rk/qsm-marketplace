@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# geom — measure the live item tree of the running desktop (`drive geom ...`).
+# The tree comes from `qs ipc call qsm inspect`; the checks are in geom.jq.
+# Every check prints its equation, the numbers and PASS/FAIL; exit 1 if any fails.
+set -uo pipefail
+
+here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+QS_PATH="${DRIVE_QS_PATH:-$HOME/Projects/qsm-desktop/shell}"
+
+die() {
+  printf 'drive geom: %s\n' "$*" >&2
+  exit 2
+}
+
+usage() { cat "$here/geom.usage"; }
+
+fetch_tree() {
+  local screen="$1"
+  if [[ -n "${GEOM_TREE:-}" ]]; then
+    cat "$GEOM_TREE"
+    return
+  fi
+  command -v qs >/dev/null 2>&1 || die "missing qs"
+  [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
+  qs ipc --path "$QS_PATH" call qsm inspect "$screen" true || die "qs ipc inspect failed for $screen"
+}
+
+# Needed positional count per check; dump takes 0 or 1.
+arity() {
+  case "$1" in
+    insets | overlap | target | rect) echo 1 ;;
+    inside | centre) echo 2 ;;
+    dump) echo 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+main() {
+  local check="${1:-}" screen="" tol="" min="" floor="" axis="" depth="" pos=() need
+  [[ -n "$check" ]] || {
+    usage
+    return 0
+  }
+  need="$(arity "$check")" || die "unknown check '$check' (run: drive geom)"
+  shift
+  while (($#)); do
+    case "$1" in
+      --screen) screen="${2:?--screen needs a value}" && shift 2 ;;
+      --tol) tol="${2:?--tol needs a value}" && shift 2 ;;
+      --min) min="${2:?--min needs a value}" && shift 2 ;;
+      --floor) floor="${2:?--floor needs a value}" && shift 2 ;;
+      --axis) axis="${2:?--axis needs x or y}" && shift 2 ;;
+      --depth) depth="${2:?--depth needs a value}" && shift 2 ;;
+      *) pos+=("$1") && shift ;;
+    esac
+  done
+  ((${#pos[@]} >= need && ${#pos[@]} <= need + (need == 0 ? 1 : 0))) || die "$check takes $need selector(s)"
+  local out
+  out="$(fetch_tree "$screen" | jq -r --arg mode "$check" --arg sel "${pos[0]:-}" --arg sel2 "${pos[1]:-}" \
+    --arg tol "$tol" --arg min "$min" --arg floor "$floor" --arg axis "$axis" --arg depth "$depth" \
+    -f "$here/geom.jq")" || exit 2
+  printf '%s\n' "$out"
+  if grep -q ': FAIL$' <<<"$out"; then exit 1; fi
+}
+
+main "$@"

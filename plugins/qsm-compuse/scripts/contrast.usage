@@ -1,0 +1,5 @@
+drive contrast A B [--screen MON] [--min RATIO]
+
+  A, B   geom selector (see: drive geom) or logical point X,Y; selector@ink = glyph pixel
+  Prints both hex colours and the WCAG ratio (L1+0.05)/(L2+0.05); --min makes it a check (exit 1).
+  Captures the output with grim; logical -> physical uses the monitor scale.

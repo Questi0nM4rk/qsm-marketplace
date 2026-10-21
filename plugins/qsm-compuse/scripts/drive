@@ -268,6 +268,8 @@ drive — sudo-free computer use on Hyprland/Wayland
     mons                     outputs with physical AND logical size + scale
     focused                  focused output name
     l2p N [MON]              convert a logical length to physical pixels
+    geom CHECK ARGS          measure the live item tree: insets overlap inside centre target dump (drive geom)
+    contrast A B             WCAG ratio between two rects/points of the live screen (drive contrast)
 
   FLOW
     until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
@@ -287,6 +289,8 @@ dispatch() {
     esc) cmd_key Escape ;;
     pos) hyprctl cursorpos ;;
     mons) cmd_mons ;;
+    geom) exec "$(dirname "$(readlink -f "$0")")/geom" "${@:2}" ;;
+    contrast) exec "$(dirname "$(readlink -f "$0")")/contrast" "${@:2}" ;;
     focused) cmd_focused ;;
     doctor) cmd_doctor ;;
     *) usage ;;

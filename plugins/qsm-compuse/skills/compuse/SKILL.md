@@ -27,5 +27,9 @@ first and stop on the first failed line. Setup and the background of every rule 
 7. Operate on workspace 10 and only when the owner asks. Announce pointer use before it starts,
    stop input afterwards and say what the owner should inspect.
 
+Measure before hand-over: `drive geom insets|overlap|inside|centre|target|dump` prints equations
+with PASS/FAIL from the live item tree; `drive contrast A B` prints the WCAG ratio of two screen
+regions.
+
 Captures land under `${XDG_RUNTIME_DIR:-/tmp}/drive-shots` (override with `DRIVE_OUT_DIR`); hand
 them to `ui-audit` for judgment.

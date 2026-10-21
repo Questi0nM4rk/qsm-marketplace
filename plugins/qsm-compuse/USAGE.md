@@ -145,5 +145,7 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive scroll -3` | Wheel; negative is down. |
 | `drive focused` | Focused output name, for `grim -o`. |
 | `drive l2p N [MON]` | Logical length to physical pixels. |
+| `drive geom CHECK ...` | Measure the live item tree with equations and PASS/FAIL: `insets`, `overlap`, `inside`, `centre`, `target`, `dump` (selectors: `Rail/RailEntry[2]`, `*[type=Slider]`; run `drive geom`). |
+| `drive contrast A B` | Grim the output, median colour of two rects (`SEL`, `SEL@ink` for the glyph pixel, or `X,Y`), WCAG ratio. |
 
 Env: `DRIVE_OUT_DIR` (default `$XDG_RUNTIME_DIR/drive-shots`), `DRIVE_SETTLE` (default `0.35`).
