@@ -81,7 +81,7 @@ function hold(socket: ReturnType<typeof createConnection>): void {
 const runtime = runtimeDir(process.env);
 const display = process.env.WAYLAND_DISPLAY;
 if (runtime === undefined || display === undefined) {
-  process.stderr.write("slot-holder: XDG_RUNTIME_DIR and WAYLAND_DISPLAY must be set\n");
+  process.stderr.write("slot-holder: the session runtime dir and WAYLAND_DISPLAY must be set\n");
   process.exit(1);
 }
 const socket = createConnection(`${runtime}/${display}`);
