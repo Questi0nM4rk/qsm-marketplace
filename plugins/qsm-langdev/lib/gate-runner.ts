@@ -207,9 +207,7 @@ function pushedSecretsGate(
     ]);
   }
   if (remote === undefined || remote === "") {
-    return fail("secrets", "the pre-push hook did not say which remote it pushes to", [
-      "The installed hook is out of date: run qsm-langdev install again, then push again.",
-    ]);
+    return noRemote("secrets");
   }
   const hits: string[] = [];
   for (const ref of parsePushLines(pushLines)) {
@@ -369,10 +367,18 @@ async function langdevAt(
   return langdevOutcome(verdicts, `file sets: ${describeSets(sets)}; ${notes}`);
 }
 
+/** The failure for a pre-push call that carries no remote name. */
+function noRemote(gate: string): GateOutcome {
+  return fail(gate, "the pre-push hook did not say which remote it pushes to", [
+    "The installed hook is out of date: run qsm-langdev install again, then push again.",
+  ]);
+}
+
 async function langdevGate(
   root: string,
   point: EnforcementPoint,
   pushLines?: string,
+  remote?: string,
 ): Promise<GateOutcome> {
   if (point === "pre-commit") {
     const skipped = fixStaged(root);
@@ -383,9 +389,12 @@ async function langdevGate(
       "Reached through something other than the installed pre-push hook.",
     ]);
   }
+  if (remote === undefined || remote === "") {
+    return noRemote("langdev");
+  }
   let blocked: GateOutcome | undefined;
   for (const ref of parsePushLines(pushLines)) {
-    const before = pushReference(root, ref);
+    const before = pushReference(root, ref, remote);
     if (before === null) {
       continue;
     }
@@ -419,6 +428,7 @@ async function structureGate(
   root: string,
   point: EnforcementPoint,
   pushLines?: string,
+  remote?: string,
 ): Promise<GateOutcome> {
   if (point === "pre-commit") {
     const head = resolveRef(root, "HEAD");
@@ -429,8 +439,11 @@ async function structureGate(
       "Reached through something other than the installed pre-push hook.",
     ]);
   }
+  if (remote === undefined || remote === "") {
+    return noRemote("structure");
+  }
   for (const ref of parsePushLines(pushLines)) {
-    const before = pushReference(root, ref);
+    const before = pushReference(root, ref, remote);
     if (before === null) {
       continue;
     }
@@ -460,9 +473,9 @@ async function runGate(
     case "entropy":
       return entropyGate(root);
     case "langdev":
-      return langdevGate(root, point, pushLines);
+      return langdevGate(root, point, pushLines, remote);
     case "structure":
-      return structureGate(root, point, pushLines);
+      return structureGate(root, point, pushLines, remote);
     default:
       return fail(name, `unknown gate '${name}' in .qsm-langdev/gates.json`, [
         `Remove it, or name one of: ${KNOWN_GATES.join(", ")}.`,

@@ -629,6 +629,26 @@ one line that the content denylist is not set up, naming the `content-denylist` 
 - **WHEN** the file does not exist
 - **THEN** the gate passes with one line naming the skill that sets it up
 
+### Requirement: A push is compared against what the pushed remote holds
+
+At pre-push the `langdev` and `structure` gates SHALL compare a ref the remote has against the
+remote's commit, and a new branch against the merge base with the default branch of the remote being
+pushed to (its `HEAD`, else `main`, else `master`, as this clone last saw it). When this clone holds
+no such branch of that remote, as on the first push to an empty remote or to a path, there is
+nothing to be worse than and the ref SHALL be skipped, never scored as a tree of added files. A
+default branch another remote holds, or a local branch, SHALL NOT serve as the reference. A pre-push
+call that carries no remote name SHALL fail these gates as it fails `secrets`.
+
+#### Scenario: The first push to an empty remote
+
+- **WHEN** a clone pushes a branch to a remote it holds no branch of
+- **THEN** the gates SHALL NOT score the whole tree as changed, and SHALL NOT block the push
+
+#### Scenario: A new branch on a remote the clone knows
+
+- **WHEN** a new branch is pushed to `origin` and `origin/main` is known
+- **THEN** the gates SHALL compare it against the merge base with `origin/main`
+
 ### Requirement: The secrets gate at a push scans the pushed commits
 
 At pre-push the `secrets` gate SHALL run gitleaks with the repository's `.gitleaks.toml`, redacted,
