@@ -3,8 +3,9 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-mkdir "$tmp/bin"
-cat >"$tmp/bin/hyprctl" <<'SH'
+
+stub_hyprctl() {
+  cat >"$tmp/bin/hyprctl" <<'SH'
 #!/usr/bin/env bash
 if [[ "$1 $2" == "cursorpos -j" ]]; then
   read -r x y < "$DRIVE_TEST_POSITION"
@@ -13,7 +14,10 @@ else
   exit 1
 fi
 SH
-cat >"$tmp/bin/ydotool" <<'SH'
+}
+
+stub_ydotool() {
+  cat >"$tmp/bin/ydotool" <<'SH'
 #!/usr/bin/env bash
 [[ "$1" == mousemove ]] || exit 1
 read -r x y < "$DRIVE_TEST_POSITION"
@@ -26,21 +30,40 @@ while (($#)); do
 done
 printf '%s %s\n' "$x" "$y" > "$DRIVE_TEST_POSITION"
 SH
-chmod +x "$tmp/bin/hyprctl" "$tmp/bin/ydotool"
-export PATH="$tmp/bin:$PATH" DRIVE_TEST_POSITION="$tmp/position" DRIVE_SETTLE=0
-printf '0 0\n' >"$DRIVE_TEST_POSITION"
-"$root/drive" move 30 24 0 | grep -q 'cursor confirmed: 29,23'
-read -r x y <"$DRIVE_TEST_POSITION"
-[[ "$x" == 29 && "$y" == 23 ]]
-printf '0 0\n' >"$DRIVE_TEST_POSITION"
-"$root/drive" move -30 -24 0 | grep -q 'cursor confirmed: -29,-23'
-read -r x y <"$DRIVE_TEST_POSITION"
-[[ "$x" == -29 && "$y" == -23 ]]
-cat >"$tmp/bin/ydotool" <<'SH'
+}
+
+stub_stuck_ydotool() {
+  cat >"$tmp/bin/ydotool" <<'SH'
 #!/usr/bin/env bash
 [[ "$1" == mousemove ]]
 SH
-chmod +x "$tmp/bin/ydotool"
-if "$root/drive" move 100 100 0 >"$tmp/out" 2>&1; then exit 1; fi
-grep -q 'within 40 steps' "$tmp/out"
-printf 'drive move behavior tests passed\n'
+}
+
+# Moves from 0,0 to $1,$2 and expects the cursor to stop at $3,$4.
+expect_move() {
+  printf '0 0\n' >"$DRIVE_TEST_POSITION"
+  "$root/drive" move "$1" "$2" 0 | grep -q "cursor confirmed: $3,$4"
+  read -r x y <"$DRIVE_TEST_POSITION"
+  [[ "$x" == "$3" && "$y" == "$4" ]]
+}
+
+expect_stuck_pointer_fails() {
+  stub_stuck_ydotool
+  chmod +x "$tmp/bin/ydotool"
+  if "$root/drive" move 100 100 0 >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q 'within 40 steps' "$tmp/out"
+}
+
+main() {
+  mkdir "$tmp/bin"
+  stub_hyprctl
+  stub_ydotool
+  chmod +x "$tmp/bin/hyprctl" "$tmp/bin/ydotool"
+  export PATH="$tmp/bin:$PATH" DRIVE_TEST_POSITION="$tmp/position" DRIVE_SETTLE=0
+  expect_move 30 24 29 23
+  expect_move -30 -24 -29 -23
+  expect_stuck_pointer_fails
+  printf 'drive move behavior tests passed\n'
+}
+
+main

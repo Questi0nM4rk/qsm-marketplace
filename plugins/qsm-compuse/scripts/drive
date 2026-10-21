@@ -74,42 +74,33 @@ cmd_nudge() {
 
 # Linux input-event codes. Real key events are the ONLY way to fire a
 # compositor keybind — see cmd_sendkey for why send_shortcut cannot.
+# code:NAME[,ALIAS...] — Linux input-event codes
+KEYTABLE='125:SUPER,META,LEFTMETA,MOD 42:SHIFT,LEFTSHIFT 29:CTRL,CONTROL,LEFTCTRL
+56:ALT,LEFTALT 30:A 48:B 46:C 32:D 18:E 33:F 34:G 35:H 23:I 36:J 37:K 38:L
+50:M 49:N 24:O 25:P 16:Q 19:R 31:S 20:T 22:U 47:V 17:W 45:X 21:Y 44:Z 2:1
+3:2 4:3 5:4 6:5 7:6 8:7 9:8 10:9 11:0 57:SPACE 15:TAB 1:ESC,ESCAPE 28:ENTER,RETURN
+14:BACKSPACE 111:DELETE,DEL 53:SLASH 51:COMMA 52:PERIOD,DOT 12:MINUS 13:EQUAL
+39:SEMICOLON 105:LEFT 106:RIGHT 103:UP 108:DOWN 102:HOME 107:END 104:PAGEUP,PGUP
+109:PAGEDOWN,PGDN 59:F1 60:F2 61:F3 62:F4 63:F5 64:F6 65:F7 66:F8 67:F9
+68:F10 87:F11 88:F12 99:PRINT,SYSRQ 164:XF86AUDIOPLAY,PLAYPAUSE 163:XF86AUDIONEXT,NEXTSONG
+165:XF86AUDIOPREV,PREVIOUSSONG 166:XF86AUDIOSTOP,STOPCD 113:XF86AUDIOMUTE,MUTE
+114:XF86AUDIOLOWERVOLUME,VOLUMEDOWN 115:XF86AUDIORAISEVOLUME,VOLUMEUP 248:XF86AUDIOMICMUTE,MICMUTE
+224:XF86MONBRIGHTNESSDOWN,BRIGHTNESSDOWN 225:XF86MONBRIGHTNESSUP,BRIGHTNESSUP'
+
 keycode() {
-  case "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')" in
-    SUPER | META | LEFTMETA | MOD) echo 125 ;;
-    SHIFT | LEFTSHIFT) echo 42 ;;
-    CTRL | CONTROL | LEFTCTRL) echo 29 ;;
-    ALT | LEFTALT) echo 56 ;;
-    A) echo 30 ;; B) echo 48 ;; C) echo 46 ;; D) echo 32 ;; E) echo 18 ;;
-    F) echo 33 ;; G) echo 34 ;; H) echo 35 ;; I) echo 23 ;; J) echo 36 ;;
-    K) echo 37 ;; L) echo 38 ;; M) echo 50 ;; N) echo 49 ;; O) echo 24 ;;
-    P) echo 25 ;; Q) echo 16 ;; R) echo 19 ;; S) echo 31 ;; T) echo 20 ;;
-    U) echo 22 ;; V) echo 47 ;; W) echo 17 ;; X) echo 45 ;; Y) echo 21 ;;
-    Z) echo 44 ;;
-    1) echo 2 ;; 2) echo 3 ;; 3) echo 4 ;; 4) echo 5 ;; 5) echo 6 ;;
-    6) echo 7 ;; 7) echo 8 ;; 8) echo 9 ;; 9) echo 10 ;; 0) echo 11 ;;
-    SPACE) echo 57 ;; TAB) echo 15 ;; ESC | ESCAPE) echo 1 ;;
-    ENTER | RETURN) echo 28 ;; BACKSPACE) echo 14 ;; DELETE | DEL) echo 111 ;;
-    SLASH) echo 53 ;; COMMA) echo 51 ;; PERIOD | DOT) echo 52 ;;
-    MINUS) echo 12 ;; EQUAL) echo 13 ;; SEMICOLON) echo 39 ;;
-    LEFT) echo 105 ;; RIGHT) echo 106 ;; UP) echo 103 ;; DOWN) echo 108 ;;
-    HOME) echo 102 ;; END) echo 107 ;; PAGEUP | PGUP) echo 104 ;; PAGEDOWN | PGDN) echo 109 ;;
-    F1) echo 59 ;; F2) echo 60 ;; F3) echo 61 ;; F4) echo 62 ;; F5) echo 63 ;;
-    F6) echo 64 ;; F7) echo 65 ;; F8) echo 66 ;; F9) echo 67 ;; F10) echo 68 ;;
-    F11) echo 87 ;; F12) echo 88 ;;
-    PRINT | SYSRQ) echo 99 ;;
-    XF86AUDIOPLAY | PLAYPAUSE) echo 164 ;;
-    XF86AUDIONEXT | NEXTSONG) echo 163 ;;
-    XF86AUDIOPREV | PREVIOUSSONG) echo 165 ;;
-    XF86AUDIOSTOP | STOPCD) echo 166 ;;
-    XF86AUDIOMUTE | MUTE) echo 113 ;;
-    XF86AUDIOLOWERVOLUME | VOLUMEDOWN) echo 114 ;;
-    XF86AUDIORAISEVOLUME | VOLUMEUP) echo 115 ;;
-    XF86AUDIOMICMUTE | MICMUTE) echo 248 ;;
-    XF86MONBRIGHTNESSDOWN | BRIGHTNESSDOWN) echo 224 ;;
-    XF86MONBRIGHTNESSUP | BRIGHTNESSUP) echo 225 ;;
-    *) return 1 ;;
-  esac
+  local want entry code names name
+  want="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
+  for entry in $KEYTABLE; do
+    code="${entry%%:*}"
+    names="${entry#*:}"
+    for name in ${names//,/ }; do
+      if [[ "$name" == "$want" ]]; then
+        echo "$code"
+        return 0
+      fi
+    done
+  done
+  return 1
 }
 
 # Press a real key through /dev/uinput, so it travels the compositor's input
@@ -250,66 +241,8 @@ cmd_doctor() {
   return "$ok"
 }
 
-case "${1:-}" in
-  move)
-    shift
-    cmd_move "$@"
-    ;;
-  warp)
-    shift
-    cmd_warp "$@"
-    ;;
-  nudge)
-    shift
-    cmd_nudge "$@"
-    ;;
-  key)
-    shift
-    cmd_key "$@"
-    ;;
-  sendkey)
-    shift
-    cmd_sendkey "$@"
-    ;;
-  click)
-    shift
-    cmd_click "$@"
-    ;;
-  rclick)
-    shift
-    cmd_rclick "$@"
-    ;;
-  mclick)
-    shift
-    cmd_mclick "$@"
-    ;;
-  type)
-    shift
-    cmd_type "$@"
-    ;;
-  scroll)
-    shift
-    cmd_scroll "$@"
-    ;;
-  esc) cmd_key Escape ;;
-  pos) hyprctl cursorpos ;;
-  shot)
-    shift
-    cmd_shot "$@"
-    ;;
-  mons) cmd_mons ;;
-  focused) cmd_focused ;;
-  l2p)
-    shift
-    cmd_l2p "$@"
-    ;;
-  until)
-    shift
-    cmd_until "$@"
-    ;;
-  doctor) cmd_doctor ;;
-  *)
-    cat <<'USAGE'
+usage() {
+  cat <<'USAGE'
 drive — sudo-free computer use on Hyprland/Wayland
 
   POINTER (logical coords, exact)
@@ -342,5 +275,22 @@ drive — sudo-free computer use on Hyprland/Wayland
 
   ENV: DRIVE_OUT_DIR (default $XDG_RUNTIME_DIR/drive-shots), DRIVE_SETTLE (0.35)
 USAGE
-    ;;
-esac
+}
+
+dispatch() {
+  case "${1:-}" in
+    move | warp | nudge | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
+      local verb="cmd_$1"
+      shift
+      "$verb" "$@"
+      ;;
+    esc) cmd_key Escape ;;
+    pos) hyprctl cursorpos ;;
+    mons) cmd_mons ;;
+    focused) cmd_focused ;;
+    doctor) cmd_doctor ;;
+    *) usage ;;
+  esac
+}
+
+dispatch "$@"
