@@ -38,11 +38,6 @@ Names, keyboard, reduced motion: a11y-audit.
 - **Pairs travel together.** A fill token and its on-token (`primary` / `onPrimary`) are read
   together in one item. Colours bind to the singleton; never copy one into a local
   `property color`, or a theme swap misses it.
-- **Components read roles only.** A component binds `Theme.accent`, never a named value
-  (`Theme.palette.mauve`), so a theme swap replaces one file of palette values and role mapping and
-  touches no component. Where the singleton keeps a `palette` block, a role points at one entry
-  (`property color accent: palette.mauve`). Check: `grep -rn 'palette\.' components/` prints
-  nothing.
 - **Durations and easing come from the motion tokens** (`Motion`, else `Theme`; with none, say so
   and ask). Reduced motion is clamped in the singleton, nowhere else, because a component that
   bypasses it breaks the setting for the whole shell. How a surface animates is desktop-ui. A
@@ -102,16 +97,20 @@ Qt's QML coding conventions and the qt-qml-review checklist, the stricter form w
 - **Layouts:** never set `width` or `height` on a Layout child (use `Layout.preferredWidth` and
   the like) and never `x` or `y`, because the first breaks size negotiation and the second is
   ignored. A reusable component sets `implicitWidth` and `implicitHeight`.
-- **Connections:** always set `target`, because the default is `parent` and a handler lands on the
-  wrong object when the parent type changes.- **Lifetime:** guard on `Loader.status`; never switch a
-  Loader between `source` and `sourceComponent`. Never `Qt.createQmlObject` (it parses a string on
-  every call) and never `Qt.createComponent` with a string URL (not type-safe): use a `Component` or
-  a typed URL.
+- **Connections:** always set `target`, because the default is `parent` and a handler lands on
+  the wrong object when the parent type changes. Write `function onFoo()`, not `onFoo:`.
+- **Lifetime:** guard on `Loader.status`; never switch a Loader between `source` and
+  `sourceComponent`. Never `Qt.createQmlObject` (it parses a string on every call) and never
+  `Qt.createComponent` with a string URL (not type-safe): use a `Component` or a typed URL. Hold
+  a `createObject()` result in a variable or give it a parent, or the GC can take it, and destroy
+  it when done.
 - **Hiding:** `visible: false` removes an item from rendering and input; `opacity: 0` keeps both,
   so a closed popout would still take the pointer.
-- **States:** a `Transition` states its `from` and `to`, or it fires on every state change.
+- **States:** a `Transition` states its `from` and `to`, or it fires on every state change. A
+  reusable component with states uses `StateGroup`, not top-level `states`.
 - **Cost:** `Image` gets `sourceSize` and `asynchronous: true`; `Text.PlainText` unless rich text
-  is needed; avoid a transparent `Rectangle` and `clip` unless measured.
+  is needed; avoid a transparent `Rectangle` and `clip` unless measured. `layer.enabled: true`
+  caches a texture and costs GPU memory: only on an expensive item, measured.
 
 ## Stress and variants
 
@@ -123,6 +122,7 @@ Qt's QML coding conventions and the qt-qml-review checklist, the stricter form w
 - Variants: a `variant` property on that singleton read by a `Loader` per component, flipped by
   `IpcHandler { target: "proto"; ... }` (`call proto pick 2`). Variants live outside the
   production import path; replay sets the `Loader`'s `active` to false, then true.
+- `font.letterSpacing` is in pixels: convert tracking from em per size.
 
 ## Make it checkable
 

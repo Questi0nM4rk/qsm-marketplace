@@ -69,6 +69,16 @@ separate Hypotheses list, and a Not examined list.
 - **THEN** the skill SHALL capture each, run the same checks on each, and file a theme-parity
   finding for any border, divider, or state visible in one and not the other
 
+#### Scenario: The accent shares the neutrals' hue
+
+- **WHEN** the top colour of each role, read with `region-stats` on a rect of that role covering
+  over half its pixels, shows neutrals with OKLCH chroma above 0.02 and an accent within 15 degrees
+  of them in hue
+- **THEN** the skill SHALL file one palette finding, because the accent then differs from its
+  ground only by lightness, and SHALL state that the two thresholds are this repo's own, not from a
+  standard, and that the design source's own values win; a role whose rect does not cover half the
+  pixels goes under Not examined
+
 ### Requirement: UX audit skill reports measured interaction findings
 
 The plugin SHALL trigger the ux-audit skill when asked to evaluate how a UI behaves or feels:

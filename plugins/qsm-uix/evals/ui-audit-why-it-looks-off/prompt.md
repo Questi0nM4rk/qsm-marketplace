@@ -16,9 +16,9 @@ region-stats tool printed on the running shell.
 Region stats, top colour of a rect of each role (it covers over half the pixels), as OKLCH hue in
 degrees, OKLCH chroma, and lightness in percent:
 
-- band (the bar): #1A1226, hue 264.0, chroma 0.04, lightness 11.0%
-- card: #262038, hue 255.0, chroma 0.05, lightness 17.3%
-- accent pill: #B9A0E0, hue 263.4, chroma 0.08, lightness 75.3%
+- band (the bar): #1A1226, hue 301.4, chroma 0.040, lightness 20.3%
+- card: #262038, hue 294.6, chroma 0.045, lightness 26.2%
+- accent pill: #B9A0E0, hue 302.1, chroma 0.094, lightness 75.0%
 
 To my eye the band, the card and the pill are all violet. Why does this look off? Answer with
 Approach:, Flow: and Next step:, and put the findings in a table with three columns: the finding,

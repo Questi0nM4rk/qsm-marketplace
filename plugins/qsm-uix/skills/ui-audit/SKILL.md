@@ -65,7 +65,8 @@ resting frame is not an audit.
    a rect of that role (when it covers over half the pixels, else Not examined), and when the
    neutrals carry chroma above 0.02 and the accent sits within 15 degrees of them in hue, file the
    palette once, because an accent that differs from its ground only by lightness marks nothing.
-   Both numbers are defaults; the design source's own values win.
+   The 0.02 and the 15 degrees are this repo's own thresholds, not from a standard, and the design
+   source's own values win.
 5. **Type and icons.** Inventory every text item with family, rendered size, weight. Sizes form a
    scale defined in the design source, not an imposed ratio. Rank items by size, weight, and
    contrast; the most glance-critical readouts belong at the top. Text in a row shares a baseline
