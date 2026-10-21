@@ -7,7 +7,7 @@ export GEOM_TREE="$root/fixtures/hover-tree.json"
 
 expect() {
   local out
-  out="$("$root/drive" geom "$1" "$2" 2>&1)" || {
+  out="$("$root/drive" geom "$1" "$2" "${@:4}" 2>&1)" || {
     printf '%s\n' "$out"
     exit 1
   }
@@ -17,6 +17,7 @@ expect() {
   }
 }
 
-expect overlap Rail/RailEntry 'gy=2)=2 >= 2: PASS'
+expect overlap Rail/RailEntry 'gap=max(gx=-[0-9.]*, gy=2)=2 >= 2: PASS'
+expect overlap Rail/RailEntry 'gy=2)=2 >= 3: FAIL' --min 3
 expect target Slider 'input=MouseArea.*h 26 >= 24: PASS'
 printf 'drive geom tests passed\n'

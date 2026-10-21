@@ -38,16 +38,16 @@ def sel($all; $s):
     step($all; (. // null) | if . == null then null else map(._id) end; $seg))
   | if length == 0 then fail("no node matches '\($s)'") else . end;
 
-# A node's rect with its StateLayer's hover growth applied, or the plain rect
-# when it has none. The reported origin already includes the scale about the
-# centre (the walker maps the origin through the scaled host, the size stays
-# unscaled), so growth scales the size only: applied once.
+# A node's rect with its StateLayer's padded hit area applied, or the plain
+# rect when it has none. The shell reports the layer's own rect and `pad`, the
+# whole device pixels the host grows by per side; the grown rect is that rect
+# expanded by pad on each side, once.
 def grown($all):
   . as $n
   | ([$all[] | select(._parent == $n._id and .type == "StateLayer" and .growth != null)] | first) as $sl
   | if $sl == null then {x, y, w, h}
     else $sl.growth as $g
-      | {x: $g.x, y: $g.y, w: ($g.w * $g.scale), h: ($g.h * $g.scale)}
+      | {x: ($g.x - $g.pad), y: ($g.y - $g.pad), w: ($g.w + 2 * $g.pad), h: ($g.h + 2 * $g.pad)}
     end;
 
 def insets($all; $tol):
@@ -98,7 +98,7 @@ def target($all; $floor):
 
 def extras: [if .text != null then "text=\(.text)" else empty end,
              if .color != null then "color=\(.color)" else empty end,
-             if .growth != null then "grow=x\(.growth.scale)" else empty end] | join(" ");
+             if .growth != null then "pad=\(.growth.pad)" else empty end] | join(" ");
 def dump($all; $depth):
   (if $sel == "" then [$all[0]] else sel($all; $sel) end)[] | . as $root
   | [$all[] | select(._id == $root._id or (._anc | index($root._id)))] as $sub
