@@ -20,7 +20,10 @@ already said.
    options (a shared name, shape, or location) goes through the question tool as two to four named
    options, the recommended one marked with its trade-off, because free text makes the user
    rebuild the options. A ticked option is a commitment to build exactly that item; a risky part
-   of it (a build, a write, a deploy) gets its own question first.
+   of it (a build, a write, a deploy) gets its own question first. An answer a loaded skill or
+   the project's own research already gives is not missing: a craft question (grouping, spacing,
+   alignment, density, motion) is decided from it with the citation, and only a product choice
+   that cannot be undone goes to the user, collected at the end of the work.
 4. The user says something is missing: open the file before you agree or redesign, because the gap
    is often in the fragment you showed, not in the file.
 5. Check the running environment (processes, config files, the project's own instructions)
