@@ -31,7 +31,9 @@ four things in writing, each in a line or two:
    reference implementation. Check which exist here; a missing one is a question or a task.
 4. **The outside judge.** What other than you and the person shows the result is right: a test
    against the real system, a reference implementation, a standard, a measurement, a third-party
-   tool, a real user. It becomes the proof inside the acceptance criteria.
+   tool, a real user. It becomes the proof inside the acceptance criteria. When the person already
+   named their own judge ("I test it on my desktop"), that is the judge: ask what proves the ask
+   from them, and never add an eval, test run, or other criterion they did not ask for.
 
 Deeper, not bigger. The four answers deepen the same ask; they never widen it. What the expert
 would add beyond the ask goes into what the work is not, or becomes a question with "leave it
@@ -107,6 +109,9 @@ to plan to split it. A fix has no epic: if the work turns out to be a fix, say s
 - When a criterion reads "works well" or "is clean", rewrite it as something a run shows.
 - When the only proof is that you or the person read the result and liked it, name an outside
   judge, because a reread confirms what was meant, not what was built.
+- When an import or research ask gets a criterion like "the evals pass" the person never said,
+  drop it and use the proof they named, because a criterion they did not ask for is work they did
+  not want.
 - When the expert's view adds work the ask did not hold, stop, because deeper is not bigger.
 
 ## Say it in the reply
