@@ -541,15 +541,16 @@ describe("install-base and the legacy bin farm", () => {
     expect(second).toMatchObject({ status: "already", steps: [] });
   });
 
-  test("a regular file in the farm is an error step and the farm stays", async () => {
-    const root = sandboxDir("qsm-install-root-");
+  test("a regular file in the farm is an error step, the farm stays, and nothing compiles", async () => {
     const live = fake({ present: ["bun"] });
     const farm = join(live.home, ".local/share/qsm/bin");
     mkdirSync(farm, { recursive: true });
     writeFileSync(join(farm, "mine"), "");
-    const r = await installBase({ pluginRoot: root })(live.ctx);
+    const r = await installBase({ pluginRoot: FIXTURE })(live.ctx);
     expect(r.status).toBe("error");
+    expect(r.steps.map((s) => s.name)).toEqual(["legacy bin farm"]);
     expect(step(r, "legacy bin farm").detail).toContain("mine");
     expect(existsSync(join(farm, "mine"))).toBe(true);
+    expect(existsSync(join(live.home, "bin"))).toBe(false);
   });
 });

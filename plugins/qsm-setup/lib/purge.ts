@@ -3,7 +3,6 @@
 // reports what is found, otherwise the same walk removes it.
 import {
   existsSync,
-  lstatSync,
   readdirSync,
   readFileSync,
   readlinkSync,
@@ -13,7 +12,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { binDir, claudeDir, type Env, fishCompletionDir, home } from "../../../lib/paths.ts";
-import { purgeFarm } from "../../../lib/legacy-farm.ts";
+import { isLink, purgeFarm } from "../../../lib/legacy-farm.ts";
 
 export interface PurgeReport {
   /** removed, or with `check` what would be removed: one sentence each */
@@ -29,14 +28,6 @@ export interface PurgeOptions {
   readonly marketplace: string;
   readonly plugins: ReadonlySet<string>;
   readonly check: boolean;
-}
-
-function isLink(path: string): boolean {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
-  }
 }
 
 /** A `# qsm: ... PATH` comment and the one statement under it: a single line, or an

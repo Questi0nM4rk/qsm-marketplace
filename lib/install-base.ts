@@ -463,9 +463,14 @@ async function run(
   if (deps?.status === "error") {
     return [deps];
   }
+  const farm = farmSteps(ctx);
+  // a farm holding a file of the user's may still shadow the binaries; compiling would hide that
+  if (farm.some((s) => s.status === "error")) {
+    return [...(deps === null ? [] : [deps]), ...farm];
+  }
   const steps: Step[] = [
     ...(deps === null ? [] : [deps]),
-    ...farmSteps(ctx),
+    ...farm,
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
     ...upstreamRows(config, ctx.env).map((t) => installUpstream(ctx, t)),

@@ -11,7 +11,7 @@ export interface FarmReport {
   readonly blocked: readonly string[];
 }
 
-function isLink(path: string): boolean {
+export function isLink(path: string): boolean {
   return lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() === true;
 }
 
