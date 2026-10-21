@@ -37,6 +37,7 @@ const plugin: Plugin = {
   dependencies: [X],
   keywords: [],
   dependencyReasons: { [X]: X },
+  requirements: [{ title: X, scenarios: 1 }],
   why: X,
   items: [item("skill"), item("agent")],
   looseCases: [],

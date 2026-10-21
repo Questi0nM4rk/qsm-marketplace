@@ -7,7 +7,7 @@ export interface Vertex {
   /** `hl` the subject, `node` a plugin, `part` a skill, agent, hooks or CLI of one, `tool` a CLI tool, `web` a web source, `mcp` an MCP server */
   readonly cls: "hl" | "node" | "part" | "tool" | "web" | "mcp";
   readonly layer: number;
-  /** a hash route the node opens: the next level down */
+  /** where the node leads, a hash route or a path: the next level down */
   readonly href?: string;
 }
 
@@ -182,7 +182,7 @@ export function graph(
   });
   const boxes = [...placed.values()].map((n) => {
     const box = `<g data-id="${esc(n.id)}"><rect class="${n.cls}" x="${n.x}" y="${n.y}" width="${n.w}" height="${NH}"/><text${n.cls === "hl" ? ' class="on-hl"' : ""} x="${n.x + n.w / 2}" y="${n.y + 21}" text-anchor="middle">${esc(clip(n.label))}</text></g>`;
-    return n.href === undefined ? box : `<a href="#${esc(n.href)}">${box}</a>`;
+    return n.href === undefined ? box : `<a href="${esc(n.href)}">${box}</a>`;
   });
   // Drawn at its own size, never larger, and never below 85% of it (13px text stays 11px or more);
   // a narrower page scrolls the figure sideways. A figure with no link has no focusable child, so

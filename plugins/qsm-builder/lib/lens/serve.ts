@@ -6,7 +6,7 @@ import { serve } from "bun";
 import { QsmError } from "../../../../lib/qsm-error.ts";
 import { createEditTask, EditError, parseEdit } from "./edits.ts";
 import { readMarketplace } from "./model.ts";
-import { renderDocument } from "./page.ts";
+import { pluginRoute, renderDocument } from "./page.ts";
 import { sha256Of } from "./tasks.ts";
 import { watchMarketplace } from "./watch.ts";
 
@@ -71,13 +71,19 @@ function eventStreams(): {
   };
 }
 
-/** The page, read from the repository now. */
-function page(root: string): Response {
+/** The overview (`plugin` null) or one plugin, read from the repository now; 404 for another name. */
+function page(root: string, plugin: string | null): Response {
   try {
     // The sha256 a pen carries is the file as this render read it.
     const sha = (rel: string) => sha256Of(root, rel);
+    const market = readMarketplace(root);
+    const only =
+      plugin === null ? null : market.plugins.find((p) => pluginRoute(p) === plugin)?.name;
+    if (only === undefined) {
+      return new Response("not found\n", { status: 404 });
+    }
     return new Response(
-      renderDocument(readMarketplace(root), { live: true, edit: { sha, transport: "server" } }),
+      renderDocument(market, { live: true, only, edit: { sha, transport: "server" } }),
       {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
       },
@@ -157,12 +163,16 @@ function route(
   if (!loopback(port).has(req.headers.get("host")?.toLowerCase() ?? "")) {
     return new Response("forbidden\n", { status: 403 });
   }
+  const path = new URL(req.url).pathname;
+  // The name is matched against the plugins by equality in page(); no pattern reads it.
+  const plugin = path.startsWith("/p/") ? path.slice(3) : undefined;
   const routes: Record<string, () => Response | Promise<Response>> = {
-    "GET /": () => page(root),
+    "GET /": () => page(root, null),
+    ...(plugin === undefined ? {} : { [`GET ${path}`]: () => page(root, plugin) }),
     "GET /events": () => streams.open(),
     "POST /edit": () => saveEdit(req, root, port),
   };
-  const handle = routes[`${req.method} ${new URL(req.url).pathname}`];
+  const handle = routes[`${req.method} ${path}`];
   return handle === undefined ? new Response("not found\n", { status: 404 }) : handle();
 }
 
