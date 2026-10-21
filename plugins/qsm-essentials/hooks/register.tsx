@@ -30,7 +30,7 @@ export function register(on: On): void {
     const { Box, Text } = $.ui.resolve(e);
     return (
       <Box flexDirection="row">
-        <Text color={TIER_COLOR[tier] ?? "gray"} bold>
+        <Text color={TIER_COLOR[tier] ?? "gray"} weight="semibold">
           {tier}{" "}
         </Text>
         {await next(e)}

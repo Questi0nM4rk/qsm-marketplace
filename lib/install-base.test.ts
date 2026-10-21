@@ -518,6 +518,13 @@ describe("links in the bin directory", () => {
   });
 });
 
+/** An empty legacy bin farm under the default data directory of `home`. */
+function farmIn(home: string): string {
+  const farm = join(home, ".local/share/qsm/bin");
+  mkdirSync(farm, { recursive: true });
+  return farm;
+}
+
 describe("install-base and the legacy bin farm", () => {
   test("a plugin installer removes the farm of symlinks once, names it, and a second run removes nothing", async () => {
     const root = sandboxDir("qsm-install-root-");
@@ -544,8 +551,7 @@ describe("install-base and the legacy bin farm", () => {
 
   test("a regular file in the farm is an error step, the farm stays, and nothing compiles", async () => {
     const live = fake({ present: ["bun"] });
-    const farm = join(live.home, ".local/share/qsm/bin");
-    mkdirSync(farm, { recursive: true });
+    const farm = farmIn(live.home);
     writeFileSync(join(farm, "mine"), "");
     const r = await installBase({ pluginRoot: FIXTURE })(live.ctx);
     expect(r.status).toBe("error");
@@ -557,8 +563,7 @@ describe("install-base and the legacy bin farm", () => {
 
   test("a farm entry that cannot be inspected is an error step, the farm stays, and nothing compiles", async () => {
     const live = fake({ present: ["bun"] });
-    const farm = join(live.home, ".local/share/qsm/bin");
-    mkdirSync(farm, { recursive: true });
+    const farm = farmIn(live.home);
     symlinkSync("/nonexistent", join(farm, "qsm-langdev"));
     chmodSync(farm, 0o600);
     try {
