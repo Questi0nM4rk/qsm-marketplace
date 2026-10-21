@@ -33,6 +33,10 @@
       "source": "./plugins/qsm-langdev-zsh"
     },
     {
+      "name": "qsm-compuse",
+      "source": "./plugins/qsm-compuse"
+    },
+    {
       "name": "qsm-cockpit",
       "source": "./plugins/qsm-cockpit"
     },

@@ -1,0 +1,8 @@
+{
+  "name": "qsm-compuse",
+  "description": "Operate the real desktop on Hyprland/Wayland without sudo: the drive bin moves the cursor with real motion events, clicks, types, injects keybinds and screenshots one output, and the compuse skill says when and how.",
+  "keywords": ["computer-use", "hyprland", "wayland", "ydotool", "screenshot", "pointer"],
+  "author": {
+    "name": "qsm"
+  }
+}

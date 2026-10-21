@@ -1,0 +1,149 @@
+# qsm-compuse — sudo-free computer use on Hyprland/Wayland
+
+Drive the real cursor, keyboard and mouse buttons on a live Hyprland session, then screenshot
+what happened. No root, no X11, no `sudo`. Built while driving a live Quickshell desktop shell
+to audit its UI.
+
+```bash
+drive doctor                     # check every dep + permission first
+drive mons                       # outputs, physical AND logical size, scale
+drive move 30 546                # cursor to logical 30,546
+drive shot - hover               # grim the focused output -> $DRIVE_OUT_DIR/hover.png
+drive key SUPER H                # inject a keybind
+drive click                      # left click where the cursor is
+```
+
+## Why two tools, not one
+
+This is the whole reason the module exists. **Positioning and clicking go through different
+tools on purpose.**
+
+The rule: **anything that must behave like real input goes through ydotool.** The compositor's
+own dispatchers are faster and exact, but they bypass the very paths that make input
+*observable* — and both failures are silent.
+
+| Job | Tool | Why |
+| --- | --- | --- |
+| Move the cursor so **hover fires** | `drive move` (ydotool relative feedback) | Real motion event, converged against compositor-reported logical coordinates. |
+| Move the cursor with no side effects | `drive warp` (compositor) | Exact, instant, but emits **no motion event** — hover will not fire. |
+| Click, type, scroll | `ydotool` | Hyprland has no click dispatcher. |
+| Press a key **that fires a keybind** | `drive key` (ydotool keycodes) | Real events travel the input path, so binds run. |
+| Send a key **into the focused app** | `drive sendkey` (compositor) | Injected past bind processing — the app sees it, binds do not. |
+
+**Trap 1: a compositor warp does not generate a motion event.** `hl.dsp.cursor.move` puts the
+pointer exactly where you ask — `hyprctl cursorpos` confirms it — and nothing under it reacts,
+because Qt never receives motion and so never fires hover-enter. Measured: warping onto a rail
+cell left its popout shut; the same coordinates through ydotool opened it. Every hover test
+built on a warp silently reports "no reaction" for working UI. `drive move` uses ydotool.
+
+**Trap 2: absolute `ydotool mousemove` axes are not layout pixels.** They can silently no-op on
+Wayland, so `drive move` instead reads `hyprctl cursorpos -j`, advances with damped relative
+ydotool motion, and repeats until the logical target is confirmed within one pixel. Negative
+layout coordinates work the same way as positive coordinates; a target that cannot be reached
+fails after a bounded number of steps.
+
+**`send_shortcut` is the other trap, and it lies quietly.** It returns `ok` and does deliver the
+key — to the focused *client*. Hyprland injects it **past its own bind processing**, so a
+compositor keybind on that combo never runs. Measured on this machine: `drive sendkey SUPER
+SHIFT B` returned `ok` and the shell's `railToggle` never fired, while `drive key SUPER SHIFT B`
+toggled the rail immediately. If you are testing a keybind, you need a real key event —
+`drive key`. `drive sendkey` exists only for typing into an application.
+
+## Logical vs physical pixels
+
+Two coordinate systems, and mixing them silently corrupts every measurement:
+
+- **Logical** — what the compositor and your app's item tree use. Cursor moves take these.
+- **Physical** — actual device pixels. `grim` writes these.
+
+`logical = physical / scale`. A 1920x1080 output at `scale=1.2` is **1600x900 logical**. So a
+widget the item tree reports at logical `x=30` sits at physical `x=36` in the screenshot.
+
+```bash
+drive mons                # prints both, side by side
+drive l2p 30              # logical 30 -> physical 36 (scale 1.2)
+```
+
+Get this backwards and every "the gap is 12px" finding is wrong by the scale factor.
+
+## Hyprland lua-dialect configs
+
+If the config is `hyprland.lua` rather than `hyprland.conf`, **the legacy string dispatch form
+is rejected outright**:
+
+```bash
+hyprctl dispatch movecursor 900 500
+# error: ')' expected near '900'
+```
+
+Every dispatcher must use the `hl.dsp.*` call shape instead:
+
+```bash
+hyprctl dispatch 'hl.dsp.cursor.move({x=900,y=500})'      # ok
+hyprctl dispatch 'hl.dsp.send_shortcut({mods="",key="Escape"})'
+hyprctl dispatch 'hl.dsp.window.close()'
+```
+
+Two `send_shortcut` gotchas, both found the hard way (they apply to `drive sendkey`, not to
+`drive key`, which uses real keycodes):
+
+1. **`mods` is required even when empty.** Omitting it errors `'mods' is required`. Pass `""`.
+2. **The key must exist in the active keymap.** `key="F13"` on a keyboard without F13 errors
+   `key not found` — it is not a syntax error, and it looks identical to one.
+
+`drive key` sidesteps both by pressing Linux input-event codes directly (`SUPER`=125, `B`=48,
+`XF86AudioPlay`=164, …). Its `keycode()` table covers letters, digits, arrows, F-keys, the
+media and level keys, and the common punctuation; an unmapped name fails loudly telling you to
+add it rather than silently doing nothing.
+
+## Permissions — the one-time setup
+
+`ydotool` writes to `/dev/uinput`, which is `root:input` mode `crw-rw----`. Two requirements:
+
+```bash
+sudo usermod -aG input "$USER"   # then log out and back in — group membership is per-session
+pgrep -x ydotoold || ydotoold &  # the daemon must be running
+```
+
+With `input` group membership `/dev/uinput` is group-writable, so **ydotool itself needs no
+sudo** and neither does the daemon. `drive doctor` checks all four conditions (binary, daemon,
+group, device writability) and tells you which one is missing.
+
+## Driving a UI under audit
+
+The loop that actually works:
+
+```bash
+drive move 30 546                                  # hover the widget
+drive until 'myapp-status | grep -q popout=calendar'   # wait for STATE, not a sleep
+drive shot - calendar
+```
+
+- **Poll state, never sleep blind.** `drive until 'CMD'` retries a shell condition 20x at 250ms.
+  If the app exposes introspection (an IPC status call, an item tree), assert on that — a
+  `sleep 0.5` after a 250ms animation is both slower and less reliable.
+- **Read geometry from the app, not the screenshot.** If it can dump its item tree with real
+  x/y/w/h, that is ground truth; pixel-measuring a screenshot is a hypothesis. Remember the
+  tree is logical and the PNG is physical.
+- **Enumerate states.** One resting frame is not an audit. Drive into every popout, panel and
+  overlay, capture each, and list what you could not reach.
+- **`grim -o <output>`, always.** Full-screen captures on a multi-monitor setup produce one
+  wide image where nothing lines up with either output's coordinates.
+
+## Reference
+
+Run `drive` bare for the full command list. Notable ones beyond the basics:
+
+| Command | Use |
+| --- | --- |
+| `drive nudge DX DY` | Relative move — probe a hover threshold without recomputing absolutes. |
+| `drive key "SUPER SHIFT" B` | Real key event — **fires compositor keybinds**. |
+| `drive key XF86AudioPlay` | Bare key, no modifier. Arg 2, if it is not a key name, is a settle time. |
+| `drive sendkey SUPER B` | Into the focused app only; does NOT fire keybinds. |
+| `drive until 'CMD' [tries]` | Poll until a condition holds. |
+| `drive mclick` | Middle click — many UIs bind "close this" to it. |
+| `drive scroll -3` | Wheel; negative is down. |
+| `drive focused` | Focused output name, for `grim -o`. |
+| `drive l2p N [MON]` | Logical length to physical pixels. |
+
+Env: `DRIVE_OUT_DIR` (default `$XDG_RUNTIME_DIR/drive-shots`), `DRIVE_SETTLE` (default `0.35`).

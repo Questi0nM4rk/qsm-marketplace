@@ -32,7 +32,7 @@ to verify or shorter to read, it has no reason to exist.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/lens-banner-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/lens-banner-light.svg">
-  <img alt="qsm-marketplace: A minimal marketplace of specialist plugins for Claude Code. 28 plugins." src="assets/lens-banner-light.svg">
+  <img alt="qsm-marketplace: A minimal marketplace of specialist plugins for Claude Code. 29 plugins." src="assets/lens-banner-light.svg">
 </picture>
 <!-- markdownlint-enable MD013 MD033 -->
 
@@ -73,9 +73,9 @@ flowchart LR
   qsm_essentials --> qsm_setup
 ```
 
-These plugins need no other plugin and no plugin needs them: `qsm-book-to-skill`, `qsm-index`,
-`qsm-opencode`, `qsm-secrets`, `qsm-statusline`, `qsm-usage`, `qsm-toolbox`, `qsm-uix`, `qsm-web`,
-`qsm-worktrunk`.
+These plugins need no other plugin and no plugin needs them: `qsm-compuse`, `qsm-book-to-skill`,
+`qsm-index`, `qsm-opencode`, `qsm-secrets`, `qsm-statusline`, `qsm-usage`, `qsm-toolbox`, `qsm-uix`,
+`qsm-web`, `qsm-worktrunk`.
 
 ## Catalog
 
@@ -120,6 +120,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-book-to-skill`
 
 | Plugin | Why it exists | Ships |
 | --- | --- | --- |
+| [qsm-compuse](plugins/qsm-compuse/README.md) | An agent that checks a shell UI through its own dispatchers gets silent wrong answers: a compositor warp emits no motion event so hover never fires, and an injected shortcut skips the keybind table. | 1 skill |
 | [qsm-cockpit](plugins/qsm-cockpit/README.md) | A session that runs a loop of steps and several agents at once hides both in a scrolling transcript, so the person cannot tell at a glance where the work stands or which model each agent spends. | CLI, 10 hooks |
 | [qsm-builder](plugins/qsm-builder/README.md) | This marketplace has rules that are easy to state and easy to break in the moment of adding something, and prompts that are easy to write and hard to write well. | 7 skills, CLI, 3 hooks |
 | [qsm-forge](plugins/qsm-forge/README.md) | The harness default for review threads is raw `gh api`, `glab api` and `curl` calls, several per step: a GraphQL listing, a lookup of the thread behind a comment, then the mutation. | 1 skill, CLI, 1 hook |

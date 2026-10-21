@@ -1,0 +1,346 @@
+#!/usr/bin/env bash
+# drive — sudo-free computer use on Hyprland/Wayland.
+#
+# Everything that must LOOK like real input goes through ydotool, because the
+# compositor's own warp/send_shortcut dispatchers bypass the paths that make
+# input observable: a warp emits no motion event (hover never fires) and
+# send_shortcut is injected past bind processing (keybinds never run). hyprctl
+# is used only to READ state and to park the pointer. See USAGE.md.
+#
+# Nothing here needs root. If a call fails, run `drive doctor` first.
+set -uo pipefail
+
+OUT_DIR="${DRIVE_OUT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/drive-shots}"
+SETTLE="${DRIVE_SETTLE:-0.35}"
+
+die() {
+	printf 'drive: %s\n' "$*" >&2
+	exit 1
+}
+need() { command -v "$1" >/dev/null 2>&1 || die "missing $1 (see: drive doctor)"; }
+
+# Hyprland's lua-dialect config rejects the legacy `hyprctl dispatch movecursor X Y`
+# string form outright, so every dispatcher goes through the hl.dsp.* call shape.
+hdisp() { hyprctl dispatch "$1" >/dev/null || die "dispatch failed: $1"; }
+
+# THE positioning command. Uses ydotool, NOT the compositor's warp dispatcher,
+# because a warp repositions the pointer WITHOUT emitting a motion event — so
+# Qt never fires hover-enter and nothing under the cursor reacts. Verified: a
+# warp onto a rail cell left its popout closed; the same coordinates via ydotool
+# opened it. If you are testing hover, you need a real motion event.
+cmd_move() {
+	[[ $# -ge 2 ]] || die "move needs X Y (layout px)"
+	need ydotool
+	need jq
+	local target_x="$1" target_y="$2" current_x current_y dx dy step_x step_y i
+	[[ "$target_x" =~ ^-?[0-9]+$ && "$target_y" =~ ^-?[0-9]+$ ]] || die "move coordinates must be integers"
+	for ((i = 0; i < 40; i++)); do
+		current_x="$(hyprctl cursorpos -j | jq -er '.x | floor')" || die "could not read cursor position"
+		current_y="$(hyprctl cursorpos -j | jq -er '.y | floor')" || die "could not read cursor position"
+		dx=$((target_x - current_x))
+		dy=$((target_y - current_y))
+		if ((dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1)); then
+			printf 'cursor confirmed: %s,%s\n' "$current_x" "$current_y"
+			sleep "${3:-$SETTLE}"
+			return
+		fi
+		step_x=$((dx * 6 / 10))
+		step_y=$((dy * 6 / 10))
+		((step_x != 0 || dx == 0)) || step_x=$((dx > 0 ? 1 : -1))
+		((step_y != 0 || dy == 0)) || step_y=$((dy > 0 ? 1 : -1))
+		ydotool mousemove -x "$step_x" -y "$step_y" || die "ydotool relative move failed"
+		sleep 0.03
+	done
+	die "cursor did not reach target $target_x,$target_y within 40 steps"
+}
+
+# Compositor warp: exact and instant, but emits NO motion event, so hover does
+# not fire. Useful only to park the pointer somewhere harmless.
+cmd_warp() {
+	[[ $# -ge 2 ]] || die "warp needs X Y"
+	hdisp "hl.dsp.cursor.move({x=$1,y=$2})"
+	sleep "${3:-$SETTLE}"
+}
+
+# Relative nudge, for probing hover thresholds without recomputing absolutes.
+cmd_nudge() {
+	[[ $# -ge 2 ]] || die "nudge needs DX DY"
+	local pos x y
+	pos="$(hyprctl cursorpos)" || die "cursorpos failed"
+	x="${pos%%,*}"
+	y="${pos##*, }"
+	cmd_move "$((x + $1))" "$((y + $2))" "${3:-$SETTLE}"
+}
+
+# Linux input-event codes. Real key events are the ONLY way to fire a
+# compositor keybind — see cmd_sendkey for why send_shortcut cannot.
+keycode() {
+	case "$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')" in
+	SUPER | META | LEFTMETA | MOD) echo 125 ;;
+	SHIFT | LEFTSHIFT) echo 42 ;;
+	CTRL | CONTROL | LEFTCTRL) echo 29 ;;
+	ALT | LEFTALT) echo 56 ;;
+	A) echo 30 ;; B) echo 48 ;; C) echo 46 ;; D) echo 32 ;; E) echo 18 ;;
+	F) echo 33 ;; G) echo 34 ;; H) echo 35 ;; I) echo 23 ;; J) echo 36 ;;
+	K) echo 37 ;; L) echo 38 ;; M) echo 50 ;; N) echo 49 ;; O) echo 24 ;;
+	P) echo 25 ;; Q) echo 16 ;; R) echo 19 ;; S) echo 31 ;; T) echo 20 ;;
+	U) echo 22 ;; V) echo 47 ;; W) echo 17 ;; X) echo 45 ;; Y) echo 21 ;;
+	Z) echo 44 ;;
+	1) echo 2 ;; 2) echo 3 ;; 3) echo 4 ;; 4) echo 5 ;; 5) echo 6 ;;
+	6) echo 7 ;; 7) echo 8 ;; 8) echo 9 ;; 9) echo 10 ;; 0) echo 11 ;;
+	SPACE) echo 57 ;; TAB) echo 15 ;; ESC | ESCAPE) echo 1 ;;
+	ENTER | RETURN) echo 28 ;; BACKSPACE) echo 14 ;; DELETE | DEL) echo 111 ;;
+	SLASH) echo 53 ;; COMMA) echo 51 ;; PERIOD | DOT) echo 52 ;;
+	MINUS) echo 12 ;; EQUAL) echo 13 ;; SEMICOLON) echo 39 ;;
+	LEFT) echo 105 ;; RIGHT) echo 106 ;; UP) echo 103 ;; DOWN) echo 108 ;;
+	HOME) echo 102 ;; END) echo 107 ;; PAGEUP | PGUP) echo 104 ;; PAGEDOWN | PGDN) echo 109 ;;
+	F1) echo 59 ;; F2) echo 60 ;; F3) echo 61 ;; F4) echo 62 ;; F5) echo 63 ;;
+	F6) echo 64 ;; F7) echo 65 ;; F8) echo 66 ;; F9) echo 67 ;; F10) echo 68 ;;
+	F11) echo 87 ;; F12) echo 88 ;;
+	PRINT | SYSRQ) echo 99 ;;
+	XF86AUDIOPLAY | PLAYPAUSE) echo 164 ;;
+	XF86AUDIONEXT | NEXTSONG) echo 163 ;;
+	XF86AUDIOPREV | PREVIOUSSONG) echo 165 ;;
+	XF86AUDIOSTOP | STOPCD) echo 166 ;;
+	XF86AUDIOMUTE | MUTE) echo 113 ;;
+	XF86AUDIOLOWERVOLUME | VOLUMEDOWN) echo 114 ;;
+	XF86AUDIORAISEVOLUME | VOLUMEUP) echo 115 ;;
+	XF86AUDIOMICMUTE | MICMUTE) echo 248 ;;
+	XF86MONBRIGHTNESSDOWN | BRIGHTNESSDOWN) echo 224 ;;
+	XF86MONBRIGHTNESSUP | BRIGHTNESSUP) echo 225 ;;
+	*) return 1 ;;
+	esac
+}
+
+# Press a real key through /dev/uinput, so it travels the compositor's input
+# path and FIRES KEYBINDS. Mods are held down around the key and released in
+# reverse order.
+cmd_key() {
+	[[ $# -ge 1 ]] || die 'key needs [MODS] KEY, e.g. key "SUPER SHIFT" B  |  key Escape'
+	need ydotool
+	# `key SUPER B` and `key Escape 0.3` are both two arguments, so decide by
+	# asking whether the SECOND one names a key: if it does, the first is the
+	# modifier list; if it does not, it is a settle time.
+	local mods key settle
+	if [[ $# -ge 2 ]] && [[ -n "$1" ]] && keycode "$2" >/dev/null 2>&1; then
+		mods="$1"
+		key="$2"
+		settle="${3:-0.6}"
+	else
+		mods=""
+		key="$1"
+		settle="${2:-0.6}"
+	fi
+
+	local code seq="" tail="" m mc
+	code="$(keycode "$key")" || die "unknown key '$key' (add it to keycode() in $0)"
+	for m in $mods; do
+		mc="$(keycode "$m")" || die "unknown modifier '$m'"
+		seq="$seq $mc:1"
+		tail="$mc:0 $tail"
+	done
+	# shellcheck disable=SC2086
+	ydotool key $seq "$code:1" "$code:0" $tail >/dev/null 2>&1 || die "ydotool key failed"
+	sleep "$settle"
+}
+
+# Deliver a shortcut to the FOCUSED CLIENT only. This does NOT fire compositor
+# keybinds: Hyprland injects it past its own bind processing, so a global
+# shortcut bound to the same combo never runs. Verified — `sendkey SUPER SHIFT B`
+# returned ok and the shell's railToggle never fired, while `key SUPER SHIFT B`
+# toggled it. Use this only to send keys INTO an application.
+cmd_sendkey() {
+	[[ $# -ge 1 ]] || die 'sendkey needs MODS KEY (mods may be "")'
+	local mods="$1" key="${2:-}"
+	if [[ -z "$key" ]]; then
+		key="$mods"
+		mods=""
+	fi
+	# `mods` is REQUIRED by hl.send_shortcut even when empty, and `key` must exist
+	# in the active keymap — a key the keyboard does not have errors "key not found".
+	hdisp "hl.dsp.send_shortcut({mods=\"$mods\",key=\"$key\"})"
+	sleep "${3:-0.6}"
+}
+
+cmd_click() {
+	need ydotool
+	ydotool click "${2:-0xC0}" >/dev/null 2>&1 || die "click failed"
+	sleep "${3:-0.4}"
+}
+cmd_rclick() {
+	need ydotool
+	ydotool click 0xC1 >/dev/null 2>&1 || die "rclick failed"
+	sleep "${2:-0.4}"
+}
+cmd_mclick() {
+	need ydotool
+	ydotool click 0xC2 >/dev/null 2>&1 || die "mclick failed"
+	sleep "${2:-0.4}"
+}
+cmd_type() {
+	need ydotool
+	ydotool type -- "$1" >/dev/null 2>&1 || die "type failed"
+	sleep "${2:-0.4}"
+}
+cmd_scroll() {
+	need ydotool
+	ydotool mousemove -w -x 0 -y "${1:--1}" >/dev/null 2>&1
+	sleep "${2:-0.4}"
+}
+
+cmd_shot() {
+	need grim
+	local mon="${1:-}" name="${2:-shot}"
+	mkdir -p "$OUT_DIR"
+	if [[ -z "$mon" ]] || [[ "$mon" = "-" ]]; then mon="$(cmd_focused)"; fi
+	grim -o "$mon" "$OUT_DIR/$name.png" || die "grim failed for output $mon"
+	printf '%s\n' "$OUT_DIR/$name.png"
+}
+
+cmd_focused() { hyprctl monitors -j | jq -r '.[]|select(.focused)|.name'; }
+
+# Logical size is physical/scale. Cursor moves use LOGICAL px; grim writes PHYSICAL px.
+# Multiply a logical coord by scale to find it in a screenshot.
+cmd_mons() {
+	hyprctl monitors -j | jq -r '.[] |
+    "\(.name)  physical=\(.width)x\(.height)  logical=\((.width/.scale)|floor)x\((.height/.scale)|floor)  at=\(.x),\(.y)  scale=\(.scale)  focused=\(.focused)"'
+}
+
+cmd_l2p() {
+	[[ $# -ge 1 ]] || die "l2p needs LOGICAL_N [MONITOR]"
+	local mon="${2:-$(cmd_focused)}"
+	hyprctl monitors -j | jq -r --arg m "$mon" --argjson n "$1" \
+		'.[]|select(.name==$m)|"logical \($n) -> physical \(($n*.scale)|floor) (scale \(.scale))"'
+}
+
+# Poll a shell command until it succeeds. Beats a blind sleep after an animation.
+cmd_until() {
+	local tries="${2:-20}" i=0
+	while [[ "$i" -lt "$tries" ]]; do
+		if eval "$1" >/dev/null 2>&1; then return 0; fi
+		i=$((i + 1))
+		sleep 0.25
+	done
+	die "condition never became true: $1"
+}
+
+cmd_doctor() {
+	local ok=0
+	chk() {
+		local label="$1" fail="$2"
+		shift 2
+		printf '%-22s' "$label"
+		if "$@" >/dev/null 2>&1; then echo OK; else
+			echo "$fail"
+			ok=1
+		fi
+	}
+	in_input_group() { id -nG | tr ' ' '\n' | grep -qx input; }
+	cursor_dispatch() { hyprctl dispatch 'hl.dsp.cursor.move({x=10,y=10})' 2>&1 | grep -q '^ok'; }
+	keymap() { keycode SUPER && keycode XF86AudioPlay; }
+	chk hyprctl MISSING command -v hyprctl
+	chk 'cursor dispatch' 'FAIL (lua dialect? see USAGE.md)' cursor_dispatch
+	chk 'keycode map' FAIL keymap
+	chk ydotool MISSING command -v ydotool
+	chk 'ydotoold running' 'NOT RUNNING (start: ydotoold &)' pgrep -x ydotoold
+	chk 'input group' "NO (need: usermod -aG input \$USER + relogin)" in_input_group
+	chk '/dev/uinput writable' NO test -w /dev/uinput
+	chk grim MISSING command -v grim
+	chk jq MISSING command -v jq
+	return "$ok"
+}
+
+case "${1:-}" in
+move)
+	shift
+	cmd_move "$@"
+	;;
+warp)
+	shift
+	cmd_warp "$@"
+	;;
+nudge)
+	shift
+	cmd_nudge "$@"
+	;;
+key)
+	shift
+	cmd_key "$@"
+	;;
+sendkey)
+	shift
+	cmd_sendkey "$@"
+	;;
+click)
+	shift
+	cmd_click "$@"
+	;;
+rclick)
+	shift
+	cmd_rclick "$@"
+	;;
+mclick)
+	shift
+	cmd_mclick "$@"
+	;;
+type)
+	shift
+	cmd_type "$@"
+	;;
+scroll)
+	shift
+	cmd_scroll "$@"
+	;;
+esc) cmd_key Escape ;;
+pos) hyprctl cursorpos ;;
+shot)
+	shift
+	cmd_shot "$@"
+	;;
+mons) cmd_mons ;;
+focused) cmd_focused ;;
+l2p)
+	shift
+	cmd_l2p "$@"
+	;;
+until)
+	shift
+	cmd_until "$@"
+	;;
+doctor) cmd_doctor ;;
+*)
+	cat <<'USAGE'
+drive — sudo-free computer use on Hyprland/Wayland
+
+  POINTER (logical coords, exact)
+    move X Y [settle]        move cursor to layout X,Y (real motion -- hover FIRES)
+    warp X Y [settle]        compositor warp; exact but NO motion event, hover will NOT fire
+    nudge DX DY [settle]     move cursor relative to where it is
+    pos                      print cursor position
+
+  INPUT (ydotool)
+    click [mask] [settle]    left click (0xC0); mask overridable
+    rclick / mclick          right / middle click
+    type "text" [settle]     type a literal string
+    scroll [amount]          wheel; negative = down
+
+  KEYS (real key events -- these DO fire compositor keybinds)
+    key "MODS" KEY [settle]  e.g. key "SUPER SHIFT" B
+    key KEY                  no modifier, e.g. key Escape
+    esc                      Escape
+    sendkey MODS KEY         to the FOCUSED CLIENT only; does NOT fire keybinds
+
+  SCREEN
+    shot [MON|-] [name]      grim one output ("-" = focused) -> $DRIVE_OUT_DIR
+    mons                     outputs with physical AND logical size + scale
+    focused                  focused output name
+    l2p N [MON]              convert a logical length to physical pixels
+
+  FLOW
+    until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
+    doctor                   check every dependency and permission
+
+  ENV: DRIVE_OUT_DIR (default $XDG_RUNTIME_DIR/drive-shots), DRIVE_SETTLE (0.35)
+USAGE
+	;;
+esac
