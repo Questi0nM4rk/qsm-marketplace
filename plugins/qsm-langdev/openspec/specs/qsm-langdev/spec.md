@@ -619,6 +619,29 @@ one line that the content denylist is not set up, naming the `content-denylist` 
 - **WHEN** the file does not exist
 - **THEN** the gate passes with one line naming the skill that sets it up
 
+### Requirement: The secrets gate at a push scans the pushed commits
+
+At pre-push the `secrets` gate SHALL run gitleaks with the repository's `.gitleaks.toml`, redacted,
+over the commits each pushed ref adds, never over the staged changes. For a ref that exists on the
+remote the range is the remote commit up to the local one; for a new branch it is the local commits
+not reachable from any remote-tracking ref; a deletion adds no commit and is skipped. A finding
+SHALL block the push naming the rule id, file, line and short commit of each hit, never the matched
+value. A gitleaks run that fails without a report SHALL block the push as one that could not run,
+and a missing `.gitleaks.toml` or gitleaks binary SHALL block it as at a commit. The machine-local
+content denylist is a commit-time check and SHALL NOT run at a push.
+
+#### Scenario: A pushed commit holds a secret
+
+- **WHEN** a push adds a commit whose file holds a secret-shaped string, to an existing branch or a
+  new one
+- **THEN** the push is blocked and the output names the rule id, file, line and commit, and not the
+  string
+
+#### Scenario: A clean push
+
+- **WHEN** every commit a push adds is free of secret-shaped strings
+- **THEN** the secrets gate SHALL pass
+
 ### Requirement: Nothing this tool touches has a warning level
 
 This holds everywhere, not only in the configs: every rule in a config this

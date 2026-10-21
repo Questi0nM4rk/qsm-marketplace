@@ -66,3 +66,14 @@ export function pushReference(root: string, pushed: PushedRef): string | null {
   }
   return mergeBase;
 }
+
+/** The git log range holding the commits a pushed ref adds: remote..local for a ref the remote
+ * has, the local commits no remote-tracking ref reaches for a new branch, null for a deletion. */
+export function pushedRange(pushed: PushedRef): string | null {
+  if (ZERO.test(pushed.localOid)) {
+    return null;
+  }
+  return ZERO.test(pushed.remoteOid)
+    ? `${pushed.localOid} --not --remotes`
+    : `${pushed.remoteOid}..${pushed.localOid}`;
+}

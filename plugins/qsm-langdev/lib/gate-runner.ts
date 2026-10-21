@@ -10,7 +10,7 @@ import { describeSets } from "./file-sets.ts";
 import { fixFiles, isFixable } from "./fixers.ts";
 import { resolveRef } from "./gitref.ts";
 import { recordsOf } from "./json.ts";
-import { parsePushLines, pushReference } from "./push.ts";
+import { parsePushLines, pushedRange, pushReference } from "./push.ts";
 import type { EnforcementPoint } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
 import { compareStructure, type StructureResult, verdict } from "./structure.ts";
@@ -86,12 +86,15 @@ function withSkipped(outcome: GateOutcome, skipped: readonly string[]): GateOutc
   return { ...outcome, remedy: [...outcome.remedy, ...lines] };
 }
 
-function secretsGate(root: string): GateOutcome {
+function secretsGate(root: string, point: EnforcementPoint, pushLines?: string): GateOutcome {
   const config = ".gitleaks.toml";
   if (!existsSync(join(root, config))) {
     return fail("secrets", `${config} is not in this repo, so secrets cannot run`, [
       `Create ${config}, or remove 'secrets' from .qsm-langdev/gates.json.`,
     ]);
+  }
+  if (point === "pre-push") {
+    return pushedSecretsGate(root, config, pushLines);
   }
   const result = runOrMissing(
     "gitleaks",
@@ -109,6 +112,60 @@ function secretsGate(root: string): GateOutcome {
     ]);
   }
   return denylistGate(root);
+}
+
+/** The commits each pushed ref adds, scanned redacted with the repo config: a hit names rule, file,
+ * line and commit, never the value. A run that fails without a report is a run that never scanned. */
+function pushedSecretsGate(root: string, config: string, pushLines?: string): GateOutcome {
+  if (pushLines === undefined) {
+    return fail("secrets", "this gate needs git's pushed refs and none were handed to it", [
+      "Reached through something other than the installed pre-push hook.",
+    ]);
+  }
+  const hits: string[] = [];
+  for (const ref of parsePushLines(pushLines)) {
+    const range = pushedRange(ref);
+    if (range === null) {
+      continue;
+    }
+    const result = runOrMissing(
+      "gitleaks",
+      [
+        "git",
+        `--log-opts=${range}`,
+        "--config",
+        config,
+        "--no-banner",
+        "--redact",
+        "--report-format",
+        "json",
+        "--report-path",
+        "-",
+      ],
+      root,
+    );
+    if ("missing" in result) {
+      return fail("secrets", "gitleaks is not installed", [
+        "Install: https://github.com/gitleaks/gitleaks, or your package manager",
+      ]);
+    }
+    const found = findingsOf(result.stdout);
+    if (result.status !== 0 && found.length === 0) {
+      return fail("secrets", `gitleaks could not scan ${ref.localRef}`, [
+        `Run gitleaks git --log-opts="${range}" --config ${config} --redact by hand and fix what it reports.`,
+      ]);
+    }
+    for (const hit of found) {
+      hits.push(`rule ${hit.rule} hit in ${hit.file}:${hit.line} (commit ${hit.commit})`);
+    }
+  }
+  if (hits.length === 0) {
+    return pass("secrets");
+  }
+  return fail("secrets", "pushed commits carry a secret", [
+    ...hits,
+    "Rewrite the commits without the secret, and rotate it if it ever left this machine. If it is a false positive, add a tighter regex to .gitleaks.toml [allowlist].",
+  ]);
 }
 
 const gateName = "secrets";
@@ -152,13 +209,14 @@ function denylistGate(root: string): GateOutcome {
   ]);
 }
 
-function findingsOf(json: string): { rule: string; file: string; line: number }[] {
+function findingsOf(json: string): { rule: string; file: string; line: number; commit: string }[] {
   try {
     const parsed = recordsOf(JSON.parse(json));
     return (parsed ?? []).map((f) => ({
       rule: String(f.RuleID),
       file: String(f.File),
       line: Number(f.StartLine),
+      commit: typeof f.Commit === "string" ? f.Commit.slice(0, 8) : "",
     }));
   } catch {
     return [];
@@ -338,7 +396,7 @@ async function runGate(
 ): Promise<GateOutcome> {
   switch (name) {
     case "secrets":
-      return secretsGate(root);
+      return secretsGate(root, point, pushLines);
     case "entropy":
       return entropyGate(root);
     case "langdev":
