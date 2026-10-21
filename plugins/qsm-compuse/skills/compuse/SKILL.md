@@ -27,5 +27,9 @@ first and stop on the first failed line. Setup and the background of every rule 
 7. Operate on workspace 10 and only when the owner asks. Announce pointer use before it starts,
    stop input afterwards and say what the owner should inspect.
 
+Motion and routes: `drive record SECS [OUT|X,Y,WxH] [--fps N]` measures real cadence (read the
+gaps, never trust a constant-rate encode); `drive frames VIDEO DIR` extracts frames;
+`drive route FILE` runs a scripted step list on workspace 10 and restores the pointer.
+
 Captures land under `${XDG_RUNTIME_DIR:-/tmp}/drive-shots` (override with `DRIVE_OUT_DIR`); hand
 them to `ui-audit` for judgment.

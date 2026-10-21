@@ -7,7 +7,14 @@ trap 'rm -rf "$tmp"' EXIT
 stub_hyprctl() {
   cat >"$tmp/bin/hyprctl" <<'SH'
 #!/usr/bin/env bash
-if [[ "$1 $2" == "cursorpos -j" ]]; then
+if [[ "$1 $2" == "activeworkspace -j" ]]; then
+  printf '{"id":%s}\n' "${DRIVE_TEST_WS:-10}"
+elif [[ "$1" == "cursorpos" && "${2:-}" != "-j" ]]; then
+  read -r x y < "$DRIVE_TEST_POSITION"
+  printf '%s, %s\n' "$x" "$y"
+elif [[ "$1 $2" == "monitors -j" ]]; then
+  printf '[{"name":"X-1","focused":true}]\n'
+elif [[ "$1 $2" == "cursorpos -j" ]]; then
   read -r x y < "$DRIVE_TEST_POSITION"
   printf '{"x":%s,"y":%s}\n' "$x" "$y"
 else
@@ -54,6 +61,20 @@ expect_stuck_pointer_fails() {
   grep -q 'within 40 steps' "$tmp/out"
 }
 
+# A route on the wrong workspace is refused; a failing route still puts the pointer back.
+expect_route_guard_and_restore() {
+  printf '5 5\n' >"$DRIVE_TEST_POSITION"
+  printf '#!/usr/bin/env bash\n' >"$tmp/bin/grim"
+  chmod +x "$tmp/bin/grim"
+  printf 'move-to 60 60\nbogus\n' >"$tmp/r.route"
+  if DRIVE_TEST_WS=3 "$root/drive" route "$tmp/r.route" >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q 'not 10' "$tmp/out"
+  if DRIVE_OUT_DIR="$tmp/shots" "$root/drive" route "$tmp/r.route" >"$tmp/out" 2>&1; then exit 1; fi
+  grep -q "unknown step 'bogus'" "$tmp/out"
+  read -r x y <"$DRIVE_TEST_POSITION"
+  [[ "$x" -ge 4 && "$x" -le 6 && "$y" -ge 4 && "$y" -le 6 ]]
+}
+
 main() {
   mkdir "$tmp/bin"
   stub_hyprctl
@@ -63,6 +84,9 @@ main() {
   expect_move 30 24 29 23
   expect_move -30 -24 -29 -23
   expect_stuck_pointer_fails
+  stub_ydotool
+  chmod +x "$tmp/bin/ydotool"
+  expect_route_guard_and_restore
   printf 'drive move behavior tests passed\n'
 }
 

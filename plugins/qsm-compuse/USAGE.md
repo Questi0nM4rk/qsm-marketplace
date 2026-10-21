@@ -145,5 +145,8 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive scroll -3` | Wheel; negative is down. |
 | `drive focused` | Focused output name, for `grim -o`. |
 | `drive l2p N [MON]` | Logical length to physical pixels. |
+| `drive record SECS [OUT\|X,Y,WxH] [--fps N]` | Real-frame video plus cadence from frame timestamps (effective fps, max gap, gaps over 1.5 periods); never constant-rate. |
+| `drive frames VIDEO DIR [--every N]` | Extract the real frames as PNGs. |
+| `drive route FILE [--workspace-ok]` | Run steps (`move-to X Y`, `hover-wait MS`, `press`, `release`, `click`, `key COMBO`, `wheel DY`, `shot NAME`) with before/after shots; workspace 10 only; pointer restored on exit. |
 
 Env: `DRIVE_OUT_DIR` (default `$XDG_RUNTIME_DIR/drive-shots`), `DRIVE_SETTLE` (default `0.35`).
