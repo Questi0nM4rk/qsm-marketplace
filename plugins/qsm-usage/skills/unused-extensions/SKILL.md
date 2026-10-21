@@ -23,10 +23,11 @@ the `usage` skill.
 
 ## Uses
 
-- `mcp__qsm-usage__ledger` has every use of a skill, command, agent and tool by name. A skill the
-  person typed as `/plugin:skill` is counted under `commands` by its full name, never under
-  `skills`: read both before calling a skill unused. Older sessions: count the same names in the
-  transcripts.
+- `mcp__qsm-usage__ledger` has every use of a skill, command, agent and tool by name in the main
+  conversation; a skill used only inside a subagent shows no use, so check before cutting it. A
+  skill the person typed as `/plugin:skill` is counted under `commands` by its full name, never
+  under `skills`: read both before calling a skill unused. Older sessions: count the same names in
+  the transcripts.
 - MCP uses are `mcp__<server>__<tool>` calls; characters outside `[a-zA-Z0-9_-]` in the server name
   become `_`, plugin servers are `mcp__plugin_<plugin>_<server>__`. Match that form, switch off by
   the configured name.

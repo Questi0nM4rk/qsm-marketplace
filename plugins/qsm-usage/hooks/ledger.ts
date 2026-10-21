@@ -198,30 +198,17 @@ function isSessionRecord(value: unknown): value is SessionRecord {
   );
 }
 
-/** Older records carried a per-turn breakdown nothing read; it goes when the record is next written. */
-function withoutAfter(turn: unknown): unknown {
-  if (!isPlainObject(turn)) {
-    return turn;
-  }
-  const { after: _after, ...kept } = turn;
-  return kept;
-}
-
 /** A stored value read back: null when nothing is stored, the record when it is one this module
  * wrote. Anything else throws: a record in an older shape is a store to migrate, not to guess at. */
 export function asSession(value: unknown): SessionRecord | null {
   if (value === undefined || value === null) {
     return null;
   }
-  const record =
-    isPlainObject(value) && Array.isArray(value.turns)
-      ? { ...value, turns: value.turns.map(withoutAfter) }
-      : value;
-  if (!isSessionRecord(record)) {
+  if (!isSessionRecord(value)) {
     const id = isPlainObject(value) ? String(value.id) : typeof value;
     throw new TypeError(`the stored session record ${id} is not in the ledger's shape`);
   }
-  return record;
+  return value;
 }
 
 export function breakdownOf(context: ContextUsage, at: number): Breakdown {

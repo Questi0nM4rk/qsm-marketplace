@@ -15,7 +15,9 @@ instead of what it does today.
 The hooks module SHALL record, for every session, into the plugin's store: the context breakdown at
 session start from `$.session.usage`; each turn's token usage and cost from `turn.complete` and
 `session.measure`; every piece of injected text the main conversation holds, with its source and
-size; and every use of a skill, command, agent, and tool, by name. The injected text SHALL come from
+size; and every use of a skill, command, agent, and tool in the main conversation, by name. A
+subagent's own tool and skill uses are in its own conversation, which the module does not read, so
+a skill used only inside a subagent shows no use. The injected text SHALL come from
 two admitted doors only: `tool.describe` for a tool's description, and the main conversation read
 through `$.session.messages({ as: "api" })` at each `turn.complete` for everything else, from the
 blocks added since the last read. The last read is remembered as an anchor: the hash of the last
@@ -29,8 +31,9 @@ line up to the first colon with digits folded to `#` and at most 48 characters; 
 opens with `Base directory for this skill:` is a skill's text, source `skill.prompt`, named by the
 `Skill` call that asked for it; a `tool_use` block is a use of that tool, and of the skill it names
 when the tool is `Skill`. A reminder the engine adds to a request after the first of a turn, as a
-system turn, is in no message and so is not recorded: the `<total_tokens>` counter and the
-output-style reminder of each tool round are such, so the ledger holds fewer of those rows than the
+system turn, is in no message and so is not recorded: the system-turn copies of the
+`<total_tokens>` counter and of the output-style reminder are such (their first copy of a prompt is
+in a message and is recorded), so the ledger holds fewer of those rows than the
 transcript, and SHALL NOT claim every piece of injected text. A skill the person types as
 `/plugin:skill` is no `Skill` call: it is counted as a command under its full name from
 `command.run`, never as a skill, and its text is the `skill.prompt` row named by the last directory
@@ -56,8 +59,9 @@ session's context by category, and `ledger`, the recorded sessions filtered by a
 #### Scenario: A session ends
 
 - **WHEN** a session with three turns ends
-- **THEN** the ledger holds its start breakdown, three turn usages, every injected piece with its
-  size, and every skill and tool used, and no prompt text
+- **THEN** the ledger holds its start breakdown, three turn usages, the injected pieces its
+  messages hold with their sizes, and every skill and tool the main conversation used, and no
+  prompt text
 
 #### Scenario: Reminders and a skill text reach the context
 
