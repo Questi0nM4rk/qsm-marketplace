@@ -38,15 +38,16 @@ def sel($all; $s):
     step($all; (. // null) | if . == null then null else map(._id) end; $seg))
   | if length == 0 then fail("no node matches '\($s)'") else . end;
 
-# A node's rect with its StateLayer's hover growth applied (scale about the
-# centre of the growth rect), or the plain rect when it has none.
+# A node's rect with its StateLayer's hover growth applied, or the plain rect
+# when it has none. The reported origin already includes the scale about the
+# centre (the walker maps the origin through the scaled host, the size stays
+# unscaled), so growth scales the size only: applied once.
 def grown($all):
   . as $n
   | ([$all[] | select(._parent == $n._id and .type == "StateLayer" and .growth != null)] | first) as $sl
   | if $sl == null then {x, y, w, h}
     else $sl.growth as $g
-      | {x: ($g.x + $g.w / 2 - $g.w * $g.scale / 2), y: ($g.y + $g.h / 2 - $g.h * $g.scale / 2),
-         w: ($g.w * $g.scale), h: ($g.h * $g.scale)}
+      | {x: $g.x, y: $g.y, w: ($g.w * $g.scale), h: ($g.h * $g.scale)}
     end;
 
 def insets($all; $tol):
@@ -89,7 +90,9 @@ def centre($all; $tol):
 
 def target($all; $floor):
   sel($all; $sel)[] | . as $n
-  | ([$all[] | select(._parent == $n._id and .type == "StateLayer")] | first // $n) as $a
+  | [$all[] | select(._parent == $n._id)] as $k
+  | ([$k[] | select(.type == "MouseArea")] | sort_by(.w * .h) | last
+     // ([$k[] | select(.type == "StateLayer")] | first) // $n) as $a
   | ($a.w >= $floor and $a.h >= $floor) as $ok
   | "target \($n | lbl) input=\($a.type)\($a | rect): w \($a.w | n) >= \($floor), h \($a.h | n) >= \($floor)\($ok | tag(.))";
 
