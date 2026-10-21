@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2154 # OUT_DIR and SETTLE come from drive, SLOT_SCALE from the slot state
+# Sourced by drive: `drive hitmap`, the hit and hover zones of a surface measured from pixels.
+# A probe moves the pointer to a logical point, waits, shoots, and counts the point as responding
+# when the watch region differs from the reference shot in at least --min-px physical pixels (each
+# channel off by more than 2%). The reference is the parked rest shot, renewed by every probe that
+# did not respond and by a fresh shot after each park, so a clock ticking over mid-run never
+# counts as a response. A responding probe is followed by a park, so hover state resets. It needs no app changes: a Workbench story and the whole desktop alike.
+
+HM_MIN_PX=16 HM_SETTLE_MS=0 HM_WATCH="" HM_PARK="" HM_STEP=4 HM_CROP="" HM_N=0 HM_REF_AT="" HM_PROBE_AT=""
+
+hm_scale() {
+  if in_slot; then echo "$SLOT_SCALE"; else hyprctl monitors -j | jq -r '.[]|select(.focused)|.scale'; fi
+}
+
+hm_wait() { awk -v s="$SETTLE" -v ms="$HM_SETTLE_MS" 'BEGIN{print s + ms / 1000}'; }
+
+hm_park() { cmd_move "${HM_PARK%,*}" "${HM_PARK#*,}" "$(hm_wait)" >/dev/null; }
+
+# A slot's compositor paints its software cursor into every shot, so the box around the pointer is
+# blanked in both shots of a comparison, at the reference's pointer (HM_REF_AT) and at the probe's
+# (HM_PROBE_AT). Hiding the cursor instead would end the hover, so a response hidden under the box,
+# a glyph smaller than the cursor, is the one thing this cannot see.
+hm_mask() {
+  in_slot || return 0
+  awk -v at="$1" -v s="$HM_SCALE" 'BEGIN{split(at, p, " "); printf "-draw\nrectangle %d,%d %d,%d\n", p[1] * s - 3, p[2] * s - 3, p[1] * s + 28, p[2] * s + 36}'
+}
+
+# Reference shot with the pointer parked; sets HM_W HM_H (logical output size) and HM_CROP (the watch region).
+hm_rest() {
+  local scale pw ph x y w h
+  scale="$(hm_scale)"
+  need magick
+  read -r pw ph < <(cmd_shot - hm-ref | xargs magick identify -format '%w %h\n')
+  HM_W="$(awk -v p="$pw" -v s="$scale" 'BEGIN{printf "%d", p / s + 0.5}')"
+  HM_H="$(awk -v p="$ph" -v s="$scale" 'BEGIN{printf "%d", p / s + 0.5}')"
+  [[ -n "$HM_PARK" ]] || HM_PARK="$((HM_W / 2)),$((HM_H / 2))"
+  HM_SCALE="$scale"
+  if [[ -n "$HM_WATCH" ]]; then
+    [[ "$HM_WATCH" =~ ^(-?[0-9]+),(-?[0-9]+),([0-9]+)x([0-9]+)$ ]] || die "--watch must be X,Y,WxH (logical)"
+    x="${BASH_REMATCH[1]}" y="${BASH_REMATCH[2]}" w="${BASH_REMATCH[3]}" h="${BASH_REMATCH[4]}"
+    HM_CROP="$(awk -v x="$x" -v y="$y" -v w="$w" -v h="$h" -v s="$scale" 'BEGIN{printf "%dx%d+%d+%d", w * s, h * s, x * s, y * s}')"
+  fi
+  hm_park_ref
+}
+
+# Sets HM_N to the changed physical pixels between two shots inside the watch region.
+hm_diff() {
+  local n mask crop=()
+  mapfile -t mask < <(
+    hm_mask "$HM_REF_AT"
+    hm_mask "$HM_PROBE_AT"
+  )
+  [[ -z "$HM_CROP" ]] || crop=(-crop "$HM_CROP" +repage)
+  n="$(magick \( "$OUT_DIR/$1.png" -fill black "${mask[@]}" \) \( "$OUT_DIR/$2.png" -fill black "${mask[@]}" \) "${crop[@]}" \
+    -metric AE -fuzz 2% -compare -format '%[distortion] %w %h' info: 2>&1)"
+  [[ "$n" =~ ^[0-9.e+-]+\ [0-9]+\ [0-9]+$ ]] || die "compare failed: $n"
+  HM_N="$(awk -v n="$n" 'BEGIN{split(n, f, " "); printf "%d", f[1] * f[2] * f[3] + 0.5}')"
+}
+
+# Parks and re-shoots the reference until two shots a second apart agree: a rollout the last probe
+# opened closes after a hold delay, and a panel still open in the reference would read as a response
+# when it closes. A slower rollout needs --settle, which lengthens the second.
+hm_park_ref() {
+  local i
+  hm_park
+  HM_REF_AT="${HM_PARK/,/ }" HM_PROBE_AT="${HM_PARK/,/ }"
+  cmd_shot - hm-ref >/dev/null
+  for ((i = 0; i < 20; i++)); do
+    cp -f "$OUT_DIR/hm-ref.png" "$OUT_DIR/hm-prev.png"
+    sleep "$(awk -v ms="$HM_SETTLE_MS" 'BEGIN{print 1 + ms / 1000}')"
+    cmd_shot - hm-ref >/dev/null
+    hm_diff hm-prev hm-ref
+    ((HM_N < HM_MIN_PX)) && return 0
+  done
+  die "the screen did not settle after parking at $HM_PARK"
+}
+
+# One probe: moves to X Y, waits, shoots; succeeds when the watch region differs from the reference.
+# A probe that did not respond becomes the new reference.
+hm_once() {
+  cmd_move "$1" "$2" "$(hm_wait)" >/dev/null
+  HM_PROBE_AT="$1 $2"
+  cmd_shot - hm-probe >/dev/null
+  hm_diff hm-ref hm-probe
+  [[ -z "${HM_TRACE:-}" ]] || echo "probe $1,$2 -> $HM_N" >&2
+  ((HM_N >= HM_MIN_PX)) && return 0
+  cp -f "$OUT_DIR/hm-probe.png" "$OUT_DIR/hm-ref.png"
+  HM_REF_AT="$HM_PROBE_AT"
+  return 1
+}
+
+# A point responds when two probes, a park apart, both do: a toast or a tick that lands in one
+# probe's window is not the pointer's doing. Every response is followed by a park.
+hm_respond() {
+  hm_once "$1" "$2" || return 1
+  hm_park_ref
+  hm_once "$1" "$2" || return 1
+  hm_park_ref
+}
+
+# Last responding coordinate from the seed along one axis in one direction (1 logical px).
+hm_edge() {
+  local axis="$1" dir="$2" lo hi mid max
+  max="$HM_W"
+  [[ "$axis" == x ]] || max="$HM_H"
+  lo="$HM_SX"
+  [[ "$axis" == x ]] || lo="$HM_SY"
+  hi=$((dir > 0 ? max - 1 : 0))
+  ((lo != hi)) || {
+    echo "$lo"
+    return
+  }
+  if hm_probe_axis "$axis" "$hi"; then
+    echo "$hi"
+    return
+  fi
+  while ((dir * (hi - lo) > 1)); do
+    mid=$(((lo + hi) / 2))
+    if hm_probe_axis "$axis" "$mid"; then lo="$mid"; else hi="$mid"; fi
+  done
+  echo "$lo"
+}
+
+hm_probe_axis() {
+  if [[ "$1" == x ]]; then hm_respond "$2" "$HM_SY"; else hm_respond "$HM_SX" "$2"; fi
+}
+
+hm_zone() {
+  [[ "${1:-}" =~ ^[0-9]+$ && "${2:-}" =~ ^[0-9]+$ ]] || die "hitmap zone needs X Y (logical, non-negative)"
+  HM_SX="$1" HM_SY="$2"
+  hm_rest
+  hm_respond "$HM_SX" "$HM_SY" || {
+    printf 'hitmap: seed %s,%s does not respond (watch %s, >= %s px changed)\n' "$HM_SX" "$HM_SY" "${HM_WATCH:-whole output}" "$HM_MIN_PX" >&2
+    exit 2
+  }
+  local l r t b
+  l="$(hm_edge x -1)"
+  r="$(hm_edge x 1)"
+  t="$(hm_edge y -1)"
+  b="$(hm_edge y 1)"
+  printf 'left   x=%s  (seed %s - %s; %s does not respond)\n' "$l" "$HM_SX" "$((HM_SX - l))" "$((l - 1))"
+  printf 'right  x=%s  (seed %s + %s, edge past the last responding %s)\n' "$((r + 1))" "$HM_SX" "$((r + 1 - HM_SX))" "$r"
+  printf 'top    y=%s  (seed %s - %s; %s does not respond)\n' "$t" "$HM_SY" "$((HM_SY - t))" "$((t - 1))"
+  printf 'bottom y=%s  (seed %s + %s, edge past the last responding %s)\n' "$((b + 1))" "$HM_SY" "$((b + 1 - HM_SY))" "$b"
+  printf 'zone %s,%s → %s..%s x %s..%s = %sx%s\n' "$HM_SX" "$HM_SY" "$l" "$((r + 1))" "$t" "$((b + 1))" "$((r + 1 - l))" "$((b + 1 - t))"
+}
+
+hm_grid() {
+  [[ "${1:-}" =~ ^([0-9]+),([0-9]+),([0-9]+)x([0-9]+)$ ]] || die "hitmap grid needs X,Y,WxH (logical)"
+  local gx="${BASH_REMATCH[1]}" gy="${BASH_REMATCH[2]}" gw="${BASH_REMATCH[3]}" gh="${BASH_REMATCH[4]}"
+  local r c px py line cells="" draws=() png="$OUT_DIR/hitmap-grid.png" total=0
+  hm_rest
+  for ((r = 0; r * HM_STEP < gh; r++)); do
+    line=""
+    for ((c = 0; c * HM_STEP < gw; c++)); do
+      px=$((gx + c * HM_STEP))
+      py=$((gy + r * HM_STEP))
+      if ((px < HM_W && py < HM_H)) && hm_respond "$px" "$py"; then
+        line+="#"
+        cells+="$c $r"$'\n'
+        total=$((total + 1))
+        draws+=(-draw "$(awk -v x="$px" -v y="$py" -v st="$HM_STEP" -v s="$HM_SCALE" 'BEGIN{printf "rectangle %d,%d %d,%d", x * s, y * s, (x + st) * s - 1, (y + st) * s - 1}')")
+      else
+        line+="."
+      fi
+    done
+    printf '%s\n' "$line"
+  done
+  magick "$OUT_DIR/hm-ref.png" -fill 'rgba(255,0,60,0.45)' "${draws[@]}" "$png"
+  printf 'grid %s,%s %sx%s step %s: %s cells respond (>= %s px changed); overlay %s\n' "$gx" "$gy" "$gw" "$gh" "$HM_STEP" "$total" "$HM_MIN_PX" "$png"
+  awk -v step="$HM_STEP" -v x0="$gx" -v y0="$gy" -f "$MOTION_DIR/hitmap.awk" <<<"${cells%$'\n'}" \
+    | awk '$5 > 0 {printf "area %d,%d %dx%d (%d cells)\n", $1, $2, $3, $4, $5}'
+}
+
+hm_check() {
+  [[ "$HM_STEP" =~ ^[1-9][0-9]*$ && "$HM_MIN_PX" =~ ^[0-9]+$ && "$HM_SETTLE_MS" =~ ^[0-9]+$ ]] || die "--step, --min-px and --settle must be whole numbers"
+  [[ -z "$HM_PARK" || "$HM_PARK" =~ ^[0-9]+,[0-9]+$ ]] || die "--park must be X,Y"
+}
+
+cmd_hitmap() {
+  local mode="${1:-}" pos=()
+  local -A opt=(["--watch"]=HM_WATCH ["--settle"]=HM_SETTLE_MS ["--step"]=HM_STEP ["--min-px"]=HM_MIN_PX ["--park"]=HM_PARK)
+  [[ "$mode" == zone || "$mode" == grid ]] || die "hitmap needs zone X Y | grid X,Y,WxH"
+  shift
+  while (($#)); do
+    if [[ -n "${opt[$1]:-}" ]]; then
+      printf -v "${opt[$1]}" %s "${2:?$1 needs a value}"
+      shift 2
+    else
+      pos+=("$1") && shift
+    fi
+  done
+  hm_check
+  mkdir -p "$OUT_DIR"
+  "hm_$mode" "${pos[@]}"
+}

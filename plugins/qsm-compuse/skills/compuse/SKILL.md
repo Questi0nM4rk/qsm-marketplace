@@ -34,6 +34,13 @@ Measure before hand-over: `drive geom insets|overlap|inside|centre|target|dump` 
 with PASS/FAIL from the live item tree; `drive contrast A B` prints the WCAG ratio of two screen
 regions.
 
+Hit and hover zones are measured from pixels, so a story and the whole desktop work alike:
+`drive hitmap zone X Y [--watch X,Y,WxH]` walks four rays from a responding seed to the edge where
+the screen stops reacting and prints `zone 1512,12 → 1512..1536 x 0..24 = 24x24`;
+`drive hitmap grid X,Y,WxH [--step N]` probes every cell and writes a PNG overlay. Restrict
+`--watch` to the region the response lands in (a clock elsewhere is noise), and add `--settle MS`
+for a slow rollout. A zone far larger than the glyph is the finding; compare it with `drive geom`.
+
 Motion and routes: `drive record SECS [OUT|X,Y,WxH] [--fps N]` measures real cadence (read the
 gaps, never trust a constant-rate encode); `drive frames VIDEO DIR` extracts frames;
 `drive route FILE` runs a scripted step list on workspace 10 and restores the pointer.
