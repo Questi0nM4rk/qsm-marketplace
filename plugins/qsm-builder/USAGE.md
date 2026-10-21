@@ -65,10 +65,10 @@ qsm-builder doctor
   marketplace or the plugin has none. A relative path exits 2, no task tool exits 4. The hook below
   calls it.
 - `lens marketplace` prints the whole marketplace as data: its Why it exists and each plugin with
-  the first sentence of its own, its dependencies and its count of open tasks. The pane draws it.
+  the first sentence of its own, its dependencies and its count of open tasks.
 - `lens plugin <name>` prints one plugin as data: its Why it exists, each skill and agent with
   its description and trigger words, its dependencies with the spec's reasons, its open tasks. A
-  name the marketplace does not list exits 2. The pane below draws it.
+  name the marketplace does not list exits 2.
 - `dir` without `.claude-plugin/marketplace.json` exits 4 (`missing`) and names the file.
 - A case's last result is read from `evals/results/<run>/aggregate-result.json`; without one the
   page says so. Open tasks come from the task tool matched by the `<plugin>:` title prefix;
@@ -79,10 +79,3 @@ qsm-builder doctor
 From a hooks module: `$.builder.lensExport({ dir, out })`, `$.builder.lensBrief({ file })`.
 The hook adds `lens brief` to the context the first time in a session the agent reads, writes or
 edits a file of a plugin, once per plugin.
-
-Open the plugin view in a Claude Code session started in the marketplace root:
-`/lens` opens a pane (docked from 110 columns, else inline above the prompt) with the whole
-marketplace: why it exists, each plugin with its reason in one line, dependencies and open task
-count. `/lens qsm-builder` opens one plugin: why it exists, skills and agents, dependencies with
-reasons, and open tasks. Press a plugin line or a skill line to open it in its own pane. It is
-read-only; running the command again re-reads it.

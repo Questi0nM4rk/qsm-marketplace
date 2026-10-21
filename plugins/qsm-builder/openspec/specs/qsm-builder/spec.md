@@ -220,6 +220,29 @@ and opening paragraph each with the file part it comes from, and its evals group
 last result apart from the editable fields. A directory with no `.claude-plugin/marketplace.json`
 SHALL fail with `missing` naming that file.
 
+#### Scenario: The person exports the marketplace
+
+- **WHEN** the person runs `qsm-builder lens export` in a marketplace
+- **THEN** one HTML file SHALL be written with an overview and one tab per plugin, and no plugin
+  file SHALL change
+
+#### Scenario: Edits wait on the published page
+
+- **WHEN** the person saved two edits on the published artifact and runs
+  `qsm-builder lens pull <url>`
+- **THEN** two tasks SHALL be made, both rows marked taken, and a second pull SHALL make none
+
+#### Scenario: The exported page opened from disk
+
+- **WHEN** the exported page runs with no artifact database
+- **THEN** its pens SHALL stay hidden and the page SHALL say it is read-only and where edits are
+  made
+
+#### Scenario: The task tool is not installed
+
+- **WHEN** the task tool is not on `PATH` and the person runs `qsm-builder doctor`
+- **THEN** the command SHALL exit `missing` and name `qsm-tasks` as what to install
+
 ### Requirement: The lens writes the root README's block and banners
 
 `qsm-builder lens readme [dir] [--check]` SHALL write, from the model the lens page reads, two SVG
@@ -266,50 +289,6 @@ leave the tool's result as the tool made it.
 
 - **WHEN** the agent reads a file of a plugin and the task tool is not on `PATH`
 - **THEN** a toast SHALL name `qsm-tasks` as the cause and the read SHALL return as it was
-
-### Requirement: A marketplace and plugin view in a pane
-
-The plugin SHALL register the slash command `/lens [plugin]`. Without a name it opens a pane that
-draws the output of `lens marketplace`, with a plugin name the output of `lens plugin <plugin>`,
-for the marketplace of the session's working directory, and it changes nothing. A press on a
-plugin line of the first, or on a skill or agent line of the second, SHALL open the next level in
-its own pane. A name the marketplace does not list, or a verb that fails, SHALL show the cause in
-the pane.
-
-#### Scenario: The person opens the marketplace
-
-- **WHEN** the person runs `/lens`
-- **THEN** a pane SHALL show the marketplace's why it exists and each plugin with one line, its
-  dependencies and its open task count
-
-#### Scenario: The person opens one plugin
-
-- **WHEN** the person runs `/lens qsm-web`
-- **THEN** a pane SHALL show that plugin's why it exists, its skills and agents with one line each,
-  its dependencies with reasons and its open tasks, and no key SHALL edit anything
-
-#### Scenario: The person exports the marketplace
-
-- **WHEN** the person runs `qsm-builder lens export` in a marketplace
-- **THEN** one HTML file SHALL be written with an overview and one tab per plugin, and no plugin
-  file SHALL change
-
-#### Scenario: Edits wait on the published page
-
-- **WHEN** the person saved two edits on the published artifact and runs
-  `qsm-builder lens pull <url>`
-- **THEN** two tasks SHALL be made, both rows marked taken, and a second pull SHALL make none
-
-#### Scenario: The exported page opened from disk
-
-- **WHEN** the exported page runs with no artifact database
-- **THEN** its pens SHALL stay hidden and the page SHALL say it is read-only and where edits are
-  made
-
-#### Scenario: The task tool is not installed
-
-- **WHEN** the task tool is not on `PATH` and the person runs `qsm-builder doctor`
-- **THEN** the command SHALL exit `missing` and name `qsm-tasks` as what to install
 
 ### Requirement: Dependencies
 

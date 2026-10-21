@@ -3,7 +3,6 @@
   "include": [
     "../../../.claude/types",
     "register.tsx",
-    "view.tsx",
     "register.test.ts",
     "noun.generated.ts",
     "../types",
