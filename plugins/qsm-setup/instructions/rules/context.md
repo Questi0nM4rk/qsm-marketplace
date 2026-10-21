@@ -128,6 +128,14 @@ it". When the person overrides a plan's deliverable, rewrite the deliverable in 
 because the old plan's output shape survives in the prompts otherwise. Split the work along what
 the person sees, a surface or a flow, not along files, when the defects live where the parts meet.
 
+A finished workflow whose work the person has confirmed ends with a lessons pass before the next
+one starts: read what went wrong or cost a retry (the journal, the fix reports, the person's
+corrections), and write each lesson into the one place that owns it, a skill, a rule, a project's
+`AGENTS.md` or its own skill, in every repository the work touched, the marketplace included.
+The person asked for it in their words: "po kazdem done workflow, a confirmed work from user, tak
+udelej review what we learned, a uprav skills, docs". A lesson left in the conversation is lost
+with it.
+
 Every dispatch, alone or inside a workflow: one task in, a short briefing plus a file path out.
 Its description starts with its model, for example `[haiku] runner: bun test`, because the
 person sees the description and must see which model runs. No worker stays idle across turns;
