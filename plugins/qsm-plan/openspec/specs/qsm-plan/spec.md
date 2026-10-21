@@ -142,7 +142,9 @@ professional would do, ask and think that the person is not; the rawest material
 from instead of a digest; the specific methods and tools they would use; and what other than the
 agent and the person would show the result is right. Those answers SHALL feed the frontier, the
 intent and the acceptance criteria, and SHALL NOT widen the ask: anything beyond it SHALL go into
-what the work is not, or into a question whose recommendation is to leave it out.
+what the work is not, or into a question whose recommendation is to leave it out. When the person
+already named their own judge, that judge SHALL be the proof, and the skill SHALL NOT add an eval,
+test run, or other criterion the person did not ask for.
 
 #### Scenario: The ask is read as a top professional would read it
 
@@ -150,6 +152,12 @@ what the work is not, or into a question whose recommendation is to leave it out
 - **THEN** the grilling skill SHALL name, before the first round, the questions the professional
   would ask, the raw material, the methods and tools, and the outside judge, and the acceptance
   criteria SHALL be checked by that judge where one exists
+
+#### Scenario: The person named the judge
+
+- **WHEN** an import or research ask comes with the proof the person named
+- **THEN** the acceptance criteria SHALL use that proof and SHALL NOT add a criterion such as "the
+  evals pass" that the person never said
 
 #### Scenario: The professional would do more than was asked
 
