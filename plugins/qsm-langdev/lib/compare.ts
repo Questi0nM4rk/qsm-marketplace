@@ -1337,24 +1337,30 @@ export interface DoctorRow {
   check: string;
   binary: string;
   present: boolean;
+  /** The probe ran out of time: the binary may be installed and only slow. */
+  timedOut: boolean;
   install: string;
 }
 
 /** Binary presence per check, every distinct binary probed once. */
-export async function doctorRows(specs: readonly CheckSpec[] = REGISTRY): Promise<DoctorRow[]> {
+export async function doctorRows(
+  specs: readonly CheckSpec[] = REGISTRY,
+  probeTimeoutMs: number = PROBE_TIMEOUT_MS,
+): Promise<DoctorRow[]> {
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
-  const present = new Map(
+  const probes = new Map(
     await Promise.all(
-      binaries.map(async (binary): Promise<[string, boolean]> => [
+      binaries.map(async (binary): Promise<[string, Probe]> => [
         binary,
-        (await probeBinary(binary, PROBE_TIMEOUT_MS)).present,
+        await probeBinary(binary, probeTimeoutMs),
       ]),
     ),
   );
   return specs.map(({ name, binary, install }) => ({
     check: name,
     binary,
-    present: present.get(binary) ?? false,
+    present: probes.get(binary)?.present ?? false,
+    timedOut: probes.get(binary)?.timedOut ?? false,
     install: installLine(install),
   }));
 }

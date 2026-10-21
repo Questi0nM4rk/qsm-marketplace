@@ -21,6 +21,7 @@ import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   type CompareOptions,
   compareTrees,
+  doctorRows,
   headline,
   resolveBinary,
   runOutcome,
@@ -256,6 +257,22 @@ describe("compareTrees: checker availability", () => {
     expect(verdicts[0]?.summary).toBe(
       "slow-probe: not measured: 'qsm-langdev-slow-version --version' timed out after 0.2s; retry",
     );
+  });
+
+  test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
+    const dir = sandboxDir("qsm-langdev-doctor-");
+    writeFileSync(join(dir, "qsm-langdev-slow-version"), "#!/bin/sh\nexec sleep 5\n");
+    chmodSync(join(dir, "qsm-langdev-slow-version"), 0o755);
+    const slow: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${dir}:${savedPath ?? ""}`;
+    try {
+      const rows = await doctorRows([slow], 200);
+
+      expect(rows[0]).toMatchObject({ check: "slow-probe", present: false, timedOut: true });
+    } finally {
+      process.env.PATH = savedPath;
+    }
   });
 
   test("the repository's node_modules/.bin copy of a checker wins over PATH", async () => {

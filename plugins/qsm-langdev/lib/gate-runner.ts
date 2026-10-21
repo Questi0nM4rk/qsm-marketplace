@@ -16,6 +16,7 @@ import {
   parsePushLines,
   pushedRange,
   pushReference,
+  pushSkipReason,
   remoteTipMissing,
 } from "./push.ts";
 import type { EnforcementPoint } from "./registry.ts";
@@ -393,9 +394,12 @@ async function langdevGate(
     return noRemote("langdev");
   }
   let blocked: GateOutcome | undefined;
-  for (const ref of parsePushLines(pushLines)) {
+  const skipped: string[] = [];
+  const refs = parsePushLines(pushLines);
+  for (const ref of refs) {
     const before = pushReference(root, ref, remote);
     if (before === null) {
+      skipped.push(pushSkipReason(root, ref, remote));
       continue;
     }
     const outcome = await langdevAt(root, before, ref.localOid, point);
@@ -403,6 +407,9 @@ async function langdevGate(
       return outcome;
     }
     blocked ??= outcome.status === "blocked" ? outcome : undefined;
+  }
+  if (blocked === undefined && refs.length > 0 && skipped.length === refs.length) {
+    return skip("langdev", `every pushed ref was skipped, nothing scored: ${skipped.join("; ")}`);
   }
   return blocked ?? pass("langdev");
 }
@@ -442,15 +449,21 @@ async function structureGate(
   if (remote === undefined || remote === "") {
     return noRemote("structure");
   }
-  for (const ref of parsePushLines(pushLines)) {
+  const skipped: string[] = [];
+  const refs = parsePushLines(pushLines);
+  for (const ref of refs) {
     const before = pushReference(root, ref, remote);
     if (before === null) {
+      skipped.push(pushSkipReason(root, ref, remote));
       continue;
     }
     const outcome = await structureAt(root, before, ref.localOid);
     if (outcome.status === "failed") {
       return outcome;
     }
+  }
+  if (refs.length > 0 && skipped.length === refs.length) {
+    return skip("structure", `every pushed ref was skipped, nothing scored: ${skipped.join("; ")}`);
   }
   return pass("structure");
 }

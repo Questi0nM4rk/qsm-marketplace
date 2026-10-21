@@ -89,8 +89,11 @@ function installedNames(dir: string): string[] {
   );
 }
 
+const LOCKFILES = ["bun.lock", "bun.lockb", "package-lock.json", "yarn.lock", "pnpm-lock.yaml"];
+
 /** Which packages are installed: the names in the root's `node_modules` and in the one beside
- * every `package.json` of the tree, each directory with its name. Versions are the lockfile's. */
+ * every `package.json` of the tree, each directory with its name, and the lockfiles beside the
+ * root and every `package.json`, content included, because a version bump changes no name. */
 function installedState(root: string, treeFiles: readonly string[]): string {
   const dirs = [
     "node_modules",
@@ -98,11 +101,19 @@ function installedState(root: string, treeFiles: readonly string[]): string {
       .filter((path) => path.endsWith("/package.json"))
       .map((path) => `${path.slice(0, -"package.json".length)}node_modules`),
   ];
+  const packageDirs = treeFiles
+    .filter((path) => path.endsWith("/package.json"))
+    .map((path) => path.slice(0, -"package.json".length));
+  const lockfiles = ["", ...packageDirs]
+    .toSorted()
+    .flatMap((dir) =>
+      LOCKFILES.map((name) => `${dir}${name}`).filter((path) => existsSync(join(root, path))),
+    );
   const held = dirs.toSorted().flatMap((dir) => {
     const at = join(root, dir);
     return existsSync(at) ? [dir, ...installedNames(at).toSorted()] : [];
   });
-  return hashOf(held);
+  return hashOf([...held, contentHash(root, lockfiles)]);
 }
 
 /** The hash of what a checker was told and what it read besides the scored

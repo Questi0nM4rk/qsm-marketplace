@@ -163,6 +163,9 @@ const list: Handler = () => {
 };
 
 function describeCheckRow(row: DoctorRow): string {
+  if (row.timedOut) {
+    return `UNKNOWN  ${row.check} (${row.binary}) — not measured: '${row.binary} --version' timed out; retry`;
+  }
   return row.present
     ? `ok       ${row.check} (${row.binary})`
     : `MISSING  ${row.check} (${row.binary}) — install: ${row.install}`;

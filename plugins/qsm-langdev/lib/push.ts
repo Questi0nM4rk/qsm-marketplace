@@ -72,6 +72,17 @@ export function pushReference(root: string, pushed: PushedRef, remote: string): 
   return mergeBase;
 }
 
+/** Why `pushReference` has nothing to compare `pushed` against, for the line a gate prints. */
+export function pushSkipReason(root: string, pushed: PushedRef, remote: string): string {
+  if (isZero(pushed.localOid)) {
+    return `${pushed.remoteRef}: a deletion, nothing to compare`;
+  }
+  if (isZero(pushed.remoteOid) && remoteDefaultBranch(root, remote) === null) {
+    return `${pushed.remoteRef}: this clone knows no default branch of '${remote}' to compare a new branch against`;
+  }
+  return `${pushed.remoteRef}: adds no commit beyond the default branch of '${remote}'`;
+}
+
 /** The git log range holding the commits a pushed ref adds: remote..local for a ref the remote
  * has, the local commits no remote-tracking ref of `remote` reaches for a new branch, null for a
  * deletion. Only the remote being pushed to counts: a commit another remote holds is still news to
