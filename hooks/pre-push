@@ -3,7 +3,7 @@
 # Remove with: qsm-langdev uninstall
 set -euo pipefail
 
-qsm-langdev hook pre-push || exit 1
+qsm-langdev hook pre-push "${1:-}" || exit 1
 
 # A fresh worktree has no node_modules, and the gates below then fail with type errors that hide
 # the cause. Root `bun install` runs the prepare script (core.hooksPath and .gates/plugin-deps.ts,

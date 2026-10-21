@@ -21,7 +21,16 @@ const COMMENT: Record<HookLang, string> = { sh: "#", py: "#", ts: "//" };
 /** The call a hook makes. git hands pre-push the remote's name as its first argument, and the
  * gate needs it to know which remote's refs are not news, so the shim passes it on. */
 function hookCallLine(name: HookName, lang: HookLang): string {
-  const push = name === "pre-push";
+  return callLine(name, lang, name === "pre-push");
+}
+
+/** The call line a hook written before the remote name was passed holds, or null when it is the
+ * current one, so a reinstall can replace that one line and keep what the person added. */
+function earlierCallLine(name: HookName, lang: HookLang): string | null {
+  return name === "pre-push" ? callLine(name, lang, false) : null;
+}
+
+function callLine(name: HookName, lang: HookLang, push: boolean): string {
   if (lang === "py") {
     return (
       "import subprocess, sys\n" +
@@ -111,6 +120,29 @@ function hooksDir(repoRoot: string): string {
   return isAbsolute(path) ? path : join(repoRoot, path);
 }
 
+/** Brings a hook we wrote whole up to the current call by replacing only its earlier call line, so
+ * whatever the person added to it stays. */
+function refreshOwnHook(name: HookName, path: string, lang: HookLang): HookAction {
+  const current = readFileSync(path, "utf8");
+  const hookLang = detectHookLang(current) ?? lang;
+  const line = hookCallLine(name, hookLang);
+  if (current.includes(line)) {
+    return { hook: name, kind: "already", path };
+  }
+  const earlier = earlierCallLine(name, hookLang);
+  if (earlier === null || !current.includes(earlier)) {
+    return {
+      hook: name,
+      kind: "manual",
+      path,
+      line,
+      why: "it holds no call line install wrote, so rewriting it would drop what was added by hand",
+    };
+  }
+  writeFileSync(path, current.replace(earlier, line), { mode: 0o755 });
+  return { hook: name, kind: "written", path };
+}
+
 /** Writes our hooks into the repository, adding to an existing one rather than replacing it. */
 export function installHooks(
   repoRoot: string,
@@ -122,13 +154,7 @@ export function installHooks(
   return names.map((name): HookAction => {
     const path = join(dir, name);
     if (isOurs(path)) {
-      const current = readFileSync(path, "utf8");
-      const ours = hookBody(name, detectHookLang(current) ?? lang);
-      if (current === ours) {
-        return { hook: name, kind: "already", path };
-      }
-      writeFileSync(path, ours, { mode: 0o755 });
-      return { hook: name, kind: "written", path };
+      return refreshOwnHook(name, path, lang);
     }
     if (!existsSync(path)) {
       writeFileSync(path, hookBody(name, lang), { mode: 0o755 });

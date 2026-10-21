@@ -77,6 +77,33 @@ describe("a block written before the remote name was passed", () => {
     expect(readFileSync(hookPath(root, "pre-push"), "utf8")).toBe(current);
     expect(installHooks(root, ["pre-push"])[0]?.kind).toBe("already");
   });
+
+  test("Reinstalling over a hook the person extended changes only the call line", () => {
+    const root = repo();
+    installHooks(root, ["pre-push"]);
+    const written = readFileSync(hookPath(root, "pre-push"), "utf8");
+    const added = "\necho the repository's own gates\nbun run validate || exit 1\n";
+    const extended = written.replace(' "${1:-}"', "") + added;
+    writeFileSync(hookPath(root, "pre-push"), extended, { mode: 0o755 });
+
+    expect(installHooks(root, ["pre-push"])[0]?.kind).toBe("written");
+    expect(readFileSync(hookPath(root, "pre-push"), "utf8")).toBe(written + added);
+    expect(installHooks(root, ["pre-push"])[0]?.kind).toBe("already");
+  });
+
+  test("a hook it wrote that lost its call line is left alone and named", () => {
+    const root = repo();
+    installHooks(root, ["pre-push"]);
+    const edited = readFileSync(hookPath(root, "pre-push"), "utf8").replace(
+      /^qsm-langdev hook .*$/m,
+      "echo hand-written",
+    );
+    writeFileSync(hookPath(root, "pre-push"), edited, { mode: 0o755 });
+
+    const action = installHooks(root, ["pre-push"])[0];
+    expect(action?.kind).toBe("manual");
+    expect(readFileSync(hookPath(root, "pre-push"), "utf8")).toBe(edited);
+  });
 });
 
 describe("uninstallHooks", () => {
