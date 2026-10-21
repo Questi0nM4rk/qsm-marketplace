@@ -77,3 +77,17 @@ export function pushedRange(pushed: PushedRef): string | null {
     ? `${pushed.localOid} --not --remotes`
     : `${pushed.remoteOid}..${pushed.localOid}`;
 }
+
+/** Whether the ref's remote tip is a commit this clone never fetched, so a range from it cannot resolve. */
+export function remoteTipMissing(root: string, pushed: PushedRef): boolean {
+  return (
+    !ZERO.test(pushed.remoteOid) &&
+    git(root, "cat-file", "-e", `${pushed.remoteOid}^{commit}`) === null
+  );
+}
+
+/** How many commits a `pushedRange` lists, or null when git cannot resolve it. */
+export function commitCount(root: string, range: string): number | null {
+  const out = git(root, "rev-list", "--count", ...range.split(" "));
+  return out === null ? null : Number(out);
+}

@@ -627,8 +627,12 @@ remote the range is the remote commit up to the local one; for a new branch it i
 not reachable from any remote-tracking ref; a deletion adds no commit and is skipped. A finding
 SHALL block the push naming the rule id, file, line and short commit of each hit, never the matched
 value. A gitleaks run that fails without a report SHALL block the push as one that could not run,
-and a missing `.gitleaks.toml` or gitleaks binary SHALL block it as at a commit. The machine-local
-content denylist is a commit-time check and SHALL NOT run at a push.
+and a missing `.gitleaks.toml` or gitleaks binary SHALL block it as at a commit. Before scanning a
+ref the remote has, the gate SHALL check that the remote commit exists in this clone, and SHALL
+block the push naming the ref and telling the person to fetch when it does not, because gitleaks
+exits 0 over a range it cannot resolve. A range git cannot list SHALL block the push as one that
+could not run; a range that lists no commit adds nothing and is skipped. The machine-local content
+denylist is a commit-time check and SHALL NOT run at a push.
 
 #### Scenario: A pushed commit holds a secret
 
@@ -641,6 +645,13 @@ content denylist is a commit-time check and SHALL NOT run at a push.
 
 - **WHEN** every commit a push adds is free of secret-shaped strings
 - **THEN** the secrets gate SHALL pass
+
+#### Scenario: A force push over a remote tip this clone never fetched
+
+- **WHEN** a push replaces a remote ref whose commit is not in this clone, with commits that hold a
+  secret-shaped string
+- **THEN** the push is blocked, the output names the ref and says to fetch first, and the remote ref
+  does not move
 
 ### Requirement: Nothing this tool touches has a warning level
 

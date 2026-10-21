@@ -77,4 +77,27 @@ describe("qsm-langdev secrets gate at a push", () => {
     commit(work, "clean");
     expect(push(setup, "feature").exit).toBe(0);
   }, 60_000);
+
+  test("a force push over a remote tip this clone never fetched is refused, the remote unmoved", () => {
+    const setup = pushSetup();
+    const { work, home } = setup;
+    const remote = join(home, "remote.git");
+    expect(push(setup, "main").exit).toBe(0);
+
+    // Someone else moves the remote; this clone never fetches that commit.
+    const other = join(home, "other");
+    git(home, "clone", "-q", "-b", "main", remote, other);
+    writeIn(other, "theirs.txt", "theirs\n");
+    commit(other, "theirs");
+    git(other, "push", "-q", "origin", "main");
+    const tip = git(home, "-C", remote, "rev-parse", "main");
+
+    writeIn(work, "config.txt", `aws_key = "${FAKE_KEY}"\n`);
+    commit(work, "add config");
+    const forced = push(setup, "+main");
+    expect(forced.exit).not.toBe(0);
+    expect(forced.stderr).toContain("never fetched");
+    expect(forced.stderr).toContain("git fetch");
+    expect(git(home, "-C", remote, "rev-parse", "main")).toBe(tip);
+  }, 60_000);
 });

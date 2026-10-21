@@ -10,7 +10,14 @@ import { describeSets } from "./file-sets.ts";
 import { fixFiles, isFixable } from "./fixers.ts";
 import { resolveRef } from "./gitref.ts";
 import { recordsOf } from "./json.ts";
-import { parsePushLines, pushedRange, pushReference } from "./push.ts";
+import {
+  commitCount,
+  type PushedRef,
+  parsePushLines,
+  pushedRange,
+  pushReference,
+  remoteTipMissing,
+} from "./push.ts";
 import type { EnforcementPoint } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
 import { compareStructure, type StructureResult, verdict } from "./structure.ts";
@@ -114,8 +121,72 @@ function secretsGate(root: string, point: EnforcementPoint, pushLines?: string):
   return denylistGate(root);
 }
 
+/** The block for a pushed range gitleaks would scan as nothing and exit 0 over: a remote tip this
+ * clone never fetched, or a range git cannot list. "empty" when it lists no commit, null when it can
+ * be scanned. */
+function rangeProblem(root: string, ref: PushedRef, range: string): GateOutcome | "empty" | null {
+  if (remoteTipMissing(root, ref)) {
+    return fail("secrets", `${ref.remoteRef} is at a commit this clone never fetched`, [
+      "Run git fetch, then push again: the pushed commits cannot be scanned without the remote tip.",
+    ]);
+  }
+  const count = commitCount(root, range);
+  if (count === null) {
+    return fail("secrets", `git cannot list the commits pushed to ${ref.remoteRef}`, [
+      `Run git rev-list ${range} by hand and fix what it reports.`,
+    ]);
+  }
+  return count === 0 ? "empty" : null;
+}
+
+/** The hits gitleaks reports over the commits one pushed ref adds, or the block when the range
+ * cannot be scanned. A run that fails without a report is a run that never scanned. */
+function scanPushedRef(root: string, config: string, ref: PushedRef): GateOutcome | string[] {
+  const range = pushedRange(ref);
+  if (range === null) {
+    return [];
+  }
+  const problem = rangeProblem(root, ref, range);
+  if (problem === "empty") {
+    return [];
+  }
+  if (problem !== null) {
+    return problem;
+  }
+  const result = runOrMissing(
+    "gitleaks",
+    [
+      "git",
+      `--log-opts=${range}`,
+      "--config",
+      config,
+      "--no-banner",
+      "--redact",
+      "--report-format",
+      "json",
+      "--report-path",
+      "-",
+    ],
+    root,
+  );
+  if ("missing" in result) {
+    return fail("secrets", "gitleaks is not installed", [
+      "Install: https://github.com/gitleaks/gitleaks, or your package manager",
+    ]);
+  }
+  const found = findingsOf(result.stdout);
+  if (result.status !== 0 && found.length === 0) {
+    return fail("secrets", `gitleaks could not scan ${ref.localRef}`, [
+      `Run gitleaks git --log-opts="${range}" --config ${config} --redact by hand and fix what it reports.`,
+    ]);
+  }
+  return found.map(
+    (hit) => `rule ${hit.rule} hit in ${hit.file}:${hit.line} (commit ${hit.commit})`,
+  );
+}
+
 /** The commits each pushed ref adds, scanned redacted with the repo config: a hit names rule, file,
- * line and commit, never the value. A run that fails without a report is a run that never scanned. */
+ * line and commit, never the value. */
 function pushedSecretsGate(root: string, config: string, pushLines?: string): GateOutcome {
   if (pushLines === undefined) {
     return fail("secrets", "this gate needs git's pushed refs and none were handed to it", [
@@ -124,40 +195,11 @@ function pushedSecretsGate(root: string, config: string, pushLines?: string): Ga
   }
   const hits: string[] = [];
   for (const ref of parsePushLines(pushLines)) {
-    const range = pushedRange(ref);
-    if (range === null) {
-      continue;
+    const scanned = scanPushedRef(root, config, ref);
+    if (!Array.isArray(scanned)) {
+      return scanned;
     }
-    const result = runOrMissing(
-      "gitleaks",
-      [
-        "git",
-        `--log-opts=${range}`,
-        "--config",
-        config,
-        "--no-banner",
-        "--redact",
-        "--report-format",
-        "json",
-        "--report-path",
-        "-",
-      ],
-      root,
-    );
-    if ("missing" in result) {
-      return fail("secrets", "gitleaks is not installed", [
-        "Install: https://github.com/gitleaks/gitleaks, or your package manager",
-      ]);
-    }
-    const found = findingsOf(result.stdout);
-    if (result.status !== 0 && found.length === 0) {
-      return fail("secrets", `gitleaks could not scan ${ref.localRef}`, [
-        `Run gitleaks git --log-opts="${range}" --config ${config} --redact by hand and fix what it reports.`,
-      ]);
-    }
-    for (const hit of found) {
-      hits.push(`rule ${hit.rule} hit in ${hit.file}:${hit.line} (commit ${hit.commit})`);
-    }
+    hits.push(...scanned);
   }
   if (hits.length === 0) {
     return pass("secrets");
