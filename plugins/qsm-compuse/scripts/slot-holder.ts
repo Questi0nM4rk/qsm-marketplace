@@ -6,6 +6,7 @@
 // virtual device and destroy it on exit, which is too short for a client to react to. This
 // process keeps one of each alive so the capabilities stay on the seat. Plain wire protocol,
 // no libraries: the protocols are tiny and nothing here may need installing.
+import { createReadStream, openSync } from "node:fs";
 import { createConnection } from "node:net";
 import { runtimeDir } from "../../../lib/paths.ts";
 
@@ -14,6 +15,7 @@ const CALLBACK = 3;
 const SEAT = 4;
 const POINTER_MANAGER = 5;
 const KEYBOARD_MANAGER = 6;
+const POINTER = 7;
 
 const word = (...values: number[]): Buffer => {
   const out = Buffer.alloc(values.length * 4);
@@ -25,6 +27,9 @@ const text = (value: string): Buffer => {
   const data = Buffer.from(`${value}\0`);
   return Buffer.concat([word(data.length), data, Buffer.alloc((4 - (data.length % 4)) % 4)]);
 };
+
+// wl_fixed_t: signed 24.8.
+const fixed = (value: number): number => Math.round(value * 256) >>> 0;
 
 const message = (object: number, opcode: number, body: Buffer = Buffer.alloc(0)): Buffer =>
   Buffer.concat([word(object, ((8 + body.length) << 16) | opcode), body]);
@@ -73,9 +78,59 @@ function hold(socket: ReturnType<typeof createConnection>): void {
   bind(socket, "wl_seat", SEAT);
   bind(socket, "zwlr_virtual_pointer_manager_v1", POINTER_MANAGER);
   bind(socket, "zwp_virtual_keyboard_manager_v1", KEYBOARD_MANAGER);
-  socket.write(message(POINTER_MANAGER, 0, word(SEAT, 7)));
+  socket.write(message(POINTER_MANAGER, 0, word(SEAT, POINTER)));
   socket.write(message(KEYBOARD_MANAGER, 0, word(SEAT, 8)));
   console.log("holding");
+  listen(socket);
+}
+
+// virtual_pointer opcodes: motion 0, motion_absolute 1, button 2, axis 3, frame 4, axis_source 5, axis_discrete 7.
+const stamp = (): number => Date.now() >>> 0;
+
+// One notch of a wheel is 15 units of axis value and one discrete step (value120 / 120).
+function wheel(notches: number): Buffer {
+  return Buffer.concat([
+    message(POINTER, 5, word(0)),
+    message(POINTER, 7, word(stamp(), 0, fixed(15 * notches), notches >>> 0)),
+    message(POINTER, 4),
+  ]);
+}
+
+// The control channel: `drive` writes one command per line to the FIFO `ctl` in the slot dir, and
+// they reach the seat through the same virtual pointer that keeps its capability alive.
+//   rel DX DY | abs X Y W H | btn LINUX_CODE 0|1 | wheel NOTCHES (positive = down)
+const commands: Record<string, (n: number[]) => Buffer> = {
+  rel: ([dx = 0, dy = 0]) => pointerEvent(0, fixed(dx), fixed(dy)),
+  abs: ([x = 0, y = 0, w = 1, h = 1]) => pointerEvent(1, x, y, w, h),
+  btn: ([code = 0, state = 0]) => pointerEvent(2, code, state),
+  wheel: ([notches = 0]) => wheel(notches),
+};
+
+function pointerEvent(opcode: number, ...values: number[]): Buffer {
+  return Buffer.concat([message(POINTER, opcode, word(stamp(), ...values)), message(POINTER, 4)]);
+}
+
+function command(line: string): Buffer | undefined {
+  const [verb = "", ...args] = line.trim().split(/\s+/);
+  const n = args.map(Number);
+  return n.some(Number.isNaN) ? undefined : commands[verb]?.(n);
+}
+
+function listen(socket: ReturnType<typeof createConnection>): void {
+  const dir = process.env.DRIVE_SLOT_ID;
+  if (dir === undefined) return;
+  // Read-write open: a FIFO opened only for reading reports end-of-file when the last writer leaves.
+  const stream = createReadStream("", { fd: openSync(`${dir}/ctl`, "r+"), encoding: "utf8" });
+  let rest = "";
+  stream.on("data", (chunk) => {
+    const lines = (rest + String(chunk)).split("\n");
+    rest = lines.pop() ?? "";
+    for (const line of lines) {
+      const out = command(line);
+      if (out) socket.write(out);
+      else console.error(`slot-holder: bad command '${line}'`);
+    }
+  });
 }
 
 const runtime = runtimeDir(process.env);

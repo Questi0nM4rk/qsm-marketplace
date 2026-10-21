@@ -164,6 +164,17 @@ cmd_click() {
   ydotool click "${2:-0xC0}" >/dev/null 2>&1 || die "click failed"
   sleep "${3:-0.4}"
 }
+# Hold or let go of a button, so a drag is press, move, release. Mask: ydotool 0x40 down / 0x80 up | button.
+cmd_press() {
+  in_slot && slot_press "$@" && return
+  need ydotool
+  ydotool click "0x4$(($(slot_button "${1:-}") - 272))" >/dev/null 2>&1 || die "press failed"
+}
+cmd_release() {
+  in_slot && slot_release "$@" && return
+  need ydotool
+  ydotool click "0x8$(($(slot_button "${1:-}") - 272))" >/dev/null 2>&1 || die "release failed"
+}
 cmd_rclick() {
   in_slot && slot_click right "${1:-}" && return
   need ydotool
@@ -270,6 +281,7 @@ drive — sudo-free computer use on Hyprland/Wayland
 
   INPUT (ydotool)
     click [mask] [settle]    left click (0xC0); mask overridable
+    press [left|right|middle] / release   hold and let go of a button (a drag is press, move, release)
     rclick / mclick          right / middle click
     type "text" [settle]     type a literal string
     scroll [amount]          wheel; negative = down
@@ -293,7 +305,7 @@ drive — sudo-free computer use on Hyprland/Wayland
     slot run NAME -- CMD...                    run a client inside it (QT_QPA_PLATFORM=wayland)
     slot bench NAME ROOT KEY                   start a Workbench session of story KEY in it (what geom reads)
     slot ls | slot stop NAME                   list slots with RSS | kill the whole tree, remove its files
-    slot budget [--reserve-mb N] [--per-slot-mb N]   how many more slots fit in MemAvailable
+    slot budget [--reserve-mb N] [--per-slot-mb N] [--provider ROOT] [--story KEY] [--remeasure]   slots that fit in MemAvailable (cost measured by a probe slot, cached)
 
   FLOW
     until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
@@ -316,7 +328,7 @@ source "$MOTION_DIR/drive-slot"
 dispatch() {
   in_slot && slot_refuse "${1:-}"
   case "${1:-}" in
-    slot | move | warp | nudge | record | frames | route | key | sendkey | click | rclick | mclick | type | scroll | shot | l2p | until)
+    slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | l2p | until)
       local verb="cmd_$1"
       shift
       "$verb" "$@"

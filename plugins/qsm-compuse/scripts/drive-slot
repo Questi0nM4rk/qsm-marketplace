@@ -78,6 +78,7 @@ slot_hold() {
   need bun
   local log i
   log="$(slot_dir "$1")/holder.log"
+  mkfifo "$(slot_dir "$1")/ctl" || die "could not create the control FIFO"
   # The whole subshell is detached from the caller's stdio: a backgrounded list keeps
   # the caller's pipe open for as long as the holder lives.
   (slot_load "$1" && exec setsid bun "$MOTION_DIR/slot-holder.ts") </dev/null >"$log" 2>&1 &
@@ -194,28 +195,58 @@ slot_ls() {
   done
 }
 
-# Mean RSS (MB) over the running slots, empty when none runs.
-slot_mean_rss() {
-  local name sum=0 n=0
-  for name in $(slot_names); do
-    slot_alive "$name" && sum=$((sum + $(slot_rss_mb "$name"))) && n=$((n + 1))
+slot_avail_mb() { awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo; }
+
+# Waits until MemAvailable moves less than 8 MB between two reads 1 s apart (at most 30 s).
+slot_settle() {
+  local prev now i
+  prev="$(slot_avail_mb)"
+  for ((i = 0; i < 30; i++)); do
+    sleep 1
+    now="$(slot_avail_mb)"
+    ((prev - now < 8 && now - prev < 8)) && return
+    prev="$now"
   done
-  ((n == 0)) || echo $((sum / n))
 }
 
-# Slots that fit = (MemAvailable - reserve) / per-slot RSS, the per-slot figure measured on running slots.
+# Per-slot cost = the MemAvailable drop of one probe slot running a Workbench, which RSS sums
+# overcount (shared pages) and miss (GPU and page cache); stopping the probe restores the memory.
+slot_probe() {
+  local before after
+  slot_alive budget-probe && die "slot 'budget-probe' is running; stop it first"
+  before="$(slot_avail_mb)"
+  slot_start budget-probe >&2
+  slot_bench budget-probe "$1" "$2" >&2 || { slot_kill budget-probe && die "probe failed"; }
+  slot_settle
+  after="$(slot_avail_mb)"
+  slot_kill budget-probe
+  ((before > after)) || die "probe slot did not lower MemAvailable ($before -> $after MB); measure again when the machine is idle"
+  echo $((before - after))
+}
+
+# Slots that fit = (MemAvailable - reserve) / per-slot cost. The cost is measured once and cached in the slot root.
 slot_budget() {
-  local reserve=3072 per="" avail how=measured
+  local reserve=3072 per="" how=given provider="$PWD" story=level cache="$SLOT_ROOT/per-slot-mb" remeasure=""
   while (($#)); do
     case "$1" in
       --reserve-mb) reserve="${2:?--reserve-mb needs a number}" && shift 2 ;;
-      --per-slot-mb) per="${2:?--per-slot-mb needs a number}" && how=given && shift 2 ;;
+      --per-slot-mb) per="${2:?--per-slot-mb needs a number}" && shift 2 ;;
+      --provider) provider="${2:?--provider needs a Workbench provider root}" && shift 2 ;;
+      --story) story="${2:?--story needs a story key}" && shift 2 ;;
+      --remeasure) remeasure=1 && shift ;;
       *) die "slot budget: unknown option '$1'" ;;
     esac
   done
-  [[ -n "$per" ]] || per="$(slot_mean_rss)"
-  [[ "$per" =~ ^[1-9][0-9]*$ ]] || die "no running slot to measure; start one or pass --per-slot-mb"
-  avail="$(awk '/^MemAvailable:/{print int($2/1024)}' /proc/meminfo)"
+  if [[ -z "$per" && -z "$remeasure" && -s "$cache" ]]; then per="$(<"$cache")" && how=cached; fi
+  if [[ -z "$per" ]]; then
+    need qsm-workbench
+    per="$(slot_probe "$provider" "$story")" || exit 1
+    mkdir -p "$SLOT_ROOT" && echo "$per" >"$cache"
+    how=measured
+  fi
+  [[ "$per" =~ ^[1-9][0-9]*$ ]] || die "--per-slot-mb must be a positive number"
+  local avail
+  avail="$(slot_avail_mb)"
   printf 'available=%sMB reserve=%sMB per-slot=%sMB (%s) -> %s more slots fit\n' "$avail" "$reserve" "$per" "$how" \
     "$((avail > reserve ? (avail - reserve) / per : 0))"
 }
@@ -239,16 +270,20 @@ cmd_slot() {
 
 # ---- slot forms of pointer and keys: wlroots virtual pointer and keyboard ----
 
-# Pointer position is TRACKED, not read: neither wlrctl nor sway reports it. A move to X,Y is a
-# large negative relative move (the cursor clamps at the output corner), then an exact relative
-# move, so the tracked value is exact while no other input source exists in the slot.
+# Every pointer event goes through the holder's virtual pointer, the one device the slot's seat
+# keeps, as one line on its control FIFO. Absolute motion is exact, so the position needs no tracking
+# tricks; the pos file only remembers it for nudge and wake.
+slot_ctl() {
+  printf '%s\n' "$*" | timeout 2 tee "$(slot_dir "$DRIVE_SLOT")/ctl" >/dev/null || die "slot input holder is not reading (see $(slot_dir "$DRIVE_SLOT")/holder.log)"
+}
+
 slot_move() {
   [[ $# -ge 2 && "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]] || die "move needs X Y inside the slot output (non-negative integers)"
-  need wlrctl
-  wlrctl pointer move -20000 -20000 || die "wlrctl move failed"
-  wlrctl pointer move "$1" "$2" || die "wlrctl move failed"
+  local w h
+  read -r w h < <(awk -v s="$SLOT_SIZE" -v k="$SLOT_SCALE" 'BEGIN{split(s,d,"x"); printf "%d %d\n", d[1]/k+0.5, d[2]/k+0.5}')
+  slot_ctl abs "$1" "$2" "$w" "$h"
   printf '%s %s\n' "$1" "$2" >"$(slot_dir "$DRIVE_SLOT")/pos"
-  printf 'cursor tracked: %s,%s (slot %s)\n' "$1" "$2" "$DRIVE_SLOT"
+  printf 'cursor: %s,%s (slot %s)\n' "$1" "$2" "$DRIVE_SLOT"
   sleep "${3:-$SETTLE}"
 }
 
@@ -268,16 +303,26 @@ slot_nudge() {
   slot_move "$((x + $1))" "$((y + $2))" "${3:-$SETTLE}"
 }
 
-slot_click() {
-  need wlrctl
-  wlrctl pointer click "$1" || die "click failed"
-  sleep "${2:-0.4}"
+slot_button() {
+  case "${1:-left}" in
+    left) echo 272 ;;
+    right) echo 273 ;;
+    middle) echo 274 ;;
+    *) die "button must be left, right or middle" ;;
+  esac
 }
 
-# drive scroll: negative = down. wlrctl: positive = down.
+# press and release are one device event each, so a drag is press, move, release.
+slot_press() { slot_ctl btn "$(slot_button "${1:-}")" 1 && sleep "${2:-0.2}"; }
+slot_release() { slot_ctl btn "$(slot_button "${1:-}")" 0 && sleep "${2:-0.2}"; }
+
+slot_click() {
+  slot_press "$1" 0.08 && slot_release "$1" "${2:-0.4}"
+}
+
+# drive scroll: negative = down, which is a positive wheel.
 slot_scroll() {
-  need wlrctl
-  wlrctl pointer scroll "$((-${1:--1}))" 0 || die "scroll failed"
+  slot_ctl wheel "$((-${1:--1}))"
   sleep "${2:-0.4}"
 }
 

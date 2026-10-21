@@ -81,10 +81,9 @@ route_key() {
   if ((${#combo[@]} > 1)); then cmd_key "${combo[*]::${#combo[@]}-1}" "${combo[-1]}" 0.3; else cmd_key "${combo[0]}" 0.3; fi
 }
 
-# wlrctl has no press or release, only a whole click, so a slot route refuses them.
-route_button() {
-  in_slot && die "route step '$1' has no slot form (wlrctl clicks whole); use click"
-  ydotool click "$([[ "$1" == press ]] && echo 0x40 || echo 0x80)" >/dev/null 2>&1 || die "$1 failed"
+# hover-wait MS: a pause in milliseconds.
+route_wait() {
+  sleep "$(awk -v ms="${1:-0}" 'BEGIN{print ms/1000}')"
 }
 
 # One route step; a `shot` step only names the capture, the caller shoots.
@@ -92,8 +91,8 @@ route_step() {
   local verb="$1" a="$2" b="$3" rest="$4"
   case "$verb" in
     move-to) cmd_move "$a" "$b" >/dev/null ;;
-    hover-wait) sleep "$(awk -v ms="${a:-0}" 'BEGIN{print ms/1000}')" ;;
-    press | release) route_button "$verb" ;;
+    hover-wait) route_wait "$a" ;;
+    press | release) "cmd_$verb" ;;
     click) cmd_click ;;
     key) route_key "$a" "$b" "$rest" ;;
     wheel) cmd_scroll "$a" ;;

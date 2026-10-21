@@ -143,6 +143,7 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive until 'CMD' [tries]` | Poll until a condition holds. |
 | `drive mclick` | Middle click — many UIs bind "close this" to it. |
 | `drive scroll -3` | Wheel; negative is down. |
+| `drive press [left\|right\|middle]` / `drive release [...]` | Hold and let go of a button, so a drag is press, move, release. |
 | `drive focused` | Focused output name, for `grim -o`. |
 | `drive l2p N [MON]` | Logical length to physical pixels. |
 | `drive geom CHECK ...` | Measure the live item tree with equations and PASS/FAIL: `insets`, `overlap`, `inside`, `centre`, `target`, `dump` (selectors: `Rail/RailEntry[2]`, `*[type=Slider]`; run `drive geom`). |
@@ -154,5 +155,5 @@ Run `drive` bare for the full command list. Notable ones beyond the basics:
 | `drive slot run NAME -- CMD...` | Run a client inside the slot (`QT_QPA_PLATFORM=wayland`). |
 | `drive slot bench NAME ROOT KEY` | Start a Workbench session of story `KEY` of provider `ROOT` in the slot; `drive geom --slot` reads its item tree (scene coordinates, not output pixels). |
 | `drive slot ls` / `drive slot stop NAME` | List slots with process count and summed RSS / kill every process of the slot (found by its `DRIVE_SLOT_ID` marker) and remove its files. |
-| `drive slot budget [--reserve-mb N] [--per-slot-mb N]` | How many more slots fit: (MemAvailable - reserve, default 3072) / per-slot RSS measured on running slots. |
-| `drive VERB ... --slot NAME` (or `DRIVE_SLOT=NAME`) | `shot`, `record`, `frames`, `route`, `move`, `nudge`, `pos`, `click`, `rclick`, `mclick`, `type`, `scroll`, `key`, `sendkey`, `geom` act on the slot through wlrctl, wtype and grim; `warp`, `l2p`, `mons`, `doctor`, `contrast` refuse; `route` has no `press`/`release`. Slot pointer position is tracked (large negative move to the corner, then an exact relative move), not read. |
+| `drive slot budget [--reserve-mb N] [--per-slot-mb N]` | How many more slots fit: (MemAvailable - reserve, default 3072) / per-slot cost: the MemAvailable drop of a probe slot running a Workbench (`--provider ROOT`, default the current directory; `--story KEY`, default `level`), measured once and cached in the slot root (`--remeasure` repeats it, `--per-slot-mb` overrides it). |
+| `drive VERB ... --slot NAME` (or `DRIVE_SLOT=NAME`) | `shot`, `record`, `frames`, `route`, `move`, `nudge`, `pos`, `click`, `rclick`, `mclick`, `type`, `scroll`, `key`, `sendkey`, `geom` `press`, `release` act on the slot (also as `route` steps) through one virtual pointer held by the slot, whose control FIFO takes absolute motion, buttons and wheel notches (`axis_source` wheel, `axis_discrete`, frame), and through wtype and grim; `warp`, `l2p`, `mons`, `doctor`, `contrast` refuse. Slot `move` is absolute motion on that device; the position is remembered for `nudge`. |
