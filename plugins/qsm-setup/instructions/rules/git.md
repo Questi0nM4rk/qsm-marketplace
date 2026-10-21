@@ -22,3 +22,6 @@ is the writing skill; worktrees are the worktrunk skill; threads are the review-
    `--body-file` or `--notes-file`, because the shell runs backticks as a command and the comment
    posts mangled. Read fresh comments with `gh api repos/<owner>/<repo>/issues/<n>/comments`,
    because `gh issue list --json comments` lags behind.
+8. Work lands in this order, with no pull request until the person says otherwise: a worktree, a
+   local test, a local review agent, `/simplify`, then a merge to main. A step skipped is named,
+   never silent.
