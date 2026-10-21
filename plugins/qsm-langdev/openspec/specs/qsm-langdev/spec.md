@@ -624,22 +624,37 @@ one line that the content denylist is not set up, naming the `content-denylist` 
 At pre-push the `secrets` gate SHALL run gitleaks with the repository's `.gitleaks.toml`, redacted,
 over the commits each pushed ref adds, never over the staged changes. For a ref that exists on the
 remote the range is the remote commit up to the local one; for a new branch it is the local commits
-not reachable from any remote-tracking ref; a deletion adds no commit and is skipped. A finding
-SHALL block the push naming the rule id, file, line and short commit of each hit, never the matched
-value. A gitleaks run that fails without a report SHALL block the push as one that could not run,
-and a missing `.gitleaks.toml` or gitleaks binary SHALL block it as at a commit. Before scanning a
-ref the remote has, the gate SHALL check that the remote commit exists in this clone, and SHALL
-block the push naming the ref and telling the person to fetch when it does not, because gitleaks
-exits 0 over a range it cannot resolve. A range git cannot list SHALL block the push as one that
-could not run; a range that lists no commit adds nothing and is skipped. The machine-local content
-denylist is a commit-time check and SHALL NOT run at a push.
+not reachable from a remote-tracking ref of the remote being pushed to, whose name git hands the
+hook as its first argument, so a commit only another remote holds is still scanned; a deletion adds
+no commit and is skipped. A pre-push call that carries no remote name SHALL block the push, naming
+the hook as out of date and telling the person to run `qsm-langdev install` again. A finding SHALL
+block the push naming the rule id, file and line of each hit, never the matched value. A gitleaks
+run that fails without a report SHALL block the push as one that could not run, a missing
+`.gitleaks.toml` SHALL block it as a fail naming that file, and a missing gitleaks binary SHALL
+block it as a fail naming the binary. Before scanning a ref the remote has, the gate SHALL check
+that the remote commit exists in this clone, and SHALL block the push naming the ref and telling
+the person to fetch when it does not, because gitleaks exits 0 over a range it cannot resolve. A
+range git cannot list SHALL block the push as one that could not run; a range that lists no commit
+adds nothing and is skipped. The machine-local content denylist is a commit-time check and SHALL
+NOT run at a push.
 
 #### Scenario: A pushed commit holds a secret
 
 - **WHEN** a push adds a commit whose file holds a secret-shaped string, to an existing branch or a
   new one
-- **THEN** the push is blocked and the output names the rule id, file, line and commit, and not the
-  string
+- **THEN** the push is blocked and the output names the rule id, file and line, and not the string
+
+#### Scenario: A commit only another remote holds
+
+- **WHEN** a new branch is pushed to one remote and a commit it adds, holding a secret-shaped
+  string, is reachable only from the remote-tracking refs of a different remote
+- **THEN** the push is blocked
+
+#### Scenario: A hook installed before the remote name was passed
+
+- **WHEN** an installed pre-push hook calls the gate without the remote name
+- **THEN** the push is blocked, the output says the hook is out of date and to run
+  `qsm-langdev install` again, and nothing is scanned or skipped
 
 #### Scenario: A clean push
 
@@ -803,8 +818,10 @@ without leaving the session or invoking the gate.
 
 `install` SHALL wire the reference-versus-shipped comparison into the repository's commit and push
 points, appending to an existing hook script rather than replacing it, each calling
-`qsm-langdev hook <pre-commit|pre-push>`, and marking exactly what it added. `uninstall` SHALL
-remove exactly what `install` added and nothing the repository already had.
+`qsm-langdev hook <pre-commit|pre-push>`, and marking exactly what it added. The pre-push call
+carries the remote name git hands the hook as its first argument. `install` SHALL bring a hook or
+block it wrote earlier up to the current call, so a repository is never left on a stale one.
+`uninstall` SHALL remove exactly what `install` added and nothing the repository already had.
 
 #### Scenario: Installing beside an existing hook
 
@@ -817,3 +834,9 @@ remove exactly what `install` added and nothing the repository already had.
 - **WHEN** `uninstall` runs after `install` appended to an existing hook
 - **THEN** the repository's original hook content SHALL remain and the
   appended block SHALL be gone
+
+#### Scenario: Reinstalling over a hook written before the remote name was passed
+
+- **WHEN** `install` runs and the pre-push hook or block it wrote earlier lacks the remote name
+- **THEN** that hook or block SHALL be rewritten to the current call, and a second `install` SHALL
+  change nothing

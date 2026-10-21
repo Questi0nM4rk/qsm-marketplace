@@ -43,6 +43,7 @@ export type Langdev = {
   }): Promise<unknown>;
   hook(options: {
     name: "pre-commit" | "pre-push";
+    remote?: string;
   }): Promise<unknown>;
 };
 

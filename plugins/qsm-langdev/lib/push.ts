@@ -9,7 +9,8 @@ export interface PushedRef {
   remoteOid: string;
 }
 
-const ZERO = /^0+$/;
+/** The all-zero oid git writes for a ref that does not exist. */
+const isZero = (oid: string): boolean => oid !== "" && oid.replaceAll("0", "") === "";
 
 export function parsePushLines(text: string): PushedRef[] {
   const refs: PushedRef[] = [];
@@ -50,10 +51,10 @@ function defaultBranch(root: string): string | null {
  * nothing to compare: a deletion (local oid all zeros), a new branch with no
  * default branch to take a merge base from, or a push that adds no commit. */
 export function pushReference(root: string, pushed: PushedRef): string | null {
-  if (ZERO.test(pushed.localOid)) {
+  if (isZero(pushed.localOid)) {
     return null;
   }
-  if (!ZERO.test(pushed.remoteOid)) {
+  if (!isZero(pushed.remoteOid)) {
     return pushed.remoteOid;
   }
   const base = defaultBranch(root);
@@ -68,20 +69,22 @@ export function pushReference(root: string, pushed: PushedRef): string | null {
 }
 
 /** The git log range holding the commits a pushed ref adds: remote..local for a ref the remote
- * has, the local commits no remote-tracking ref reaches for a new branch, null for a deletion. */
-export function pushedRange(pushed: PushedRef): string | null {
-  if (ZERO.test(pushed.localOid)) {
+ * has, the local commits no remote-tracking ref of `remote` reaches for a new branch, null for a
+ * deletion. Only the remote being pushed to counts: a commit another remote holds is still news to
+ * this one. Remote names cannot hold glob characters, so `--remotes=<name>` is refs/remotes/<name>/*. */
+export function pushedRange(pushed: PushedRef, remote: string): string | null {
+  if (isZero(pushed.localOid)) {
     return null;
   }
-  return ZERO.test(pushed.remoteOid)
-    ? `${pushed.localOid} --not --remotes`
+  return isZero(pushed.remoteOid)
+    ? `${pushed.localOid} --not --remotes=${remote}`
     : `${pushed.remoteOid}..${pushed.localOid}`;
 }
 
 /** Whether the ref's remote tip is a commit this clone never fetched, so a range from it cannot resolve. */
 export function remoteTipMissing(root: string, pushed: PushedRef): boolean {
   return (
-    !ZERO.test(pushed.remoteOid) &&
+    !isZero(pushed.remoteOid) &&
     git(root, "cat-file", "-e", `${pushed.remoteOid}^{commit}`) === null
   );
 }

@@ -7,12 +7,40 @@
       "qsm-langdev check": {
         "description": "Compare the working tree against a reference commit through every selected checker (exit 3 = worse)",
         "args": [
-          { "name": "dir", "type": "string", "positional": true, "description": "repository path (defaults to cwd)" },
-          { "name": "path", "type": "string", "positional": true, "repeatable": true, "description": "a file or directory, relative to the repository, for the checkers that score the given set (defaults to the whole repository)" },
-          { "name": "against", "type": "string", "description": "reference commit (defaults to HEAD)" },
-          { "name": "at", "type": "string", "choices": ["pre-commit", "pre-push"], "description": "enforcement point (defaults to pre-commit)" },
-          { "name": "lang", "type": "string", "description": "comma-separated languages, overriding the repository's selection" },
-          { "name": "allFindings", "type": "boolean", "description": "report every current finding, not only the newly occurring ones" }
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "repository path (defaults to cwd)"
+          },
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "repeatable": true,
+            "description": "a file or directory, relative to the repository, for the checkers that score the given set (defaults to the whole repository)"
+          },
+          {
+            "name": "against",
+            "type": "string",
+            "description": "reference commit (defaults to HEAD)"
+          },
+          {
+            "name": "at",
+            "type": "string",
+            "choices": ["pre-commit", "pre-push"],
+            "description": "enforcement point (defaults to pre-commit)"
+          },
+          {
+            "name": "lang",
+            "type": "string",
+            "description": "comma-separated languages, overriding the repository's selection"
+          },
+          {
+            "name": "allFindings",
+            "type": "boolean",
+            "description": "report every current finding, not only the newly occurring ones"
+          }
         ]
       },
       "qsm-langdev list": {
@@ -21,58 +49,148 @@
       "qsm-langdev doctor": {
         "description": "Report which checker binaries are present, with install commands for the rest",
         "args": [
-          { "name": "dir", "type": "string", "positional": true, "description": "repository path (defaults to cwd)" }
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "repository path (defaults to cwd)"
+          }
         ]
       },
       "qsm-langdev languages": {
         "description": "List, add, or remove the languages this repository gates on",
         "args": [
-          { "name": "action", "type": "string", "positional": true, "choices": ["list", "add", "remove"], "description": "what to do with the selection (defaults to list)" },
-          { "name": "name", "type": "string", "positional": true, "description": "the language, for add and remove" }
+          {
+            "name": "action",
+            "type": "string",
+            "positional": true,
+            "choices": ["list", "add", "remove"],
+            "description": "what to do with the selection (defaults to list)"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "description": "the language, for add and remove"
+          }
         ]
       },
       "qsm-langdev init": {
         "description": "Scaffold a profile's per-tool configs for the languages this repository holds",
         "args": [
-          { "name": "dir", "type": "string", "positional": true, "description": "repository path (defaults to cwd)" },
-          { "name": "profile", "type": "string", "description": "profile name; absent keeps whatever the repository already records" },
-          { "name": "target", "type": "string", "repeatable": true, "description": "<language>=<target>, e.g. ts=browser" }
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "repository path (defaults to cwd)"
+          },
+          {
+            "name": "profile",
+            "type": "string",
+            "description": "profile name; absent keeps whatever the repository already records"
+          },
+          {
+            "name": "target",
+            "type": "string",
+            "repeatable": true,
+            "description": "<language>=<target>, e.g. ts=browser"
+          }
         ]
       },
       "qsm-langdev structure": {
         "description": "Compare a commit's sentrux architecture quality with the working tree's (exit 3 = worse)",
         "args": [
-          { "name": "path", "type": "string", "positional": true, "description": "the tree to score (defaults to cwd)" },
-          { "name": "against", "type": "string", "description": "reference commit (defaults to HEAD, or the agent's start point with --session)" },
-          { "name": "session", "type": "string", "description": "session id whose start point in each tree is the reference" },
-          { "name": "agent", "type": "string", "description": "agent id; with --session and no path, every tree that agent edited is judged" }
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "description": "the tree to score (defaults to cwd)"
+          },
+          {
+            "name": "against",
+            "type": "string",
+            "description": "reference commit (defaults to HEAD, or the agent's start point with --session)"
+          },
+          {
+            "name": "session",
+            "type": "string",
+            "description": "session id whose start point in each tree is the reference"
+          },
+          {
+            "name": "agent",
+            "type": "string",
+            "description": "agent id; with --session and no path, every tree that agent edited is judged"
+          }
         ]
       },
       "qsm-langdev install": {
         "description": "Write this repo's pre-commit and pre-push git hooks (appends to an existing hook)",
         "args": [
-          { "name": "dir", "type": "string", "positional": true, "description": "repository path (defaults to cwd)" },
-          { "name": "lang", "type": "string", "choices": ["sh", "py", "ts"], "description": "hook script language (defaults to sh)" }
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "repository path (defaults to cwd)"
+          },
+          {
+            "name": "lang",
+            "type": "string",
+            "choices": ["sh", "py", "ts"],
+            "description": "hook script language (defaults to sh)"
+          }
         ]
       },
       "qsm-langdev uninstall": {
         "description": "Take exactly what install added back out of the git hooks",
         "args": [
-          { "name": "dir", "type": "string", "positional": true, "description": "repository path (defaults to cwd)" }
+          {
+            "name": "dir",
+            "type": "string",
+            "positional": true,
+            "description": "repository path (defaults to cwd)"
+          }
         ]
       },
       "qsm-langdev edited": {
         "description": "Compare one edited file against HEAD and answer the findings text the edit hook gives the model",
         "args": [
-          { "name": "file", "type": "string", "positional": true, "required": true, "description": "the absolute path of the file that was edited" },
-          { "name": "session", "type": "string", "required": true, "description": "the session that edited it" },
-          { "name": "agent", "type": "string", "description": "the agent that edited it (absent for the main agent)" }
+          {
+            "name": "file",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the absolute path of the file that was edited"
+          },
+          {
+            "name": "session",
+            "type": "string",
+            "required": true,
+            "description": "the session that edited it"
+          },
+          {
+            "name": "agent",
+            "type": "string",
+            "description": "the agent that edited it (absent for the main agent)"
+          }
         ]
       },
       "qsm-langdev hook": {
         "description": "Run the gates this repo selected for a hook point (what the installed hooks call)",
         "args": [
-          { "name": "name", "type": "string", "positional": true, "required": true, "choices": ["pre-commit", "pre-push"], "description": "the enforcement point to run" }
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "choices": ["pre-commit", "pre-push"],
+            "description": "the enforcement point to run"
+          },
+          {
+            "name": "remote",
+            "type": "string",
+            "positional": true,
+            "description": "the remote a pre-push hook pushes to (git's first argument to the hook)"
+          }
         ]
       }
     },

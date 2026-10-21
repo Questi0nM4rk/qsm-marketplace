@@ -27,7 +27,7 @@ export const verbs: Readonly<Record<string, VerbRow>> = {
   install: { words: ["qsm-langdev","install"], args: [{ name: "dir", flag: null }, { name: "lang", flag: "--lang" }] },
   uninstall: { words: ["qsm-langdev","uninstall"], args: [{ name: "dir", flag: null }] },
   edited: { words: ["qsm-langdev","edited"], args: [{ name: "file", flag: null }, { name: "session", flag: "--session" }, { name: "agent", flag: "--agent" }] },
-  hook: { words: ["qsm-langdev","hook"], args: [{ name: "name", flag: null }] },
+  hook: { words: ["qsm-langdev","hook"], args: [{ name: "name", flag: null }, { name: "remote", flag: null }] },
 };
 
 /** One verb's argv: its words, each option in declaration order, the

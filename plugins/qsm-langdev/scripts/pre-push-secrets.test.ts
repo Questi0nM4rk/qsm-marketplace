@@ -4,22 +4,23 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { commit, git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir, writeIn } from "../../../lib/fixtures/sandbox.ts";
+import { installHooks } from "../lib/git-hooks.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 // Built at run time so this file is not itself a hit for the scan it tests.
 const FAKE_KEY = ["AKIA", "QYLPMN5HHHFPZAM2"].join("");
 
-/** A work repository gating `secrets` at a push, a bare remote it has pushed `main` to, and the
- * hook that runs the CLI the way the installed one does. */
-function pushSetup(): { work: string; hooks: string; home: string } {
+/** A work repository gating `secrets` at a push, a bare remote `origin`, and the pre-push hook
+ * `install` writes, which finds the CLI as `qsm-langdev` on PATH like the installed one. */
+function pushSetup(): { work: string; bin: string; home: string } {
   const home = sandboxDir("qsm-langdev-push-secrets-");
   const work = join(home, "work");
   const remote = join(home, "remote.git");
-  const hooks = join(home, "hooks");
+  const bin = join(home, "bin");
   git(home, "init", "-q", "--bare", remote);
   git(home, "init", "-q", "-b", "main", work);
   git(work, "remote", "add", "origin", remote);
@@ -31,23 +32,35 @@ function pushSetup(): { work: string; hooks: string; home: string } {
   );
   writeIn(work, "readme.txt", "hello\n");
   commit(work, "base");
-  mkdirSync(hooks);
+  mkdirSync(bin);
   writeFileSync(
-    join(hooks, "pre-push"),
-    `#!/usr/bin/env bash\nexec ${process.execPath} ${CLI} hook pre-push\n`,
+    join(bin, "qsm-langdev"),
+    `#!/usr/bin/env bash\nexec ${process.execPath} ${CLI} "$@"\n`,
   );
-  chmodSync(join(hooks, "pre-push"), 0o755);
-  return { work, hooks, home };
+  chmodSync(join(bin, "qsm-langdev"), 0o755);
+  installHooks(work, ["pre-push"]);
+  return { work, bin, home };
 }
 
-function push({ work, hooks, home }: ReturnType<typeof pushSetup>, ...refspec: string[]) {
-  const r = spawnSync(
-    "git",
-    ["-C", work, "-c", `core.hooksPath=${hooks}`, "push", "-q", "origin", ...refspec],
-    { encoding: "utf8", env: isolatedEnv(home, { GIT_CONFIG_GLOBAL: "/dev/null" }) },
-  );
+/** `git push <remote> <refspec>`, with extra git arguments before `push`'s own. */
+function pushTo(
+  { work, bin, home }: ReturnType<typeof pushSetup>,
+  remote: string,
+  refspec: string[],
+  ...flags: string[]
+) {
+  const r = spawnSync("git", ["-C", work, "push", "-q", ...flags, remote, ...refspec], {
+    encoding: "utf8",
+    env: isolatedEnv(home, {
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
+    }),
+  });
   return { exit: r.status ?? 1, stderr: r.stderr };
 }
+
+const push = (setup: ReturnType<typeof pushSetup>, ...refspec: string[]) =>
+  pushTo(setup, "origin", refspec);
 
 describe("qsm-langdev secrets gate at a push", () => {
   test("a clean commit passes, a pushed secret is refused on an existing and on a new branch", () => {
@@ -63,6 +76,7 @@ describe("qsm-langdev secrets gate at a push", () => {
     expect(existing.stderr).toContain("pushed commits carry a secret");
     expect(existing.stderr).toContain("rule aws-access-token hit in config.txt:1");
     expect(existing.stderr).not.toContain(FAKE_KEY);
+    expect(existing.stderr).not.toContain("(commit");
     expect(git(home, "-C", join(home, "remote.git"), "rev-parse", "main")).not.toBe(
       git(work, "rev-parse", "main"),
     );
@@ -99,5 +113,45 @@ describe("qsm-langdev secrets gate at a push", () => {
     expect(forced.stderr).toContain("never fetched");
     expect(forced.stderr).toContain("git fetch");
     expect(git(home, "-C", remote, "rev-parse", "main")).toBe(tip);
+  }, 60_000);
+
+  test("a secret commit only another remote holds is refused when pushed as a new branch to this one", () => {
+    const setup = pushSetup();
+    const { work, home } = setup;
+    git(home, "init", "-q", "--bare", join(home, "backup.git"));
+    git(home, "init", "-q", "--bare", join(home, "public.git"));
+    git(work, "remote", "add", "backup", join(home, "backup.git"));
+    git(work, "remote", "add", "public", join(home, "public.git"));
+
+    // The secret reaches backup past the gate, so refs/remotes/backup/leak holds the commit.
+    git(work, "checkout", "-q", "-b", "leak");
+    writeIn(work, "config.txt", `aws_key = "${FAKE_KEY}"\n`);
+    commit(work, "add config");
+    expect(pushTo(setup, "backup", ["leak"], "--no-verify").exit).toBe(0);
+    expect(git(work, "rev-parse", "refs/remotes/backup/leak")).toBe(git(work, "rev-parse", "leak"));
+
+    const toPublic = pushTo(setup, "public", ["leak"]);
+    expect(toPublic.exit).not.toBe(0);
+    expect(toPublic.stderr).toContain("rule aws-access-token hit in config.txt:1");
+    expect(git(home, "-C", join(home, "public.git"), "branch", "--list", "leak")).toBe("");
+  }, 60_000);
+
+  test("a hook installed before the remote name was passed blocks loud until install runs again", () => {
+    const setup = pushSetup();
+    const { work, home } = setup;
+    const hook = join(work, ".git", "hooks", "pre-push");
+    writeFileSync(
+      hook,
+      "#!/usr/bin/env bash\n# installed by qsm-langdev\nset -euo pipefail\n\nqsm-langdev hook pre-push || exit 1\n",
+    );
+
+    const stale = push(setup, "main");
+    expect(stale.exit).not.toBe(0);
+    expect(stale.stderr).toContain("did not say which remote");
+    expect(stale.stderr).toContain("qsm-langdev install");
+    expect(git(home, "-C", join(home, "remote.git"), "branch", "--list", "main")).toBe("");
+
+    expect(installHooks(work, ["pre-push"])[0]?.kind).toBe("written");
+    expect(push(setup, "main").exit).toBe(0);
   }, 60_000);
 });

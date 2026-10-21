@@ -63,6 +63,22 @@ describe("installHooks", () => {
   });
 });
 
+describe("a block written before the remote name was passed", () => {
+  test("install rewrites it to the current call once, beside the repository's own hook", () => {
+    const root = repo();
+    writeFileSync(hookPath(root, "pre-push"), THEIRS, { mode: 0o755 });
+    installHooks(root, ["pre-push"]);
+    const current = readFileSync(hookPath(root, "pre-push"), "utf8");
+    expect(current).toContain('qsm-langdev hook pre-push "${1:-}" || exit 1');
+    const stale = current.replace(' "${1:-}"', "");
+    writeFileSync(hookPath(root, "pre-push"), stale, { mode: 0o755 });
+
+    expect(installHooks(root, ["pre-push"])[0]?.kind).toBe("appended");
+    expect(readFileSync(hookPath(root, "pre-push"), "utf8")).toBe(current);
+    expect(installHooks(root, ["pre-push"])[0]?.kind).toBe("already");
+  });
+});
+
 describe("uninstallHooks", () => {
   test("Uninstall restores the prior hook", () => {
     const root = repo();

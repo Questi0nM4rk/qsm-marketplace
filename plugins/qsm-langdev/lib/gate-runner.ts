@@ -93,7 +93,12 @@ function withSkipped(outcome: GateOutcome, skipped: readonly string[]): GateOutc
   return { ...outcome, remedy: [...outcome.remedy, ...lines] };
 }
 
-function secretsGate(root: string, point: EnforcementPoint, pushLines?: string): GateOutcome {
+function secretsGate(
+  root: string,
+  point: EnforcementPoint,
+  pushLines?: string,
+  remote?: string,
+): GateOutcome {
   const config = ".gitleaks.toml";
   if (!existsSync(join(root, config))) {
     return fail("secrets", `${config} is not in this repo, so secrets cannot run`, [
@@ -101,7 +106,7 @@ function secretsGate(root: string, point: EnforcementPoint, pushLines?: string):
     ]);
   }
   if (point === "pre-push") {
-    return pushedSecretsGate(root, config, pushLines);
+    return pushedSecretsGate(root, config, pushLines, remote);
   }
   const result = runOrMissing(
     "gitleaks",
@@ -141,8 +146,13 @@ function rangeProblem(root: string, ref: PushedRef, range: string): GateOutcome 
 
 /** The hits gitleaks reports over the commits one pushed ref adds, or the block when the range
  * cannot be scanned. A run that fails without a report is a run that never scanned. */
-function scanPushedRef(root: string, config: string, ref: PushedRef): GateOutcome | string[] {
-  const range = pushedRange(ref);
+function scanPushedRef(
+  root: string,
+  config: string,
+  ref: PushedRef,
+  remote: string,
+): GateOutcome | string[] {
+  const range = pushedRange(ref, remote);
   if (range === null) {
     return [];
   }
@@ -180,22 +190,30 @@ function scanPushedRef(root: string, config: string, ref: PushedRef): GateOutcom
       `Run gitleaks git --log-opts="${range}" --config ${config} --redact by hand and fix what it reports.`,
     ]);
   }
-  return found.map(
-    (hit) => `rule ${hit.rule} hit in ${hit.file}:${hit.line} (commit ${hit.commit})`,
-  );
+  return found.map((hit) => `rule ${hit.rule} hit in ${hit.file}:${hit.line}`);
 }
 
-/** The commits each pushed ref adds, scanned redacted with the repo config: a hit names rule, file,
- * line and commit, never the value. */
-function pushedSecretsGate(root: string, config: string, pushLines?: string): GateOutcome {
+/** The commits each pushed ref adds, scanned redacted with the repo config: a hit names rule, file
+ * and line, never the value. */
+function pushedSecretsGate(
+  root: string,
+  config: string,
+  pushLines?: string,
+  remote?: string,
+): GateOutcome {
   if (pushLines === undefined) {
     return fail("secrets", "this gate needs git's pushed refs and none were handed to it", [
       "Reached through something other than the installed pre-push hook.",
     ]);
   }
+  if (remote === undefined || remote === "") {
+    return fail("secrets", "the pre-push hook did not say which remote it pushes to", [
+      "The installed hook is out of date: run qsm-langdev install again, then push again.",
+    ]);
+  }
   const hits: string[] = [];
   for (const ref of parsePushLines(pushLines)) {
-    const scanned = scanPushedRef(root, config, ref);
+    const scanned = scanPushedRef(root, config, ref, remote);
     if (!Array.isArray(scanned)) {
       return scanned;
     }
@@ -251,14 +269,13 @@ function denylistGate(root: string): GateOutcome {
   ]);
 }
 
-function findingsOf(json: string): { rule: string; file: string; line: number; commit: string }[] {
+function findingsOf(json: string): { rule: string; file: string; line: number }[] {
   try {
     const parsed = recordsOf(JSON.parse(json));
     return (parsed ?? []).map((f) => ({
       rule: String(f.RuleID),
       file: String(f.File),
       line: Number(f.StartLine),
-      commit: typeof f.Commit === "string" ? f.Commit.slice(0, 8) : "",
     }));
   } catch {
     return [];
@@ -435,10 +452,11 @@ async function runGate(
   root: string,
   point: EnforcementPoint,
   pushLines?: string,
+  remote?: string,
 ): Promise<GateOutcome> {
   switch (name) {
     case "secrets":
-      return secretsGate(root, point, pushLines);
+      return secretsGate(root, point, pushLines, remote);
     case "entropy":
       return entropyGate(root);
     case "langdev":
@@ -475,11 +493,19 @@ export async function runGates(
   root: string,
   point: EnforcementPoint,
   names: readonly string[],
-  { pushLines, allow }: { pushLines?: string | undefined; allow?: string | undefined } = {},
+  {
+    pushLines,
+    remote,
+    allow,
+  }: {
+    pushLines?: string | undefined;
+    remote?: string | undefined;
+    allow?: string | undefined;
+  } = {},
 ): Promise<GateOutcome[]> {
   const outcomes: GateOutcome[] = [];
   for (const name of names) {
-    outcomes.push(allowed(await runGate(name, root, point, pushLines), allow));
+    outcomes.push(allowed(await runGate(name, root, point, pushLines, remote), allow));
   }
   return outcomes;
 }
