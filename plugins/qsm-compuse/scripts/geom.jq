@@ -38,15 +38,14 @@ def sel($all; $s):
     step($all; (. // null) | if . == null then null else map(._id) end; $seg))
   | if length == 0 then fail("no node matches '\($s)'") else . end;
 
-# A node's rect with its StateLayer's hover growth applied (scale about the
-# centre of the growth rect), or the plain rect when it has none.
+# A node's rect at full hover growth. The StateLayer reports its rect as it is now, already
+# carrying growthPx per side, so only the rest of `pad` is added: growth applies once.
 def grown($all):
   . as $n
   | ([$all[] | select(._parent == $n._id and .type == "StateLayer" and .growth != null)] | first) as $sl
   | if $sl == null then {x, y, w, h}
-    else $sl.growth as $g
-      | {x: ($g.x + $g.w / 2 - $g.w * $g.scale / 2), y: ($g.y + $g.h / 2 - $g.h * $g.scale / 2),
-         w: ($g.w * $g.scale), h: ($g.h * $g.scale)}
+    else $sl.growth as $g | (($g.pad // 0) - ($sl.growthPx // 0)) as $d
+      | {x: ($g.x - $d), y: ($g.y - $d), w: ($g.w + 2 * $d), h: ($g.h + 2 * $d)}
     end;
 
 def insets($all; $tol):
@@ -89,13 +88,14 @@ def centre($all; $tol):
 
 def target($all; $floor):
   sel($all; $sel)[] | . as $n
-  | ([$all[] | select(._parent == $n._id and .type == "StateLayer")] | first // $n) as $a
+  | ([$all[] | select(._parent == $n._id and (.type | test("MouseArea|Handler$")) and .w > 0 and .h > 0)] | max_by(.w * .h)) as $band
+  | ($band // ([$all[] | select(._parent == $n._id and .type == "StateLayer")] | first) // $n) as $a
   | ($a.w >= $floor and $a.h >= $floor) as $ok
   | "target \($n | lbl) input=\($a.type)\($a | rect): w \($a.w | n) >= \($floor), h \($a.h | n) >= \($floor)\($ok | tag(.))";
 
 def extras: [if .text != null then "text=\(.text)" else empty end,
              if .color != null then "color=\(.color)" else empty end,
-             if .growth != null then "grow=x\(.growth.scale)" else empty end] | join(" ");
+             if .growth != null then "grow=\(.growth.pad)px" else empty end] | join(" ");
 def dump($all; $depth):
   (if $sel == "" then [$all[0]] else sel($all; $sel) end)[] | . as $root
   | [$all[] | select(._id == $root._id or (._anc | index($root._id)))] as $sub
