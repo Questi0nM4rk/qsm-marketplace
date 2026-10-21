@@ -70,12 +70,12 @@ const runSave: Handler = (call) => {
   }
   const db = openArchive(env());
   if (catchUpAll) {
-    return catchUpOutcome(catchUp(db, projectsDir(env())));
+    return catchUpOutcome(catchUp(db, projectsDir(env()), env()));
   }
   if (transcript === undefined) {
     return fail("usage", "save needs a transcript path or --catch-up");
   }
-  const r = saveTranscript(db, transcript, cwd === undefined ? {} : { cwd });
+  const r = saveTranscript(db, transcript, env(), cwd === undefined ? {} : { cwd });
   return r.status === "saved"
     ? ok(r, `saved ${r.id}: ${r.turns} turns, ${r.added} new`)
     : ok(r, `skipped: ${r.reason} in ${r.path}`);

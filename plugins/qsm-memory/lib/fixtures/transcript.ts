@@ -1,6 +1,14 @@
 // Builds transcript text the way Claude Code writes it, one record per line, so tests cover every
 // record type seen on a real machine (2026-09-30) without shipping a real transcript.
 
+import { join } from "node:path";
+import { sandboxDir } from "../../../../lib/fixtures/sandbox.ts";
+
+/** An environment whose archive, and so whose blob store, is a sandbox directory. */
+export function testEnv(): Record<string, string> {
+  return { QSM_MEMORY_DB: join(sandboxDir("qsm-memory-env-"), "memory.db") };
+}
+
 interface Opts {
   readonly cwd?: string;
   readonly sessionId?: string;
@@ -48,6 +56,18 @@ export class TranscriptBuilder {
 
   human(text: string): this {
     return this.conversation("user", text, { origin: { kind: "human" }, promptSource: "typed" });
+  }
+
+  /** A typed prompt that pastes an image, as base64, beside its text. */
+  humanWithImage(text: string, base64: string, mediaType = "image/png"): this {
+    return this.conversation(
+      "user",
+      [
+        { type: "text", text },
+        { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+      ],
+      { origin: { kind: "human" }, promptSource: "typed" },
+    );
   }
 
   /** The prompt of a headless `claude -p` run: a user record nobody typed. */

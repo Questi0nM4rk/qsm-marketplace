@@ -25,6 +25,9 @@ qsm-memory note "text" --expires 14
 - `blob put <file>` stores the bytes under their sha256 in `blobs/` beside the archive and prints
   `<sha256>  <path>`; the same bytes again store nothing. `blob path <sha256>` prints the path, or
   fails as `missing`.
+- `save` also copies each image pasted into a typed prompt into `blobs/` and records it in the
+  archive's `blob_ref` table (session, turn, sha256, media type); files and links a prompt names
+  are not kept.
 - `orient [--cwd <dir>]` answers the session-start block, at most 1500 characters, as `{ text }`:
   the project's last three sessions, the in-progress tasks with their epics, the notes, how to
   search.
@@ -39,7 +42,8 @@ qsm-memory note "text" --expires 14
   `show <id> --lines a-b`.
 - Environment: `QSM_MEMORY_DB` (archive file, and `blobs/` beside it), `CLAUDE_CONFIG_DIR` (where
   transcripts live).
-- Screenshot eval (in the checkout, not the binary): `QSM_MEMORY_OCR_FIXTURES=<dir> bun
-  evals/ocr/run.ts --model haiku --runs 3` reads Teams screenshots into JSON with
-  `evals/ocr/guide.md` and scores each run against gold with `evals/ocr/score.ts`. The fixtures are
-  private: `threads.json` lists each thread's screenshots as blob sha256, beside `gold/` and `runs/`.
+- Screenshot eval (in the checkout, not the binary):
+  `QSM_MEMORY_OCR_FIXTURES=<dir> bun evals/ocr/run.ts --model haiku --runs 3` reads Teams
+  screenshots into JSON with `evals/ocr/guide.md` and scores each run against gold with
+  `evals/ocr/score.ts`. The fixtures are private: `threads.json` lists each thread's screenshots as
+  blob sha256, beside `gold/` and `runs/`.

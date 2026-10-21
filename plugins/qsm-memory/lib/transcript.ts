@@ -16,11 +16,20 @@ export interface Turn {
   readonly text: string;
 }
 
+/** An image a person pasted into a prompt: `uuid` is the block's key, record uuid plus index. */
+export interface Image {
+  readonly uuid: string;
+  readonly mediaType: string;
+  readonly bytes: Buffer;
+}
+
 export interface Transcript {
   readonly cwd: string | null;
   readonly title: string | null;
   /** what a person typed and what the model answered, as text; nothing else */
   readonly turns: readonly Turn[];
+  /** the images a person pasted into a prompt, which `turns` cannot hold */
+  readonly images: readonly Image[];
   /** the user turns among `turns`: a person's prompts, not a tool result, a hook or system
    * injection, or the prompt of a headless run */
   readonly humanTurns: number;
@@ -38,6 +47,13 @@ const blockSchema = z.object({
   name: z.string().optional(),
   input: z.unknown().optional(),
   content: resultContentSchema.optional(),
+  source: z
+    .object({
+      type: z.string().optional(),
+      media_type: z.string().optional(),
+      data: z.string().optional(),
+    })
+    .optional(),
 });
 type Block = z.infer<typeof blockSchema>;
 
@@ -146,6 +162,29 @@ function recordTurns(record: TranscriptRecord, full: boolean): Turn[] {
   return turns;
 }
 
+function recordImages(record: TranscriptRecord): Image[] {
+  if (!isConversation(record) || record.type !== "user" || !isTyped(record)) {
+    return [];
+  }
+  const content = record.message?.content;
+  const blocks = typeof content === "string" ? [] : (content ?? []);
+  return blocks.flatMap((block, index) => {
+    const { source } = block;
+    return block.type === "image" &&
+      source?.type === "base64" &&
+      source.data !== undefined &&
+      source.data.length > 0
+      ? [
+          {
+            uuid: `${record.uuid}/${index}`,
+            mediaType: source.media_type ?? "application/octet-stream",
+            bytes: Buffer.from(source.data, "base64"),
+          },
+        ]
+      : [];
+  });
+}
+
 function firstLine(text: string): string {
   const line = text.split("\n").find((l) => l.trim().length > 0) ?? "";
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line;
@@ -176,7 +215,8 @@ export function parseTranscript(text: string): Transcript {
   const aiTitle = all.findLast((r) => r.type === "ai-title" && typeof r.aiTitle === "string");
   const cwd = all.find((r) => typeof r.cwd === "string")?.cwd ?? null;
   const title = aiTitle?.aiTitle ?? (human[0] === undefined ? null : firstLine(human[0].text));
-  return { cwd, title, turns, humanTurns: human.length };
+  const images = all.flatMap(recordImages);
+  return { cwd, title, turns, images, humanTurns: human.length };
 }
 
 /** Every conversation turn of a transcript, tool calls and results included, in file order:

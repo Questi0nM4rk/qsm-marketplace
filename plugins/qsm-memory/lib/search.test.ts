@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { TranscriptBuilder } from "./fixtures/transcript.ts";
+import { TranscriptBuilder, testEnv } from "./fixtures/transcript.ts";
 import { saveTranscript } from "./save.ts";
 import { formatHits, ftsQuery, NO_MATCH, search, sinceCutoff } from "./search.ts";
 import { applySchema } from "./store.ts";
@@ -20,7 +20,7 @@ function archive(): { db: Database; dir: string } {
   const save = (name: string, text: string, when: string) => {
     const path = join(dir, name);
     writeFileSync(path, text);
-    saveTranscript(db, path, { now: () => when });
+    saveTranscript(db, path, testEnv(), { now: () => when });
   };
   save(
     "aaa.jsonl",

@@ -8,7 +8,9 @@ import { messageOf } from "../../../lib/outcome.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 import { projectOf } from "./project.ts";
-import { parseTranscript, sessionIdOf, type Turn } from "./transcript.ts";
+import { putBytes } from "./blobs.ts";
+import type { Env } from "./store.ts";
+import { type Image, parseTranscript, sessionIdOf, type Turn } from "./transcript.ts";
 
 export type SaveResult =
   | {
@@ -51,6 +53,18 @@ function insertTurns(db: Database, sessionId: string, turns: readonly Turn[]): n
   return added;
 }
 
+const INSERT_BLOB_REF = `INSERT OR IGNORE INTO blob_ref
+  (session_id, turn_uuid, sha256, media_type) VALUES (?, ?, ?, ?)`;
+
+/** Copies each pasted image into the blob store and records which turn it came from. */
+function keepImages(db: Database, env: Env, sessionId: string, images: readonly Image[]): void {
+  const stmt = db.query(INSERT_BLOB_REF);
+  for (const image of images) {
+    const { sha256 } = putBytes(env, image.bytes);
+    stmt.run(sessionId, image.uuid, sha256, image.mediaType);
+  }
+}
+
 const UPSERT_SESSION = `INSERT INTO sessions
   (id, cwd, project, title, started_at, ended_at, transcript_path, saved_at, turn_count)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -63,6 +77,7 @@ const UPSERT_SESSION = `INSERT INTO sessions
 export function saveTranscript(
   db: Database,
   transcriptPath: string,
+  env: Env,
   options: SaveOptions = {},
 ): SaveResult {
   if (!existsSync(transcriptPath)) {
@@ -84,6 +99,7 @@ export function saveTranscript(
     return { status: "skipped", path: transcriptPath, reason: "no human turn" };
   }
   const { turns, title } = transcript;
+  keepImages(db, env, id, transcript.images);
   const cwd = transcript.cwd ?? options.cwd ?? process.cwd();
   const [first] = turns;
   const last = turns.at(-1);
@@ -191,7 +207,12 @@ const CATCH_UP_MAX = 20;
 
 /** Saves at most `max` unsaved transcripts and says how many remain. One that cannot be saved is
  * named in `failed` and the rest still save; it stays unsaved for the next run. */
-export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): CatchUpResult {
+export function catchUp(
+  db: Database,
+  projects: string,
+  env: Env,
+  max = CATCH_UP_MAX,
+): CatchUpResult {
   const pending = unsavedTranscripts(db, projects);
   let saved = 0;
   let skipped = 0;
@@ -205,7 +226,7 @@ export function catchUp(db: Database, projects: string, max = CATCH_UP_MAX): Cat
     }
     tried += 1;
     try {
-      const r = saveTranscript(db, path);
+      const r = saveTranscript(db, path, env);
       if (r.status === "saved") {
         saved += 1;
       } else {

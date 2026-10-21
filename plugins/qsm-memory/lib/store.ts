@@ -58,6 +58,16 @@ CREATE TRIGGER IF NOT EXISTS turns_ad AFTER DELETE ON turns BEGIN
   INSERT INTO turns_fts(turns_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
 END;
 
+-- An image a person pasted into a turn: the bytes are the blob, kept after Claude Code deletes
+-- the transcript. turn_uuid is the image block's key; an image-only prompt has no turn row.
+CREATE TABLE IF NOT EXISTS blob_ref (
+  session_id TEXT NOT NULL,
+  turn_uuid TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  media_type TEXT NOT NULL,
+  PRIMARY KEY (session_id, turn_uuid)
+);
+
 CREATE TABLE IF NOT EXISTS skipped (
   id TEXT PRIMARY KEY,
   path TEXT NOT NULL,
