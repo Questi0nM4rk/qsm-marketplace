@@ -187,23 +187,30 @@ function isSessionRecord(value: unknown): value is SessionRecord {
   );
 }
 
-/** A stored value read back: a record this module wrote, or null. */
+/** Older records carried a per-turn breakdown nothing read; it goes when the record is next written. */
+function withoutAfter(turn: unknown): unknown {
+  if (!isPlainObject(turn)) {
+    return turn;
+  }
+  const { after: _after, ...kept } = turn;
+  return kept;
+}
+
+/** A stored value read back: null when nothing is stored, the record when it is one this module
+ * wrote. Anything else throws: a record in an older shape is a store to migrate, not to guess at. */
 export function asSession(value: unknown): SessionRecord | null {
-  if (!isPlainObject(value) || typeof value.id !== "string" || !Array.isArray(value.turns)) {
+  if (value === undefined || value === null) {
     return null;
   }
-  // Older records carried a per-turn breakdown nothing read; it goes when the record is next written.
-  const turns: unknown[] = value.turns.map((turn: unknown) => {
-    if (!isPlainObject(turn)) {
-      return turn;
-    }
-    const { after: _after, ...kept } = turn;
-    return kept;
-  });
-  // Older records counted messages, not blocks; the cursor restarts and the next turn reads on.
-  const { toolMessagesSeen: _seen, ...rest } = value;
-  const record = { blocksSeen: 0, ...rest, turns };
-  return isSessionRecord(record) ? record : null;
+  const record =
+    isPlainObject(value) && Array.isArray(value.turns)
+      ? { ...value, turns: value.turns.map(withoutAfter) }
+      : value;
+  if (!isSessionRecord(record)) {
+    const id = isPlainObject(value) ? String(value.id) : typeof value;
+    throw new TypeError(`the stored session record ${id} is not in the ledger's shape`);
+  }
+  return record;
 }
 
 export function breakdownOf(context: ContextUsage, at: number): Breakdown {

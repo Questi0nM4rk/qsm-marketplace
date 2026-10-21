@@ -14,26 +14,35 @@ instead of what it does today.
 
 The hooks module SHALL record, for every session, into the plugin's store: the context breakdown at
 session start from `$.session.usage`; each turn's token usage and cost from `turn.complete` and
-`session.measure`; every piece of text the harness injects, with its source and size; and every use
-of a skill, command, agent, and tool, by name. The injected text SHALL come from two admitted
-doors only: `tool.describe` for a tool's description, and the main conversation read through
-`$.session.messages({ as: "api" })` at each `turn.complete` for everything else, from the blocks
-added since the last read (a shorter conversation after a compaction is read whole). A text block of
-a user message that opens with `<system-reminder>` is an attachment, source `prompt.attachment`,
-named by its first line up to the first colon with digits folded to `#` and at most 48 characters;
-a text block that opens with `Base directory for this skill:` is a skill's text, source
-`skill.prompt`, named by the `Skill` call that asked for it; a `tool_use` block is a use of that
-tool, and of the skill it names when the tool is `Skill`. The module SHALL NOT hook
-`prompt.attachment`, `prompt.section`, `prompt.context`, `prompt.compose`, `skill.prompt`, or any
-`classic.*` event, and SHALL NOT record on a `session.append` row of the doors `attachment`,
-`hook-context`, or `compaction`: an organization's policy module that runs first passes those over
-for a user plugin, so the hook never runs and the harness shows the person a "was skipped" notice.
-Recording SHALL never call a model, never block or alter the event it observes, and never store
-prompt or tool content beyond names, sizes, and counts. The ledger SHALL keep the last 200 sessions
-and drop the oldest first, and when the store is over its size limit it SHALL drop the oldest
-sessions until the write fits. The module SHALL register two tools the model calls to read it:
-`breakdown`, the current session's context by category, and `ledger`, the recorded sessions
-filtered by a window.
+`session.measure`; every piece of injected text the main conversation holds, with its source and
+size; and every use of a skill, command, agent, and tool, by name. The injected text SHALL come from
+two admitted doors only: `tool.describe` for a tool's description, and the main conversation read
+through `$.session.messages({ as: "api" })` at each `turn.complete` for everything else, from the
+blocks added since the last read (a shorter conversation after a compaction is read whole). A text
+block of a user message that opens with `<system-reminder>` is an attachment, source
+`prompt.attachment`, named by its first line up to the first colon with digits folded to `#` and at
+most 48 characters; a text block that opens with `Base directory for this skill:` is a skill's text,
+source `skill.prompt`, named by the `Skill` call that asked for it; a `tool_use` block is a use of
+that tool, and of the skill it names when the tool is `Skill`. A reminder the engine adds to a
+request after the first of a turn, as a system turn, is in no message and so is not recorded: the
+`<total_tokens>` counter and the output-style reminder of each tool round are such, so the ledger
+holds fewer of those rows than the transcript, and SHALL NOT claim every piece of injected text. A
+skill the person types as `/plugin:skill` is no `Skill` call: it is counted as a command under its
+full name from `command.run`, never as a skill, and its text is the `skill.prompt` row named by the
+last directory of the skill's base directory. The module SHALL NOT hook `prompt.attachment`,
+`prompt.section`, `prompt.context`, `prompt.compose`, `skill.prompt`, or any `classic.*` event, and
+SHALL NOT record on a `session.append` row of the doors `attachment`, `hook-context`, or
+`compaction`: an organization's policy module that runs first passes those over for a user plugin,
+so the hook never runs and the harness shows the person a "was skipped" notice. A stored session
+record SHALL be read back whole or not at all: one without the cursor `blocksSeen`, or of any other
+wrong shape, fails its event through the module's error path (shown once, the event continues) and
+is never replaced by a fresh record or read in a second shape; a store from an older shape is
+migrated once, outside the plugin. Recording SHALL never call a model, never block or alter the
+event it observes, and never store prompt or tool content beyond names, sizes, and counts. The
+ledger SHALL keep the last 200 sessions and drop the oldest first, and when the store is over its
+size limit it SHALL drop the oldest sessions until the write fits. The module SHALL register two
+tools the model calls to read it: `breakdown`, the current session's context by category, and
+`ledger`, the recorded sessions filtered by a window.
 
 #### Scenario: A session ends
 
@@ -48,11 +57,23 @@ filtered by a window.
 - **THEN** the ledger holds one `prompt.attachment` row per reminder name and one `skill.prompt`
   row named by the skill, each with its character size, and the skill is counted once as used
 
+#### Scenario: A skill the person types
+
+- **WHEN** the person types `/qsm-essentials:writing` and a turn ends
+- **THEN** the ledger counts the command `qsm-essentials:writing` once, no skill use, and holds one
+  `skill.prompt` row named `writing`
+
 #### Scenario: A hook the policy module passes over
 
 - **WHEN** the plugin loads under an organization policy module that passes over
   `prompt.attachment` and `skill.prompt` for a user plugin
 - **THEN** the person sees no "was skipped" notice from qsm-usage, because it hooks neither
+
+#### Scenario: A stored record in an old shape
+
+- **WHEN** a session starts and its stored record has no `blocksSeen`
+- **THEN** the event fails through the module's error path naming the event, the stored record is
+  left as it was, and no record for the session is written
 
 #### Scenario: The store is full
 

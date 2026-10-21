@@ -121,6 +121,40 @@ test("A session ends", async ($, on) => {
   expect(serialized.includes("PRIVATE")).toBe(false);
 });
 
+test("A skill the person types is a command, and its text row is named by its directory", async ($, on) => {
+  const store: Store = new Map();
+  stubStore(on, store);
+  stubHost(on, "s17");
+  stubMessages(on, () => [
+    text("user", "<command-message>p:tdd</command-message>\n<command-name>/p:tdd</command-name>"),
+    text("user", "Base directory for this skill: /plugins/p/skills/tdd\n\nPRIVATE-SKILL"),
+  ]);
+  on("command.run", () => ({}));
+
+  await $.session.start(START);
+  await $.command.run({
+    command: "p:tdd",
+    args: "",
+    origin: { kind: "composer" },
+    presentation: { isFullscreen: false, columns: 80 },
+  });
+  await $.turn.complete({
+    answer: ANSWER_TEXT,
+    durationMs: 1000,
+    isAborted: false,
+    turnId: "t0",
+    reason: "answer",
+    usage: TURN_USAGE,
+  });
+
+  const rec = sessionIn(store, "s17");
+  expect(rec.uses.commands).toEqual({ "p:tdd": 1 });
+  expect(rec.uses.skills).toEqual({});
+  expect(rec.injected.map(({ source, name, count }) => [source, name, count])).toEqual([
+    ["skill.prompt", "tdd", 1],
+  ]);
+});
+
 test("Two turns: the second counts only the blocks its own messages added", async ($, on) => {
   const store: Store = new Map();
   stubStore(on, store);
@@ -370,6 +404,35 @@ test("The store is full", async ($, on) => {
   expect(index[199]).toBe("new");
   expect(store.has("session:old0")).toBe(false);
   expect(store.has("session:new")).toBe(true);
+});
+
+test("A stored record in an old shape fails the event and stays as it was", async ($, on) => {
+  const store: Store = new Map();
+  const old = {
+    id: "s16",
+    startedAt: 1,
+    start: null,
+    turns: [],
+    costUsd: null,
+    injected: [],
+    uses: { skills: {}, commands: {}, agents: {}, tools: {} },
+    toon: [],
+    toolMessagesSeen: 4,
+  };
+  store.set("session:s16", old);
+  stubStore(on, store);
+  const seen = newSeen();
+  stubHost(on, "s16", seen);
+  stubMessages(on, () => []);
+
+  await $.session.start(START);
+  await $.session.end({ sessionId: "s16", reason: "other", resume: { id: "s16" } });
+
+  const errors = seen.logs.filter((l) => l.includes(" failed: "));
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toStartWith("session.start failed: the stored session record s16 is not in");
+  expect(store.get("session:s16")).toBe(old);
+  expect(store.has("sessions")).toBe(false);
 });
 
 test("Recording fails", async ($, on) => {
