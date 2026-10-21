@@ -820,8 +820,11 @@ without leaving the session or invoking the gate.
 points, appending to an existing hook script rather than replacing it, each calling
 `qsm-langdev hook <pre-commit|pre-push>`, and marking exactly what it added. The pre-push call
 carries the remote name git hands the hook as its first argument. `install` SHALL bring a hook or
-block it wrote earlier up to the current call, so a repository is never left on a stale one.
-`uninstall` SHALL remove exactly what `install` added and nothing the repository already had.
+block it wrote earlier up to the current call, so a repository is never left on a stale one, by
+replacing only its earlier call line: whatever the person added to a hook `install` wrote whole
+stays as it was. A hook `install` wrote whole that holds neither the current nor the earlier call
+line SHALL be left untouched and named with the line to add by hand. `uninstall` SHALL remove
+exactly what `install` added and nothing the repository already had.
 
 #### Scenario: Installing beside an existing hook
 
@@ -840,3 +843,9 @@ block it wrote earlier up to the current call, so a repository is never left on 
 - **WHEN** `install` runs and the pre-push hook or block it wrote earlier lacks the remote name
 - **THEN** that hook or block SHALL be rewritten to the current call, and a second `install` SHALL
   change nothing
+
+#### Scenario: Reinstalling over a hook the person extended
+
+- **WHEN** `install` runs and the pre-push hook it wrote whole has the earlier call line followed by
+  lines the person added
+- **THEN** only the call line SHALL change, and every added line SHALL stay
