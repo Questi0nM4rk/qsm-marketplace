@@ -118,6 +118,13 @@ their results together and judging the integration, the flow, and the end-to-end
 behaviour, never one reviewer per unit checking what its builder already said. Any test a
 workflow writes follows the same standard: the flow through the real surface, not units.
 
+A stage's output schema is its deliverable, and the workers produce exactly that. When the ask is
+a change, every stage returns the changed behaviour and its measured evidence, and documentation is
+a few lines beside it; a stage that may only write documents is an audit, never the answer to "fix
+it". When the person overrides a plan's deliverable, rewrite the deliverable in every prompt,
+because the old plan's output shape survives in the prompts otherwise. Split the work along what
+the person sees, a surface or a flow, not along files, when the defects live where the parts meet.
+
 Every dispatch, alone or inside a workflow: one task in, a short briefing plus a file path out.
 Its description starts with its model, for example `[haiku] runner: bun test`, because the
 person sees the description and must see which model runs. No worker stays idle across turns;

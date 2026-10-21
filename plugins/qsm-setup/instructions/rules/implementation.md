@@ -103,6 +103,17 @@ is not the rule; write the test that proves the behaviour, whenever it is cheape
 path. An agent that has read the code must not decide what is tested, because it ends by testing
 what it just wrote; the behaviours come from the requirements, the intent, and the spec.
 
+## UI work names its instrument first
+
+UI and UX work starts by naming how its result will be seen and measured on the real, composed
+surface: a capture of the live window, a frame recording at the motion's own rate (25 to 60 fps of
+real frames), pixel geometry read from the item tree and checked against the equation that must
+hold (equal insets, no overlap after hover growth, a hit area at least the target floor), contrast
+computed from the rendered colours. When no instrument can show the result, building that
+instrument is the first task, and the work reports itself blocked instead of shipping a change
+nobody can see. A changed source line is not a UI fix; a before and after measurement is. Owner
+acceptance still decides; the measurement is the evidence the owner judges with.
+
 ## Clean before and after
 
 A tool leaves the machine as it found it, plus only what it was asked to add. Before it writes, an
