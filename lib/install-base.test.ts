@@ -516,3 +516,40 @@ describe("links in the bin directory", () => {
     expect(lstatSync(join(f.home, "bin", "qsm-mine")).isFile()).toBe(true);
   });
 });
+
+describe("install-base and the legacy bin farm", () => {
+  test("a plugin installer removes the farm of symlinks once, names it, and a second run removes nothing", async () => {
+    const root = sandboxDir("qsm-install-root-");
+    const live = fake({ present: ["bun"] });
+    const data = join(live.home, "xdg-data");
+    const env = { ...live.ctx.env, XDG_DATA_HOME: data };
+    const farm = join(data, "qsm", "bin");
+    mkdirSync(farm, { recursive: true });
+    symlinkSync("/nonexistent", join(farm, "qsm-langdev"));
+    const bare = installBase({ pluginRoot: root });
+
+    const planned = await bare({ ...live.ctx, env, dryRun: true });
+    expect(planned.detail).toContain("would remove legacy bin farm");
+    expect(existsSync(farm)).toBe(true);
+
+    const first = await bare({ ...live.ctx, env });
+    expect(first.status).toBe("installed");
+    expect(step(first, "legacy bin farm").detail).toStartWith("removed legacy bin farm");
+    expect(existsSync(join(data, "qsm"))).toBe(false);
+
+    const second = await bare({ ...live.ctx, env });
+    expect(second).toMatchObject({ status: "already", steps: [] });
+  });
+
+  test("a regular file in the farm is an error step and the farm stays", async () => {
+    const root = sandboxDir("qsm-install-root-");
+    const live = fake({ present: ["bun"] });
+    const farm = join(live.home, ".local/share/qsm/bin");
+    mkdirSync(farm, { recursive: true });
+    writeFileSync(join(farm, "mine"), "");
+    const r = await installBase({ pluginRoot: root })(live.ctx);
+    expect(r.status).toBe("error");
+    expect(step(r, "legacy bin farm").detail).toContain("mine");
+    expect(existsSync(join(farm, "mine"))).toBe(true);
+  });
+});

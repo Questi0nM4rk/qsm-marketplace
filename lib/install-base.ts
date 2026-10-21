@@ -26,6 +26,7 @@ import {
   type InstallStatus,
   type Step,
 } from "./install-contract.ts";
+import { purgeFarm } from "./legacy-farm.ts";
 import { binDir, buildRecordPath, type Env, fishCompletionDir } from "./paths.ts";
 import { loadManifest, type QsmManifest } from "./qsm-manifest.ts";
 
@@ -408,9 +409,24 @@ function plan(config: InstallBaseConfig, manifest: QsmManifest, ctx: InstallCont
     (bin) => `would write ${join(fishCompletionDir(ctx.env), `${bin}.fish`)}`,
   );
   return [
+    ...farmSteps(ctx),
     ...lines.map(planStep),
     ...upstreamRows(config, ctx.env).map((t) => planUpstream(ctx, t)),
     ...completions.map(planStep),
+  ];
+}
+
+/** The legacy bin farm shadows the compiled binaries on PATH, so it goes before they are written:
+ * one step naming it, `would remove` under dry run, an error for a file of the user's inside it. */
+function farmSteps(ctx: InstallContext): Step[] {
+  const name = "legacy bin farm";
+  const farm = purgeFarm(ctx.env, ctx.dryRun);
+  const verb = ctx.dryRun ? "would remove" : "removed";
+  return [
+    ...farm.found.map((f): Step => {
+      return { name, status: ctx.dryRun ? "skipped" : "installed", detail: `${verb} ${f}` };
+    }),
+    ...farm.blocked.map((detail): Step => ({ name, status: "error", detail })),
   ];
 }
 
@@ -449,6 +465,7 @@ async function run(
   }
   const steps: Step[] = [
     ...(deps === null ? [] : [deps]),
+    ...farmSteps(ctx),
     ...compileSteps(config, manifest, ctx.env),
     ...pruneSteps(config.pluginRoot),
     ...upstreamRows(config, ctx.env).map((t) => installUpstream(ctx, t)),
