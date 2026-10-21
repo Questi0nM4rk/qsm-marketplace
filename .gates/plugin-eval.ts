@@ -5,8 +5,8 @@
 // judged by haiku (claude-haiku-5-5, the cheapest model that grades well) and the agent under test
 // runs on sonnet, unless a flag says otherwise.
 //
-// A run costs fewer model calls in three ways. Before any model runs, every regex grader is broken
-// on purpose: it must match samples/pass.md and not samples/fail.md of its case. Fire and negative
+// A run costs fewer model calls in three ways. Before any model runs, every regex grader (of the
+// picked cases only, with `--case` or `--tag`; the others only warn) is broken on purpose: it must match samples/pass.md and not samples/fail.md of its case. Fire and negative
 // cases run with no baseline arm, scenarios with the with-without ablation, in separate calls.
 // A case whose files, and the plugin's skills/agents/instructions, are unchanged since it last met
 // the bar is not run again; `--force` runs everything. `--case` or `--tag` from the caller runs
@@ -55,6 +55,7 @@ interface Entry {
   label: string;
   kind: string;
   name: string;
+  tags: string[];
 }
 
 const KINDS = ["fire", "negative", "scenario"];
@@ -97,6 +98,7 @@ function caseDirs(): Entry[] {
         label,
         kind: KINDS.find((k) => tags.includes(k)) ?? "",
         name: str(meta.name, label),
+        tags,
       };
     });
 }
@@ -232,11 +234,35 @@ function verdicts(files: string[]): Verdict[] {
   });
 }
 
+/** The values a repeatable flag carries, as `--case a --case b`. */
+function flagValues(flag: string): string[] {
+  return flags.flatMap((f, i) =>
+    f === flag && flags[i + 1] !== undefined ? [flags[i + 1] ?? ""] : [],
+  );
+}
+
 const all = caseDirs();
-const bad = brokenGraders(all);
+const cases = flagValues("--case");
+const tags = flagValues("--tag");
+const picked = all.filter(
+  (c) =>
+    (cases.length === 0 && tags.length === 0) ||
+    cases.includes(c.name) ||
+    cases.includes(c.label) ||
+    tags.some((t) => c.tags.includes(t)),
+);
+const bad = brokenGraders(picked);
 if (bad.length > 0) {
   console.error(`regex graders broken, no model was run:\n${bad.map((b) => `  ${b}`).join("\n")}`);
   process.exit(1);
+}
+if (pick) {
+  const others = brokenGraders(all.filter((c) => !picked.includes(c)));
+  if (others.length > 0) {
+    console.error(
+      `warning: regex graders broken in cases not run:\n${others.map((b) => `  ${b}`).join("\n")}`,
+    );
+  }
 }
 const untagged = pick ? [] : all.filter((c) => c.kind === "");
 if (untagged.length > 0) {
