@@ -226,7 +226,7 @@ function registerSession(on: On): void {
       // built (prompt.attachment, skill.prompt) are passed over for a user plugin under an
       // organization's policy module, so the blocks are read here, once per turn.
       if (isMain) {
-        const scan = scanBlocks(await $.session.messages({ as: "api" }), rec.blocksSeen);
+        const scan = scanBlocks(await $.session.messages({ as: "api" }), rec.anchor);
         for (const tool of scan.tools) {
           addUse(rec, "tools", tool);
         }
@@ -236,7 +236,7 @@ function registerSession(on: On): void {
         for (const piece of scan.injections) {
           addInjection(rec, piece.source, piece.name, piece.chars);
         }
-        rec.blocksSeen = scan.seen;
+        rec.anchor = scan.anchor;
       }
     });
     if (isMain) {

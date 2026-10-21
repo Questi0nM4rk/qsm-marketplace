@@ -200,6 +200,76 @@ test("Two turns: the second counts only the blocks its own messages added", asyn
   ]);
 });
 
+async function endTurn($: Engine, turnId: string): Promise<void> {
+  await $.turn.complete({
+    answer: ANSWER_TEXT,
+    durationMs: 1000,
+    isAborted: false,
+    turnId,
+    reason: "answer",
+    usage: TURN_USAGE,
+  });
+}
+
+const skillTurn = (id: string, skill: string): ApiMessage[] => [
+  text("user", `use ${skill}`),
+  toolUse(id, "Skill", { skill }),
+  {
+    role: "user",
+    content: [
+      { type: "tool_result", tool_use_id: id, content: `Launching skill: ${skill}` },
+      { type: "text", text: `Base directory for this skill: /plugins/p/skills/${skill}\n\nBODY` },
+    ],
+  },
+  text("assistant", "Done."),
+];
+
+test("A compaction leaves a conversation as long as before: it is read whole, not from the old cursor", async ($, on) => {
+  const store: Store = new Map();
+  stubStore(on, store);
+  stubHost(on, "s18", newSeen());
+  let messages: ApiMessage[] = [];
+  stubMessages(on, () => messages);
+
+  await $.session.start(START);
+  messages = skillTurn("1", "tdd");
+  await endTurn($, "t0");
+
+  // The compacted conversation: a summary, the re-injected reminder, then a new skill use. It has
+  // more blocks than the first conversation had, the case a block-count cursor got wrong.
+  messages = [
+    text("user", "<system-reminder>\nToday's date is 2026-10-22.\n</system-reminder>"),
+    text("user", "Summary of the conversation so far"),
+    text("assistant", "Understood."),
+    ...skillTurn("9", "tdd"),
+  ];
+  await endTurn($, "t1");
+
+  const rec = sessionIn(store, "s18");
+  expect(rec.uses.skills).toEqual({ tdd: 2 });
+  expect(rec.injected.map(({ source, name, count }) => [source, name, count])).toEqual([
+    ["skill.prompt", "tdd", 2],
+    ["prompt.attachment", "Today's date is #-#-#.", 1],
+  ]);
+});
+
+test("A last block that repeats does not hide what came after its first copy", async ($, on) => {
+  const store: Store = new Map();
+  stubStore(on, store);
+  stubHost(on, "s19", newSeen());
+  let messages: ApiMessage[] = [];
+  stubMessages(on, () => messages);
+
+  await $.session.start(START);
+  messages = skillTurn("1", "tdd");
+  await endTurn($, "t0");
+  messages = [...messages, ...skillTurn("2", "tdd")];
+  await endTurn($, "t1");
+  await endTurn($, "t2");
+
+  expect(sessionIn(store, "s19").uses.skills).toEqual({ tdd: 2 });
+});
+
 /** Rows well past the verb's ~4,000-character ask threshold. */
 function listing(rows: number): string {
   return Array.from(

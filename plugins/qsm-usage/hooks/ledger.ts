@@ -65,6 +65,13 @@ export interface ToonSaving {
   toTokens: number;
 }
 
+/** Where the last read of the main conversation ended: the hash of its last block with the two
+ * before it, and which occurrence of that hash among the conversation's blocks it was. */
+export interface BlockAnchor {
+  hash: string;
+  nth: number;
+}
+
 export interface SessionRecord {
   id: string;
   startedAt: number;
@@ -74,8 +81,8 @@ export interface SessionRecord {
   injected: Injection[];
   uses: Record<UseKind, Record<string, number>>;
   toon: ToonSaving[];
-  /** How many content blocks of the main conversation `turn.complete` has already read; `scanBlocks` reads only what came after. */
-  blocksSeen: number;
+  /** The end of the last read of the main conversation: `scanBlocks` reads what follows it, or the whole conversation when it is `null` or no longer there (a compaction). */
+  anchor: BlockAnchor | null;
 }
 
 export function newSession(id: string, at: number): SessionRecord {
@@ -88,7 +95,7 @@ export function newSession(id: string, at: number): SessionRecord {
     injected: [],
     uses: { skills: {}, commands: {}, agents: {}, tools: {} },
     toon: [],
-    blocksSeen: 0,
+    anchor: null,
   };
 }
 
@@ -130,6 +137,10 @@ function isTurnUsage(usage: unknown): boolean {
     isNum(usage.cache_read_input_tokens) &&
     isNum(usage.cache_creation_input_tokens)
   );
+}
+
+function isAnchorOrNull(value: unknown): boolean {
+  return value === null || (isPlainObject(value) && isStr(value.hash) && isNum(value.nth));
 }
 
 function isTurn(turn: Record<string, unknown>): boolean {
@@ -183,7 +194,7 @@ function isSessionRecord(value: unknown): value is SessionRecord {
     everyRow(value.injected, isInjection) &&
     isUses(value.uses) &&
     everyRow(value.toon, isSaving) &&
-    isNum(value.blocksSeen)
+    isAnchorOrNull(value.anchor)
   );
 }
 
@@ -270,13 +281,17 @@ export interface ApiMessageLike {
   content: readonly { type: string; [field: string]: unknown }[];
 }
 
-/** What one read of the conversation added: tool uses, skill uses, injected text, and the cursor. */
+/** What one read of the conversation added: tool uses, skill uses, injected text, and the anchor. */
 export interface BlockScan {
   tools: string[];
   skills: string[];
   injections: { source: InjectionSource; name: string; chars: number }[];
-  seen: number;
+  anchor: BlockAnchor | null;
 }
+
+/** How many blocks, the last one included, a block's hash covers: one block alone can repeat after a
+ * compaction ("Done."), three in a row almost never do. */
+const ANCHOR_BLOCKS = 3;
 
 const REMINDER = "<system-reminder>";
 const SKILL_TEXT = "Base directory for this skill:";
@@ -327,13 +342,64 @@ function scanText(scan: BlockScan, asked: string[], text: string): void {
   }
 }
 
-/** The tool uses, skill uses and injected text in the blocks added after block `seen`, in order.
- * A conversation shorter than the cursor was compacted: it is read whole. */
-export function scanBlocks(messages: readonly ApiMessageLike[], seen: number): BlockScan {
+/** What identifies a block between two reads: its text, or the id the API gave it. A tool result's
+ * content is left out, because it can be large and its id already tells it apart. */
+function blockIdentity(role: string, block: Block): string {
+  switch (block.type) {
+    case "text":
+      return `${role}:text:${String(block.text)}`;
+    case "tool_use":
+      return `${role}:tool_use:${String(block.id)}:${String(block.name)}`;
+    case "tool_result":
+      return `${role}:tool_result:${String(block.tool_use_id)}`;
+    default:
+      return `${role}:${block.type}:${JSON.stringify(block)}`;
+  }
+}
+
+/** cyrb53: a 53-bit string hash, synchronous (the module has no Node, and `crypto.subtle` is async).
+ * It only tells blocks apart, so it needs no strength. */
+function hashOf(text: string): string {
+  let h1 = 0xde_ad_be_ef;
+  let h2 = 0x41_c6_ce_57;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    h1 = Math.imul(h1 ^ code, 2_654_435_761);
+    h2 = Math.imul(h2 ^ code, 1_597_334_677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2_246_822_507) ^ Math.imul(h2 ^ (h2 >>> 13), 3_266_489_909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2_246_822_507) ^ Math.imul(h1 ^ (h1 >>> 13), 3_266_489_909);
+  return (4_294_967_296 * (2_097_151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+/** The tool uses, skill uses and injected text in the blocks after `anchor`, in order. An anchor
+ * that is `null`, or not in the conversation (it was compacted or rewritten), reads it whole. */
+export function scanBlocks(
+  messages: readonly ApiMessageLike[],
+  anchor: BlockAnchor | null,
+): BlockScan {
   const blocks = messages.flatMap((m) => m.content.map((block) => ({ role: m.role, block })));
-  const scan: BlockScan = { tools: [], skills: [], injections: [], seen: blocks.length };
+  const identities = blocks.map(({ role, block }) => blockIdentity(role, block));
+  const hashes = identities.map((_, i) =>
+    hashOf(identities.slice(Math.max(0, i + 1 - ANCHOR_BLOCKS), i + 1).join("\0")),
+  );
+  // Each block's anchor key is its hash and which occurrence of that hash it is.
+  const seen = new Map<string, number>();
+  const keys = hashes.map((hash) => {
+    const nth = (seen.get(hash) ?? 0) + 1;
+    seen.set(hash, nth);
+    return `${hash}#${nth}`;
+  });
+  const start = anchor === null ? 0 : keys.indexOf(`${anchor.hash}#${anchor.nth}`) + 1;
+  const last = hashes.at(-1);
+  const scan: BlockScan = {
+    tools: [],
+    skills: [],
+    injections: [],
+    anchor: last === undefined ? null : { hash: last, nth: seen.get(last) ?? 1 },
+  };
   const asked: string[] = [];
-  for (const { role, block } of blocks.slice(blocks.length < seen ? 0 : seen)) {
+  for (const { role, block } of blocks.slice(start)) {
     if (role === "assistant" && block.type === "tool_use") {
       scanToolUse(scan, asked, block);
     } else if (role === "user" && block.type === "text" && typeof block.text === "string") {
