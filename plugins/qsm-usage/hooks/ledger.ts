@@ -74,11 +74,8 @@ export interface SessionRecord {
   injected: Injection[];
   uses: Record<UseKind, Record<string, number>>;
   toon: ToonSaving[];
-  /**
-   * How many of the main conversation's messages `turn.complete` has already read for their
-   * tool_use blocks; `toolUsesSince` reads only what came after.
-   */
-  toolMessagesSeen: number;
+  /** How many content blocks of the main conversation `turn.complete` has already read; `scanBlocks` reads only what came after. */
+  blocksSeen: number;
 }
 
 export function newSession(id: string, at: number): SessionRecord {
@@ -91,7 +88,7 @@ export function newSession(id: string, at: number): SessionRecord {
     injected: [],
     uses: { skills: {}, commands: {}, agents: {}, tools: {} },
     toon: [],
-    toolMessagesSeen: 0,
+    blocksSeen: 0,
   };
 }
 
@@ -186,7 +183,7 @@ function isSessionRecord(value: unknown): value is SessionRecord {
     everyRow(value.injected, isInjection) &&
     isUses(value.uses) &&
     everyRow(value.toon, isSaving) &&
-    isNum(value.toolMessagesSeen)
+    isNum(value.blocksSeen)
   );
 }
 
@@ -203,7 +200,9 @@ export function asSession(value: unknown): SessionRecord | null {
     const { after: _after, ...kept } = turn;
     return kept;
   });
-  const record = { ...value, turns };
+  // Older records counted messages, not blocks; the cursor restarts and the next turn reads on.
+  const { toolMessagesSeen: _seen, ...rest } = value;
+  const record = { blocksSeen: 0, ...rest, turns };
   return isSessionRecord(record) ? record : null;
 }
 
@@ -257,18 +256,84 @@ export function addUse(rec: SessionRecord, kind: UseKind, name: string): void {
   rec.uses[kind][name] = (rec.uses[kind][name] ?? 0) + 1;
 }
 
-/** A message with the shape `turn.complete` reads from `$.session.messages()`:
+/** A message with the shape `turn.complete` reads from `$.session.messages({ as: "api" })`:
  * structural, so this file stays free of the ambient 'claude-code' module. */
-export interface MessageToolUses {
-  toolUses: readonly { tool: string }[];
+export interface ApiMessageLike {
+  role: string;
+  content: readonly { type: string; [field: string]: unknown }[];
 }
 
-/** The tool names of every `tool_use` block added since message `seen`, in order. */
-export function toolUsesSince(
-  messages: readonly MessageToolUses[],
-  seen: number,
-): readonly string[] {
-  return messages.slice(seen).flatMap((m) => m.toolUses.map((t) => t.tool));
+/** What one read of the conversation added: tool uses, skill uses, injected text, and the cursor. */
+export interface BlockScan {
+  tools: string[];
+  skills: string[];
+  injections: { source: InjectionSource; name: string; chars: number }[];
+  seen: number;
+}
+
+const REMINDER = "<system-reminder>";
+const SKILL_TEXT = "Base directory for this skill:";
+const NAME_CHARS = 48;
+
+/** A reminder's name: its first line up to the first colon, digits folded so a counter is one row. */
+function reminderName(text: string): string {
+  const line =
+    text
+      .slice(REMINDER.length)
+      .split("\n")
+      .find((l) => l.trim() !== "") ?? "";
+  return (line.split(":")[0] ?? "").trim().replaceAll(/\d+/g, "#").slice(0, NAME_CHARS);
+}
+
+function skillDir(text: string): string {
+  const line = text.slice(SKILL_TEXT.length).split("\n")[0] ?? "";
+  return (
+    line
+      .trim()
+      .split("/")
+      .findLast((part) => part !== "") ?? ""
+  );
+}
+
+type Block = ApiMessageLike["content"][number];
+
+/** An assistant's tool_use block: a use of that tool, and of the skill it names for `Skill`. */
+function scanToolUse(scan: BlockScan, asked: string[], { name, input }: Block): void {
+  if (typeof name !== "string") {
+    return;
+  }
+  scan.tools.push(name);
+  if (name === "Skill" && isPlainObject(input) && typeof input.skill === "string") {
+    scan.skills.push(input.skill);
+    asked.push(input.skill);
+  }
+}
+
+/** A user's text block: a reminder is an attachment, the skill's loaded text is the skill's prompt. */
+function scanText(scan: BlockScan, asked: string[], text: string): void {
+  if (text.startsWith(REMINDER)) {
+    const name = reminderName(text);
+    scan.injections.push({ source: "prompt.attachment", name, chars: text.length });
+  } else if (text.startsWith(SKILL_TEXT)) {
+    const name = asked.shift() ?? skillDir(text);
+    scan.injections.push({ source: "skill.prompt", name, chars: text.length });
+  }
+}
+
+/** The tool uses, skill uses and injected text in the blocks added after block `seen`, in order.
+ * A conversation shorter than the cursor was compacted: it is read whole. */
+export function scanBlocks(messages: readonly ApiMessageLike[], seen: number): BlockScan {
+  const blocks = messages.flatMap((m) => m.content.map((block) => ({ role: m.role, block })));
+  const scan: BlockScan = { tools: [], skills: [], injections: [], seen: blocks.length };
+  const asked: string[] = [];
+  for (const { role, block } of blocks.slice(blocks.length < seen ? 0 : seen)) {
+    if (role === "assistant" && block.type === "tool_use") {
+      scanToolUse(scan, asked, block);
+    } else if (role === "user" && block.type === "text" && typeof block.text === "string") {
+      scanText(scan, asked, block.text);
+    }
+  }
+  return scan;
 }
 
 export function addToon(

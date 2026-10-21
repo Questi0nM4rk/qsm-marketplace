@@ -1,6 +1,6 @@
 // claude plugin test plugins/qsm-usage: the ledger's scenarios, driven through
 // the engine's own chain, on the host test-host.tsx stubs.
-import type { On, SessionMessage } from "claude-code";
+import type { ApiMessage, On } from "claude-code";
 import { type Engine, expect, test } from "claude-code/testing";
 import { isPlainObject } from "../lib/toon-scalar.ts";
 import {
@@ -13,7 +13,6 @@ import {
   stubStore,
 } from "./test-host.tsx";
 
-const PROMPT_TEXT = "PRIVATE-PROMPT-TEXT do not keep me";
 const ANSWER_TEXT = "PRIVATE-ANSWER-TEXT";
 
 const START = { cwd: "/repo", surface: null, isInteractive: false } as const;
@@ -25,33 +24,53 @@ const TURN_USAGE = {
   cache_creation_input_tokens: 10,
 };
 
-/** No tool_use blocks unless a test sets its own; the ledger's turn.complete
- * reads this every main-thread turn. */
-function stubMessages(on: On, messages: () => SessionMessage[]): void {
+/** The main conversation as the Messages API holds it; the ledger's turn.complete reads this
+ * every main-thread turn. */
+function stubMessages(on: On, messages: () => ApiMessage[]): void {
   on("session.messages", () => ({ value: messages() }));
 }
 
-/** The chain's bottom for every injection event: each passes its text on. */
+const text = (role: "user" | "assistant", body: string): ApiMessage => ({
+  role,
+  content: [{ type: "text", text: body }],
+});
+
+const toolUse = (id: string, name: string, input: Record<string, unknown> = {}): ApiMessage => ({
+  role: "assistant",
+  content: [{ type: "tool_use", id, name, input }],
+});
+
+/** The chain's bottom for the one injection event the plugin still hooks. */
 function answerInjections(on: On): void {
-  on("prompt.attachment", (_$, e) => ({ text: e.text }));
   on("tool.describe", (_$, e) => ({ description: e.description }));
-  on("skill.prompt", (_$, e) => ({ text: e.text }));
   on("session.measure", (_$, e) => ({ changed: e.changed }));
 }
 
 async function injectEach($: Engine): Promise<void> {
-  await $.prompt.attachment({
-    type: "todo_reminder",
-    text: PROMPT_TEXT,
-    origin: { kind: "engine" },
-  });
   await $.tool.describe({
     tool: "Bash",
     description: "runs commands",
     provider: { plugin: "engine", tier: "core" },
   });
-  await $.skill.prompt({ skill: "tdd", text: PROMPT_TEXT });
 }
+
+/** A conversation holding what the harness injects: two reminders and a skill's text. */
+const INJECTED: ApiMessage[] = [
+  text("user", "<system-reminder>\nToday's date is 2026-10-21.\n</system-reminder>"),
+  text("user", "<system-reminder>\n# Environment\nPRIVATE-ENV</system-reminder>"),
+  text("user", "do the thing"),
+  toolUse("1", "Skill", { skill: "p:tdd" }),
+  {
+    role: "user",
+    content: [
+      { type: "tool_result", tool_use_id: "1", content: "Launching skill: p:tdd" },
+      {
+        type: "text",
+        text: "Base directory for this skill: /plugins/p/skills/tdd\n\nPRIVATE-SKILL",
+      },
+    ],
+  },
+];
 
 async function threeTurns($: Engine): Promise<void> {
   for (let i = 0; i < 3; i += 1) {
@@ -76,7 +95,7 @@ test("A session ends", async ($, on) => {
   const store: Store = new Map();
   stubStore(on, store);
   stubHost(on, "s1");
-  stubMessages(on, () => []);
+  stubMessages(on, () => INJECTED);
   answerInjections(on);
 
   await $.session.start(START);
@@ -90,37 +109,34 @@ test("A session ends", async ($, on) => {
   expect(rec.turns.length).toBe(3);
   expect(rec.turns.map((t) => t.usage)).toEqual([TURN_USAGE, TURN_USAGE, TURN_USAGE]);
   expect(rec.turns.map((t) => t.costUsd)).toEqual([0.1, 0.2, 0.300_000_000_000_000_04]);
-  expect(rec.injected).toContainEqual(
-    expect.objectContaining({ source: "prompt.attachment", name: "todo_reminder" }),
-  );
-  expect(rec.injected).toContainEqual(
-    expect.objectContaining({ source: "tool.describe", name: "Bash", chars: 13 }),
-  );
-  expect(rec.injected).toContainEqual(
-    expect.objectContaining({ source: "skill.prompt", name: "tdd" }),
-  );
-  expect(rec.uses.skills).toEqual({ tdd: 1 });
+  expect(rec.injected.map(({ source, name, count }) => [source, name, count])).toEqual([
+    ["tool.describe", "Bash", 1],
+    ["prompt.attachment", "Today's date is #-#-#.", 1],
+    ["prompt.attachment", "# Environment", 1],
+    ["skill.prompt", "p:tdd", 1],
+  ]);
+  expect(rec.uses.skills).toEqual({ "p:tdd": 1 });
+  expect(rec.uses.tools).toEqual({ Skill: 1 });
   const serialized = JSON.stringify([...store.values()]);
   expect(serialized.includes("PRIVATE")).toBe(false);
 });
 
-test("Two turns: the second counts only the tool_use blocks its own messages added", async ($, on) => {
+test("Two turns: the second counts only the blocks its own messages added", async ($, on) => {
   const store: Store = new Map();
   stubStore(on, store);
   stubHost(on, "s2", newSeen());
-  let messages: SessionMessage[] = [];
+  let messages: ApiMessage[] = [];
   stubMessages(on, () => messages);
 
   await $.session.start(START);
 
   messages = [
-    { role: "user", text: "run it", toolUses: [] },
+    text("user", "run it"),
     {
       role: "assistant",
-      text: "",
-      toolUses: [
-        { tool_use_id: "1", tool: "Bash", input: {} },
-        { tool_use_id: "2", tool: "Read", input: {} },
+      content: [
+        { type: "tool_use", id: "1", name: "Bash", input: {} },
+        { type: "tool_use", id: "2", name: "Read", input: {} },
       ],
     },
   ];
@@ -133,11 +149,7 @@ test("Two turns: the second counts only the tool_use blocks its own messages add
     usage: TURN_USAGE,
   });
 
-  messages = [
-    ...messages,
-    { role: "user", text: "again", toolUses: [] },
-    { role: "assistant", text: "", toolUses: [{ tool_use_id: "3", tool: "Bash", input: {} }] },
-  ];
+  messages = [...messages, text("user", "again"), toolUse("3", "Bash")];
   await $.turn.complete({
     answer: ANSWER_TEXT,
     durationMs: 1000,
@@ -366,14 +378,8 @@ test("Recording fails", async ($, on) => {
   stubStore(on, store, true);
   stubHost(on, "s3", seen);
   stubMessages(on, () => []);
-  on("prompt.attachment", (_$, e) => ({ text: e.text }));
 
   const started = await $.session.start(START);
-  const section = await $.prompt.attachment({
-    type: "todo_reminder",
-    text: "kept as is",
-    origin: { kind: "engine" },
-  });
   const turn = await $.turn.complete({
     answer: "done",
     durationMs: 1,
@@ -384,7 +390,6 @@ test("Recording fails", async ($, on) => {
   });
 
   expect(started).toEqual({ cwd: "/repo" });
-  expect(section).toEqual({ text: "kept as is" });
   expect(turn.text).toBe("done");
   // The engine names the plugin before every log line, so the line itself starts with the event.
   const errors = seen.logs.filter((l) => l.includes(" failed: "));
