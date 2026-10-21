@@ -98,6 +98,8 @@ export interface StartSpec {
   readonly port: number;
   readonly outDir: string;
   readonly liveView: string;
+  /** The invoking user's `uid:gid`, so a file the instance writes to the mount is the user's own. */
+  readonly user: string;
 }
 
 /** The exact argument vector that starts one isolated instance. */
@@ -115,6 +117,8 @@ export function runDefinition(spec: StartSpec): string[] {
     // Firefox needs far more than the default 64 MB of shared memory.
     "--shm-size=2g",
     "--init",
+    "--user",
+    spec.user,
     "--env",
     `QSM_BROWSERBOX_LIVE_VIEW=${spec.liveView}`,
     "--volume",

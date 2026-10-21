@@ -72,6 +72,7 @@ describe("runDefinition", () => {
     port: 11_000,
     outDir: "/srv/out/bbox-11000",
     liveView: "http://127.0.0.1:11000/",
+    user: "1000:1000",
   });
 
   test("the instance is detached, named, labelled and ephemeral", () => {
@@ -81,6 +82,10 @@ describe("runDefinition", () => {
     expect(argv).toContain("bbox-11000");
     expect(argv).toContain(`${LABEL}=1`);
     expect(argv.at(-1)).toBe(IMAGE);
+  });
+
+  test("the instance runs as the invoking user, so what it writes to the mount is theirs", () => {
+    expect(argv[argv.indexOf("--user") + 1]).toBe("1000:1000");
   });
 
   test("only the live-view port is published, and only on loopback", () => {

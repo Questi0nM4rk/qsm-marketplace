@@ -365,17 +365,17 @@ an older driver that never answers the current one.
 - **WHEN** the image's label equals the hash of the current `docker/` context
 - **THEN** `qsm-web browserbox start` SHALL start the instance without a build
 
-### Requirement: A started instance has an empty output directory
+### Requirement: An instance writes its artifacts as the invoking user
 
-qsm-web browserbox SHALL empty an instance's default output directory before it starts the
-instance, because an artifact an earlier run left there, owned by another user, makes every capture
-into that directory fail. A directory the caller named with `--out` SHALL be left as it is.
+qsm-web browserbox SHALL start an instance as the invoking user's uid and gid, so no file it writes
+to the mounted output directory is owned by another user, and it SHALL NOT delete anything from that
+directory.
 
-#### Scenario: A stale artifact from an earlier run
+#### Scenario: Two captures, one earlier artifact
 
-- **WHEN** the default output directory holds a file the instance's user cannot overwrite and an
-  instance starts for that port
-- **THEN** a screenshot fetch into it SHALL succeed, and a second one SHALL too
+- **WHEN** two `--screenshot` fetches run one after the other
+- **THEN** both SHALL succeed, every file they wrote SHALL be owned by the invoking user, and the
+  first fetch's files SHALL still exist after the second
 
 ### Requirement: Install places the one bin on PATH
 

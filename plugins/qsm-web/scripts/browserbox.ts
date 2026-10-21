@@ -1,6 +1,6 @@
 // qsm-web browserbox: the last rung.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { home } from "../../../lib/paths.ts";
 import { join } from "node:path";
 import {
@@ -184,15 +184,18 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
   const name = instanceName(port);
   const where = out ?? outDir(process.env, home(process.env), name);
   if (!box.dryRun) {
-    if (out === undefined) {
-      // The instance's own dir holds only what an earlier run of this port left, and an artifact an
-      // older image wrote as root would make every later capture fail.
-      rmSync(where, { recursive: true, force: true });
-    }
     mkdirSync(where, { recursive: true });
   }
   const liveView = liveViewUrl(port);
-  const started = box.run(runDefinition({ name, port, outDir: where, liveView }));
+  const started = box.run(
+    runDefinition({
+      name,
+      port,
+      outDir: where,
+      liveView,
+      user: `${process.getuid?.()}:${process.getgid?.()}`,
+    }),
+  );
   if (started.status !== 0) {
     throw new QsmError("failed", `the instance would not start (exit ${started.status})`);
   }
