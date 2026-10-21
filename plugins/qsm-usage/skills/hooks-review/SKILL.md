@@ -16,7 +16,9 @@ The ledger does not time classic hooks. Read duration from the transcripts of th
 attachment entries of type `hook_success`, `hook_non_blocking_error`,
 `hook_error_during_execution` or `hook_cancelled`, with `hookName`, `hookEvent` and `durationMs`.
 A silent successful run is not written, so a hook with no entries has "no timing data".
-`mcp__qsm-usage__ledger` holds every injected piece of text per session with its source and size.
+`mcp__qsm-usage__ledger` holds the injected text of the conversation per session with its source and
+size, with fewer reminder rows than the transcript: a reminder the engine adds to a request after
+the first of a turn is in no message, so the ledger never saw it.
 
 ## Slow and timing out
 

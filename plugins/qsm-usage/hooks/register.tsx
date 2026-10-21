@@ -21,7 +21,7 @@ import {
   newSession,
   nextIndex,
   type SessionRecord,
-  toolUsesSince,
+  scanBlocks,
 } from "./ledger.ts";
 import { isFilterAnswer } from "../lib/filter.ts";
 import { isPlainObject } from "../lib/toon-scalar.ts";
@@ -221,14 +221,22 @@ function registerSession(on: On): void {
         usage: e.usage === undefined ? null : { ...e.usage },
         costUsd: null,
       });
-      // Only the main conversation's own tool_use blocks: `$.session.messages()` with no argument
-      // is that conversation, and a subagent's turn.complete adds none of them.
+      // Only the main conversation: `$.session.messages` with no agent is that conversation, and a
+      // subagent's turn.complete adds none of it. The hooks that would see each piece as it is
+      // built (prompt.attachment, skill.prompt) are passed over for a user plugin under an
+      // organization's policy module, so the blocks are read here, once per turn.
       if (isMain) {
-        const messages = await $.session.messages();
-        for (const tool of toolUsesSince(messages, rec.toolMessagesSeen)) {
+        const scan = scanBlocks(await $.session.messages({ as: "api" }), rec.anchor);
+        for (const tool of scan.tools) {
           addUse(rec, "tools", tool);
         }
-        rec.toolMessagesSeen = messages.length;
+        for (const skill of scan.skills) {
+          addUse(rec, "skills", skill);
+        }
+        for (const piece of scan.injections) {
+          addInjection(rec, piece.source, piece.name, piece.chars);
+        }
+        rec.anchor = scan.anchor;
       }
     });
     if (isMain) {
@@ -255,31 +263,11 @@ function registerSession(on: On): void {
   });
 }
 
-function registerInjections(on: On): void {
-  on("prompt.attachment", async ($, e, next) => {
-    const result = await next(e);
-    const { text } = result;
-    if (text !== null) {
-      await record($, "prompt.attachment", (rec) => {
-        addInjection(rec, "prompt.attachment", e.type, text.length);
-      });
-    }
-    return result;
-  });
-
+function registerToolDescriptions(on: On): void {
   on("tool.describe", async ($, e, next) => {
     const result = await next(e);
     await record($, "tool.describe", (rec) => {
       addInjection(rec, "tool.describe", e.tool, result.description.length);
-    });
-    return result;
-  });
-
-  on("skill.prompt", async ($, e, next) => {
-    const result = await next(e);
-    await record($, "skill.prompt", (rec) => {
-      addInjection(rec, "skill.prompt", e.skill, result.text.length);
-      addUse(rec, "skills", e.skill);
     });
     return result;
   });
@@ -318,7 +306,7 @@ function registerLedgerTools(on: On): void {
 /** Everything the ledger records, and the two tools that read it. */
 function registerLedger(on: On): void {
   registerSession(on);
-  registerInjections(on);
+  registerToolDescriptions(on);
   registerUses(on);
   registerLedgerTools(on);
 }

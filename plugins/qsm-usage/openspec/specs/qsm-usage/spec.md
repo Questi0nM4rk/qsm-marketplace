@@ -14,20 +14,98 @@ instead of what it does today.
 
 The hooks module SHALL record, for every session, into the plugin's store: the context breakdown at
 session start from `$.session.usage`; each turn's token usage and cost from `turn.complete` and
-`session.measure`; every piece of text the harness injects, with its source and size, from
-`prompt.attachment`, `tool.describe`, and `skill.prompt`; and every use of a skill, command, agent,
-and tool, by name. Recording SHALL never call a model, never block or alter the event it observes,
-and never store prompt or tool content beyond names, sizes, and counts. The ledger SHALL keep the
-last 200 sessions and drop the oldest first, and when the store is over its size limit it SHALL drop
-the oldest sessions until the write fits. The module SHALL register two tools the model calls to
-read it: `breakdown`, the current session's context by category, and `ledger`, the recorded sessions
-filtered by a window.
+`session.measure`; every piece of injected text the main conversation holds, with its source and
+size; and every use of a skill, command, agent, and tool in the main conversation, by name. A
+subagent's own tool and skill uses are in its own conversation, which the module does not read, so
+a skill used only inside a subagent shows no use. The injected text SHALL come from
+two admitted doors only: `tool.describe` for a tool's description, and the main conversation read
+through `$.session.messages({ as: "api" })` at each `turn.complete` for everything else, from the
+blocks added since the last read. The last read is remembered as an anchor: the hash of the last
+three blocks read (so a short block such as "Done." does not match by chance) and which occurrence
+of that hash it was, never the blocks' content. The next read finds that occurrence in the current
+conversation and reads what follows it; when it is not found, because the conversation was compacted
+or rewritten, or the record has no anchor yet, the whole current conversation is read, so a
+compacted conversation of any length is read from its first block. A text block of a user message
+that opens with `<system-reminder>` is an attachment, source `prompt.attachment`, named by its first
+line up to the first colon with digits folded to `#` and at most 48 characters; a text block that
+opens with `Base directory for this skill:` is a skill's text, source `skill.prompt`, named by the
+`Skill` call that asked for it; a `tool_use` block is a use of that tool, and of the skill it names
+when the tool is `Skill`. A reminder the engine adds to a request after the first of a turn, as a
+system turn, is in no message and so is not recorded: the system-turn copies of the
+`<total_tokens>` counter and of the output-style reminder are such (their first copy of a prompt is
+in a message and is recorded), so the ledger holds fewer of those rows than the
+transcript, and SHALL NOT claim every piece of injected text. A skill the person types as
+`/plugin:skill` is no `Skill` call: it is counted as a command under its full name from
+`command.run`, never as a skill, and its text is the `skill.prompt` row named by the last directory
+of the skill's base directory. The module SHALL NOT hook `prompt.attachment`, `prompt.section`,
+`prompt.context`, `prompt.compose`, `skill.prompt`, or any `classic.*` event, and SHALL NOT record
+on a `session.append` row of the doors `attachment`, `hook-context`, or `compaction`: an
+organization's policy module that runs first passes those over for a user plugin, so the hook never
+runs and the harness shows the person a "was skipped" notice. A stored session record SHALL be read
+back whole or not at all: one without the field `anchor` (its value is the anchor or `null`), or of
+any other wrong shape, fails its event through the module's error path (shown once, the event
+continues) and is never replaced by a fresh record or read in a second shape; a store from an older
+shape is migrated once, outside the plugin, and a migrated record gets `anchor: null`: the old shape
+kept no way to find where its last read ended, and most of its transcripts no longer exist, so the
+migrated record is not recomputed. The limit is stated, not hidden: a migrated session that is
+resumed reads its whole conversation on its first turn, so the uses and injected text it already
+counted are counted once more, a one-time recount bounded by that conversation. Recording SHALL
+never call a model, never block or alter the event it observes, and never store prompt or tool
+content beyond names, sizes, and counts. The ledger SHALL keep the last 200 sessions and drop the
+oldest first, and when the store is over its size limit it SHALL drop the oldest sessions until the
+write fits. The module SHALL register two tools the model calls to read it: `breakdown`, the current
+session's context by category, and `ledger`, the recorded sessions filtered by a window.
 
 #### Scenario: A session ends
 
 - **WHEN** a session with three turns ends
-- **THEN** the ledger holds its start breakdown, three turn usages, every injected piece with its
-  size, and every skill and tool used, and no prompt text
+- **THEN** the ledger holds its start breakdown, three turn usages, the injected pieces its
+  messages hold with their sizes, and every skill and tool the main conversation used, and no
+  prompt text
+
+#### Scenario: Reminders and a skill text reach the context
+
+- **WHEN** a turn ends and the conversation holds two `<system-reminder>` text blocks and the text
+  of a skill the model asked for with the `Skill` tool
+- **THEN** the ledger holds one `prompt.attachment` row per reminder name and one `skill.prompt`
+  row named by the skill, each with its character size, and the skill is counted once as used
+
+#### Scenario: A skill the person types
+
+- **WHEN** the person types `/qsm-essentials:writing` and a turn ends
+- **THEN** the ledger counts the command `qsm-essentials:writing` once, no skill use, and holds one
+  `skill.prompt` row named `writing`
+
+#### Scenario: A compaction leaves a conversation as long as the one before
+
+- **WHEN** a turn read a conversation of 20 blocks, the person compacts, and the next turn ends
+  with a conversation of 25 blocks in which the model called a skill
+- **THEN** the anchor is not in the new conversation, all 25 blocks are read, and the skill is
+  counted once, with the reminders the compaction re-injected
+
+#### Scenario: A last block that repeats
+
+- **WHEN** a turn ends on the assistant text "Done." and a later turn ends on the same text after
+  new tool calls
+- **THEN** the later read starts after the first "Done." and counts those tool calls once
+
+#### Scenario: A migrated session is resumed
+
+- **WHEN** a session whose record was migrated with `anchor: null` is resumed and a turn ends
+- **THEN** its whole conversation is read once, the counts it already held rise by what that
+  conversation holds, and the record carries a real anchor from then on
+
+#### Scenario: A hook the policy module passes over
+
+- **WHEN** the plugin loads under an organization policy module that passes over
+  `prompt.attachment` and `skill.prompt` for a user plugin
+- **THEN** the person sees no "was skipped" notice from qsm-usage, because it hooks neither
+
+#### Scenario: A stored record in an old shape
+
+- **WHEN** a session starts and its stored record has no `anchor`
+- **THEN** the event fails through the module's error path naming the event, the stored record is
+  left as it was, and no record for the session is written
 
 #### Scenario: The store is full
 
