@@ -425,6 +425,7 @@ const hook: Handler = async (call) => {
   const outcomes = await runGates(root, name, config.hooks[name], {
     // git's pre-push payload, read once and handed to every gate that wants it
     pushLines: name === "pre-push" ? await readStdin() : undefined,
+    remote: optionalString(call, "remote"),
     allow: process.env.QSM_LANGDEV_ALLOW?.trim(),
   });
   reportGateOutcomes(name, outcomes);

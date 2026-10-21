@@ -18,21 +18,24 @@ const SHEBANG: Record<HookLang, string> = {
 };
 const COMMENT: Record<HookLang, string> = { sh: "#", py: "#", ts: "//" };
 
+/** The call a hook makes. git hands pre-push the remote's name as its first argument, and the
+ * gate needs it to know which remote's refs are not news, so the shim passes it on. */
 function hookCallLine(name: HookName, lang: HookLang): string {
+  const push = name === "pre-push";
   if (lang === "py") {
     return (
       "import subprocess, sys\n" +
-      `if subprocess.run(["qsm-langdev", "hook", "${name}"]).returncode != 0:\n` +
+      `if subprocess.run(["qsm-langdev", "hook", "${name}"${push ? ", *sys.argv[1:2]" : ""}]).returncode != 0:\n` +
       "    sys.exit(1)"
     );
   }
   if (lang === "ts") {
     return (
-      `if (Bun.spawnSync(["qsm-langdev", "hook", "${name}"], ` +
+      `if (Bun.spawnSync(["qsm-langdev", "hook", "${name}"${push ? ", ...Bun.argv.slice(2, 3)" : ""}], ` +
       '{ stdio: ["inherit", "inherit", "inherit"] }).exitCode !== 0) process.exit(1);'
     );
   }
-  return `qsm-langdev hook ${name} || exit 1`;
+  return `qsm-langdev hook ${name}${push ? ' "${1:-}"' : ""} || exit 1`;
 }
 
 /** Which language an existing hook is written in, or null when we cannot
@@ -62,6 +65,14 @@ const blockBegin = (lang: HookLang): string => `${COMMENT[lang]} ${BLOCK_BEGIN}`
 const blockEnd = (lang: HookLang): string => `${COMMENT[lang]} ${BLOCK_END}`;
 const gateBlock = (name: HookName, lang: HookLang): string =>
   `\n${blockBegin(lang)}\n${hookCallLine(name, lang)}\n${blockEnd(lang)}\n`;
+
+/** Where our marked block sits in a hook, or null when it has none. */
+function ownBlock(body: string, lang: HookLang): { start: number; end: number } | null {
+  const start = body.indexOf(blockBegin(lang));
+  const endMarker = blockEnd(lang);
+  const end = body.indexOf(endMarker);
+  return start !== -1 && end > start ? { start, end: end + endMarker.length } : null;
+}
 
 function hookBody(name: HookName, lang: HookLang): string {
   const comment = COMMENT[lang];
@@ -111,7 +122,13 @@ export function installHooks(
   return names.map((name): HookAction => {
     const path = join(dir, name);
     if (isOurs(path)) {
-      return { hook: name, kind: "already", path };
+      const current = readFileSync(path, "utf8");
+      const ours = hookBody(name, detectHookLang(current) ?? lang);
+      if (current === ours) {
+        return { hook: name, kind: "already", path };
+      }
+      writeFileSync(path, ours, { mode: 0o755 });
+      return { hook: name, kind: "written", path };
     }
     if (!existsSync(path)) {
       writeFileSync(path, hookBody(name, lang), { mode: 0o755 });
@@ -131,6 +148,13 @@ export function installHooks(
     }
     if (body.includes(hookCallLine(name, existingLang))) {
       return { hook: name, kind: "already", path };
+    }
+    const stale = ownBlock(body, existingLang);
+    if (stale !== null) {
+      const fresh =
+        body.slice(0, stale.start) + gateBlock(name, existingLang).trim() + body.slice(stale.end);
+      writeFileSync(path, fresh, { mode: 0o755 });
+      return { hook: name, kind: "appended", path, backup: `${path}.qsm-backup` };
     }
     const backup = `${path}.qsm-backup`;
     if (!existsSync(backup)) {
@@ -158,13 +182,11 @@ export function uninstallHooks(
 
     const body = readFileSync(path, "utf8");
     const lang = detectHookLang(body) ?? "sh";
-    const begin = body.indexOf(blockBegin(lang));
-    const endMarker = blockEnd(lang);
-    const end = body.indexOf(endMarker);
-    if (begin !== -1 && end > begin) {
+    const block = ownBlock(body, lang);
+    if (block !== null) {
       const without =
-        body.slice(0, begin).replace(/\n*$/, "\n") +
-        body.slice(end + endMarker.length).replace(/^\n+/, "");
+        body.slice(0, block.start).replace(/\n*$/, "\n") +
+        body.slice(block.end).replace(/^\n+/, "");
       writeFileSync(path, without, { mode: 0o755 });
       return { hook: name, kind: "unappended", path };
     }

@@ -10,7 +10,14 @@ import { describeSets } from "./file-sets.ts";
 import { fixFiles, isFixable } from "./fixers.ts";
 import { resolveRef } from "./gitref.ts";
 import { recordsOf } from "./json.ts";
-import { parsePushLines, pushReference } from "./push.ts";
+import {
+  commitCount,
+  type PushedRef,
+  parsePushLines,
+  pushedRange,
+  pushReference,
+  remoteTipMissing,
+} from "./push.ts";
 import type { EnforcementPoint } from "./registry.ts";
 import { describeStore } from "./result-store.ts";
 import { compareStructure, type StructureResult, verdict } from "./structure.ts";
@@ -86,12 +93,20 @@ function withSkipped(outcome: GateOutcome, skipped: readonly string[]): GateOutc
   return { ...outcome, remedy: [...outcome.remedy, ...lines] };
 }
 
-function secretsGate(root: string): GateOutcome {
+function secretsGate(
+  root: string,
+  point: EnforcementPoint,
+  pushLines?: string,
+  remote?: string,
+): GateOutcome {
   const config = ".gitleaks.toml";
   if (!existsSync(join(root, config))) {
     return fail("secrets", `${config} is not in this repo, so secrets cannot run`, [
       `Create ${config}, or remove 'secrets' from .qsm-langdev/gates.json.`,
     ]);
+  }
+  if (point === "pre-push") {
+    return pushedSecretsGate(root, config, pushLines, remote);
   }
   const result = runOrMissing(
     "gitleaks",
@@ -109,6 +124,108 @@ function secretsGate(root: string): GateOutcome {
     ]);
   }
   return denylistGate(root);
+}
+
+/** The block for a pushed range gitleaks would scan as nothing and exit 0 over: a remote tip this
+ * clone never fetched, or a range git cannot list. "empty" when it lists no commit, null when it can
+ * be scanned. */
+function rangeProblem(root: string, ref: PushedRef, range: string): GateOutcome | "empty" | null {
+  if (remoteTipMissing(root, ref)) {
+    return fail("secrets", `${ref.remoteRef} is at a commit this clone never fetched`, [
+      "Run git fetch, then push again: the pushed commits cannot be scanned without the remote tip.",
+    ]);
+  }
+  const count = commitCount(root, range);
+  if (count === null) {
+    return fail("secrets", `git cannot list the commits pushed to ${ref.remoteRef}`, [
+      `Run git rev-list ${range} by hand and fix what it reports.`,
+    ]);
+  }
+  return count === 0 ? "empty" : null;
+}
+
+/** The hits gitleaks reports over the commits one pushed ref adds, or the block when the range
+ * cannot be scanned. A run that fails without a report is a run that never scanned. */
+function scanPushedRef(
+  root: string,
+  config: string,
+  ref: PushedRef,
+  remote: string,
+): GateOutcome | string[] {
+  const range = pushedRange(ref, remote);
+  if (range === null) {
+    return [];
+  }
+  const problem = rangeProblem(root, ref, range);
+  if (problem === "empty") {
+    return [];
+  }
+  if (problem !== null) {
+    return problem;
+  }
+  const result = runOrMissing(
+    "gitleaks",
+    [
+      "git",
+      `--log-opts=${range}`,
+      "--config",
+      config,
+      "--no-banner",
+      "--redact",
+      "--report-format",
+      "json",
+      "--report-path",
+      "-",
+    ],
+    root,
+  );
+  if ("missing" in result) {
+    return fail("secrets", "gitleaks is not installed", [
+      "Install: https://github.com/gitleaks/gitleaks, or your package manager",
+    ]);
+  }
+  const found = findingsOf(result.stdout);
+  if (result.status !== 0 && found.length === 0) {
+    return fail("secrets", `gitleaks could not scan ${ref.localRef}`, [
+      `Run gitleaks git --log-opts="${range}" --config ${config} --redact by hand and fix what it reports.`,
+    ]);
+  }
+  return found.map((hit) => `rule ${hit.rule} hit in ${hit.file}:${hit.line}`);
+}
+
+/** The commits each pushed ref adds, scanned redacted with the repo config: a hit names rule, file
+ * and line, never the value. */
+function pushedSecretsGate(
+  root: string,
+  config: string,
+  pushLines?: string,
+  remote?: string,
+): GateOutcome {
+  if (pushLines === undefined) {
+    return fail("secrets", "this gate needs git's pushed refs and none were handed to it", [
+      "Reached through something other than the installed pre-push hook.",
+    ]);
+  }
+  if (remote === undefined || remote === "") {
+    return fail("secrets", "the pre-push hook did not say which remote it pushes to", [
+      "The installed hook is out of date: run qsm-langdev install again, then push again.",
+    ]);
+  }
+  const hits: string[] = [];
+  for (const ref of parsePushLines(pushLines)) {
+    const scanned = scanPushedRef(root, config, ref, remote);
+    if (!Array.isArray(scanned)) {
+      return scanned;
+    }
+    hits.push(...scanned);
+  }
+  if (hits.length === 0) {
+    return pass("secrets");
+  }
+  return fail("secrets", "pushed commits carry a secret", [
+    ...hits,
+    "Rewrite the commits without the secret, and rotate it if it ever left this machine. If it is a false positive, add a tighter regex to .gitleaks.toml [allowlist].",
+  ]);
 }
 
 const gateName = "secrets";
@@ -335,10 +452,11 @@ async function runGate(
   root: string,
   point: EnforcementPoint,
   pushLines?: string,
+  remote?: string,
 ): Promise<GateOutcome> {
   switch (name) {
     case "secrets":
-      return secretsGate(root);
+      return secretsGate(root, point, pushLines, remote);
     case "entropy":
       return entropyGate(root);
     case "langdev":
@@ -375,11 +493,19 @@ export async function runGates(
   root: string,
   point: EnforcementPoint,
   names: readonly string[],
-  { pushLines, allow }: { pushLines?: string | undefined; allow?: string | undefined } = {},
+  {
+    pushLines,
+    remote,
+    allow,
+  }: {
+    pushLines?: string | undefined;
+    remote?: string | undefined;
+    allow?: string | undefined;
+  } = {},
 ): Promise<GateOutcome[]> {
   const outcomes: GateOutcome[] = [];
   for (const name of names) {
-    outcomes.push(allowed(await runGate(name, root, point, pushLines), allow));
+    outcomes.push(allowed(await runGate(name, root, point, pushLines, remote), allow));
   }
   return outcomes;
 }
