@@ -119,46 +119,40 @@ treated as having no imports.
 
 ### Requirement: A checker runs once per content, against a stored result
 
-Every checker result SHALL be stored in the worktree's own result store,
-`.qsm-langdev/results/`, which git ignores: the directory holds its own
-`.gitignore` of `*`, written when the store creates it, so a repository that
-never ran `init` sees nothing untracked and its own `.gitignore` is never
-edited; the import graph's cache does the same. A stored result is keyed by
-the checker, the checker's tool version (what `<binary> --version` prints), a
-hash of the configuration it read (its arguments without the scored files, and
-the config files it declares in the registry), and the hash of the content it
-scored, paths included: each file on its own for a per-file checker, the whole
-set for every other checker. A run SHALL look both sides up in the store and
-score only what is missing. So the first run in a worktree scores both sides
-once, and every later run scores the shipped side only, because the reference
-is the content of the last commit, which the store already holds from when it
-was the shipped side. A change of tool version or configuration misses the
-store and scores both sides again, once, and so does a qsm-langdev that scores
-a side with other inputs: an entry an older one stored is not read. Switching branches, pulling or
-rebasing needs nothing special: content the store does not know is scored
-once. A rule pack a checker would pull over the network (semgrep's `p/<pack>`,
-or a single rule, `r/<id>`) SHALL be fetched once per run into a local file the
-checker reads, and that file's content SHALL be part of the configuration
-hash, so a changed pack misses the store; our own rules (`qsm/<language>`) are
-written from the binary the same way and hashed the same way. A finding from
-a local rules file SHALL be known by the rule's own id, never by the scratch
-directory the file sat in, so a stored side and a fresh one name it alike. A
-checker whose version cannot be read, one of whose packs
-cannot be fetched (it then pulls the pack itself, as it would with no store),
-or whose answer depends on something no key holds (dotnet's advisories come
-over the network), SHALL never be stored and SHALL be scored every run, and
-the report SHALL name it and why. A failed run is never stored, and an entry the store
-cannot read is a miss. The store SHALL keep each enforcement point's entries
-apart, `results/<checker>/<point>/`, because one checker runs another set and
-engine at a push than at a commit; the edit hook and the stop gate run at the
-pre-commit point and share its entries. After a run the store SHALL keep, for
-every checker the run used and at the run's point only, the entries the
-reference and shipped sides of that run used, so it never grows without bound
-and a commit never evicts what a push stored, nor a push what a commit stored.
-An entry outside a point's directory is a miss and is removed by the next run
-of its checker. Nothing SHALL run a checker twice over the
-same content, the two sides of one run included. The report SHALL say, per
-checker, whether each side was a hit or scored, and the run's total.
+Every checker result SHALL be stored in the worktree's own result store, `.qsm-langdev/results/`,
+which git ignores: the directory holds its own `.gitignore` of `*`, written when the store creates
+it, so a repository that never ran `init` sees nothing untracked and its own `.gitignore` is never
+edited; the import graph's cache does the same. A stored result is keyed by the checker, the
+checker's tool version (what `<binary> --version` prints), a hash of the configuration it read (its
+arguments without the scored files, and the config files it declares in the registry, and, for a
+checker that resolves imports (`tsc`, `depcruise`, `knip`), the names of the packages installed in
+the tree's `node_modules` directories, so a result scored before `bun install` is not served after
+it), and the hash of the content it scored, paths included: each file on its own for a per-file
+checker, the whole set for every other checker. A run SHALL look both sides up in the store and
+score only what is missing. So the first run in a worktree scores both sides once, and every later
+run scores the shipped side only, because the reference is the content of the last commit, which the
+store already holds from when it was the shipped side. A change of tool version or configuration
+misses the store and scores both sides again, once, and so does a qsm-langdev that scores a side
+with other inputs: an entry an older one stored is not read. Switching branches, pulling or rebasing
+needs nothing special: content the store does not know is scored once. A rule pack a checker would
+pull over the network (semgrep's `p/<pack>`, or a single rule, `r/<id>`) SHALL be fetched once per
+run into a local file the checker reads, and that file's content SHALL be part of the configuration
+hash, so a changed pack misses the store; our own rules (`qsm/<language>`) are written from the
+binary the same way and hashed the same way. A finding from a local rules file SHALL be known by the
+rule's own id, never by the scratch directory the file sat in, so a stored side and a fresh one name
+it alike. A checker whose version cannot be read, one of whose packs cannot be fetched (it then
+pulls the pack itself, as it would with no store), or whose answer depends on something no key holds
+(dotnet's advisories come over the network), SHALL never be stored and SHALL be scored every run,
+and the report SHALL name it and why. A failed run is never stored, and an entry the store cannot
+read is a miss. The store SHALL keep each enforcement point's entries apart,
+`results/<checker>/<point>/`, because one checker runs another set and engine at a push than at a
+commit; the edit hook and the stop gate run at the pre-commit point and share its entries. After a
+run the store SHALL keep, for every checker the run used and at the run's point only, the entries
+the reference and shipped sides of that run used, so it never grows without bound and a commit never
+evicts what a push stored, nor a push what a commit stored. An entry outside a point's directory is
+a miss and is removed by the next run of its checker. Nothing SHALL run a checker twice over the
+same content, the two sides of one run included. The report SHALL say, per checker, whether each
+side was a hit or scored, and the run's total.
 
 #### Scenario: The first run in a fresh worktree
 

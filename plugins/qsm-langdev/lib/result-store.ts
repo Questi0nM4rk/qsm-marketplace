@@ -2,7 +2,7 @@
 // checkout being checked, so no checker scores the same content twice.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
 import { writeAtomic } from "../../../lib/fs.ts";
@@ -82,18 +82,44 @@ export function contentHash(root: string, files: readonly string[]): string {
   return hashOf(sorted.flatMap((path) => [path, contentOf(root, path)]));
 }
 
+/** The names a dependency directory holds, one level into a `@scope`. */
+function installedNames(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) =>
+    name.startsWith("@") ? readdirSync(join(dir, name)).map((inner) => `${name}/${inner}`) : [name],
+  );
+}
+
+/** Which packages are installed: the names in the root's `node_modules` and in the one beside
+ * every `package.json` of the tree, each directory with its name. Versions are the lockfile's. */
+function installedState(root: string, treeFiles: readonly string[]): string {
+  const dirs = [
+    "node_modules",
+    ...treeFiles
+      .filter((path) => path.endsWith("/package.json"))
+      .map((path) => `${path.slice(0, -"package.json".length)}node_modules`),
+  ];
+  const held = dirs.toSorted().flatMap((dir) => {
+    const at = join(root, dir);
+    return existsSync(at) ? [dir, ...installedNames(at).toSorted()] : [];
+  });
+  return hashOf(held);
+}
+
 /** The hash of what a checker was told and what it read besides the scored
- * files: its argv with those files taken out, and every config file of the
- * side's tree that one of `patterns` matches, path and content. */
+ * files: its argv with those files taken out, every config file of the
+ * side's tree that one of `patterns` matches, path and content, and, for a
+ * checker that resolves imports, which packages are installed. */
 export function configHash(
   root: string,
   treeFiles: readonly string[],
   patterns: readonly string[],
   argv: readonly string[],
+  resolvesInstalled = false,
 ): string {
   const globs = patterns.map((pattern) => new Glob(pattern));
   const read = treeFiles.filter((path) => globs.some((glob) => glob.match(path)));
-  return hashOf([JSON.stringify(argv), contentHash(root, read)]);
+  const parts = [JSON.stringify(argv), contentHash(root, read)];
+  return hashOf(resolvesInstalled ? [...parts, installedState(root, treeFiles)] : parts);
 }
 
 function isFinding(value: unknown): value is Finding {

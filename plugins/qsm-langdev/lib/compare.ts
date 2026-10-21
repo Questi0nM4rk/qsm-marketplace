@@ -1079,7 +1079,13 @@ function keyingFor(
     .filter((arg) => !scored.has(arg))
     .map((arg) => arg.split(narrowed.root).join("<root>"));
   const read = [...argv, ...packHashes];
-  const config = configHash(tree.root, tree.files, spec.configFiles ?? [], read);
+  const config = configHash(
+    tree.root,
+    tree.files,
+    spec.configFiles ?? [],
+    read,
+    spec.resolvesInstalled === true,
+  );
   return { checker: spec.name, version, config };
 }
 
