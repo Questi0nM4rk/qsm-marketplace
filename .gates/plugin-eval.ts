@@ -244,11 +244,18 @@ function flagValues(flag: string): string[] {
 const all = caseDirs();
 const cases = flagValues("--case");
 const tags = flagValues("--tag");
+// `--case` is a name glob, as in `claude plugin eval --case <glob>`.
+const caseGlobs = cases.map((pattern) => new Bun.Glob(pattern));
+for (const [i, g] of caseGlobs.entries()) {
+  if (!all.some((c) => g.match(c.name) || g.match(c.label))) {
+    console.error(`--case ${cases[i]} matches no case of ${name}, no model was run`);
+    process.exit(1);
+  }
+}
 const picked = all.filter(
   (c) =>
     (cases.length === 0 && tags.length === 0) ||
-    cases.includes(c.name) ||
-    cases.includes(c.label) ||
+    caseGlobs.some((g) => g.match(c.name) || g.match(c.label)) ||
     tags.some((t) => c.tags.includes(t)),
 );
 const bad = brokenGraders(picked);
