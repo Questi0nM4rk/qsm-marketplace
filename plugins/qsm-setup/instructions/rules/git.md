@@ -5,8 +5,9 @@ is the writing skill; worktrees are the worktrunk skill; threads are the review-
 
 1. The main agent pushes the working branch when a task or a batch finishes, so local commits
    never pile up. A worker never pushes.
-2. On main, run `git pull --rebase` before `git push`, because long sessions and parallel agents
-   leave the remote ahead, and a rejected push costs a manual merge.
+2. On main, run `git pull --rebase=merges` before `git push`, because long sessions and parallel
+   agents leave the remote ahead, and a rejected push costs a manual merge. A plain `--rebase`
+   flattens a worker's merge commit and replays its conflicts.
 3. A phase pull request targets the feature branch. Only the final consolidated one targets main.
 4. After a squash merge, a stacked pull request is not rebased: the rebase replays commits that
    already landed under another SHA and conflicts on each. Reset to `origin/main`, cherry-pick
