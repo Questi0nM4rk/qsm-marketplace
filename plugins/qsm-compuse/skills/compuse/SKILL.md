@@ -34,3 +34,8 @@ regions.
 Motion and routes: `drive record SECS [OUT|X,Y,WxH] [--fps N]` measures real cadence (read the
 gaps, never trust a constant-rate encode); `drive frames VIDEO DIR` extracts frames;
 `drive route FILE` runs a scripted step list on workspace 10 and restores the pointer.
+
+Parallel review without the owner's session: `drive slot start NAME` launches a private headless
+compositor, `drive slot bench NAME ROOT KEY` opens a Workbench story in it, and any verb with
+`--slot NAME` (shot, record, move, click, type, key, geom, route) acts there; `drive slot ls`
+shows the RSS, `drive slot budget` how many more fit, `drive slot stop NAME` removes everything.
