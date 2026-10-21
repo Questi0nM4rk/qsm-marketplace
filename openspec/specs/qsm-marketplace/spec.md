@@ -121,7 +121,10 @@ A plugin's `scripts/install.ts` SHALL be the shared install base configured
 with the plugin root, its upstream tools, and at most one plugin-specific extra
 step. The base SHALL, in this order: require `bun` on PATH; compile every
 binary declared under `qsm.bin` into the bin directory (`QSM_BIN_DIR`, default
-`~/.local/bin`); compile every classic command hook declared in
+`~/.local/bin`) after removing the legacy bin farm `<data>/qsm/bin` when every entry in it is a
+symlink, one named step (a regular file in it is an `error` step naming the file, nothing in the
+farm is removed, and the run stops there without compiling, because the farm may still shadow the
+binaries); compile every classic command hook declared in
 `hooks/hooks.json` into the plugin's `dist/`; for each upstream tool, probe it
 and run its install command when it is missing and one is declared (a
 failure is `error`, or `suggested` for an optional tool); a missing required
@@ -160,6 +163,19 @@ result with every step as data inside the outcome envelope: `error` maps to
 - **WHEN** the installer runs with `--dry-run`
 - **THEN** it SHALL write nothing, SHALL list each step it would take, and
   SHALL report `skipped`
+
+#### Scenario: A plugin installed straight onto a machine holding the legacy bin farm
+
+- **WHEN** a plugin's own installer runs on a machine whose `<data>/qsm/bin` holds symlinks
+- **THEN** the farm SHALL be gone afterwards, one step SHALL name it, a dry run SHALL say
+  `would remove` it and leave it, and a second run SHALL remove nothing
+
+#### Scenario: The legacy bin farm holds a file that is not a link
+
+- **WHEN** a plugin's own installer runs and `<data>/qsm/bin` holds a regular file, or an entry
+  the installer cannot inspect (the farm directory has no search permission)
+- **THEN** the status SHALL be `error`, the step SHALL name the entry, the farm SHALL stay, and
+  no binary SHALL have been compiled
 
 ### Requirement: One plugin, one binary, and its words are the noun's path
 

@@ -239,22 +239,22 @@ whether the current farm is stale without changing anything.
 
 ### Requirement: Install and relink purge every older qsm artifact, before and after themselves
 
-`qsm-setup install` and `qsm-setup relink` SHALL, before writing anything, remove every
-artifact an older qsm version left on the machine, and SHALL name each removal in their
-output. The artifacts are: the legacy bin farm `<data>/qsm/bin` when every entry in it is a
-symlink; every `# qsm:` block that puts a directory on PATH in a fish `conf.d` file,
-`.zshenv` or `.zshrc`, the comment line and the lines that follow it up to the next blank
-line; a recorded binary no plugin declares any more; a symlink in the bin directory that
-points into the marketplace checkout or into a `uv/tools/qsm-*` tool directory, together with
-that tool directory; and an empty plugin data directory under the Claude config directory
-whose plugin the marketplace no longer lists. The purge SHALL be idempotent: a second run
-removes nothing and says so. It SHALL write no `.bak` or other backup of any file it edits.
-After `install` the purge SHALL run again in report-only mode, and any artifact still found
-SHALL make the verb fail. `relink --check` SHALL report each artifact as stale without
-removing it. Doctor SHALL FAIL, naming each artifact and `qsm-setup relink` as the remedy,
+`qsm-setup install` and `qsm-setup relink` SHALL, before writing anything, remove every artifact an
+older qsm version left on the machine, and SHALL name each removal in their output. The artifacts
+are: the legacy bin farm `<data>/qsm/bin` when every entry in it is a symlink (removed by the shared
+install base, which every plugin installer runs, and by the purge through the same function); every
+`# qsm:` block that puts a directory on PATH in a fish `conf.d` file, `.zshenv` or `.zshrc`, the
+comment line and the lines that follow it up to the next blank line; a recorded binary no plugin
+declares any more; a symlink in the bin directory that points into the marketplace checkout or into
+a `uv/tools/qsm-*` tool directory, together with that tool directory; and an empty plugin data
+directory under the Claude config directory whose plugin the marketplace no longer lists. The purge
+SHALL be idempotent: a second run removes nothing and says so. It SHALL write no `.bak` or other
+backup of any file it edits. After `install` the purge SHALL run again in report-only mode, and any
+artifact still found SHALL make the verb fail. `relink --check` SHALL report each artifact as stale
+without removing it. Doctor SHALL FAIL, naming each artifact and `qsm-setup relink` as the remedy,
 for every artifact the purge would remove, and SHALL FAIL when the first `qsm-*` on PATH for a
-declared or built binary is not the installed binary in the bin directory. Every test and tool
-that creates a temporary directory SHALL remove it.
+declared or built binary is not the installed binary in the bin directory. Every test and tool that
+creates a temporary directory SHALL remove it.
 
 #### Scenario: A machine holding every legacy artifact
 

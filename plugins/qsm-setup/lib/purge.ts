@@ -3,7 +3,6 @@
 // reports what is found, otherwise the same walk removes it.
 import {
   existsSync,
-  lstatSync,
   readdirSync,
   readFileSync,
   readlinkSync,
@@ -12,14 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import {
-  binDir,
-  claudeDir,
-  dataDir,
-  type Env,
-  fishCompletionDir,
-  home,
-} from "../../../lib/paths.ts";
+import { binDir, claudeDir, type Env, fishCompletionDir, home } from "../../../lib/paths.ts";
+import { isLink, purgeFarm } from "../../../lib/legacy-farm.ts";
 
 export interface PurgeReport {
   /** removed, or with `check` what would be removed: one sentence each */
@@ -35,36 +28,6 @@ export interface PurgeOptions {
   readonly marketplace: string;
   readonly plugins: ReadonlySet<string>;
   readonly check: boolean;
-}
-
-function isLink(path: string): boolean {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
-  }
-}
-
-/** The bin farm of the retired layout: `<data>/qsm/bin`, symlinks only. */
-function purgeFarm(dataHome: string, o: PurgeOptions, r: { found: string[]; blocked: string[] }) {
-  const farm = join(dataHome, "qsm", "bin");
-  if (!existsSync(farm)) {
-    return;
-  }
-  const foreign = readdirSync(farm).filter((n) => !isLink(join(farm, n)));
-  if (foreign.length > 0) {
-    r.blocked.push(`${farm} holds files that are not links: ${foreign.join(", ")}; remove them`);
-    return;
-  }
-  r.found.push(`legacy bin farm ${join(dataHome, "qsm")}`);
-  if (!o.check) {
-    rmSync(farm, { recursive: true });
-    try {
-      rmdirSync(join(dataHome, "qsm"));
-    } catch {
-      // other content stays; only the farm was ours
-    }
-  }
 }
 
 /** A `# qsm: ... PATH` comment and the one statement under it: a single line, or an
@@ -170,7 +133,9 @@ export function purge(o: PurgeOptions): PurgeReport {
         .map((n) => join(confDir, n))
     : [];
   const zdot = o.env.ZDOTDIR ?? h;
-  purgeFarm(dataDir(o.env), o, r);
+  const farm = purgeFarm(o.env, o.check);
+  r.found.push(...farm.found);
+  r.blocked.push(...farm.blocked);
   purgeRcBlocks([...fishFiles, join(zdot, ".zshenv"), join(zdot, ".zshrc")], o, r.found);
   purgeLinks(binDir(o.env), o, r.found);
   purgeDataDirs(claudeDir(o.env), o, r.found);
