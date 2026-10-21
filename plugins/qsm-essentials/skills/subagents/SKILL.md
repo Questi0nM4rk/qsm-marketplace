@@ -25,14 +25,21 @@ does what").
    worker can run. Without it you cannot reject the result.
 4. A task that needs a design decision goes to the user first with your recommendation, because a
    worker closes it silently.
-5. A worker that edits gets its own worktree and branch, made before dispatch. You review and merge.
-   Two writers in one tree lose changes.
-   The dispatch prompt names the path made for that one worker, never your own tree or another
-   worker's.
-6. Independent tasks (no shared file, no ordering) go out in one response, each with its own slice
+5. A worker that edits gets its own worktree and branch, made before dispatch. Two writers in one
+   tree lose changes. An implementation worker is your extension: run, implement, sync, as if you
+   wrote it yourself. So sync your working branch first (`git fetch`, then pull or rebase it onto
+   its remote, `origin/main` when you work on main), cut the worker's branch from that synced
+   branch, never from a stale side branch, and merge it back into your branch right after review,
+   in the same turn. The dispatch prompt names the path made for that one worker, never your own
+   tree or another worker's.
+6. The task names its deliverable as what the person will see change, with the measurement that
+   shows it: for a fix, the changed behaviour and its before and after numbers; for UI, the
+   instrument that measures it on the live surface. A worker asked for a record writes records, so
+   ask for a record only when the ask is an audit.
+7. Independent tasks (no shared file, no ordering) go out in one response, each with its own slice
    of the work named, so no two cover the same ground. More than three for one piece of work is a
    Workflow (workflow-authoring skill).
-7. Unnamed and one-shot, so the worker ends with its answer. Name one only when you will message
+8. Unnamed and one-shot, so the worker ends with its answer. Name one only when you will message
    it again, and stop it when its result lands.
 
 ## Take back
