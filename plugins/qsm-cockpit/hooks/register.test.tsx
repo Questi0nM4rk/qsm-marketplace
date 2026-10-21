@@ -130,7 +130,7 @@ test("a running haiku agent sits on a green chip, and the stage tool puts the ba
   expect(drawn).toContain('"backgroundColor":"green"');
   expect(drawn).toContain("[haiku] runner: sleep 20");
   expect(drawn).toContain(
-    '"backgroundColor":"blue","color":"white","bold":true},"children":[" EXECUTE "]',
+    '"backgroundColor":"blue","color":"white","weight":"semibold"},"children":[" EXECUTE "]',
   );
   expect(drawn).toContain("└ spec-apply cockpit");
 });

@@ -3,6 +3,7 @@
 import type { ApiMessage, On } from "claude-code";
 import { type Engine, expect, test } from "claude-code/testing";
 import { isPlainObject } from "../lib/toon-scalar.ts";
+import { newSession } from "./ledger.ts";
 import {
   newSeen,
   sessionIn,
@@ -91,6 +92,26 @@ async function threeTurns($: Engine): Promise<void> {
   }
 }
 
+async function endTurn($: Engine, turnId: string): Promise<void> {
+  await $.turn.complete({
+    answer: ANSWER_TEXT,
+    durationMs: 1000,
+    isAborted: false,
+    turnId,
+    reason: "answer",
+    usage: TURN_USAGE,
+  });
+}
+
+/** A session whose main conversation the test sets turn by turn through `messages`. */
+function conversation(on: On, sessionId: string): { store: Store; messages: ApiMessage[] } {
+  const c: { store: Store; messages: ApiMessage[] } = { store: new Map(), messages: [] };
+  stubStore(on, c.store);
+  stubHost(on, sessionId, newSeen());
+  stubMessages(on, () => c.messages);
+  return c;
+}
+
 test("A session ends", async ($, on) => {
   const store: Store = new Map();
   stubStore(on, store);
@@ -138,14 +159,7 @@ test("A skill the person types is a command, and its text row is named by its di
     origin: { kind: "composer" },
     presentation: { isFullscreen: false, columns: 80 },
   });
-  await $.turn.complete({
-    answer: ANSWER_TEXT,
-    durationMs: 1000,
-    isAborted: false,
-    turnId: "t0",
-    reason: "answer",
-    usage: TURN_USAGE,
-  });
+  await endTurn($, "t0");
 
   const rec = sessionIn(store, "s17");
   expect(rec.uses.commands).toEqual({ "p:tdd": 1 });
@@ -156,15 +170,11 @@ test("A skill the person types is a command, and its text row is named by its di
 });
 
 test("Two turns: the second counts only the blocks its own messages added", async ($, on) => {
-  const store: Store = new Map();
-  stubStore(on, store);
-  stubHost(on, "s2", newSeen());
-  let messages: ApiMessage[] = [];
-  stubMessages(on, () => messages);
+  const c = conversation(on, "s2");
 
   await $.session.start(START);
 
-  messages = [
+  c.messages = [
     text("user", "run it"),
     {
       role: "assistant",
@@ -174,42 +184,17 @@ test("Two turns: the second counts only the blocks its own messages added", asyn
       ],
     },
   ];
-  await $.turn.complete({
-    answer: ANSWER_TEXT,
-    durationMs: 1000,
-    isAborted: false,
-    turnId: "t0",
-    reason: "answer",
-    usage: TURN_USAGE,
-  });
+  await endTurn($, "t0");
 
-  messages = [...messages, text("user", "again"), toolUse("3", "Bash")];
-  await $.turn.complete({
-    answer: ANSWER_TEXT,
-    durationMs: 1000,
-    isAborted: false,
-    turnId: "t1",
-    reason: "answer",
-    usage: TURN_USAGE,
-  });
+  c.messages = [...c.messages, text("user", "again"), toolUse("3", "Bash")];
+  await endTurn($, "t1");
 
-  const rec = sessionIn(store, "s2");
+  const rec = sessionIn(c.store, "s2");
   expect(Object.entries(rec.uses.tools).toSorted(([a], [b]) => a.localeCompare(b))).toEqual([
     ["Bash", 2],
     ["Read", 1],
   ]);
 });
-
-async function endTurn($: Engine, turnId: string): Promise<void> {
-  await $.turn.complete({
-    answer: ANSWER_TEXT,
-    durationMs: 1000,
-    isAborted: false,
-    turnId,
-    reason: "answer",
-    usage: TURN_USAGE,
-  });
-}
 
 const skillTurn = (id: string, skill: string): ApiMessage[] => [
   text("user", `use ${skill}`),
@@ -224,20 +209,21 @@ const skillTurn = (id: string, skill: string): ApiMessage[] => [
   text("assistant", "Done."),
 ];
 
-test("A compaction leaves a conversation as long as before: it is read whole, not from the old cursor", async ($, on) => {
-  const store: Store = new Map();
-  stubStore(on, store);
-  stubHost(on, "s18", newSeen());
-  let messages: ApiMessage[] = [];
-  stubMessages(on, () => messages);
-
+/** A started session whose first turn used the skill `tdd`. */
+async function afterOneSkillTurn($: Engine, on: On, sessionId: string) {
+  const c = conversation(on, sessionId);
   await $.session.start(START);
-  messages = skillTurn("1", "tdd");
+  c.messages = skillTurn("1", "tdd");
   await endTurn($, "t0");
+  return c;
+}
+
+test("A compaction leaves a conversation as long as before: it is read whole, not from the old cursor", async ($, on) => {
+  const c = await afterOneSkillTurn($, on, "s18");
 
   // The compacted conversation: a summary, the re-injected reminder, then a new skill use. It has
   // more blocks than the first conversation had, the case a block-count cursor got wrong.
-  messages = [
+  c.messages = [
     text("user", "<system-reminder>\nToday's date is 2026-10-22.\n</system-reminder>"),
     text("user", "Summary of the conversation so far"),
     text("assistant", "Understood."),
@@ -245,7 +231,7 @@ test("A compaction leaves a conversation as long as before: it is read whole, no
   ];
   await endTurn($, "t1");
 
-  const rec = sessionIn(store, "s18");
+  const rec = sessionIn(c.store, "s18");
   expect(rec.uses.skills).toEqual({ tdd: 2 });
   expect(rec.injected.map(({ source, name, count }) => [source, name, count])).toEqual([
     ["skill.prompt", "tdd", 2],
@@ -254,20 +240,12 @@ test("A compaction leaves a conversation as long as before: it is read whole, no
 });
 
 test("A last block that repeats does not hide what came after its first copy", async ($, on) => {
-  const store: Store = new Map();
-  stubStore(on, store);
-  stubHost(on, "s19", newSeen());
-  let messages: ApiMessage[] = [];
-  stubMessages(on, () => messages);
-
-  await $.session.start(START);
-  messages = skillTurn("1", "tdd");
-  await endTurn($, "t0");
-  messages = [...messages, ...skillTurn("2", "tdd")];
+  const c = await afterOneSkillTurn($, on, "s19");
+  c.messages = [...c.messages, ...skillTurn("2", "tdd")];
   await endTurn($, "t1");
   await endTurn($, "t2");
 
-  expect(sessionIn(store, "s19").uses.skills).toEqual({ tdd: 2 });
+  expect(sessionIn(c.store, "s19").uses.skills).toEqual({ tdd: 2 });
 });
 
 /** Rows well past the verb's ~4,000-character ask threshold. */
@@ -478,17 +456,8 @@ test("The store is full", async ($, on) => {
 
 test("A stored record in an old shape fails the event and stays as it was", async ($, on) => {
   const store: Store = new Map();
-  const old = {
-    id: "s16",
-    startedAt: 1,
-    start: null,
-    turns: [],
-    costUsd: null,
-    injected: [],
-    uses: { skills: {}, commands: {}, agents: {}, tools: {} },
-    toon: [],
-    toolMessagesSeen: 4,
-  };
+  const { anchor: _anchor, ...shape } = newSession("s16", 1);
+  const old = { ...shape, toolMessagesSeen: 4 };
   store.set("session:s16", old);
   stubStore(on, store);
   const seen = newSeen();

@@ -240,7 +240,7 @@ function stageLine(Text: Elements["Text"], current: Stage | undefined, reached: 
           </Text>,
         ]),
     stage === current ? (
-      <Text key={stage} backgroundColor="blue" color="white" bold>{` ${stage} `}</Text>
+      <Text key={stage} backgroundColor="blue" color="white" weight="semibold">{` ${stage} `}</Text>
     ) : (
       <Text key={stage} dimColor={!reached.has(stage)}>{` ${stage} `}</Text>
     ),
@@ -249,7 +249,7 @@ function stageLine(Text: Elements["Text"], current: Stage | undefined, reached: 
 
 function tierChip(Text: Elements["Text"], run: AgentRun) {
   return (
-    <Text backgroundColor={TIER_COLOR[run.tier] ?? "gray"} color="black" bold>
+    <Text backgroundColor={TIER_COLOR[run.tier] ?? "gray"} color="black" weight="semibold">
       {` ${run.tier} `}
     </Text>
   );
@@ -259,6 +259,15 @@ function tierChip(Text: Elements["Text"], run: AgentRun) {
 function agentState(run: AgentRun, now: number): string {
   const stage = run.stage === undefined ? "" : `${run.stage} · `;
   return `${stage}${run.doing} · ${seconds(now - run.startedAt)}`;
+}
+
+/** The dot that says whether the agent is working now. */
+function workingDot(Text: Elements["Text"], isWorking: boolean) {
+  return (
+    <Text color={isWorking ? "blue" : undefined} dimColor={!isWorking} weight="semibold">
+      {isWorking ? "● " : "○ "}
+    </Text>
+  );
 }
 
 function registerBand(on: On): void {
@@ -279,9 +288,7 @@ function registerBand(on: On): void {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row">
-          <Text color={e.props.isWorking ? "blue" : undefined} dimColor={!e.props.isWorking} bold>
-            {e.props.isWorking ? "● " : "○ "}
-          </Text>
+          {workingDot(Text, e.props.isWorking)}
           {stageLine(Text, last?.stage, new Set(history.map((step) => step.stage)))}
           {claimed[0] !== undefined && <Text dimColor>{`  ${claimed[0].id}`}</Text>}
         </Box>
@@ -314,7 +321,7 @@ function card(els: Elements, title: string, note: string, body: RenderChildren) 
       marginBottom={1}
     >
       <Text>
-        <Text bold>{title}</Text>
+        <Text weight="semibold">{title}</Text>
         <Text dimColor>{note === "" ? "" : `  ${note}`}</Text>
       </Text>
       {body}
