@@ -172,8 +172,9 @@ result with every step as data inside the outcome envelope: `error` maps to
 
 #### Scenario: The legacy bin farm holds a file that is not a link
 
-- **WHEN** a plugin's own installer runs and `<data>/qsm/bin` holds a regular file
-- **THEN** the status SHALL be `error`, the step SHALL name the file, the farm SHALL stay, and
+- **WHEN** a plugin's own installer runs and `<data>/qsm/bin` holds a regular file, or an entry
+  the installer cannot inspect (the farm directory has no search permission)
+- **THEN** the status SHALL be `error`, the step SHALL name the entry, the farm SHALL stay, and
   no binary SHALL have been compiled
 
 ### Requirement: One plugin, one binary, and its words are the noun's path

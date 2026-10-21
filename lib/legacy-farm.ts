@@ -11,8 +11,13 @@ export interface FarmReport {
   readonly blocked: readonly string[];
 }
 
+/** False for anything that is not a symlink we can see, an unreadable entry included. */
 export function isLink(path: string): boolean {
-  return lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() === true;
+  try {
+    return lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Removes the farm when every entry in it is a symlink; with `check` only reports it. */

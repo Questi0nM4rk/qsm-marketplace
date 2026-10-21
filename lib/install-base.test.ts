@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   accessSync,
+  chmodSync,
   constants,
   existsSync,
   lstatSync,
@@ -552,5 +553,23 @@ describe("install-base and the legacy bin farm", () => {
     expect(step(r, "legacy bin farm").detail).toContain("mine");
     expect(existsSync(join(farm, "mine"))).toBe(true);
     expect(existsSync(join(live.home, "bin"))).toBe(false);
+  });
+
+  test("a farm entry that cannot be inspected is an error step, the farm stays, and nothing compiles", async () => {
+    const live = fake({ present: ["bun"] });
+    const farm = join(live.home, ".local/share/qsm/bin");
+    mkdirSync(farm, { recursive: true });
+    symlinkSync("/nonexistent", join(farm, "qsm-langdev"));
+    chmodSync(farm, 0o600);
+    try {
+      const r = await installBase({ pluginRoot: FIXTURE })(live.ctx);
+      expect(r.status).toBe("error");
+      expect(r.steps.map((s) => s.name)).toEqual(["legacy bin farm"]);
+      expect(step(r, "legacy bin farm").detail).toContain("qsm-langdev");
+      expect(existsSync(join(live.home, "bin"))).toBe(false);
+    } finally {
+      chmodSync(farm, 0o700);
+    }
+    expect(readdirSync(farm)).toEqual(["qsm-langdev"]);
   });
 });
