@@ -101,7 +101,10 @@ states. It never proves the language, the runtime, or the platform: a function t
 needs no tests of how addition works, because that tests the `+` operator. Test-driven development
 is not the rule; write the test that proves the behaviour, whenever it is cheapest to run the real
 path. An agent that has read the code must not decide what is tested, because it ends by testing
-what it just wrote; the behaviours come from the requirements, the intent, and the spec.
+what it just wrote; the behaviours come from the requirements, the intent, and the spec. A fixture
+is recorded from the real producer or copied from its source, never written from what the consumer
+expects, because an invented shape proves the code against itself: a geometry fix passed on a tree
+with a field the shell never emits, and failed on the real one.
 
 ## UI work names its instrument first
 
