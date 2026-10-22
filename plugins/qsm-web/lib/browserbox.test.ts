@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  CONTAINER_PORT,
   chooseRuntime,
   execDefinition,
   IMAGE,
@@ -88,9 +87,10 @@ describe("runDefinition", () => {
     expect(argv[argv.indexOf("--user") + 1]).toBe("1000:1000");
   });
 
-  test("only the live-view port is published, and only on loopback", () => {
-    expect(argv).toContain(`127.0.0.1:11000:${CONTAINER_PORT}`);
-    expect(argv.join(" ")).not.toContain("0.0.0.0:");
+  test("the instance shares the host's network and is told its own live-view port", () => {
+    expect(argv[argv.indexOf("--network") + 1]).toBe("host");
+    expect(argv).not.toContain("--publish");
+    expect(argv).toContain("QSM_BROWSERBOX_PORT=11000");
   });
 
   test("nothing of the host display reaches the container", () => {

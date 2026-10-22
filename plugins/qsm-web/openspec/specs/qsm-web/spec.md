@@ -238,13 +238,21 @@ tier, needing no container.
 qsm-web browserbox SHALL start, list, and stop isolated browser instances,
 each with its own live-view address a human can watch. Starting SHALL
 succeed unattended; a missing or unreachable container runtime SHALL fail
-the start with a reported error, not a hang.
+the start with a reported error, not a hang. Each instance SHALL run on the host's network, so
+a page served on the host's loopback address is reachable from its browser, and its live view
+SHALL listen on the loopback address only, on the instance's own port, so no other host can reach
+the browser.
 
 #### Scenario: Start and list an instance
 
 - **WHEN** an agent starts a new instance
 - **THEN** qsm-web browserbox SHALL report its name and live-view address, and
   it SHALL appear in the instance list
+
+#### Scenario: A server on the host's loopback
+
+- **WHEN** a page is served on the host's 127.0.0.1 and an agent fetches it with qsm-web browserbox
+- **THEN** the fetch SHALL succeed and a requested screenshot SHALL show the page
 
 #### Scenario: Container runtime unavailable
 
