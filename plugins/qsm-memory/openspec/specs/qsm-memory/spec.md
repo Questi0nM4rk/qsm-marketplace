@@ -277,7 +277,8 @@ only, so `save` SHALL copy every base64 image block of a typed user prompt into 
 write one `blob_ref` row (session id, turn uuid, sha256, media type). The turn uuid is the image
 block's key, the record uuid plus the block's index, because a prompt of only an image has no turn
 row. A second save of the same transcript SHALL add no row and no blob. Images are kept from saves
-made after this behaviour shipped; a session archived earlier keeps none, and nothing re-reads it
+made after this behaviour shipped: a session archived earlier gets its images only when its
+transcript is still on disk and is saved again, and nothing re-reads an archived session on its own
 to backfill, because its transcript may already be deleted. Files a prompt names and
 URLs it contains are not kept.
 
