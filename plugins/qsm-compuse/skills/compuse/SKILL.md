@@ -51,4 +51,6 @@ compositor, `drive slot bench NAME ROOT KEY` opens a Workbench story in it, and 
 shows the RSS, `drive slot budget` how many more fit, `drive slot stop NAME` removes everything.
 A whole shell runs in a slot too, isolated from the owner's bus and state:
 `XDG_STATE_HOME=DIR dbus-run-session -- drive slot run NAME -- qs --path SHELL`, then reach it with
-`qs ipc --pid PID`.
+`qs ipc --pid PID`. Quickshell in a slot may not hot-reload a saved file: restart it before you
+trust its log. A recording or capture is deleted once measured, because the temporary filesystem
+has a quota and a full one stops every run.

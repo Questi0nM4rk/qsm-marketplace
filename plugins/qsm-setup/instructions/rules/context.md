@@ -128,6 +128,15 @@ it". When the person overrides a plan's deliverable, rewrite the deliverable in 
 because the old plan's output shape survives in the prompts otherwise. Split the work along what
 the person sees, a surface or a flow, not along files, when the defects live where the parts meet.
 
+Resume a workflow only to replay what finished: the cache keeps the longest unchanged prefix of
+agent calls, so editing an early prompt reruns every later one, finished ones included. Unfinished
+items run again as a new run filtered by its arguments, after the names their worktrees will take
+are free. Parallel builders in worktrees land through one gate the main agent runs per branch: the
+merge happens in an integration worktree, every story and flow runs there, the consumer starts
+clean from it in a headless session, and only then does the working branch fast-forward, because
+two branches that each pass can still break each other when merged. A long run checks the free
+space of the temporary filesystem first and deletes recordings and captures once they are measured.
+
 A finished workflow whose work the person has confirmed ends with a lessons pass before the next
 one starts: read what went wrong or cost a retry (the journal, the fix reports, the person's
 corrections), and write each lesson into the one place that owns it, a skill, a rule, a project's

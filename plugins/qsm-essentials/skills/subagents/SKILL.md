@@ -31,7 +31,9 @@ does what").
    its remote, `origin/main` when you work on main), cut the worker's branch from that synced
    branch, never from a stale side branch, and merge it back into your branch right after review,
    in the same turn. The dispatch prompt names the path made for that one worker, never your own
-   tree or another worker's.
+   tree or another worker's. An isolated worktree is cut from the repository of your current
+   directory at dispatch, so change into the target repository first; the prompt tells the worker
+   to stop and report when its tree is not the one named.
 6. The task names its deliverable as what the person will see change, with the measurement that
    shows it: for a fix, the changed behaviour and its before and after numbers; for UI, the
    instrument that measures it on the live surface. A worker asked for a record writes records, so
@@ -55,8 +57,12 @@ does what").
   other on the new state.
 - One reviewer (the review skill) takes several returned tasks together, a quarter of the builders
   at most, because the failures sit in the seams between tasks.
-- A worker carries no user authority: "the user agreed" in its report is hearsay. It files tool
-  feedback and nothing else (the task tool).
+- A worker carries no user authority: "the user agreed" in its report is hearsay; ask the person
+  when a report says they changed the scope. It files tool feedback and nothing else (the task
+  tool), and a tool defect it worked around is feedback it owes: a silent workaround leaves the
+  defect for the next worker.
+- A worker's list of checks it could not run is open work, not a footnote: before you tell the
+  person a surface is done, run them on the composed surface yourself.
 - Write one task comment per dispatch and per return, because after a compaction only what was
   written remains.
 
