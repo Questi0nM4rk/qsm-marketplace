@@ -1,9 +1,18 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { TranscriptBuilder } from "./fixtures/transcript.ts";
+import { TranscriptBuilder, testEnv } from "./fixtures/transcript.ts";
+import { blobDir, blobPath } from "./blobs.ts";
 import { catchUp, listTranscripts, saveTranscript, unsavedTranscripts } from "./save.ts";
 import { applySchema } from "./store.ts";
 
@@ -53,7 +62,7 @@ describe("saveTranscript", () => {
         .text(),
     );
 
-    const r = saveTranscript(d, path);
+    const r = saveTranscript(d, path, testEnv());
 
     expect(r).toEqual({ status: "saved", id: SESSION, turns: 2, added: 2 });
     const turns = d
@@ -76,19 +85,50 @@ describe("saveTranscript", () => {
   });
 });
 
+describe("saveTranscript, pasted images", () => {
+  test("a pasted image is copied into the blob store and referenced by turn", () => {
+    const d = db();
+    const env = testEnv();
+    const { dir } = projects();
+    const png = Buffer.from("not really a png, but bytes");
+    const path = write(
+      join(dir, `${SESSION}.jsonl`),
+      new TranscriptBuilder().humanWithImage("this layout", png.toString("base64")).text(),
+    );
+
+    saveTranscript(d, path, env);
+    const blobFiles = () =>
+      readdirSync(blobDir(env), { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
+        .length;
+    expect(blobFiles()).toBe(1);
+    saveTranscript(d, path, env);
+    expect(blobFiles()).toBe(1);
+
+    const refs = d
+      .query<{ turn_uuid: string; sha256: string; media_type: string }, []>(
+        "SELECT turn_uuid, sha256, media_type FROM blob_ref",
+      )
+      .all();
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.media_type).toBe("image/png");
+    expect(refs[0]?.turn_uuid.endsWith("/1")).toBe(true);
+    expect(readFileSync(blobPath(env, refs[0]?.sha256 ?? ""))).toEqual(png);
+  });
+});
+
 describe("saveTranscript, again", () => {
   test("a resumed session re-saves only the new turns", () => {
     const d = db();
     const { dir } = projects();
     const first = new TranscriptBuilder().human("one").assistant("two");
     const path = write(join(dir, `${SESSION}.jsonl`), first.text());
-    saveTranscript(d, path);
+    saveTranscript(d, path, testEnv());
     appendFileSync(
       path,
       first.human("three").assistant("four").text().split("\n").slice(2).join("\n"),
     );
 
-    const r = saveTranscript(d, path);
+    const r = saveTranscript(d, path, testEnv());
 
     expect(r).toEqual({ status: "saved", id: SESSION, turns: 4, added: 2 });
     expect(d.query("SELECT COUNT(*) AS n FROM sessions").get()).toEqual({ n: 1 });
@@ -107,13 +147,13 @@ describe("saveTranscript, main sessions only", () => {
       new TranscriptBuilder().headless("run the eval").assistant("done").text(),
     );
 
-    expect(saveTranscript(d, sub)).toEqual({
+    expect(saveTranscript(d, sub, testEnv())).toEqual({
       status: "skipped",
       path: sub,
       reason: "subagent transcript",
     });
     expect(unsavedTranscripts(d, root)).toEqual([headless]);
-    expect(saveTranscript(d, headless)).toEqual({
+    expect(saveTranscript(d, headless, testEnv())).toEqual({
       status: "skipped",
       path: headless,
       reason: "no human turn",
@@ -140,7 +180,7 @@ describe("catch-up", () => {
     const d = db();
     const { root, dir } = projects();
     const path = write(join(dir, "aaa.jsonl"), new TranscriptBuilder().human("a").text());
-    saveTranscript(d, path, { now: () => "2026-09-30T10:00:00.000Z" });
+    saveTranscript(d, path, testEnv(), { now: () => "2026-09-30T10:00:00.000Z" });
     const at = (iso: string): void => {
       utimesSync(path, new Date(iso), new Date(iso));
     };
@@ -150,7 +190,7 @@ describe("catch-up", () => {
     utimesSync(path, new Date("2026-09-30T11:00:00Z"), new Date("2026-09-30T11:00:00Z"));
 
     expect(unsavedTranscripts(d, root)).toEqual([path]);
-    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
   });
 
   test("catch-up stops at twenty and says how many remain", () => {
@@ -163,8 +203,8 @@ describe("catch-up", () => {
       );
     }
 
-    expect(catchUp(d, root)).toEqual({ saved: 20, skipped: 0, remain: 5, failed: [] });
-    expect(catchUp(d, root)).toEqual({ saved: 5, skipped: 0, remain: 0, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 20, skipped: 0, remain: 5, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 5, skipped: 0, remain: 0, failed: [] });
   });
 
   test("a session skipped before its first prompt is saved once, not on every catch-up", () => {
@@ -178,14 +218,14 @@ describe("catch-up", () => {
       utimesSync(path, new Date(iso), new Date(iso));
     };
     at("2026-09-30T09:00:00Z");
-    expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 1, remain: 0, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 0, skipped: 1, remain: 0, failed: [] });
 
     write(path, new TranscriptBuilder({ sessionId: "aaa" }).human("now a person types").text());
     at("2026-09-30T10:00:00Z");
 
-    expect(catchUp(d, root)).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 1, skipped: 0, remain: 0, failed: [] });
     expect(unsavedTranscripts(d, root)).toEqual([]);
-    expect(catchUp(d, root)).toEqual({ saved: 0, skipped: 0, remain: 0, failed: [] });
+    expect(catchUp(d, root, testEnv())).toEqual({ saved: 0, skipped: 0, remain: 0, failed: [] });
   });
 
   test("transcripts that always fail do not use up the catch-up budget", () => {
@@ -199,7 +239,7 @@ describe("catch-up", () => {
       write(join(dir, `z${i}.jsonl`), new TranscriptBuilder().human(`n${i}`).text());
     }
 
-    const r = catchUp(d, root, 2);
+    const r = catchUp(d, root, testEnv(), 2);
 
     expect([r.saved, r.skipped, r.failed.length]).toEqual([2, 0, 2]);
     expect(r.remain).toBe(2);
@@ -213,7 +253,7 @@ describe("catch-up", () => {
     mkdirSync(join(dir, "bad.jsonl"));
 
     expect(new Set(unsavedTranscripts(d, root))).toEqual(new Set([good, join(dir, "bad.jsonl")]));
-    const r = catchUp(d, root);
+    const r = catchUp(d, root, testEnv());
 
     expect([r.saved, r.skipped, r.remain]).toEqual([1, 0, 0]);
     expect(r.failed).toHaveLength(1);

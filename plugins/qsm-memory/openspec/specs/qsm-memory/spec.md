@@ -270,6 +270,24 @@ of a blob (an OCR transcription) is derived and never replaces the blob.
 - **WHEN** `blob path <64 hex>` runs and no blob has that sha256
 - **THEN** it exits `missing` and the next step names `qsm-memory blob put <file>`
 
+### Requirement: Save keeps the images a person pasted
+
+Claude Code deletes a transcript after `cleanupPeriodDays` (activate sets 7), and a turn holds text
+only, so `save` SHALL copy every base64 image block of a typed user prompt into the blob store and
+write one `blob_ref` row (session id, turn uuid, sha256, media type). The turn uuid is the image
+block's key, the record uuid plus the block's index, because a prompt of only an image has no turn
+row. A second save of the same transcript SHALL add no row and no blob. Images are kept from saves
+made after this behaviour shipped: a session archived earlier gets its images only when its
+transcript is still on disk and is saved again, and nothing re-reads an archived session on its own
+to backfill, because its transcript may already be deleted. Files a prompt names and
+URLs it contains are not kept.
+
+#### Scenario: a pasted screenshot outlives the transcript
+
+- **WHEN** a typed prompt holds text and a base64 image and `save` runs twice
+- **THEN** `blob_ref` holds one row for the image, and `blob path <its sha256>` prints a file whose
+  bytes are the image
+
 ### Requirement: Notes are the one thing an agent writes
 
 `qsm-memory note <text>` SHALL write a short-term note for the working directory's project (the main

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
-import { TranscriptBuilder } from "./fixtures/transcript.ts";
+import { TranscriptBuilder, testEnv } from "./fixtures/transcript.ts";
 import { saveTranscript } from "./save.ts";
 import { formatList, listSessions, resolveSession, show } from "./sessions.ts";
 import { applySchema } from "./store.ts";
@@ -22,7 +22,7 @@ function archive(): Database {
   const save = (name: string, text: string) => {
     const path = join(dir, name);
     writeFileSync(path, text);
-    saveTranscript(db, path);
+    saveTranscript(db, path, testEnv());
   };
   save(
     "abc-1.jsonl",
@@ -77,7 +77,7 @@ describe("show", () => {
       long.human("u".repeat(3000)).assistant("a".repeat(3000));
     }
     writeFileSync(join(transcriptDir, "long-3.jsonl"), long.text());
-    saveTranscript(db, join(transcriptDir, "long-3.jsonl"));
+    saveTranscript(db, join(transcriptDir, "long-3.jsonl"), testEnv());
 
     const out = show(db, "long-3").split("\n");
     expect(out.filter((line) => line.startsWith("#"))).toHaveLength(6);
@@ -85,7 +85,7 @@ describe("show", () => {
 
     const huge = new TranscriptBuilder({ sessionId: "huge-4" }).human("h".repeat(50_000)).text();
     writeFileSync(join(transcriptDir, "huge-4.jsonl"), huge);
-    saveTranscript(db, join(transcriptDir, "huge-4.jsonl"));
+    saveTranscript(db, join(transcriptDir, "huge-4.jsonl"), testEnv());
     expect(show(db, "huge-4")).toEndWith("[turn cut at 20000 of 50009 characters]");
   });
 
@@ -144,7 +144,7 @@ describe("list", () => {
       path,
       new TranscriptBuilder({ sessionId: "s1", cwd: worktree }).human("hi").text(),
     );
-    saveTranscript(db, path);
+    saveTranscript(db, path, testEnv());
 
     expect(listSessions(db, { project: worktree }).map((r) => r.id)).toEqual(["s1"]);
     expect(listSessions(db, { project: root }).map((r) => r.id)).toEqual(["s1"]);

@@ -32,7 +32,11 @@ export function putBlob(env: Env, file: string): PutResult {
       next: "pass the path of an existing file",
     });
   }
-  const bytes = readFileSync(file);
+  return putBytes(env, readFileSync(file));
+}
+
+/** `putBlob` for bytes already in memory, such as an image read out of a transcript. */
+export function putBytes(env: Env, bytes: Uint8Array): PutResult {
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const path = pathOf(env, sha256);
   if (existsSync(path)) {
