@@ -2,7 +2,6 @@ FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LIBGL_ALWAYS_SOFTWARE=1 \
-    DISPLAY=:99 \
     HOME=/home/box \
     VENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH
@@ -49,5 +48,4 @@ USER box
 
 RUN camoufox fetch
 
-EXPOSE 6080
 ENTRYPOINT ["/usr/bin/tini", "--", "/opt/entrypoint.sh"]

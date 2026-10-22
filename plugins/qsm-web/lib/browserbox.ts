@@ -10,8 +10,6 @@ const SOURCE_LABEL = "qsm.browserbox.source";
 /** One live-view port per instance. */
 export const PORT_LOW = 11_000;
 export const PORT_HIGH = 11_100;
-/** The port KasmVNC listens on inside the container. */
-export const CONTAINER_PORT = 6080;
 
 export type Runtime = "docker" | "podman";
 
@@ -112,8 +110,10 @@ export function runDefinition(spec: StartSpec): string[] {
     spec.name,
     "--label",
     `${LABEL}=1`,
-    "--publish",
-    `127.0.0.1:${spec.port}:${CONTAINER_PORT}`,
+    // The host's network, so the browser reaches servers on the host's loopback. The live view
+    // listens on the instance's own port, on loopback only.
+    "--network",
+    "host",
     // Firefox needs far more than the default 64 MB of shared memory.
     "--shm-size=2g",
     "--init",
@@ -121,6 +121,8 @@ export function runDefinition(spec: StartSpec): string[] {
     spec.user,
     "--env",
     `QSM_BROWSERBOX_LIVE_VIEW=${spec.liveView}`,
+    "--env",
+    `QSM_BROWSERBOX_PORT=${spec.port}`,
     "--volume",
     `${spec.outDir}:/out`,
     IMAGE,

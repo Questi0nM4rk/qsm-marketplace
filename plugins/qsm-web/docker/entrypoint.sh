@@ -8,23 +8,30 @@ if [ "${shm_kb:-0}" -lt 1000000 ]; then
   echo "browserbox: /dev/shm is ${shm_kb}KB; start the instance with --shm-size=2g" >&2
 fi
 
-# Xvnc is the display and the streaming server in one. It listens only on the
-# container's own port; the instance publishes that port on the host's
-# loopback address, which is the only way in.
-Xvnc :99 \
+# The instance shares the host's network, so its port and its X display number must not clash with
+# another instance or the host's own display: both derive from the instance's port.
+port="${QSM_BROWSERBOX_PORT:?browserbox: QSM_BROWSERBOX_PORT is not set}"
+display=":$((port - 10000))"
+
+# Xvnc is the display and the streaming server in one. It listens on the host's loopback
+# address only, on the instance's port, which is the only way in.
+Xvnc "$display" \
   -geometry 1280x1024 -depth 24 \
-  -interface 0.0.0.0 -websocketPort 6080 \
+  -interface 127.0.0.1 -websocketPort "$port" \
   -httpd /usr/share/kasmvnc/www \
   -sslOnly 0 -SecurityTypes None -disableBasicAuth \
   -FreeKeyMappings \
   -Log '*:stdout:30' >/tmp/kasmvnc.log 2>&1 &
 
-export DISPLAY=:99
+export DISPLAY="$display"
 for _ in $(seq 1 50); do
-  xdpyinfo -display :99 >/dev/null 2>&1 && break
+  xdpyinfo -display "$display" >/dev/null 2>&1 && break
   sleep 0.1
 done
-xdpyinfo -display :99 >/dev/null 2>&1 || { echo "browserbox: the display never came up" >&2; exit 1; }
+xdpyinfo -display "$display" >/dev/null 2>&1 || {
+  echo "browserbox: the display never came up" >&2
+  exit 1
+}
 
-echo "browserbox: live view on container port 6080 (${QSM_BROWSERBOX_LIVE_VIEW:-unmapped})"
+echo "browserbox: live view on 127.0.0.1:$port (${QSM_BROWSERBOX_LIVE_VIEW:-unmapped})"
 exec /opt/venv/bin/python /opt/driver/daemon.py
