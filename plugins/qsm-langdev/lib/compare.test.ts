@@ -21,6 +21,7 @@ import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
   type CompareOptions,
   compareTrees,
+  doctorRows,
   headline,
   resolveBinary,
   runOutcome,
@@ -238,6 +239,42 @@ describe("compareTrees: scored files", () => {
 });
 
 describe("compareTrees: checker availability", () => {
+  test("a binary whose presence probe times out is not measured, never reported as not installed", async () => {
+    const { root, head } = repoWith({ "a.txt": "alpha\n", ".gitignore": "node_modules/\n" });
+    write(root, { "a.txt": "alpha and more\n" });
+    stage(root);
+    const bin = join(root, "node_modules", ".bin");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, "qsm-langdev-slow-version"), "#!/bin/sh\nexec sleep 5\n");
+    chmodSync(join(bin, "qsm-langdev-slow-version"), 0o755);
+    const slow: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+
+    const { verdicts } = await runWith(root, head, slow, { probeTimeoutMs: 200 });
+
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]?.missing).toBeUndefined();
+    expect(verdicts[0]?.notMeasured).toBe(true);
+    expect(verdicts[0]?.summary).toBe(
+      "slow-probe: not measured: 'qsm-langdev-slow-version --version' timed out after 0.2s; retry",
+    );
+  });
+
+  test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
+    const dir = sandboxDir("qsm-langdev-doctor-");
+    writeFileSync(join(dir, "qsm-langdev-slow-version"), "#!/bin/sh\nexec sleep 5\n");
+    chmodSync(join(dir, "qsm-langdev-slow-version"), 0o755);
+    const slow: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${dir}:${savedPath ?? ""}`;
+    try {
+      const rows = await doctorRows([slow], 200);
+
+      expect(rows[0]).toMatchObject({ check: "slow-probe", present: false, timedOut: true });
+    } finally {
+      process.env.PATH = savedPath;
+    }
+  });
+
   test("the repository's node_modules/.bin copy of a checker wins over PATH", async () => {
     const { root, head } = repoWith({ "a.txt": "alpha\n", ".gitignore": "node_modules/\n" });
     write(root, { "a.txt": "alpha and more BADLINE\n" });

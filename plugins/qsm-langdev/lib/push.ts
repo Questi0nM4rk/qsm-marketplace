@@ -34,30 +34,34 @@ function git(root: string, ...args: string[]): string | null {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
-function defaultBranch(root: string): string | null {
-  const remote = git(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD");
-  if (remote !== null && remote !== "") {
-    return remote;
+/** The default branch of the remote being pushed to, as this clone last saw it, or null when the
+ * clone holds no remote-tracking branch of that remote (an empty remote, a path or URL target). */
+function remoteDefaultBranch(root: string, remote: string): string | null {
+  const head = git(root, "symbolic-ref", "--short", `refs/remotes/${remote}/HEAD`);
+  if (head !== null && head !== "") {
+    return head;
   }
   for (const name of ["main", "master"]) {
-    if (git(root, "rev-parse", "--verify", "-q", `refs/heads/${name}`) !== null) {
-      return name;
+    if (git(root, "rev-parse", "--verify", "-q", `refs/remotes/${remote}/${name}`) !== null) {
+      return `${remote}/${name}`;
     }
   }
   return null;
 }
 
 /** The commit a pushed ref is compared against, or null when there is
- * nothing to compare: a deletion (local oid all zeros), a new branch with no
- * default branch to take a merge base from, or a push that adds no commit. */
-export function pushReference(root: string, pushed: PushedRef): string | null {
+ * nothing to compare: a deletion (local oid all zeros), a new branch on a
+ * remote this clone knows no default branch of (an empty remote has nothing
+ * to be worse than), or a push that adds no commit. Only `remote` counts: a
+ * default branch another remote holds says nothing of what this one has. */
+export function pushReference(root: string, pushed: PushedRef, remote: string): string | null {
   if (isZero(pushed.localOid)) {
     return null;
   }
   if (!isZero(pushed.remoteOid)) {
     return pushed.remoteOid;
   }
-  const base = defaultBranch(root);
+  const base = remoteDefaultBranch(root, remote);
   if (base === null) {
     return null;
   }
@@ -66,6 +70,21 @@ export function pushReference(root: string, pushed: PushedRef): string | null {
     return null;
   }
   return mergeBase;
+}
+
+/** Why `pushReference` has nothing to compare `pushed` against, for the line a gate prints. */
+export function pushSkipReason(root: string, pushed: PushedRef, remote: string): string {
+  if (isZero(pushed.localOid)) {
+    return `${pushed.remoteRef}: a deletion, nothing to compare`;
+  }
+  const base = isZero(pushed.remoteOid) ? remoteDefaultBranch(root, remote) : null;
+  if (isZero(pushed.remoteOid) && base === null) {
+    return `${pushed.remoteRef}: this clone knows no default branch of '${remote}' to compare a new branch against`;
+  }
+  if (base !== null && git(root, "merge-base", base, pushed.localOid) === null) {
+    return `${pushed.remoteRef}: shares no history with '${base}', the default branch of '${remote}'`;
+  }
+  return `${pushed.remoteRef}: adds no commit beyond the default branch of '${remote}'`;
 }
 
 /** The git log range holding the commits a pushed ref adds: remote..local for a ref the remote

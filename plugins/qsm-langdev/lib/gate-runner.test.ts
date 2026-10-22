@@ -1,8 +1,10 @@
 // What a git hook answers when a checker could not be measured: blocked,
 // with its own code, never the failure a worse tree gets.
+import { spawnSync } from "node:child_process";
 import { expect, test } from "bun:test";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { Verdict } from "./compare.ts";
-import { allowed, gatesCode, langdevOutcome } from "./gate-runner.ts";
+import { allowed, gatesCode, langdevOutcome, runGates } from "./gate-runner.ts";
 
 const unmeasured: Verdict = {
   check: "semgrep-ts",
@@ -55,4 +57,35 @@ test("A check that could not run is not allowed", () => {
   expect(allowed(langdevOutcome([missing], "sizes"), "known").status).toBe("failed");
   expect(allowed(langdevOutcome([unmeasured], "sizes"), "known").status).toBe("blocked");
   expect(allowed(langdevOutcome([worse], "sizes")).status).toBe("failed");
+});
+
+test("a push whose every ref is skipped says why, per ref, instead of a bare pass", async () => {
+  const root = sandboxDir("qsm-langdev-skip-");
+  const git = (...args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  git("init", "-q", "-b", "main");
+  git(
+    "-c",
+    "user.email=t@example.com",
+    "-c",
+    "user.name=t",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "a",
+  );
+  const head = git("rev-parse", "HEAD").stdout.trim();
+  const lines = `refs/heads/main ${head} refs/heads/main ${"0".repeat(40)}\n`;
+
+  const outcomes = await runGates(root, "pre-push", ["langdev", "structure"], {
+    pushLines: lines,
+    remote: "/somewhere/empty.git",
+  });
+
+  for (const outcome of outcomes) {
+    expect(outcome.status).toBe("skipped");
+    expect(outcome.status === "skipped" ? outcome.reason : "").toContain(
+      "refs/heads/main: this clone knows no default branch of '/somewhere/empty.git'",
+    );
+  }
 });

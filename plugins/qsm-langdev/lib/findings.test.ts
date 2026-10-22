@@ -1,7 +1,29 @@
 // Output parsers whose identity rule is not obvious from the tool's format.
 
 import { describe, expect, test } from "bun:test";
-import { countJscpd, countSemgrep } from "./findings.ts";
+import { countJscpd, countSemgrep, countShellMetrics } from "./findings.ts";
+
+describe("countShellMetrics", () => {
+  const output = `==============================================================================
+  LLOC  CCN  Location
+------------------------------------------------------------------------------
+     2   12  f:2 a.sh
+     2    1  <main> a.sh
+------------------------------------------------------------------------------
+ 1 file(s), 2 function(s) analyzed. [bash 5.3.20(1)-release]
+
+==============================================================================
+ NLOC    NLOC  LLOC    LLOC    CCN Func File (lines:comment:blank)
+total     avg total     avg    avg  cnt
+------------------------------------------------------------------------------
+   42   42.00     4    2.00   1.50    2 a.sh (5:1:0)
+------------------------------------------------------------------------------
+`;
+
+  test("the per-file and total average rows are not complexity findings", () => {
+    expect(countShellMetrics(output, 10)).toBe(1);
+  });
+});
 
 function semgrepOutput(checkId: string): string {
   return JSON.stringify({

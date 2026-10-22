@@ -722,6 +722,8 @@ export interface CompareOptions {
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
+  /** Test seam; production gives a binary's `--version` probe PROBE_TIMEOUT_MS. */
+  probeTimeoutMs?: number;
   jobs?: number;
   /** Score only these paths (relative to root) on both sides — the edit hook's one file. */
   only?: readonly string[];
@@ -770,29 +772,41 @@ function applicability(
 }
 
 /** Whether a binary runs, and the version it names: whatever `--version`
- * printed when it exited 0 having printed something, else null. */
+ * printed when it exited 0 having printed something, else null. A probe that
+ * ran out of time says nothing about presence: `timedOut`, never `present`. */
 interface Probe {
   present: boolean;
+  timedOut: boolean;
+  timeoutMs: number;
   version: string | null;
 }
+
+const PROBE_TIMEOUT_MS = 10_000;
 
 async function probeBinary(binary: string, timeoutMs: number): Promise<Probe> {
   const r = await spawnAsync(tmpdir(), binary, ["--version"], timeoutMs);
   const said = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  const timedOut = isErrno(r.error) && r.error.code === "ETIMEDOUT";
   const present = !r.error;
-  return { present, version: present && r.status === 0 && said !== "" ? said : null };
+  return {
+    present,
+    timedOut,
+    timeoutMs,
+    version: present && r.status === 0 && said !== "" ? said : null,
+  };
 }
 
 /** Every binary the selected checkers run, each probed once. */
 async function probeAll(
   selected: readonly CheckSpec[],
   root: string,
+  timeoutMs: number,
 ): Promise<ReadonlyMap<string, Probe>> {
   const binaries = [...new Set(selected.map((spec) => spec.binary))];
   const probes = await Promise.all(
     binaries.map(async (binary): Promise<[string, Probe]> => [
       binary,
-      await probeBinary(resolveBinary(root, binary), 10_000),
+      await probeBinary(resolveBinary(root, binary), timeoutMs),
     ]),
   );
   return new Map(probes);
@@ -859,12 +873,26 @@ function missingPrerequisiteVerdicts(
 ): Verdict[] {
   const missingBinaryVerdicts: Verdict[] = selected
     .filter((spec) => probes.get(spec.binary)?.present !== true)
-    .map((spec) => ({
-      check: spec.name,
-      pass: false,
-      missing: true as const,
-      summary: `${spec.binary} is not installed — install: ${installLine(spec.install)}`,
-    }));
+    .map((spec): Verdict => {
+      const probe = probes.get(spec.binary);
+      // A binary that did not answer in time may be installed and only slow
+      // (a loaded machine): not measured, never missing.
+      if (probe?.timedOut === true) {
+        const seconds = (probe.timeoutMs / 1000).toFixed(1);
+        return {
+          check: spec.name,
+          pass: false,
+          notMeasured: true,
+          summary: `${spec.name}: not measured: '${spec.binary} --version' timed out after ${seconds}s; retry`,
+        };
+      }
+      return {
+        check: spec.name,
+        pass: false,
+        missing: true,
+        summary: `${spec.binary} is not installed — install: ${installLine(spec.install)}`,
+      };
+    });
 
   const languagesInPlay = [...new Set(selected.map((spec) => spec.language))];
   const missingConfigVerdicts: Verdict[] = languagesInPlay
@@ -1051,7 +1079,13 @@ function keyingFor(
     .filter((arg) => !scored.has(arg))
     .map((arg) => arg.split(narrowed.root).join("<root>"));
   const read = [...argv, ...packHashes];
-  const config = configHash(tree.root, tree.files, spec.configFiles ?? [], read);
+  const config = configHash(
+    tree.root,
+    tree.files,
+    spec.configFiles ?? [],
+    read,
+    spec.resolvesInstalled === true,
+  );
   return { checker: spec.name, version, config };
 }
 
@@ -1193,7 +1227,7 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const probes = await probeAll(applicable, root);
+  const probes = await probeAll(applicable, root, options.probeTimeoutMs ?? PROBE_TIMEOUT_MS);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   if (missingVerdicts.length > 0) {
     const verdicts = [...skipVerdicts, ...missingVerdicts];
@@ -1303,24 +1337,30 @@ export interface DoctorRow {
   check: string;
   binary: string;
   present: boolean;
+  /** The probe ran out of time: the binary may be installed and only slow. */
+  timedOut: boolean;
   install: string;
 }
 
 /** Binary presence per check, every distinct binary probed once. */
-export async function doctorRows(specs: readonly CheckSpec[] = REGISTRY): Promise<DoctorRow[]> {
+export async function doctorRows(
+  specs: readonly CheckSpec[] = REGISTRY,
+  probeTimeoutMs: number = PROBE_TIMEOUT_MS,
+): Promise<DoctorRow[]> {
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
-  const present = new Map(
+  const probes = new Map(
     await Promise.all(
-      binaries.map(async (binary): Promise<[string, boolean]> => [
+      binaries.map(async (binary): Promise<[string, Probe]> => [
         binary,
-        (await probeBinary(binary, 10_000)).present,
+        await probeBinary(binary, probeTimeoutMs),
       ]),
     ),
   );
   return specs.map(({ name, binary, install }) => ({
     check: name,
     binary,
-    present: present.get(binary) ?? false,
+    present: probes.get(binary)?.present ?? false,
+    timedOut: probes.get(binary)?.timedOut ?? false,
     install: installLine(install),
   }));
 }

@@ -119,46 +119,41 @@ treated as having no imports.
 
 ### Requirement: A checker runs once per content, against a stored result
 
-Every checker result SHALL be stored in the worktree's own result store,
-`.qsm-langdev/results/`, which git ignores: the directory holds its own
-`.gitignore` of `*`, written when the store creates it, so a repository that
-never ran `init` sees nothing untracked and its own `.gitignore` is never
-edited; the import graph's cache does the same. A stored result is keyed by
-the checker, the checker's tool version (what `<binary> --version` prints), a
-hash of the configuration it read (its arguments without the scored files, and
-the config files it declares in the registry), and the hash of the content it
-scored, paths included: each file on its own for a per-file checker, the whole
-set for every other checker. A run SHALL look both sides up in the store and
-score only what is missing. So the first run in a worktree scores both sides
-once, and every later run scores the shipped side only, because the reference
-is the content of the last commit, which the store already holds from when it
-was the shipped side. A change of tool version or configuration misses the
-store and scores both sides again, once, and so does a qsm-langdev that scores
-a side with other inputs: an entry an older one stored is not read. Switching branches, pulling or
-rebasing needs nothing special: content the store does not know is scored
-once. A rule pack a checker would pull over the network (semgrep's `p/<pack>`,
-or a single rule, `r/<id>`) SHALL be fetched once per run into a local file the
-checker reads, and that file's content SHALL be part of the configuration
-hash, so a changed pack misses the store; our own rules (`qsm/<language>`) are
-written from the binary the same way and hashed the same way. A finding from
-a local rules file SHALL be known by the rule's own id, never by the scratch
-directory the file sat in, so a stored side and a fresh one name it alike. A
-checker whose version cannot be read, one of whose packs
-cannot be fetched (it then pulls the pack itself, as it would with no store),
-or whose answer depends on something no key holds (dotnet's advisories come
-over the network), SHALL never be stored and SHALL be scored every run, and
-the report SHALL name it and why. A failed run is never stored, and an entry the store
-cannot read is a miss. The store SHALL keep each enforcement point's entries
-apart, `results/<checker>/<point>/`, because one checker runs another set and
-engine at a push than at a commit; the edit hook and the stop gate run at the
-pre-commit point and share its entries. After a run the store SHALL keep, for
-every checker the run used and at the run's point only, the entries the
-reference and shipped sides of that run used, so it never grows without bound
-and a commit never evicts what a push stored, nor a push what a commit stored.
-An entry outside a point's directory is a miss and is removed by the next run
-of its checker. Nothing SHALL run a checker twice over the
-same content, the two sides of one run included. The report SHALL say, per
-checker, whether each side was a hit or scored, and the run's total.
+Every checker result SHALL be stored in the worktree's own result store, `.qsm-langdev/results/`,
+which git ignores: the directory holds its own `.gitignore` of `*`, written when the store creates
+it, so a repository that never ran `init` sees nothing untracked and its own `.gitignore` is never
+edited; the import graph's cache does the same. A stored result is keyed by the checker, the
+checker's tool version (what `<binary> --version` prints), a hash of the configuration it read (its
+arguments without the scored files, and the config files it declares in the registry, and, for a
+checker that resolves imports (`tsc`, `depcruise`, `knip`), the names of the packages installed in
+the tree's `node_modules` directories and the content of the lockfile beside the root and every
+`package.json` (`bun.lock`, `package-lock.json`, `yarn.lock`), so a result scored before
+`bun install` or before a version bump is not served after it), and the hash of the content it
+scored, paths included: each file on its own for a per-file checker, the whole set for every other
+checker. A run SHALL look both sides up in the store and score only what is missing. So the first
+run in a worktree scores both sides once, and every later run scores the shipped side only, because
+the reference is the content of the last commit, which the store already holds from when it was the
+shipped side. A change of tool version or configuration misses the store and scores both sides
+again, once, and so does a qsm-langdev that scores a side with other inputs: an entry an older one
+stored is not read. Switching branches, pulling or rebasing needs nothing special: content the store
+does not know is scored once. A rule pack a checker would pull over the network (semgrep's
+`p/<pack>`, or a single rule, `r/<id>`) SHALL be fetched once per run into a local file the checker
+reads, and that file's content SHALL be part of the configuration hash, so a changed pack misses the
+store; our own rules (`qsm/<language>`) are written from the binary the same way and hashed the same
+way. A finding from a local rules file SHALL be known by the rule's own id, never by the scratch
+directory the file sat in, so a stored side and a fresh one name it alike. A checker whose version
+cannot be read, one of whose packs cannot be fetched (it then pulls the pack itself, as it would
+with no store), or whose answer depends on something no key holds (dotnet's advisories come over the
+network), SHALL never be stored and SHALL be scored every run, and the report SHALL name it and why.
+A failed run is never stored, and an entry the store cannot read is a miss. The store SHALL keep
+each enforcement point's entries apart, `results/<checker>/<point>/`, because one checker runs
+another set and engine at a push than at a commit; the edit hook and the stop gate run at the
+pre-commit point and share its entries. After a run the store SHALL keep, for every checker the run
+used and at the run's point only, the entries the reference and shipped sides of that run used, so
+it never grows without bound and a commit never evicts what a push stored, nor a push what a commit
+stored. An entry outside a point's directory is a miss and is removed by the next run of its
+checker. Nothing SHALL run a checker twice over the same content, the two sides of one run included.
+The report SHALL say, per checker, whether each side was a hit or scored, and the run's total.
 
 #### Scenario: The first run in a fresh worktree
 
@@ -297,12 +292,22 @@ selected checker's binary is not resolvable. `check` SHALL also fail, naming
 the missing file and that it must be created or the checker removed from
 selection, when a selected language has no scaffolded config in the
 repository, since scoring both sides at a tool's defaults would let nothing
-ever regress.
+ever regress. A binary whose `--version` presence probe does not answer in
+time (10 s) is not missing: `check` SHALL report that checker as not measured,
+naming the probe and its limit and asking for a retry, and SHALL NOT tell the
+person to install it.
 
 #### Scenario: A checker's binary is absent
 
 - **WHEN** a selected checker's binary cannot be found
 - **THEN** `check` SHALL fail and print that checker's install command
+
+#### Scenario: A checker's presence probe times out
+
+- **WHEN** a selected checker's binary does not answer `--version` within the
+  probe limit
+- **THEN** `check` SHALL report the checker as not measured with the limit
+  named, and SHALL NOT say it is not installed
 
 #### Scenario: A selected language has no config in the repository
 
@@ -458,13 +463,22 @@ command and run nothing.
 binary resolves and, when it does not, the command to install it. `doctor`
 SHALL also report whether the structural checker on the machine reports a
 qsm-patched version, distinguishing that from an unpatched upstream checker
-and from none present at all. `doctor` SHALL install nothing.
+and from none present at all. A binary that does not answer `--version` within the probe limit is
+not missing: `doctor` SHALL report it as not measured, as `check` does. `doctor` SHALL install
+nothing.
 
 #### Scenario: A backing linter is missing
 
 - **WHEN** a selected checker's binary does not resolve
 - **THEN** `doctor` SHALL list it as missing together with its install
   command, and run no install itself
+
+#### Scenario: Doctor meets a checker whose presence probe times out
+
+- **WHEN** a selected checker's binary does not answer `--version` within the probe limit
+- **THEN** `doctor` SHALL list it as not measured and ask for a retry, SHALL NOT list it as
+  missing or give its install command, and SHALL end `blocked` rather than `missing` when no
+  binary is truly absent
 
 #### Scenario: An unpatched structural checker is present
 
@@ -618,6 +632,34 @@ one line that the content denylist is not set up, naming the `content-denylist` 
 
 - **WHEN** the file does not exist
 - **THEN** the gate passes with one line naming the skill that sets it up
+
+### Requirement: A push is compared against what the pushed remote holds
+
+At pre-push the `langdev` and `structure` gates SHALL compare a ref the remote has against the
+remote's commit, and a new branch against the merge base with the default branch of the remote being
+pushed to (its `HEAD`, else `main`, else `master`, as this clone last saw it). When this clone holds
+no such branch of that remote, as on the first push to an empty remote or to a path, there is
+nothing to be worse than and the ref SHALL be skipped, never scored as a tree of added files. When
+every pushed ref is skipped the gate SHALL report itself skipped, naming each ref and why, never a
+bare pass. A
+default branch another remote holds, or a local branch, SHALL NOT serve as the reference. A pre-push
+call that carries no remote name SHALL fail these gates as it fails `secrets`.
+
+#### Scenario: The first push to an empty remote
+
+- **WHEN** a clone pushes a branch to a remote it holds no branch of
+- **THEN** the gates SHALL NOT score the whole tree as changed, and SHALL NOT block the push
+
+#### Scenario: Every pushed ref is skipped
+
+- **WHEN** a push to a path or an empty remote skips every ref
+- **THEN** the `langdev` and `structure` gates SHALL print `skipped` with each ref and its reason,
+  and SHALL NOT block the push
+
+#### Scenario: A new branch on a remote the clone knows
+
+- **WHEN** a new branch is pushed to `origin` and `origin/main` is known
+- **THEN** the gates SHALL compare it against the merge base with `origin/main`
 
 ### Requirement: The secrets gate at a push scans the pushed commits
 

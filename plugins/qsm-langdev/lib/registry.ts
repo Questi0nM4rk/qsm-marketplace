@@ -349,6 +349,9 @@ export type CheckSpec = {
   thresholds?: Record<string, number>;
   /** Globs over repository-relative paths naming the files the tool reads for its configuration. */
   configFiles?: readonly string[];
+  /** The tool resolves imports through the installed dependencies, so what is installed is part of
+   * what it scored: a result scored before `bun install` is not the result after it. */
+  resolvesInstalled?: true;
   /** Why this checker's results are never stored: its answer depends on
    * something no key can hold, such as rules fetched over the network. */
   notStored?: string;
@@ -526,6 +529,7 @@ const SPECS: readonly CheckSpec[] = [
     install: { suggest: "bun upgrade" },
     fileSet: "given",
     configFiles: TS_PROJECT,
+    resolvesInstalled: true,
     args: () => ["check", "--no-pretty"],
     count: countTsc,
     appliesWhen: {
@@ -543,6 +547,7 @@ const SPECS: readonly CheckSpec[] = [
     install: bunGlobal("knip"),
     fileSet: "given",
     configFiles: ["knip.json", "knip.jsonc", ".knip.json", ".knip.jsonc", "knip.ts", ...TS_PROJECT],
+    resolvesInstalled: true,
     args: () => ["--reporter", "json", "--no-exit-code"],
     count: countKnip,
   },
@@ -559,6 +564,7 @@ const SPECS: readonly CheckSpec[] = [
     install: bunGlobal("dependency-cruiser"),
     fileSet: "given",
     configFiles: [".dependency-cruiser.*", ...TS_PROJECT],
+    resolvesInstalled: true,
     args: (files) => ["--config", "--output-type", "json", ...files],
     count: countDepcruise,
     appliesWhen: {

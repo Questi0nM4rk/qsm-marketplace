@@ -199,8 +199,10 @@ export function countShellMetrics(output: string, threshold: number): number | n
     if (line === header) {
       continue;
     }
-    const ccn = Number(line.trim().split(/\s+/)[ccnIndex]);
-    if (Number.isFinite(ccn) && ccn > threshold) {
+    // A function row holds a whole-number CCN; the per-file and total tables
+    // put a decimal average (NLOC avg 42.00) in that column.
+    const cell = line.trim().split(/\s+/)[ccnIndex] ?? "";
+    if (/^\d+$/.test(cell) && Number(cell) > threshold) {
       count += 1;
     }
   }
