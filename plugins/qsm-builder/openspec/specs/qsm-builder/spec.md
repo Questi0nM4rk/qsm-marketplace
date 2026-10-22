@@ -224,9 +224,11 @@ unknown plugin SHALL answer 404; the page SHALL have exactly one `h1`, each pane
 with a skip link to the content; a plugin's page SHALL show, each in its own section, its reason to
 exist, its skills and agents (description, trigger words, opening), its hooks by event, its CLI
 verbs, its spec requirements with their count of scenarios, its eval cases with the last result, its
-open tasks and its dependencies; the page SHALL keep a 16 px gutter at phone width and SHALL request
-nothing outside 127.0.0.1, its fonts being the system's. The export and the artifact keep every
-panel in one document. A directory with no `.claude-plugin/marketplace.json` SHALL fail with
+open tasks and its dependencies; the page SHALL keep a 16 px gutter at phone width, give a card's
+text at least 320 px of a 390 px screen, keep its plugin navigation to one horizontally scrolling
+row, and draw trigger words as plain quoted tags that look unlike links and buttons; it SHALL
+request nothing outside 127.0.0.1, its fonts being the system's. The export and the artifact keep
+every panel in one document. A directory with no `.claude-plugin/marketplace.json` SHALL fail with
 `missing` naming that file.
 
 #### Scenario: The person exports the marketplace
