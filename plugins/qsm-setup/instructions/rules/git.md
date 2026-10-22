@@ -10,7 +10,9 @@ is the writing skill; worktrees are the worktrunk skill; threads are the review-
    flattens a worker's merge commit and replays its conflicts.
 3. Work lands in this order, with no pull request until the person says otherwise: a worktree, a
    local test, a local review agent, `/simplify`, then a merge to main, then the push of item 1. A
-   step skipped is named, never silent.
+   step skipped is named, never silent. Where the repository has a pre-push comparison, the local
+   test includes it against the remote branch (`qsm-langdev check --against origin/main --at
+   pre-push`), because a branch that passes against its own base can still push main over a limit.
 4. A release tag is annotated (`git tag -a vX.Y.Z -m "..."`), because `--follow-tags` pushes only
    annotated tags and skips a lightweight one without a word.
 5. Fix every review finding that holds, nitpicks included, before you push, because a second
