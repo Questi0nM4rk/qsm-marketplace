@@ -34,6 +34,7 @@ main,.masthead{max-width:860px;margin:0 auto}
 main{padding-inline:clamp(16px,5vw,48px)}
 .sheet>.masthead{padding-block:44px 0;padding-inline:clamp(16px,5vw,48px)}
 main{padding-block:40px 56px;display:flex;flex-direction:column;gap:40px;outline:none}
+@media(max-width:520px){main{padding-inline:4px}.sheet>.masthead{padding-inline:4px}}
 .skip{position:absolute;left:16px;top:-80px;z-index:20;background:var(--lavender-bg);color:var(--heading);border:2px solid var(--lavender);padding:6px 12px}
 .skip:focus{top:8px}
 a{color:var(--lavender)}
@@ -46,7 +47,7 @@ h2[tabindex]:focus:not(:focus-visible){outline:none}
 .part{padding:8px 0 0}
 .part p{color:var(--muted)}
 .card{background:var(--surface);border:2px solid var(--edge);border-radius:0;box-shadow:6px 6px 0 var(--shade);padding:28px 28px 30px;min-width:0}
-@media(max-width:520px){.card{padding:20px 14px 22px}}
+@media(max-width:520px){.card{padding:16px 10px 18px;box-shadow:3px 3px 0 var(--shade)}}
 .card.soft{background:var(--mint-bg)}
 .card.calm{background:var(--sky-bg)}
 
@@ -72,14 +73,15 @@ code{font-family:var(--mono);font-size:inherit;background:var(--raised);color:va
 .tabs a:hover{border-color:var(--lavender)}
 .tabs a[aria-current="page"]{background:var(--lavender-bg);border-color:var(--lavender);color:var(--heading)}
 .tabs.sub{margin-top:0}
-@media(max-width:520px){.tabs{gap:6px}.tabs a{font-size:var(--fs-12);padding:3px 8px}}
+@media(max-width:520px){.tabs{gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:0 4px 8px 0}.tabs a{font-size:var(--fs-12);padding:3px 8px;white-space:nowrap;flex:none}}
 .tabs small{color:var(--muted);font-size:var(--fs-12)}
 .back{font-size:var(--fs-16);font-weight:500;align-self:flex-start}
 .theme{font:inherit;font-size:var(--fs-14);font-weight:500;color:var(--heading);background:var(--lavender-bg);border:2px solid var(--lavender);padding:3px 12px;box-shadow:3px 3px 0 var(--shade);cursor:pointer;display:block;margin:12px 16px 0 auto;min-block-size:32px}
 @media(min-width:1240px){.theme{position:fixed;top:12px;right:12px;margin:0;z-index:10}}
 
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.chip{font-family:var(--mono);font-size:var(--fs-14);padding:3px 10px;border:2px solid var(--lavender);background:var(--lavender-bg);color:var(--heading);box-shadow:3px 3px 0 var(--shade);overflow-wrap:anywhere}
+.trig{font-family:var(--mono);font-size:var(--fs-14);padding:1px 6px;background:var(--raised);color:var(--muted);cursor:text;overflow-wrap:anywhere}
+.trig::before{content:"\\201C"}.trig::after{content:"\\201D"}
 .tag{font-size:var(--fs-12);font-weight:600;padding:2px 10px;border-radius:0;background:var(--raised);color:var(--muted);display:inline-block;margin-right:6px}
 .tag.fire{background:var(--rose-bg);color:var(--rose)}
 .tag.scn{background:var(--butter-bg);color:var(--butter)}
@@ -316,6 +318,7 @@ export const SCRIPT = `
 /** The pen and its editor, on the served page only: small, quiet, the same sharp corners and edges. */
 export const PEN_CSS = `
 .pen-wrap{position:relative;padding-right:38px;min-height:32px;min-width:0}
+@media(max-width:520px){.pen-wrap{padding-right:0}.pen-wrap>.pen{position:static;float:right;width:28px;height:28px;margin:0 0 4px 8px}}
 .pen-wrap.inline{display:inline-block}
 .pen-wrap>.pen-read>p:last-child{margin-bottom:0}
 .pen{position:absolute;top:0;right:0;width:32px;height:32px;padding:0;display:grid;place-items:center;background:transparent;color:var(--muted);border:1px solid var(--edge);border-radius:0;cursor:pointer}

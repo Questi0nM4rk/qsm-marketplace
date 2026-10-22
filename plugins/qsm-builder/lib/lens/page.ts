@@ -91,7 +91,7 @@ function pen(ctx: Ctx, spec: Spec, read: string, small = false): string {
   if (ctx.edit === undefined) {
     return read;
   }
-  return `<div class="pen-wrap${small ? " inline" : ""}" data-key="${esc(`${spec.file}|${spec.section}`)}" data-pen="${payload(ctx, spec)}"><div class="pen-read">${read}</div><button class="pen" type="button" data-open aria-label="${esc(`Edit ${spec.section}`)}" title="Edit">${PEN_ICON}</button></div>`;
+  return `<div class="pen-wrap${small ? " inline" : ""}" data-key="${esc(`${spec.file}|${spec.section}`)}" data-pen="${payload(ctx, spec)}"><button class="pen" type="button" data-open aria-label="${esc(`Edit ${spec.section}`)}" title="Edit">${PEN_ICON}</button><div class="pen-read">${read}</div></div>`;
 }
 
 /** A button that opens an edit with no text of its own to turn into a control (add, remove). */
@@ -616,7 +616,7 @@ function triggerChips(i: Item, ctx: Ctx, where: string): string {
     }),
     i.triggers.length === 0
       ? `<p class="dim">The description has no <code>Triggers:</code> list.</p>`
-      : `<div class="chips">${i.triggers.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>`,
+      : `<div class="chips">${i.triggers.map((t) => `<span class="trig">${esc(t)}</span>`).join("")}</div>`,
   );
 }
 
@@ -813,7 +813,7 @@ function pluginGraph(p: Plugin): string {
 function shipped(p: Plugin): string {
   const articles = p.items.map(
     (i) =>
-      `<article class="ship"><h4><a href="#${itemRoute(p, i)}">${esc(i.name)}</a> ${tag(i.kind, i.kind)}</h4><p>${inline(i.description)}</p>${i.triggers.length === 0 ? "" : `<div class="chips">${i.triggers.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>`}${i.opening === "" ? "" : `<p class="dim">${inline(i.opening)}</p>`}</article>`,
+      `<article class="ship"><h4><a href="#${itemRoute(p, i)}">${esc(i.name)}</a> ${tag(i.kind, i.kind)}</h4><p>${inline(i.description)}</p>${i.triggers.length === 0 ? "" : `<div class="chips">${i.triggers.map((t) => `<span class="trig">${esc(t)}</span>`).join("")}</div>`}${i.opening === "" ? "" : `<p class="dim">${inline(i.opening)}</p>`}</article>`,
   );
   return card(
     "Skills and agents",
