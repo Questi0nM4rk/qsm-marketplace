@@ -464,9 +464,17 @@ call, and an absent or failing filter lets the call through unfiltered and unblo
 SHALL NOT route a subagent's git command through the
 filter, because the filter's rewrite hands the filter binary a git operand, which the harness's
 worktree-isolation guard refuses inside a subagent regardless of whether that subagent is
-isolated. The installer SHALL NOT fetch the filter; it SHALL report the install command at the
-pinned upstream revision, and the documentation SHALL warn that the bare crates.io name installs
-an unrelated package.
+isolated. The verb SHALL NOT route a command one of whose segments starts with `git log`, `grep` or
+`find` through the filter, because the filter changes what their output says: its `git log` drops
+merge commits, its `grep` searches in another regex dialect, and its `find` folds paths into a
+tree, so an agent reading the filtered output draws a wrong conclusion. The installer SHALL NOT
+fetch the filter; it SHALL report the install command at the pinned upstream revision, and the
+documentation SHALL warn that the bare crates.io name installs an unrelated package.
+
+#### Scenario: A command whose meaning the filter changes
+
+- **WHEN** the main agent runs `git log --oneline -6` on a branch whose newest commit is a merge
+- **THEN** the call runs as written and its output lists the merge commit
 
 #### Scenario: Filter missing at call time
 

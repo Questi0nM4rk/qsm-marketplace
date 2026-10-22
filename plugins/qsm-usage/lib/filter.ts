@@ -33,9 +33,27 @@ export function redirectsToFile(command: string): boolean {
   return STDOUT_REDIRECT.test(command);
 }
 
-/** True when the filter must not see `command`: a subagent's git, or output written to a file. */
+/**
+ * Commands whose filtered form says something else than the command did, measured against the
+ * filter: `git log` loses its merge commits, `grep` becomes a search with another regex dialect
+ * (a basic `a\\|b` no longer alternates), and `find` collapses its paths into a tree.
+ */
+const CHANGED_BY_FILTER: readonly (readonly string[])[] = [["git", "log"], ["grep"], ["find"]];
+
+/** True when a segment of `command` starts with a command the filter would change the meaning of. */
+export function filterChangesMeaning(command: string): boolean {
+  return command.split(COMMAND_SEPARATOR).some((segment) => {
+    const words = segment.trim().split(/\s+/);
+    return CHANGED_BY_FILTER.some((prefix) => prefix.every((word, i) => words[i] === word));
+  });
+}
+
+/** True when the filter must not see `command`: a subagent's git, output written to a file, or a
+ * command whose filtered output would mean something else. */
 export function leavesUnfiltered(command: string, subagent: boolean): boolean {
-  return (subagent && runsGit(command)) || redirectsToFile(command);
+  return (
+    (subagent && runsGit(command)) || redirectsToFile(command) || filterChangesMeaning(command)
+  );
 }
 
 /** What the filter made of a command: the command to run instead, or the reason to refuse it. */

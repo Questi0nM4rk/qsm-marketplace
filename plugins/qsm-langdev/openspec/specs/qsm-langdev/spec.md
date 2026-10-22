@@ -67,6 +67,18 @@ content, against a stored result").
 - **THEN** `check` SHALL pass, reporting that no checker ran, not that every
   checker passed
 
+### Requirement: Duplication is scored at every commit, not first at the push
+
+jscpd SHALL run at pre-commit as well as at pre-push, because a commit that passes its own gates and
+adds clones is found only when main is pushed, after several such commits were merged, far from the
+commit that added them. A whole-tree jscpd run takes well under a second on this repository
+(measured 136 ms on 514 files), so the commit gate carries no real cost.
+
+#### Scenario: A commit adds a duplicated block
+
+- **WHEN** a commit adds a block that repeats one already in the tree, and nothing else
+- **THEN** its pre-commit gate SHALL report jscpd worse and block the commit
+
 ### Requirement: Every run computes its file sets once
 
 Before any checker runs, the run SHALL compute three file sets and hand each
