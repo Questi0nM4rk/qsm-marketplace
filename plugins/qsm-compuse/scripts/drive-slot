@@ -141,6 +141,11 @@ slot_bench() {
   need qsm-workbench
   local name="$1" dir
   dir="$(slot_dir "$name")"
+  # One story per slot: the session file of the previous story would refuse the next start.
+  if [[ -f "$dir/bench.json" ]]; then
+    qsm-workbench session stop --session-file "$dir/bench.json" >/dev/null 2>&1
+    rm -f "$dir/bench.json"
+  fi
   (slot_run "$name" -- qsm-workbench session start --provider "$2" --story "$3" --session-file "$dir/bench.json" --log "$dir/bench.log") \
     | jq -r 'if .status == "error" then "drive: workbench did not start: \(.error) (\(.logPath))\n" | halt_error(1)
       else "workbench in slot '"$name"': pid=\(.session.pid) story=\(.describe.story)" end'
