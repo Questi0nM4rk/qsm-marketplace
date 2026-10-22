@@ -298,6 +298,7 @@ drive — sudo-free computer use on Hyprland/Wayland
     focused                  focused output name
     l2p N [MON]              convert a logical length to physical pixels
     geom CHECK ARGS          measure the live item tree: insets overlap inside centre target dump (drive geom)
+    hitmap zone|grid ARGS    hit and hover zones measured from pixels (drive hitmap)
     contrast A B             WCAG ratio between two rects/points of the live screen (drive contrast)
 
   SLOT (isolated headless sway per agent; add --slot NAME or DRIVE_SLOT=NAME to shot, record, frames, route, move, nudge, pos, click, rclick, mclick, type, scroll, key, sendkey, geom)
@@ -325,11 +326,13 @@ MOTION_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 source "$MOTION_DIR/drive-motion"
 # shellcheck source=drive-slot
 source "$MOTION_DIR/drive-slot"
+# shellcheck source=drive-hitmap
+source "$MOTION_DIR/drive-hitmap"
 
 # A capture or an input on the owner's session is opt-in: a screencopy cut short crashed the
 # owner's Hyprland once (SIGBUS in copyShm), and an agent's stray click lands in the owner's work.
 live_gate() {
-  local acting=" move warp nudge record route key sendkey esc click press release rclick mclick type scroll shot contrast "
+  local acting=" move warp nudge record route key sendkey esc click press release rclick mclick type scroll shot contrast hitmap "
   in_slot || [[ "${DRIVE_LIVE:-}" == 1 || "$acting" != *" ${1:-none} "* ]] \
     || die "'$1' acts on the owner's live session: run it in a slot (DRIVE_SLOT=NAME), or set DRIVE_LIVE=1 when the owner asked for live input"
 }
@@ -338,7 +341,7 @@ dispatch() {
   in_slot && slot_refuse "${1:-}"
   live_gate "${1:-}"
   case "${1:-}" in
-    slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | l2p | until)
+    slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | hitmap | l2p | until)
       local verb="cmd_$1"
       shift
       "$verb" "$@"
