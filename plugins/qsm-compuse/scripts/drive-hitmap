@@ -41,7 +41,7 @@ hm_rest() {
     x="${BASH_REMATCH[1]}" y="${BASH_REMATCH[2]}" w="${BASH_REMATCH[3]}" h="${BASH_REMATCH[4]}"
     HM_CROP="$(awk -v x="$x" -v y="$y" -v w="$w" -v h="$h" -v s="$scale" 'BEGIN{printf "%dx%d+%d+%d", w * s, h * s, x * s, y * s}')"
   fi
-  hm_park_ref
+  hm_still
 }
 
 # Sets HM_N to the changed physical pixels between two shots inside the watch region.
@@ -61,7 +61,7 @@ hm_diff() {
 # Parks and re-shoots the reference until two shots a second apart agree: a rollout the last probe
 # opened closes after a hold delay, and a panel still open in the reference would read as a response
 # when it closes. A slower rollout needs --settle, which lengthens the second.
-hm_park_ref() {
+hm_still() {
   local i
   hm_park
   HM_REF_AT="${HM_PARK/,/ }" HM_PROBE_AT="${HM_PARK/,/ }"
@@ -74,6 +74,31 @@ hm_park_ref() {
     ((HM_N < HM_MIN_PX)) && return 0
   done
   die "the screen did not settle after parking at $HM_PARK"
+}
+
+# Whether the parked screen is back to hm-base, the reference from before the response (its pointer at $1).
+hm_back() {
+  HM_REF_AT="$1"
+  hm_diff hm-base hm-ref
+  HM_REF_AT="${HM_PARK/,/ }"
+  ((HM_N < HM_MIN_PX))
+}
+
+# Parks, settles, and checks the screen is back to what it was before the response. A surface that
+# stays open after the pointer leaves gets up to three Escapes, each with 3 s before the next probe,
+# because a dismissed surface ignores the pointer for a moment and an Escape sent mid-animation is
+# lost; one that still stays stops the run, because every later probe would be compared against an
+# open surface.
+hm_reset() {
+  local i
+  hm_still
+  hm_back "$1" && return 0
+  for i in 1 2 3; do
+    cmd_key Escape 3 >/dev/null
+    hm_still
+    hm_back "$1" && return 0
+  done
+  die "the screen does not return to rest after parking at $HM_PARK and three Escapes ($HM_N px differ): the surface needs another dismissal, or a clock in the watch region ticked (--watch)"
 }
 
 # One probe: moves to X Y, waits, shoots; succeeds when the watch region differs from the reference.
@@ -93,10 +118,12 @@ hm_once() {
 # A point responds when two probes, a park apart, both do: a toast or a tick that lands in one
 # probe's window is not the pointer's doing. Every response is followed by a park.
 hm_respond() {
+  local at="$HM_REF_AT"
+  cp -f "$OUT_DIR/hm-ref.png" "$OUT_DIR/hm-base.png"
   hm_once "$1" "$2" || return 1
-  hm_park_ref
+  hm_reset "$at"
   hm_once "$1" "$2" || return 1
-  hm_park_ref
+  hm_reset "$at"
 }
 
 # Last responding coordinate from the seed along one axis in one direction (1 logical px).
