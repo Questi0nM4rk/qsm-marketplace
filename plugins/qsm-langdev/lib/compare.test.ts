@@ -238,18 +238,30 @@ describe("compareTrees: scored files", () => {
   });
 });
 
+/** A repo whose staged edit is `edit` over a.txt, with an empty, ignored node_modules/.bin. */
+function stagedWithLocalBin(edit: string): { root: string; head: string; bin: string } {
+  const { root, head } = repoWith({ "a.txt": "alpha\n", ".gitignore": "node_modules/\n" });
+  write(root, { "a.txt": edit });
+  stage(root);
+  const bin = join(root, "node_modules", ".bin");
+  mkdirSync(bin, { recursive: true });
+  return { root, head, bin };
+}
+
+/** An executable `name` in `dir` that runs `body`. */
+function executable(dir: string, name: string, body: string): void {
+  writeFileSync(join(dir, name), body);
+  chmodSync(join(dir, name), 0o755);
+}
+
+const SLOW_PROBE: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+
 describe("compareTrees: checker availability", () => {
   test("a binary whose presence probe times out is not measured, never reported as not installed", async () => {
-    const { root, head } = repoWith({ "a.txt": "alpha\n", ".gitignore": "node_modules/\n" });
-    write(root, { "a.txt": "alpha and more\n" });
-    stage(root);
-    const bin = join(root, "node_modules", ".bin");
-    mkdirSync(bin, { recursive: true });
-    writeFileSync(join(bin, "qsm-langdev-slow-version"), "#!/bin/sh\nexec sleep 5\n");
-    chmodSync(join(bin, "qsm-langdev-slow-version"), 0o755);
-    const slow: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+    const { root, head, bin } = stagedWithLocalBin("alpha and more\n");
+    executable(bin, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
 
-    const { verdicts } = await runWith(root, head, slow, { probeTimeoutMs: 200 });
+    const { verdicts } = await runWith(root, head, SLOW_PROBE, { probeTimeoutMs: 200 });
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0]?.missing).toBeUndefined();
@@ -261,13 +273,11 @@ describe("compareTrees: checker availability", () => {
 
   test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
     const dir = sandboxDir("qsm-langdev-doctor-");
-    writeFileSync(join(dir, "qsm-langdev-slow-version"), "#!/bin/sh\nexec sleep 5\n");
-    chmodSync(join(dir, "qsm-langdev-slow-version"), 0o755);
-    const slow: CheckSpec = { ...MARKED, name: "slow-probe", binary: "qsm-langdev-slow-version" };
+    executable(dir, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
     const savedPath = process.env.PATH;
     process.env.PATH = `${dir}:${savedPath ?? ""}`;
     try {
-      const rows = await doctorRows([slow], 200);
+      const rows = await doctorRows([SLOW_PROBE], 200);
 
       expect(rows[0]).toMatchObject({ check: "slow-probe", present: false, timedOut: true });
     } finally {
@@ -276,14 +286,9 @@ describe("compareTrees: checker availability", () => {
   });
 
   test("the repository's node_modules/.bin copy of a checker wins over PATH", async () => {
-    const { root, head } = repoWith({ "a.txt": "alpha\n", ".gitignore": "node_modules/\n" });
-    write(root, { "a.txt": "alpha and more BADLINE\n" });
-    stage(root);
-    const bin = join(root, "node_modules", ".bin");
-    mkdirSync(bin, { recursive: true });
+    const { root, head, bin } = stagedWithLocalBin("alpha and more BADLINE\n");
     // a grep that PATH does not have, so only the local copy can answer
-    writeFileSync(join(bin, "qsm-langdev-local-grep"), '#!/bin/sh\nexec grep "$@"\n');
-    chmodSync(join(bin, "qsm-langdev-local-grep"), 0o755);
+    executable(bin, "qsm-langdev-local-grep", '#!/bin/sh\nexec grep "$@"\n');
     expect(resolveBinary(root, "qsm-langdev-local-grep")).toBe(join(bin, "qsm-langdev-local-grep"));
     expect(resolveBinary(root, "grep")).toBe("grep");
     const local: CheckSpec = { ...MARKED, name: "local", binary: "qsm-langdev-local-grep" };

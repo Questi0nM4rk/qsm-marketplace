@@ -1,19 +1,11 @@
 // What a push is compared against: only what the remote being pushed to holds.
 
 import { expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
+import { git } from "../../../lib/fixtures/git.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { type PushedRef, pushReference } from "./push.ts";
 
 const ZERO = "0".repeat(40);
-
-function git(root: string, ...args: string[]): string {
-  const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
-  }
-  return result.stdout.trim();
-}
 
 /** A clone with two commits whose `origin` knows only the first, as after a clone that then moved on. */
 function clone(): { root: string; first: string; second: string } {
