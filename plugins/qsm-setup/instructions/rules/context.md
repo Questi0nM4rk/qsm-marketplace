@@ -118,8 +118,11 @@ a workflow.
 
 Review and fix stages are a quarter of the build stage: one reviewer for four builders, reading
 their results together and judging the integration, the flow, and the end-to-end business
-behaviour, never one reviewer per unit checking what its builder already said. Any test a
-workflow writes follows the same standard: the flow through the real surface, not units.
+behaviour, never one reviewer per unit checking what its builder already said. The review prompt
+names the setup (one person, one machine, its remotes) and asks only for findings that give a wrong
+result there, because a reviewer without that bound finds a new edge case every round and the loop
+never converges. Any test a workflow writes follows the same standard: the flow through the real
+surface, not units.
 
 A stage's output schema is its deliverable, and the workers produce exactly that. When the ask is
 a change, every stage returns the changed behaviour and its measured evidence, and documentation is

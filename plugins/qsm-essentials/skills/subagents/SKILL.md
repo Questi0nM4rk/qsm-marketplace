@@ -43,6 +43,10 @@ does what").
    Workflow (workflow-authoring skill).
 8. Unnamed and one-shot, so the worker ends with its answer. Name one only when you will message
    it again, and stop it when its result lands.
+9. Each worker gets its own scratch directory, named in the prompt, because workers sharing one
+   overwrite each other's probes. A worker never writes shared live state (a plugin store, the
+   Claude home, another tree): it dry-runs on a copy, and you apply the change after the merge,
+   once the code that reads the new shape is installed.
 
 ## Take back
 
