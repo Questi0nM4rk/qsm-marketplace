@@ -1,8 +1,10 @@
 // The page: one HTML fragment (no doctype, html, head or body: it is published as an artifact that
-// wraps it). Top tabs are the marketplace overview and the plugins; inside a plugin, sub-tabs are
-// the plugin overview and one tab per skill and agent. Routes are the URL hash: `#overview`,
-// `#qsm-essentials`, `#qsm-essentials/debugging`. Only the tab picked last is shown. Every text
-// read from a file goes through esc() on its way in.
+// wraps it). One h1 for the page; every panel titles itself at h2. The links at the top lead to the
+// marketplace overview and to the plugins; inside a plugin, a second row of links leads to the
+// plugin overview and to each skill and agent. Panels are shown by the URL hash: `#overview`,
+// `#qsm-essentials`, `#qsm-essentials/debugging`. The export and the artifact hold every panel in
+// one document; the server (`only` set) sends the overview at `/` and one plugin at `/p/<plugin>`,
+// so a page stays small. Every text read from a file goes through esc() on its way in.
 
 import { relative } from "node:path";
 import { ARTIFACT_SCRIPT, LIVE_SCRIPT, PEN_ICON, PEN_SCRIPT } from "./client.ts";
@@ -21,11 +23,11 @@ import {
 import { newItemSpecs, searchIndex } from "./newitem.ts";
 import { type Reference, type RefKind, REF_KINDS } from "./refs.ts";
 import type { Field, Spec } from "./spec.ts";
-import { CSS, FONTS, PEN_CSS, SCRIPT, WAIT_CSS } from "./style.ts";
+import { CSS, PEN_CSS, SCRIPT, WAIT_CSS } from "./style.ts";
 import type { Task } from "./tasks.ts";
 
 const slug = (name: string): string => name.replaceAll(/[^a-zA-Z0-9-]/g, "-");
-const pluginRoute = (p: Plugin): string => slug(p.name);
+export const pluginRoute = (p: Plugin): string => slug(p.name);
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
 // ---- the pen: the served page only; an exported page reads the same without it
@@ -34,7 +36,20 @@ interface Ctx {
   readonly root: string;
   /** set on the served page: reads the sha256 of a file as it is now */
   readonly edit: PageOptions["edit"];
+  /** set when the page holds the overview or one plugin: another plugin is another request */
+  readonly paged: boolean;
 }
+
+/** Where a plugin's panel is: its own request on a paged page, a hash route otherwise. */
+const pluginHref = (ctx: Ctx, p: Plugin): string =>
+  ctx.paged ? `/p/${pluginRoute(p)}` : `#${pluginRoute(p)}`;
+
+/** A panel: a titled region the hash shows, the title the page's second level of heading. */
+const panel = (route: string, label: string, eyebrow: string, title: string, body: string) =>
+  `<section class="tab" data-route="${esc(route)}" aria-label="${esc(label)}">
+<header class="part"><span class="eyebrow">${esc(eyebrow)}</span><h2 class="title">${title}</h2></header>
+${body}
+</section>`;
 
 /** What one edit changes: a file's section and the one control that does it. */
 interface Target {
@@ -130,7 +145,7 @@ const card = (
   opts: { tone?: string; titleHtml?: string } = {},
 ): string => {
   const heading = opts.titleHtml ?? esc(title);
-  return `<section class="card ${opts.tone ?? ""}"><span class="eyebrow">${esc(eyebrow)}</span>${heading === "" ? "" : `<h2>${heading}</h2>`}${body}</section>`;
+  return `<section class="card ${opts.tone ?? ""}"><span class="eyebrow">${esc(eyebrow)}</span>${heading === "" ? "" : `<h3>${heading}</h3>`}${body}</section>`;
 };
 const casesOf = (p: Plugin): number =>
   p.items.reduce((n, i) => n + i.cases.length, p.looseCases.length);
@@ -144,17 +159,20 @@ function newItemPanel(m: Marketplace, ctx: Ctx): string {
   const buttons = newItemSpecs(m)
     .map(({ label, spec }) => action(ctx, spec, label))
     .join("");
-  const body = `<p>Describe what you want and save it as one task of kind new. Nothing is created: the agent searches for an existing owner first, shows you what it would add and creates it after your yes. A new item without an eval case is refused.</p>${buttons}<script type="application/json" id="lens-index">${JSON.stringify(searchIndex(m)).replaceAll("<", "\\u003c")}</script>`;
-  return `<div class="tab" data-route="new" role="tabpanel" aria-label="New item">
-<section class="part"><span class="eyebrow">new</span><h1 class="sm"><em>Start a skill, an agent or a plugin</em></h1></section>
-<a class="back" href="#overview">&larr; overview</a>
-${card("Describe it", "What should exist that does not.", body, { tone: "soft" })}
-</div>`;
+  const body = `<p>Describe what you want and save it as one task of kind new. Nothing is created: the agent searches for an existing owner first, shows you what it would add and creates it after your yes. A new item without an eval case is refused.</p>${buttons}<script type="application/json" id="lens-index">${JSON.stringify(searchIndex(m, (p) => pluginHref(ctx, p))).replaceAll("<", "\\u003c")}</script>`;
+  return panel(
+    "new",
+    "New item",
+    "new",
+    "<em>Start a skill, an agent or a plugin</em>",
+    `<a class="back" href="${ctx.paged ? "/" : "#overview"}">&larr; overview</a>
+${card("Describe it", "What should exist that does not.", body, { tone: "soft" })}`,
+  );
 }
 
 // ---- overview
 
-function tile(p: Plugin): string {
+function tile(p: Plugin, ctx: Ctx): string {
   const tasks = p.tasks === null ? "tasks not read" : plural(p.tasks.length, "open task");
   const why = whyLine(p.why);
   const has = [
@@ -163,7 +181,7 @@ function tile(p: Plugin): string {
     plural(casesOf(p), "eval case"),
     tasks,
   ].join(" · ");
-  return `<div class="tile"><h3><a href="#${pluginRoute(p)}">${esc(p.name)}</a></h3><div><b>Why</b>${why === "" ? "No Why it exists section." : inline(why)}</div><div><b>Has</b>${esc(has)}</div></div>`;
+  return `<div class="tile"><h4><a href="${pluginHref(ctx, p)}">${esc(p.name)}</a></h4><div><b>Why</b>${why === "" ? "No Why it exists section." : inline(why)}</div><div><b>Has</b>${esc(has)}</div></div>`;
 }
 
 const KIND_LABEL: Record<RefKind, string> = {
@@ -186,7 +204,7 @@ const legendOf = (refs: readonly Reference[]): string =>
 
 /** The marketplace graph, the top C4 level: every plugin and the dependencies between them, nothing
  * outside the marketplace; a plugin's own graph is where its outside names first appear. */
-function dependencyGraph(m: Marketplace): string {
+function dependencyGraph(m: Marketplace, ctx: Ctx): string {
   const inMarket = new Set(m.plugins.map((p) => p.name));
   const deps = new Map(
     m.plugins.map((p) => [p.name, p.dependencies.filter((d) => inMarket.has(d))]),
@@ -200,7 +218,7 @@ function dependencyGraph(m: Marketplace): string {
     label: p.name,
     cls: "node",
     layer: layer(p.name),
-    href: pluginRoute(p),
+    href: pluginHref(ctx, p),
   }));
   const edges: Link[] = m.plugins.flatMap((p) =>
     (deps.get(p.name) ?? []).map((d) => ({ from: p.name, to: d, dep: true })),
@@ -237,14 +255,17 @@ function overview(m: Marketplace, ctx: Ctx): string {
           ),
           { tone: "soft" },
         );
-  const tiles = `<div class="tiles">${m.plugins.map(tile).join("")}</div><p class="dim" style="margin-top:16px">${esc(m.tasksNote)}</p>`;
-  return `<div class="tab" data-route="overview" role="tabpanel" aria-label="Overview">
-<section class="part"><span class="eyebrow">overview</span><h1>${plural(m.plugins.length, "plugin")}, <em>one reason each</em></h1></section>
-${why}
+  const tiles = `<div class="tiles">${m.plugins.map((p) => tile(p, ctx)).join("")}</div><p class="dim" style="margin-top:16px">${esc(m.tasksNote)}</p>`;
+  return panel(
+    "overview",
+    "Overview",
+    "overview",
+    `${plural(m.plugins.length, "plugin")}, <em>one reason each</em>`,
+    `${why}
 ${card("Plugins", "What each plugin is for.", tiles)}
 ${ctx.edit === undefined ? "" : card("Something missing?", "", `<p><a href="#new">Start a new skill, agent or plugin</a>. It is saved as one task, and an eval case is required.</p>`)}
-${card("Dependencies", "Which plugin needs which.", dependencyGraph(m))}
-</div>`;
+${card("Dependencies", "Which plugin needs which.", dependencyGraph(m, ctx))}`,
+  );
 }
 
 // ---- evals
@@ -458,7 +479,7 @@ function caseBlock(c: Case, ctx: Ctx, where: string): string {
     ),
   ].join("");
   const tags = c.tags.length === 0 ? "" : ` ${c.tags.map((t) => tag(TONE[t] ?? "", t)).join("")}`;
-  return `<article class="case"><header><h4>${head}</h4>${caseMenu(c, ctx, where)}</header><p class="case-name"><code>${esc(c.name)}</code>${tags}</p>
+  return `<article class="case"><header><h5>${head}</h5>${caseMenu(c, ctx, where)}</header><p class="case-name"><code>${esc(c.name)}</code>${tags}</p>
 ${kv("Given to the agent", prompt)}
 ${kv("Graders accept", c.graders.length === 0 ? `<span class="dim">no grader is written</span>` : c.graders.map((g) => graderBlock(g, c, ctx, where)).join(""))}
 ${settings}
@@ -472,7 +493,7 @@ function evalGroups(cases: readonly Case[], ctx: Ctx, where: string): string {
   return grouped(cases)
     .map(
       (g) =>
-        `<section class="kind"><h3>${esc(g.kind.title)} <small>${plural(g.cases.length, "case")}</small></h3><p class="dim">${esc(g.kind.measures)}</p>${g.cases.map((c) => caseBlock(c, ctx, where)).join("")}</section>`,
+        `<section class="kind"><h4>${esc(g.kind.title)} <small>${plural(g.cases.length, "case")}</small></h4><p class="dim">${esc(g.kind.measures)}</p>${g.cases.map((c) => caseBlock(c, ctx, where)).join("")}</section>`,
     )
     .join("");
 }
@@ -508,9 +529,9 @@ function taskCard(title: string, tasks: readonly Task[] | null, empty: string): 
 
 function bar(p: Plugin, current: string): string {
   const tab = (route: string, label: string, sub: string) =>
-    `<a role="tab" href="#${route}" data-route="${route}" aria-selected="${route === current}">${esc(label)}${sub}</a>`;
+    `<a href="#${route}" data-route="${route}"${route === current ? ' aria-current="page"' : ""}>${esc(label)}${sub}</a>`;
   const items = p.items.map((i) => tab(itemRoute(p, i), i.name, ` <small>${i.kind}</small>`));
-  return `<nav class="tabs sub" role="tablist" aria-label="${esc(p.name)} sections">${[tab(pluginRoute(p), "Plugin overview", ""), ...items].join("")}</nav>`;
+  return `<nav class="tabs sub" aria-label="${esc(p.name)} sections">${[tab(pluginRoute(p), "Plugin overview", ""), ...items].join("")}</nav>`;
 }
 
 const li = (cls: string, text: string, n: number): string =>
@@ -673,17 +694,20 @@ function itemPanel(p: Plugin, i: Item, ctx: Ctx): string {
   const route = itemRoute(p, i);
   const where = `${p.name}:${i.name}`;
   const dev = `<details class="note" style="margin-top:0"><summary>Path, model, tools</summary><div class="rows">${itemDeveloper(i, ctx, where)}</div></details>`;
-  return `<div class="tab" data-route="${route}" role="tabpanel" aria-label="${esc(i.name)}">
-<section class="part"><span class="eyebrow">${esc(p.name)} · ${i.kind}</span><h1 class="sm"><em>${esc(i.name)}</em></h1></section>
-${bar(p, route)}
+  return panel(
+    route,
+    i.name,
+    `${p.name} · ${i.kind}`,
+    `<em>${esc(i.name)}</em>`,
+    `${bar(p, route)}
 <a class="back" href="#${pluginRoute(p)}">&larr; ${esc(p.name)} overview</a>
 ${card("Its own text", "Where each part comes from.", itemText(i, ctx, where), { tone: "soft" })}
 ${i.headings.length === 0 ? "" : card("How it works", "Its steps.", flow(i))}
 ${card("Evals", plural(i.cases.length, "case"), itemCases(i, ctx, where), { tone: "calm" })}
 ${card("References", "What it refers to.", referenceGraph(i.name, slug(route), i.references, `the files of this ${i.kind}`))}
 ${taskCard(`Tasks naming ${i.name}`, i.tasks, `No open task names <code>${esc(i.name)}</code>.`)}
-${card("Developer", "", dev)}
-</div>`;
+${card("Developer", "", dev)}`,
+  );
 }
 
 // ---- plugin overview
@@ -745,7 +769,9 @@ const part = (key: string, label: string, href?: string): Vertex => ({
 
 /** The plugin graph: the plugin, its parts, and the names each part refers to. */
 function pluginGraph(p: Plugin): string {
-  const parts: Vertex[] = p.items.map((i) => part(`${i.kind}:${i.name}`, i.name, itemRoute(p, i)));
+  const parts: Vertex[] = p.items.map((i) =>
+    part(`${i.kind}:${i.name}`, i.name, `#${itemRoute(p, i)}`),
+  );
   if (p.hooks.length > 0) {
     parts.push(part("hooks", plural(p.hooks.length, "hook")));
   }
@@ -783,21 +809,60 @@ function pluginGraph(p: Plugin): string {
   return `<figure>${graph(`${p.name} and what it refers to`, slug(p.name), nodes, edges)}<figcaption>${legendOf(every)}<br>${note}</figcaption></figure>`;
 }
 
-function shipped(p: Plugin, ctx: Ctx): string {
-  const lines = p.items.map((i) => {
-    const what = `${tag(i.kind, i.kind)}${inline(firstSentence(i.description))} ${esc(plural(i.cases.length, "case"))}`;
-    return `<div class="row"><b><a href="#${itemRoute(p, i)}">${esc(i.name)}</a></b><span>${what}</span></div>`;
-  });
+/** Skills and agents, each with what it says about itself, read only: the pens are on its own panel. */
+function shipped(p: Plugin): string {
+  const articles = p.items.map(
+    (i) =>
+      `<article class="ship"><h4><a href="#${itemRoute(p, i)}">${esc(i.name)}</a> ${tag(i.kind, i.kind)}</h4><p>${inline(i.description)}</p>${i.triggers.length === 0 ? "" : `<div class="chips">${i.triggers.map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>`}${i.opening === "" ? "" : `<p class="dim">${inline(i.opening)}</p>`}</article>`,
+  );
+  return card(
+    "Skills and agents",
+    `${plural(kindCount(p, "skill"), "skill")}, ${plural(kindCount(p, "agent"), "agent")}.`,
+    articles.length === 0
+      ? `<p class="dim">This plugin ships no skill or agent.</p>`
+      : articles.join(""),
+    { tone: "calm" },
+  );
+}
+
+/** The spec's requirements by title, each with its count of scenarios. */
+function specCard(p: Plugin): string {
+  if (p.requirements.length === 0) {
+    return card("Spec", "None.", `<p class="dim">This plugin has no requirement in its spec.</p>`);
+  }
+  const lines = p.requirements.map((r) => row(plural(r.scenarios, "scenario"), esc(r.title)));
+  return card("Spec", `${plural(p.requirements.length, "requirement")}.`, rows(...lines));
+}
+
+/** One eval case on one row: its name, its tags and its last result. */
+function evalRow(c: Case, owner: string): string {
+  const r = c.result;
+  const result =
+    r === null
+      ? `<span class="dim">${esc(c.noResult)}</span>`
+      : `${tag(meetsBar(r) ? "skill" : "stale", meetsBar(r) ? "bar met" : "bar not met")} with ${r.withPass}/${r.withTotal}, without ${r.withoutPass === null ? "not run" : `${r.withoutPass}/${r.withoutTotal}`}, ${esc(r.date)}`;
+  return row(c.name, `${owner}${c.tags.map((t) => tag(TONE[t] ?? "", t)).join("")} ${result}`);
+}
+
+/** Every eval case of the plugin on one row: its name, its tags and its last result. */
+function evalsCard(p: Plugin, ctx: Ctx): string {
+  const lines = [
+    ...p.items.flatMap((i) =>
+      i.cases.map((c) => evalRow(c, `<a href="#${itemRoute(p, i)}">${esc(i.name)}</a> `)),
+    ),
+    ...p.looseCases.map((c) => evalRow(c, "")),
+  ];
   const loose =
     p.looseCases.length === 0
       ? ""
       : `<p class="src-head" style="margin-top:24px"><b>Evals that name no skill or agent</b><span>Their names do not start with the name of a skill or agent of this plugin.</span></p>${evalGroups(p.looseCases, ctx, p.name)}`;
-  const list = lines.length === 0 ? "<p>No skills or agents.</p>" : rows(...lines);
+  if (lines.length === 0) {
+    return card("Evals", "None.", `<p class="dim">No eval case is written for this plugin.</p>`);
+  }
   return card(
-    "What it ships",
-    `${plural(kindCount(p, "skill"), "skill")}, ${plural(kindCount(p, "agent"), "agent")}.`,
-    list + loose,
-    { tone: "calm" },
+    "Evals",
+    `${plural(lines.length, "case")}.`,
+    `<p class="dim">The last result of each case, written by the eval runner. A case opens on the page of the skill or agent it names.</p>${rows(...lines)}${loose}`,
   );
 }
 
@@ -852,7 +917,7 @@ function surface(p: Plugin, ctx: Ctx): string {
           `${plural(p.hooks.length, "hook")}.`,
           rows(...p.hooks.map((h) => hookRow(p, h, ctx))),
         );
-  return verbs + hooks;
+  return hooks + verbs;
 }
 
 function developer(p: Plugin, ctx: Ctx): string {
@@ -917,22 +982,32 @@ function pluginPanel(p: Plugin, ctx: Ctx): string {
           }),
           prose(p.why),
         );
-  return `<div class="tab" data-route="${route}" role="tabpanel" aria-label="${esc(p.name)}">
-<section class="part"><span class="eyebrow">plugin</span><h1><em>${esc(p.name)}</em></h1></section>
-${bar(p, route)}
+  return panel(
+    route,
+    p.name,
+    "plugin",
+    `<em>${esc(p.name)}</em>`,
+    `${bar(p, route)}
 ${card("Why it exists", "", why, { tone: "soft" })}
-${dependenciesCard(p)}
-${taskCard("Open epics and tasks", p.tasks, `No open task starts with <code>${esc(p.name)}:</code> or names the plugin.`)}
-${shipped(p, ctx)}
+${shipped(p)}
 ${surface(p, ctx)}
+${specCard(p)}
+${evalsCard(p, ctx)}
+${taskCard("Open epics and tasks", p.tasks, `No open task starts with <code>${esc(p.name)}:</code> or names the plugin.`)}
+${dependenciesCard(p)}
 ${card("References", "What it refers to.", pluginGraph(p))}
-${developer(p, ctx)}
-</div>`;
+${developer(p, ctx)}`,
+  );
 }
 
 export interface PageOptions {
   /** the page is served: it listens for changes and redraws */
   readonly live?: boolean;
+  /**
+   * The page holds one view: the overview (null) or the plugin of that name, not every panel. The
+   * export and the artifact leave it unset and hold all of them.
+   */
+  readonly only?: string | null;
   /**
    * every text gets a pen; `sha` reads a file's sha256 now. `server`: the page is served and saves
    * an edit as a task. `artifact`: the page is published; the pens stay hidden until the artifact
@@ -949,29 +1024,39 @@ export function renderDocument(m: Marketplace, opts: PageOptions = {}): string {
   return `<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n${renderPage(m, opts)}`;
 }
 
-const top = (route: string, label: string): string =>
-  `<a role="tab" href="#${route}" data-route="${route}" data-top="1" aria-selected="false">${esc(label)}</a>`;
+/** A link of the top row: a hash route on a page that holds every panel, a path on a paged one. */
+function top(ctx: Ctx, route: string, href: string, label: string, here: boolean): string {
+  return ctx.paged
+    ? `<a href="${esc(href)}"${here ? ' aria-current="page"' : ""}>${esc(label)}</a>`
+    : `<a href="#${route}" data-route="${route}" data-top="1">${esc(label)}</a>`;
+}
 
 export function renderPage(m: Marketplace, opts: PageOptions = {}): string {
-  const tabs = [
-    top("overview", "Overview"),
-    ...m.plugins.map((p) => top(pluginRoute(p), p.name)),
+  const only = opts.only;
+  const ctx: Ctx = { root: m.dir, edit: opts.edit, paged: only !== undefined };
+  const links = [
+    top(ctx, "overview", "/", "Overview", only === null),
+    ...m.plugins.map((p) => top(ctx, pluginRoute(p), pluginHref(ctx, p), p.name, p.name === only)),
   ].join("");
-  const ctx: Ctx = { root: m.dir, edit: opts.edit };
+  const plugins = m.plugins.filter((p) => only === undefined || p.name === only);
   const panels = [
-    overview(m, ctx),
-    ...m.plugins.flatMap((p) => [pluginPanel(p, ctx), ...p.items.map((i) => itemPanel(p, i, ctx))]),
-    ...(opts.edit === undefined ? [] : [newItemPanel(m, ctx)]),
+    ...(only === undefined || only === null ? [overview(m, ctx)] : []),
+    ...(only === null
+      ? []
+      : plugins.flatMap((p) => [pluginPanel(p, ctx), ...p.items.map((i) => itemPanel(p, i, ctx))])),
+    ...(opts.edit === undefined || (only !== undefined && only !== null)
+      ? []
+      : [newItemPanel(m, ctx)]),
   ];
   return `<title>${esc(m.name)} marketplace lens</title>
-<link rel="stylesheet" href="${FONTS}">
 <style>${CSS}${opts.edit === undefined ? "" : PEN_CSS}${opts.edit?.transport === "artifact" ? WAIT_CSS : ""}</style>
+<a class="skip" href="#main">Skip to the content</a>
 <button class="theme" type="button" id="theme">Light / dark</button>
-<div class="sheet"><main>
-<section class="part"><span class="eyebrow">${esc(m.name)} · marketplace lens</span><p class="site">Plugins <em>and what proves them</em></p>
+<div class="sheet"><header class="part masthead"><span class="eyebrow">${esc(m.name)} · marketplace lens</span><h1 class="site">Plugins <em>and what proves them</em></h1>
 <p class="lede">Why each plugin exists, what its skills and agents promise, and the eval cases that check them. Read from the files of <code>${esc(m.name)}</code> on ${esc(m.madeAt.slice(0, 10))}; nothing here is written by a model.</p>
 ${opts.edit?.transport === "server" ? "" : `<p class="dim read-only" style="margin-top:8px">This page is a snapshot and is read-only. Edits are made on <code>qsm-builder lens</code>, which serves this page and turns each edit into a task, or on this page once it is published as an artifact.</p>`}
-<nav class="tabs" role="tablist" aria-label="Overview and plugins">${tabs}</nav></section>
+<nav class="tabs" aria-label="Overview and plugins">${links}</nav></header>
+<main id="main" tabindex="-1">
 ${panels.join("\n")}
 </main></div>
 <script>${SCRIPT}</script>

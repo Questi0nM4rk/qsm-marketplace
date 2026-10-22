@@ -34,7 +34,7 @@ export const LIVE_SCRIPT = `
   function refresh(){
     if(busy){again=true;return;}
     busy=true;
-    fetch("/",{cache:"no-store"}).then(function(r){return r.text();}).then(swap).then(function(){var w=document.getElementById("live-fail");if(w){w.remove();}}).catch(stale).then(function(){
+    fetch(location.pathname,{cache:"no-store"}).then(function(r){return r.text();}).then(swap).then(function(){var w=document.getElementById("live-fail");if(w){w.remove();}}).catch(stale).then(function(){
       busy=false;if(again){again=false;refresh();}
     });
   }
@@ -100,7 +100,7 @@ export const PEN_SCRIPT = `
     box.appendChild(el("p","hint","These already exist and use your words; read them before you start another."));
     hits.forEach(function(h){
       var a=el("a",null,h.x.name+" ("+h.x.kind+", "+h.n+" of "+ws.length+" words)");
-      a.href="#"+h.x.route;box.appendChild(a);box.appendChild(el("br"));
+      a.href=h.x.href;box.appendChild(a);box.appendChild(el("br"));
     });
   }
   function close(wrap){

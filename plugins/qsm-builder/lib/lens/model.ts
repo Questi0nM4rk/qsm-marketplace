@@ -109,6 +109,8 @@ export interface Plugin {
   readonly keywords: readonly string[];
   /** the reason the plugin's spec gives for each dependency; a name with none is absent */
   readonly dependencyReasons: Readonly<Record<string, string>>;
+  /** the requirements of the plugin's spec: each title with its count of scenarios */
+  readonly requirements: readonly { readonly title: string; readonly scenarios: number }[];
   /** the body of the README's `## Why it exists` section; null without one */
   readonly why: string | null;
   readonly items: readonly Item[];
@@ -606,6 +608,7 @@ function pluginOf(
     dependencies,
     keywords: strings(manifest.keywords),
     dependencyReasons: dependencyReasons(name, dir),
+    requirements: requirementsOf(name, dir),
     why: whyOf(dir),
     items,
     looseCases: loose,
@@ -658,10 +661,26 @@ function dependencyReasons(name: string, dir: string): Record<string, string> {
   return reasons;
 }
 
+/** Each `### Requirement:` of the plugin's spec with the count of `#### Scenario:` under it. */
+function requirementsOf(name: string, dir: string): { title: string; scenarios: number }[] {
+  const out: { title: string; scenarios: number }[] = [];
+  for (const line of (read(join(dir, "openspec", "specs", name, "spec.md")) ?? "").split(/\r?\n/)) {
+    if (line.startsWith("### Requirement: ")) {
+      out.push({ title: line.slice("### Requirement: ".length).trim(), scenarios: 0 });
+    } else if (line.startsWith("#### Scenario:") && out.length > 0) {
+      const last = out.at(-1);
+      if (last !== undefined) {
+        last.scenarios += 1;
+      }
+    }
+  }
+  return out;
+}
+
 /** The body of the README's `## Why it exists` section in dir, or null. */
 function whyOf(dir: string): string | null {
   const text = read(join(dir, "README.md"));
-  const m = text?.match(/^## Why it exists\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m);
+  const m = text?.match(/^## Why it exists\s*\n([\s\S]*?)(?=^## |^<!--|(?![\s\S]))/m);
   return m?.[1]?.trim() ?? null;
 }
 

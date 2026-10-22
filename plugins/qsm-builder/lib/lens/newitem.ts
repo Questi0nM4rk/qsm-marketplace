@@ -2,7 +2,7 @@
 // A form has every field a detail page has, plus the use case, the CLI and the links, and refuses
 // to save without an eval case. The page turns each Spec into a pen form; nothing is written.
 
-import type { Marketplace } from "./model.ts";
+import type { Marketplace, Plugin } from "./model.ts";
 import type { Field, Spec } from "./spec.ts";
 
 const MODELS = ["", "haiku", "sonnet", "opus", "inherit"];
@@ -125,11 +125,12 @@ export function newItemSpecs(m: Marketplace): { label: string; spec: Spec }[] {
 /** What "check whether this already exists" searches: every plugin, skill and agent with a line. */
 export function searchIndex(
   m: Marketplace,
-): { route: string; name: string; kind: string; line: string }[] {
+  hrefOf: (p: Plugin) => string,
+): { href: string; name: string; kind: string; line: string }[] {
   return m.plugins.flatMap((p) => [
-    { route: p.name, name: p.name, kind: "plugin", line: p.description },
+    { href: hrefOf(p), name: p.name, kind: "plugin", line: p.description },
     ...p.items.map((i) => ({
-      route: p.name,
+      href: hrefOf(p),
       name: i.name,
       kind: `${p.name} ${i.kind}`,
       line: i.description,

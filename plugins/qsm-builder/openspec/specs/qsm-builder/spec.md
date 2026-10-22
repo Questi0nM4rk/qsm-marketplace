@@ -217,14 +217,29 @@ open tasks), and `doctor` checks the binary runs and the task tool is reachable.
 a plugin with its README's `## Why it exists`, its dependencies with the reasons its spec gives, and
 the open epics and tasks that name it; a skill or agent SHALL show its description, trigger words
 and opening paragraph each with the file part it comes from, and its evals grouped by kind with the
-last result apart from the editable fields. A directory with no `.claude-plugin/marketplace.json`
-SHALL fail with `missing` naming that file.
+last result apart from the editable fields. The served page SHALL be small and navigable: `/` SHALL
+hold the overview and `/p/<plugin>` one plugin, so a request never carries the other plugins, and an
+unknown plugin SHALL answer 404; the page SHALL have exactly one `h1`, each panel titling itself at
+`h2`; the plugin and skill links SHALL be plain links marking the current one with `aria-current`,
+with a skip link to the content; a plugin's page SHALL show, each in its own section, its reason to
+exist, its skills and agents (description, trigger words, opening), its hooks by event, its CLI
+verbs, its spec requirements with their count of scenarios, its eval cases with the last result, its
+open tasks and its dependencies; the page SHALL keep a 16 px gutter at phone width and SHALL request
+nothing outside 127.0.0.1, its fonts being the system's. The export and the artifact keep every
+panel in one document. A directory with no `.claude-plugin/marketplace.json` SHALL fail with
+`missing` naming that file.
 
 #### Scenario: The person exports the marketplace
 
 - **WHEN** the person runs `qsm-builder lens export` in a marketplace
 - **THEN** one HTML file SHALL be written with an overview and one tab per plugin, and no plugin
   file SHALL change
+
+#### Scenario: One plugin per request
+
+- **WHEN** a browser opens `/p/qsm-builder` on a served lens
+- **THEN** the page SHALL hold that plugin's panels and one `h1`, `/` SHALL hold the overview, and
+  `/p/nope` SHALL answer 404
 
 #### Scenario: Edits wait on the published page
 

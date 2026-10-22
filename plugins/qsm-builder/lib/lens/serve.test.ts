@@ -30,6 +30,11 @@ function marketplace(): string {
     "plugins/qsm-a/skills/one/SKILL.md",
     '---\nname: one\ndescription: "Use when x."\n---\n\nOpening words about zork and nothing else.\n',
   );
+  write(
+    root,
+    "plugins/qsm-a/openspec/specs/qsm-a/spec.md",
+    "### Requirement: A speaks\n\nA SHALL speak.\n\n#### Scenario: It speaks\n\n- **WHEN** asked\n- **THEN** it speaks\n",
+  );
   write(root, "plugins/qsm-builder/references.txt", "# the list\nother\n");
   return root;
 }
@@ -102,15 +107,29 @@ async function nextEvent(url: string, trigger: () => void): Promise<string> {
 test("a name added to references.txt while the page is open shows in the graph, no restart", async () => {
   const root = marketplace();
   const url = await start(root);
-  const before = await (await fetch(url)).text();
+  const before = await (await fetch(`${url}p/qsm-a`)).text();
   expect(before).toContain("<title>fix marketplace lens</title>");
   expect(before).not.toContain(">zork</text>");
   const said = await nextEvent(url, () => {
     appendFileSync(join(root, "plugins/qsm-builder/references.txt"), "zork\n");
   });
   expect(said).toContain("data: change");
-  const after = await (await fetch(url)).text();
+  const after = await (await fetch(`${url}p/qsm-a`)).text();
   expect(after).toContain(">zork</text>");
+});
+
+test("the overview is at / and one plugin at /p/<plugin>, each with one h1; another name is 404", async () => {
+  const url = await start(marketplace());
+  const home = await (await fetch(url)).text();
+  const plugin = await (await fetch(`${url}p/qsm-a`)).text();
+  expect(home.match(/<h1/g)?.length).toBe(1);
+  expect(plugin.match(/<h1/g)?.length).toBe(1);
+  expect(home).toContain('href="/p/qsm-a"');
+  expect(home).not.toContain('data-route="qsm-a/one"');
+  expect(plugin).toContain('data-route="qsm-a/one"');
+  expect(plugin).not.toContain('data-route="overview"');
+  expect(plugin).toContain("1 requirement");
+  expect((await fetch(`${url}p/nope`)).status).toBe(404);
 });
 
 test("generated and ignored files never wake the page", async () => {
@@ -181,16 +200,16 @@ function parsePen(text: string): Pen {
 
 /** Whether the page shows `label` before and after `change` runs. */
 async function shownAround(url: string, label: string, change: () => void): Promise<boolean[]> {
-  const before = (await (await fetch(url)).text()).includes(label);
+  const before = (await (await fetch(`${url}p/qsm-a`)).text()).includes(label);
   change();
-  return [before, (await (await fetch(url)).text()).includes(label)];
+  return [before, (await (await fetch(`${url}p/qsm-a`)).text()).includes(label)];
 }
 
-/** A fresh marketplace served, with its first page. */
+/** A fresh marketplace served, with the page of its one plugin. */
 async function served(): Promise<{ root: string; url: string; html: string }> {
   const root = marketplace();
   const url = await start(root);
-  return { root, url, html: await (await fetch(url)).text() };
+  return { root, url, html: await (await fetch(`${url}p/qsm-a`)).text() };
 }
 
 const unescapeHtml = (s: string): string =>
@@ -245,8 +264,8 @@ const post = (url: string, body: unknown, headers: Record<string, string> = {}) 
   });
 
 /** The pen of a text on the served page, as the page rendered it. */
-async function penOf(url: string, key: string): Promise<Pen> {
-  const html = await (await fetch(url)).text();
+async function penOf(url: string, key: string, path = "p/qsm-a"): Promise<Pen> {
+  const html = await (await fetch(`${url}${path}`)).text();
   const at = html.indexOf(`data-key="${key}" data-pen="`);
   const raw = html.slice(at).match(/data-pen="([^"]*)"/)?.[1] ?? "null";
   return parsePen(unescapeHtml(raw));
@@ -330,11 +349,12 @@ test("an edit from another origin, no origin, another content type, a rebound ho
 });
 
 test("a new skill is saved as one task of kind new and refused without an eval case; no file is made", async () => {
-  const { root, url, html } = await served();
+  const { root, url } = await served();
+  const html = await (await fetch(url)).text();
   expect(html).toContain('data-route="new"');
   expect(html).toContain("New skill");
   expect(html).toContain('id="lens-index"');
-  const pen = await penOf(url, "plugins/{plugin}/skills/{name}/SKILL.md|new skill");
+  const pen = await penOf(url, "plugins/{plugin}/skills/{name}/SKILL.md|new skill", "");
   expect(pen.kind).toBe("new");
   expect(pen.sha).toBe("missing");
 

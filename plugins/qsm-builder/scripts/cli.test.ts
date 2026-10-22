@@ -95,7 +95,8 @@ describe("qsm-builder lens export", () => {
     expect(html).toStartWith("<!doctype html>");
     expect(html.match(/data-top="1"/g)?.length).toBe(3);
     expect(html).toContain('data-route="qsm-a/one"');
-    expect(html).toContain('data-route="qsm-a" role="tabpanel"');
+    expect(html).toContain('data-route="qsm-a" aria-label="qsm-a"');
+    expect(html.match(/<h1/g)?.length).toBe(1);
     expect(html).toContain("Use when x &lt; y.");
     expect(html).not.toContain("x < y");
     expect(html).toContain("a caller asks for one.");

@@ -2,9 +2,6 @@
 // pastel light mode, one sheet on a dotted ground, sharp corners, 2px edges, hard soft shadows),
 // and the inline script that switches tabs by hash and the theme.
 
-export const FONTS =
-  "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Rubik:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap";
-
 const LIGHT = `--bg:#e9e4f3; --surface:#fdfcff; --raised:#f2eef9; --line:#ddd6ea;
   --text:#3b3848; --muted:#635e77; --heading:#2b2937;
   --lavender:#6554ad; --mint:#2f6b54; --peach:#8c523e; --sky:#38658b; --rose:#934965; --butter:#725f24;
@@ -18,9 +15,9 @@ export const CSS = `
   --lavender:#b9aee6; --mint:#9fd4bf; --peach:#e8b9a0; --sky:#9cc3e3; --rose:#e3a9bd; --butter:#e6d59c;
   --lavender-bg:#363149; --mint-bg:#2c3a36; --peach-bg:#3d322f; --sky-bg:#2d3646; --rose-bg:#3d2f37; --butter-bg:#3a3629;
   --fs-12:12px; --dur:120ms; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-20:20px;
-  --serif:"Archivo Black","Arial Black",Impact,sans-serif;
-  --sans:Rubik,"Segoe UI",system-ui,sans-serif;
-  --mono:"JetBrains Mono",Consolas,monospace;
+  --serif:system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --sans:system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace;
   --radius:0; --edge:#45425a; --shade:#14131a; --dot:#2f2d3b; --sheet:#1d1c25; color-scheme:dark;
 }
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
@@ -32,12 +29,17 @@ export const CSS = `
 body{margin:0;background:var(--bg);background-image:radial-gradient(var(--dot) 1.3px,transparent 1.5px);background-size:22px 22px;color:var(--text);font-family:var(--sans);font-size:var(--fs-16);line-height:1.6}
 .sheet{max-width:960px;margin-block:48px 72px;margin-inline:auto;background:var(--sheet);border:2px solid var(--edge);box-shadow:10px 10px 0 var(--shade)}
 @media(max-width:1000px){.sheet{margin-inline:16px}}
-@media(max-width:520px){.sheet{margin-block:16px 40px;margin-inline:8px;box-shadow:6px 6px 0 var(--shade)}main{padding-inline:12px}}
-main{max-width:860px;margin:0 auto;padding-block:44px 56px;padding-inline:clamp(16px,5vw,48px);display:flex;flex-direction:column;gap:40px}
+@media(max-width:520px){.sheet{margin-block:16px 40px;box-shadow:6px 6px 0 var(--shade)}}
+main,.masthead{max-width:860px;margin:0 auto}
+main{padding-inline:clamp(16px,5vw,48px)}
+.sheet>.masthead{padding-block:44px 0;padding-inline:clamp(16px,5vw,48px)}
+main{padding-block:40px 56px;display:flex;flex-direction:column;gap:40px;outline:none}
+.skip{position:absolute;left:16px;top:-80px;z-index:20;background:var(--lavender-bg);color:var(--heading);border:2px solid var(--lavender);padding:6px 12px}
+.skip:focus{top:8px}
 a{color:var(--lavender)}
 a:focus-visible,summary:focus-visible,button:focus-visible{outline:2px solid var(--lavender);outline-offset:3px}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--lavender);outline-offset:2px}
-h1[tabindex]:focus:not(:focus-visible){outline:none}
+h2[tabindex]:focus:not(:focus-visible){outline:none}
 
 .tab{display:flex;flex-direction:column;gap:40px}
 .tab[hidden]{display:none}
@@ -50,13 +52,15 @@ h1[tabindex]:focus:not(:focus-visible){outline:none}
 
 .eyebrow{display:block;font-family:var(--sans);font-size:var(--fs-14);font-weight:600;letter-spacing:.04em;color:var(--muted);margin-bottom:10px;overflow-wrap:anywhere}
 .part .eyebrow{display:inline-block;color:var(--heading);background:var(--lavender-bg);border:2px solid var(--lavender);padding:4px 10px;box-shadow:3px 3px 0 var(--shade)}
-h1{font-family:var(--serif);font-weight:400;letter-spacing:-.02em;font-size:var(--fs-20);line-height:1.15;color:var(--heading);margin:0;text-wrap:balance;overflow-wrap:anywhere}
-h1 em{font-style:normal;color:var(--lavender)}
-h1.sm{font-size:var(--fs-20)}
-h2{font-family:var(--serif);font-weight:400;font-size:var(--fs-18);line-height:1.25;color:var(--heading);margin:0 0 14px;text-wrap:balance;overflow-wrap:anywhere}
-h3{font-family:var(--sans);font-size:var(--fs-16);font-weight:600;margin:0;color:var(--heading)}
+h1,h2.title{font-family:var(--serif);font-weight:800;letter-spacing:-.02em;font-size:var(--fs-20);line-height:1.15;color:var(--heading);margin:0;text-wrap:balance;overflow-wrap:anywhere}
+h1 em,h2 em{font-style:normal;color:var(--lavender)}
+h3{font-family:var(--serif);font-weight:800;font-size:var(--fs-18);line-height:1.25;color:var(--heading);margin:0 0 14px;text-wrap:balance;overflow-wrap:anywhere}
+h4{font-family:var(--sans);font-size:var(--fs-16);font-weight:600;margin:0;color:var(--heading)}
+.ship{padding:14px 0;border-top:1px solid var(--line)}.ship:first-of-type{border-top:0;padding-top:0}
+.ship h4{margin-bottom:6px;overflow-wrap:anywhere}
+.ship .chips{margin-block:10px 12px}
 p{margin:0 0 12px;max-width:65ch;overflow-wrap:anywhere}p:last-child{margin-bottom:0}
-.part .site{font-family:var(--serif);font-size:var(--fs-18);line-height:1.25;color:var(--heading);margin:0;text-wrap:balance}
+.part .site{font-family:var(--serif);font-weight:800;font-size:var(--fs-18);line-height:1.25;color:var(--heading);margin:0;text-wrap:balance}
 .part .site em{font-style:normal;color:var(--lavender)}
 .lede{font-size:var(--fs-16);color:var(--muted);margin-top:12px}
 small{font-size:var(--fs-12)}
@@ -66,7 +70,7 @@ code{font-family:var(--mono);font-size:inherit;background:var(--raised);color:va
 .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;align-items:center}
 .tabs a{font-family:var(--mono);font-size:var(--fs-14);text-decoration:none;color:var(--text);background:var(--surface);border:2px solid var(--edge);padding:4px 10px;box-shadow:3px 3px 0 var(--shade);overflow-wrap:anywhere}
 .tabs a:hover{border-color:var(--lavender)}
-.tabs a[aria-selected="true"]{background:var(--lavender-bg);border-color:var(--lavender);color:var(--heading)}
+.tabs a[aria-current="page"]{background:var(--lavender-bg);border-color:var(--lavender);color:var(--heading)}
 .tabs.sub{margin-top:0}
 @media(max-width:520px){.tabs{gap:6px}.tabs a{font-size:var(--fs-12);padding:3px 8px}}
 .tabs small{color:var(--muted);font-size:var(--fs-12)}
@@ -90,8 +94,8 @@ code{font-family:var(--mono);font-size:inherit;background:var(--raised);color:va
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
 @media(max-width:640px){.tiles{grid-template-columns:1fr}}
 .tile{background:var(--raised);border:2px solid var(--edge);border-top:4px solid var(--lavender);padding:16px 18px;min-width:0;box-shadow:4px 4px 0 var(--shade)}
-.tile h3{font-family:var(--mono);font-size:var(--fs-16);font-weight:500;margin-bottom:8px;overflow-wrap:anywhere}
-.tile h3 a{display:inline-block;min-block-size:24px}
+.tile h4{font-family:var(--mono);font-size:var(--fs-16);font-weight:500;margin-bottom:8px;overflow-wrap:anywhere}
+.tile h4 a{display:inline-block;min-block-size:24px}
 .tile div{font-size:var(--fs-16);line-height:1.5;margin-top:6px;overflow-wrap:anywhere}
 .tile div b{display:block;font-size:var(--fs-12);font-weight:600;color:var(--muted);letter-spacing:.03em}
 
@@ -105,19 +109,18 @@ code{font-family:var(--mono);font-size:inherit;background:var(--raised);color:va
 @media(max-width:600px){.rows .row{grid-template-columns:1fr;gap:4px}}
 .brick{margin-top:18px}
 .item+.item{margin-top:28px;padding-top:24px;border-top:2px solid var(--line)}
-.item h2{margin-bottom:10px}
 
 .src{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .src:first-child{margin-top:0;padding-top:0;border-top:none}
 .src-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin:0 0 8px;font-size:var(--fs-14);color:var(--muted)}
 .src-head b{font-size:var(--fs-12);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--heading)}
 .kind{margin-top:24px}.kind:first-child{margin-top:8px}
-.kind>h3{font-family:var(--serif);font-weight:400;font-size:var(--fs-16);color:var(--heading);margin-bottom:4px}
-.kind>h3 small{font-family:var(--sans);font-size:var(--fs-14);color:var(--muted)}
+.kind>h4{font-family:var(--serif);font-weight:800;font-size:var(--fs-16);color:var(--heading);margin-bottom:4px}
+.kind>h4 small{font-family:var(--sans);font-size:var(--fs-14);color:var(--muted)}
 .case{margin-top:14px;padding:16px 18px;background:var(--surface);border:2px solid var(--edge);box-shadow:3px 3px 0 var(--shade)}
 @media(max-width:520px){.case{padding:12px}}
 .case>header{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
-.case h4{font-family:var(--sans);font-size:var(--fs-16);font-weight:600;line-height:1.35;color:var(--heading);margin:0;min-width:0;overflow-wrap:anywhere}
+.case h5{font-family:var(--sans);font-size:var(--fs-16);font-weight:600;line-height:1.35;color:var(--heading);margin:0;min-width:0;overflow-wrap:anywhere}
 .case-name{margin:6px 0 12px;font-size:var(--fs-14);color:var(--muted)}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;padding:10px 0;border-top:1px solid var(--line);font-size:var(--fs-16);line-height:1.55}
 .kv>*{min-width:0;overflow-wrap:anywhere}
@@ -211,10 +214,10 @@ export const SCRIPT = `
     try{localStorage.setItem("theme",next);}catch(e){}
   });
   function current(){
-    var panels=[].slice.call(document.querySelectorAll("[role=tabpanel]"));
+    var panels=[].slice.call(document.querySelectorAll(".tab"));
     var id="";
     try{id=decodeURIComponent(location.hash.slice(1)).split("?")[0];}catch(e){}
-    return panels.some(function(p){return p.getAttribute("data-route")===id;})?id:"overview";
+    return panels.some(function(p){return p.getAttribute("data-route")===id;})?id:panels[0].getAttribute("data-route");
   }
   function picked(all){
     var h=location.hash.slice(1),q=h.indexOf("?");
@@ -278,45 +281,32 @@ export const SCRIPT = `
   }
   document.addEventListener("mouseover",lit);
   document.addEventListener("focusin",lit);
-  var base=document.title,want=null;
+  var base=document.title;
   function show(){
     pick();
-    var tabs=[].slice.call(document.querySelectorAll("[role=tab]"));
-    var panels=[].slice.call(document.querySelectorAll("[role=tabpanel]"));
+    var links=[].slice.call(document.querySelectorAll("a[data-route]"));
+    var panels=[].slice.call(document.querySelectorAll(".tab"));
     var route=current();
     panels.forEach(function(p){p.hidden=p.getAttribute("data-route")!==route;});
-    tabs.forEach(function(t){
+    links.forEach(function(t){
       var r=t.getAttribute("data-route");
       var on=t.hasAttribute("data-top")?(route===r||route.indexOf(r+"/")===0):route===r;
-      t.setAttribute("aria-selected",String(on));
-      t.tabIndex=on?0:-1;
+      if(on){t.setAttribute("aria-current","page");}else{t.removeAttribute("aria-current");}
     });
     var open=panels.filter(function(p){return !p.hidden;})[0];
     document.title=(open?open.getAttribute("aria-label")+" - ":"")+base;
   }
+  // A hash change is a new panel: its title takes focus so a screen reader says where it landed.
   function settle(){
-    var a=document.activeElement,t=null;
-    if(want){
-      t=[].filter.call(document.querySelectorAll('[role=tab][data-route="'+CSS.escape(want.route)+'"]'),function(x){
-        return !x.closest("[hidden]")&&x.hasAttribute("data-top")===want.top;
-      })[0];
-      want=null;
-    }
-    if(t){t.focus();return;}
-    if(a&&a!==document.body&&!a.closest("[hidden]")){return;}
-    var h=document.querySelector("[role=tabpanel]:not([hidden]) h1");
+    var h=document.querySelector(".tab:not([hidden]) h2.title");
     if(h){h.tabIndex=-1;h.focus({preventScroll:true});}
   }
   addEventListener("hashchange",function(){show();scrollTo(0,0);settle();});
-  document.addEventListener("keydown",function(e){
-    var from=document.activeElement;
-    if(!from||from.getAttribute("role")!=="tab"){return;}
-    var list=[].slice.call(from.closest("[role=tablist]").querySelectorAll("[role=tab]"));
-    var at=list.indexOf(from);
-    var to={ArrowRight:at+1,ArrowLeft:at-1,Home:0,End:list.length-1}[e.key];
-    if(to===undefined){return;}
-    e.preventDefault(); var t=list[(to+list.length)%list.length];
-    want={route:t.getAttribute("data-route"),top:t.hasAttribute("data-top")}; location.hash=t.getAttribute("data-route");
+  document.addEventListener("click",function(e){
+    var a=e.target.closest&&e.target.closest("a.skip");
+    if(!a){return;}
+    e.preventDefault();
+    var m=document.getElementById("main");m.focus();
   });
   window.qsmShow=show;
   show();
