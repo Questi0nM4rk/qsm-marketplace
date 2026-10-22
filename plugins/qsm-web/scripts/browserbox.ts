@@ -187,7 +187,15 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
     mkdirSync(where, { recursive: true });
   }
   const liveView = liveViewUrl(port);
-  const started = box.run(runDefinition({ name, port, outDir: where, liveView }));
+  const started = box.run(
+    runDefinition({
+      name,
+      port,
+      outDir: where,
+      liveView,
+      user: `${process.getuid?.()}:${process.getgid?.()}`,
+    }),
+  );
   if (started.status !== 0) {
     throw new QsmError("failed", `the instance would not start (exit ${started.status})`);
   }

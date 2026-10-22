@@ -365,6 +365,18 @@ an older driver that never answers the current one.
 - **WHEN** the image's label equals the hash of the current `docker/` context
 - **THEN** `qsm-web browserbox start` SHALL start the instance without a build
 
+### Requirement: An instance writes its artifacts as the invoking user
+
+qsm-web browserbox SHALL start an instance as the invoking user's uid and gid, so no file it writes
+to the mounted output directory is owned by another user, and it SHALL NOT delete anything from that
+directory.
+
+#### Scenario: Two captures, one earlier artifact
+
+- **WHEN** two `--screenshot` fetches run one after the other
+- **THEN** both SHALL succeed, every file they wrote SHALL be owned by the invoking user, and the
+  first fetch's files SHALL still exist after the second
+
 ### Requirement: Install places the one bin on PATH
 
 Installing qsm-web SHALL place the one `qsm-web` command on PATH, needing no upstream service beyond
