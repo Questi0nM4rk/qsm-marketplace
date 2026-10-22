@@ -368,10 +368,11 @@ test("a tool result of any tool is masked in its nested text, and a media block 
 });
 
 /** Toasts are dropped and log lines kept in `logs`, so a test reads what the hook logged. */
-function quietUi(on: On, logs: string[]): void {
+function quietUi(on: On, logs: string[], sinks: (string | undefined)[] = []): void {
   on("ui.toast", () => ({ value: undefined }));
   on("ui.log", (_$, e) => {
     logs.push(e.text);
+    sinks.push(e.to);
     return { value: undefined };
   });
 }
@@ -379,15 +380,16 @@ function quietUi(on: On, logs: string[]): void {
 const NOTICE =
   "<task-notification><output-file>/tmp/tasks/12d301b5-a7e7-49ab-b0ca-564f748e878e.output</output-file></task-notification>";
 
-test("a prompt that is not the person's own is never sent to capture, and the log names its origin", async ($, on) => {
+test("a prompt that is not the person's own is never sent to capture, and the debug log names its origin", async ($, on) => {
   let spawned = 0;
   const logs: string[] = [];
+  const sinks: (string | undefined)[] = [];
   on("prompt.submit", (_$, e) => ({ text: e.text }));
   on("process.run", () => {
     spawned += 1;
     return { value: { ...RAN, stdout: "" } };
   });
-  quietUi(on, logs);
+  quietUi(on, logs, sinks);
 
   const sent = await $.prompt.submit({
     text: NOTICE,
@@ -398,6 +400,7 @@ test("a prompt that is not the person's own is never sent to capture, and the lo
   expect(sent.text).toBe(NOTICE);
   expect(spawned).toBe(0);
   expect(logs.join("\n")).toContain("task-notification");
+  expect(sinks).toEqual(["debug"]);
 });
 
 test("a failed capture logs the verb, the exit code and the stderr, never the prompt", async ($, on) => {

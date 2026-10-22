@@ -362,7 +362,9 @@ export function register(on: On): void {
 
   on("prompt.submit", async ($, e, next) => {
     if (!PERSON_ORIGINS.has(e.origin.kind)) {
-      $.ui.log(`a ${e.origin.kind} prompt is not the person's own; it was not captured`);
+      $.ui.log(`a ${e.origin.kind} prompt is not the person's own; it was not captured`, {
+        to: "debug",
+      });
       return next(e);
     }
     const argv = argvOf(verbOf("capture"));
