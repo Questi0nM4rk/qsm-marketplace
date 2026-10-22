@@ -581,7 +581,7 @@ const SPECS: readonly CheckSpec[] = [
       counts: "clone pairs, the number in jscpd's own report at statistics.total.clones",
     },
     language: "ts",
-    runsAt: "pre-push",
+    runsAt: "pre-commit",
     extensions: [".ts", ".tsx", ".js", ".jsx"],
     binary: "jscpd",
     install: bunGlobal("jscpd"),

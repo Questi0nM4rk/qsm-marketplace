@@ -1,6 +1,7 @@
 // Fills .claude/types/ for the hooks modules' tsconfigs: the engine's API declarations plus each
-// plugin's committed types/index.d.ts. The engine extracts them only when its plugin-authoring skill
-// is invoked, so run the command in the error below if the source is missing.
+// plugin's committed types/index.d.ts. The engine writes its declarations under /tmp only when its
+// plugin-authoring skill is invoked, and /tmp is emptied on a reboot, so a missing source is
+// extracted here by invoking that skill once (one short haiku call).
 import {
   copyFileSync,
   existsSync,
@@ -10,11 +11,21 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { basename, join } from "node:path";
 import { isRecord, pluginDirs, rel, root } from "./walk.ts";
 
 const engineGlob = `/tmp/claude-${process.getuid?.()}/bundled-skills/*/*/plugin-authoring/types/claude-code.d.ts`;
-const [engine] = globSync(engineGlob).toSorted((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+const EXTRACT = ["-p", "--model", "haiku", "/plugin-authoring reply ok"];
+const newestEngine = (): string | undefined =>
+  globSync(engineGlob).toSorted((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+if (newestEngine() === undefined) {
+  console.log(
+    "plugin-types: engine declarations missing, invoking the plugin-authoring skill once",
+  );
+  spawnSync("claude", EXTRACT, { stdio: "ignore", timeout: 120_000 });
+}
+const engine = newestEngine();
 /** The `types` path a plugin.json names, or null for a plugin without a noun. */
 function typesOf(dir: string): string | null {
   const manifest: unknown = JSON.parse(
@@ -34,9 +45,9 @@ const missing = [
   ...sources.filter((s) => !existsSync(s.from)).map((s) => rel(s.from)),
 ];
 if (engine === undefined || missing.length > 0) {
-  const fix = 'claude -p --model haiku "/plugin-authoring reply ok"';
-  const hint = engine === undefined ? `\nextract the engine declarations once with: ${fix}` : "";
-  console.error(`plugin-types: missing source:\n  ${missing.join("\n  ")}${hint}`);
+  const ran =
+    engine === undefined ? `\n(claude ${EXTRACT.join(" ")} ran and did not extract them)` : "";
+  console.error(`plugin-types: missing source:\n  ${missing.join("\n  ")}${ran}`);
   process.exit(1);
 }
 
