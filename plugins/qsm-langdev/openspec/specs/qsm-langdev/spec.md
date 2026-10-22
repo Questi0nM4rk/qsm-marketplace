@@ -476,8 +476,9 @@ nothing.
 #### Scenario: Doctor meets a checker whose presence probe times out
 
 - **WHEN** a selected checker's binary does not answer `--version` within the probe limit
-- **THEN** `doctor` SHALL list it as not measured and ask for a retry, and SHALL NOT list it as
-  missing or give its install command
+- **THEN** `doctor` SHALL list it as not measured and ask for a retry, SHALL NOT list it as
+  missing or give its install command, and SHALL end `blocked` rather than `missing` when no
+  binary is truly absent
 
 #### Scenario: An unpatched structural checker is present
 

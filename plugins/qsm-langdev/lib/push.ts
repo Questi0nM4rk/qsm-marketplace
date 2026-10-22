@@ -77,8 +77,12 @@ export function pushSkipReason(root: string, pushed: PushedRef, remote: string):
   if (isZero(pushed.localOid)) {
     return `${pushed.remoteRef}: a deletion, nothing to compare`;
   }
-  if (isZero(pushed.remoteOid) && remoteDefaultBranch(root, remote) === null) {
+  const base = isZero(pushed.remoteOid) ? remoteDefaultBranch(root, remote) : null;
+  if (isZero(pushed.remoteOid) && base === null) {
     return `${pushed.remoteRef}: this clone knows no default branch of '${remote}' to compare a new branch against`;
+  }
+  if (base !== null && git(root, "merge-base", base, pushed.localOid) === null) {
+    return `${pushed.remoteRef}: shares no history with '${base}', the default branch of '${remote}'`;
   }
   return `${pushed.remoteRef}: adds no commit beyond the default branch of '${remote}'`;
 }

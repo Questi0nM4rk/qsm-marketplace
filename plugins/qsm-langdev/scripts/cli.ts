@@ -205,8 +205,15 @@ const doctor: Handler = async (call) => {
   }
   const data = { checks: rows, gaps, structural };
   // a gate binary that is absent fails the hook, so it is the verdict, not a row
-  const gone = rows.some((row) => !row.present) || !structural.patched;
-  return { ...(gone ? fail("missing", text, data) : ok(data, text)), warnings };
+  const gone = rows.some((row) => !row.present && !row.timedOut) || !structural.patched;
+  // a probe that only ran out of time proves nothing absent: the run is blocked until a retry
+  const slow = rows.some((row) => row.timedOut);
+  const verdict = gone
+    ? fail("missing", text, data)
+    : slow
+      ? fail("blocked", text, data)
+      : ok(data, text);
+  return { ...verdict, warnings };
 };
 
 const LANGUAGES_ACTIONS = ["list", "add", "remove"] as const;
