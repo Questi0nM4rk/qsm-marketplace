@@ -5,10 +5,13 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")" && pwd)"
 export GEOM_TREE="$root/fixtures/hover-tree.json"
 
+# drive geom exits 1 on a FAIL verdict, so the exit status must match the verdict the line expects.
 expect() {
-  local out
-  out="$("$root/drive" geom "$1" "$2" "${@:4}" 2>&1)" || {
-    printf '%s\n' "$out"
+  local out status=0 want=0
+  out="$("$root/drive" geom "$1" "$2" "${@:4}" 2>&1)" || status=$?
+  [[ $3 == *FAIL* ]] && want=1
+  [[ $status == "$want" ]] || {
+    printf 'exit %s, want %s\n%s\n' "$status" "$want" "$out"
     exit 1
   }
   grep -q "$3" <<<"$out" || {
