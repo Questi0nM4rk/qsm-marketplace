@@ -4,7 +4,7 @@ drive geom CHECK ARGS [--slot NAME] [--screen MON] [--tol PX] [--min PX] [--floo
   overlap SEL                matched nodes, hover growth applied: no overlap, gap >= --min (2)
   inside CHILD PARENT        child rect inside parent; overhang per side <= --tol (0)
   centre A B                 centre offset per axis (or one --axis) <= --tol (1), plus monitor-edge distances
-  target SEL                 input area (StateLayer, else node) >= --floor (24) per axis
+  target SEL                 input area (largest MouseArea child, else StateLayer, else node) >= --floor (24) per axis
   dump [SEL]                 listing of nodes with rects, to find selectors (--depth 3)
   rect SEL                   "x y w h" of the first match
 

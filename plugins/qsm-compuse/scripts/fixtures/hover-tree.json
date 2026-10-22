@@ -1,0 +1,49 @@
+{
+  "tree": {
+    "type": "Item",
+    "x": 0,
+    "y": 0,
+    "w": 300,
+    "h": 800,
+    "children": [
+      {
+        "type": "Rail",
+        "x": 0,
+        "y": 0,
+        "w": 50,
+        "h": 800,
+        "children": [
+          { "type": "RailEntry", "x": 10.05, "y": 661, "w": 40, "h": 32 },
+          {
+            "type": "RailEntry",
+            "x": 8.8,
+            "y": 696,
+            "w": 40,
+            "h": 32,
+            "children": [
+              {
+                "type": "StateLayer",
+                "x": 8.8,
+                "y": 696,
+                "w": 40,
+                "h": 32,
+                "growth": { "x": 8.8, "y": 696, "w": 40, "h": 32, "pad": 1 }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Slider",
+        "x": 20,
+        "y": 100,
+        "w": 192,
+        "h": 16,
+        "children": [
+          { "type": "StateLayer", "x": 20, "y": 100, "w": 192, "h": 16 },
+          { "type": "MouseArea", "x": 20, "y": 95, "w": 192, "h": 26 }
+        ]
+      }
+    ]
+  }
+}
