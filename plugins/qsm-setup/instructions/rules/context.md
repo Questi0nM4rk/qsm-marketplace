@@ -152,3 +152,24 @@ Every dispatch, alone or inside a workflow: one task in, a short briefing plus a
 Its description starts with its model, for example `[haiku] runner: bun test`, because the
 person sees the description and must see which model runs. No worker stays idle across turns;
 a teammate may wait for notice, never permanently.
+
+## Out of the loop
+
+Out of the loop means the person said they are away, or started a run to work unattended, such as
+a night run.
+
+1. Build only what the person approved before the run began: a task under an epic whose intent
+   they approved and whose spec they approved, or a bug or feedback task that existed before the
+   run. A task the run files itself waits for the person, because work nobody approved is work
+   the person must read, judge and often throw away.
+2. Every change goes into its own worktree. One strict reviewer reads each batch of up to four
+   branches together, as the Workflows section says.
+3. A branch lands only in the order of the git rule, through the integration gate of the Workflows
+   section, and is pushed. A branch that fails the review or a gate is not merged: its worktree is
+   removed, and the branch stays for the person to judge, the one exception to merge or delete.
+4. Never guess a product choice. Collect each one with its options and your recommendation, and
+   leave the part it decides unbuilt.
+5. The run ends in a report that outlives the session, linked from a `qsm-memory` note: what
+   landed, what did not and why, and the batch of decisions for the person. The lessons pass
+   waits for the person's confirmation of the work, because a lesson drawn from unconfirmed work
+   can teach the wrong thing.
