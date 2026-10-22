@@ -139,7 +139,8 @@ if (runtime === undefined || display === undefined) {
   process.stderr.write("slot-holder: the session runtime dir and WAYLAND_DISPLAY must be set\n");
   process.exit(1);
 }
-const socket = createConnection(`${runtime}/${display}`);
+// A display may be a path of its own (a desktop slot's sockets live in the slot's runtime dir).
+const socket = createConnection(display.startsWith("/") ? display : `${runtime}/${display}`);
 const pending = { buf: Buffer.alloc(0) };
 socket.on("data", (chunk) => {
   onData(socket, pending, Buffer.from(chunk));

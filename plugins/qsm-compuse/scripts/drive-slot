@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2154 # SLOT_* come from the state file sourced by slot_load
+# shellcheck disable=SC2154,SC2153 # SLOT_* come from the state file sourced by slot_load
 # Sourced by drive: the slot verbs, and the slot forms of pointer, keys and tree.
 # A slot is one headless sway with its own Wayland socket and its own virtual pointer
 # and keyboard. sway, not cage, because cage has no way to set the output size or scale.
@@ -26,6 +26,11 @@ slot_load() {
   source "$(slot_dir "$1")/state"
   DRIVE_SLOT_ID="$(slot_dir "$1")"
   export WAYLAND_DISPLAY="$SLOT_DISPLAY" SWAYSOCK="$SLOT_SWAYSOCK" DRIVE_SLOT_ID
+  # A desktop slot's sockets live in its own runtime dir; the session's XDG_RUNTIME_DIR stays, so a nested drive finds the slot.
+  [[ "${SLOT_KIND:-}" != desktop ]] || export WAYLAND_DISPLAY="$SLOT_RT/$SLOT_DISPLAY"
+  # Keys go to the nested Hyprland itself: niri reads keycodes with its own keymap, so wtype's
+  # per-device keymap would arrive as other letters, while Hyprland honours it.
+  SLOT_KEYBOARD="${SLOT_KIND:+$SLOT_RT/$SLOT_CLIENT_DISPLAY}"
 }
 
 # First render node that is not nvidia: the iGPU renders a headless slot, the dGPU stays asleep.
@@ -94,18 +99,27 @@ slot_start_args() {
     case "$1" in
       --size) printf 'size=%s\n' "${2:?--size needs WxH}" && shift 2 ;;
       --scale) printf 'scale=%s\n' "${2:?--scale needs a number}" && shift 2 ;;
+      --desktop) printf 'desktop=%s\n' "${2:?--desktop needs the Quickshell path of the shell}" && shift 2 ;;
+      --hypr) printf 'hypr=%s\n' "${2:?--hypr needs a Hyprland lua config}" && shift 2 ;;
+      --clock) printf 'clock=%s\n' "${2:?--clock needs a time like 2026-10-22 10:00:00}" && shift 2 ;;
       *) die "slot start: unknown option '$1'" ;;
     esac
   done
 }
 
 slot_start() {
-  local name="${1:-}" size=1280x800 scale=1 dir renderer=gles2 opt
+  local name="${1:-}" size="" scale="" desktop="" hypr="" clock="" dir renderer=gles2 opt
   [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slot start needs NAME (lowercase letters, digits, dashes)"
   shift
   while read -r opt; do
     [[ -z "$opt" ]] || printf -v "${opt%%=*}" '%s' "${opt#*=}"
   done < <(slot_start_args "$@")
+  if [[ -n "$desktop" ]]; then
+    slot_start_desktop "$name" "${size:-1920x1080}" "${scale:-1.25}" "$desktop" "$hypr" "$clock"
+    return
+  fi
+  [[ -z "$hypr$clock" ]] || die "--hypr and --clock need --desktop"
+  size="${size:-1280x800}" scale="${scale:-1}"
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   need sway
   need swaymsg
@@ -126,11 +140,160 @@ slot_start() {
     "$(slot_field "$name" SLOT_OUTPUT)" "$size" "$scale" "$renderer" "$(cat "$dir/pid")"
 }
 
+# ---- desktop slot: a whole Hyprland desktop, nested and sandboxed ----
+
+# The nested Hyprland's socket path is XDG_RUNTIME_DIR/hypr/<61-char signature>/.socket2.sock, and a
+# Unix socket path holds 107 bytes: the runtime dir is $XDG_RUNTIME_DIR/ds-NAME, so NAME is short.
+slot_desktop_rt() { printf '%s/ds-%s\n' "${XDG_RUNTIME_DIR:?}" "$1"; }
+
+# The nested Hyprland reads the consumer's lua config (its rules, animations, binds) with every
+# process start stubbed out, because drive starts the shell itself and nothing else may run.
+slot_write_desktop_config() {
+  local dir="$1" size="$2" scale="$3" hypr="$4" inside="$5"
+  cat >"$dir/sway.conf" <<CFG
+xwayland disable
+default_border none
+seat * hide_cursor 1
+output * resolution $size scale 1
+exec sh -c 'echo \$WAYLAND_DISPLAY > "$inside/display"'
+CFG
+  cat >"$dir/niri.kdl" <<'CFG'
+prefer-no-csd
+hotkey-overlay {
+    skip-at-startup
+}
+output "winit" {
+    scale 1
+}
+layout {
+    gaps 0
+    border {
+        off
+    }
+    focus-ring {
+        off
+    }
+}
+window-rule {
+    open-fullscreen true
+}
+animations {
+    off
+}
+CFG
+  {
+    printf -- '-- drive desktop slot: the consumer config with process starts stubbed, then the nested output.\n'
+    printf 'hl.exec_cmd = function() end\n'
+    [[ -z "$hypr" ]] || printf 'dofile("%s")\n' "$hypr"
+    printf 'hl.monitor({ output = "WAYLAND-1", mode = "%s", position = "0x0", scale = %s })\n' "$size" "$scale"
+    printf 'hl.config({ misc = { disable_hyprland_logo = true, disable_splash_rendering = true }, debug = { disable_logs = false } })\n'
+    # Binds resolve a keycode through the configured layout, and wtype's keycodes are its own: resolve by its keysym.
+    printf 'hl.device({ name = "hl-virtual-keyboard-unknown", resolve_binds_by_sym = true })\n'
+  } >"$dir/hyprland.lua"
+}
+
+# Aquamarine up to 0.15.1 can attach the first buffer before it acks the initial configure, and
+# niri then drops the nested Hyprland, so its window never maps (upstream 7bb8bdf fixes it). Until a
+# release carries the fix, the nested Hyprland loads a build of that commit from the cache.
+AQUAMARINE_FIX=7bb8bdf4e8fedaf4dfae58512bc4c728671727df
+slot_aquamarine_dir() { printf '%s/qsm/compuse/aquamarine-%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}" "${AQUAMARINE_FIX:0:7}"; }
+
+# The library dir the nested Hyprland must load, or nothing when the installed Aquamarine is fixed.
+slot_aquamarine_lib() {
+  local have
+  have="$(pkg-config --modversion aquamarine)" || die "aquamarine is not installed"
+  [[ "$have" != 0.15.1 && "$(printf '0.15.1\n%s\n' "$have" | sort -V | tail -1)" == "$have" ]] && return
+  [[ -f "$(slot_aquamarine_dir)/libaquamarine.so.$have" ]] \
+    || die "aquamarine $have cannot host a nested Hyprland under niri; build the fixed one once: drive slot aquamarine"
+  slot_aquamarine_dir
+}
+
+# Builds Aquamarine at the fix commit into the cache; the build tree is removed after.
+slot_aquamarine() {
+  local out src tool
+  for tool in git cmake hyprwayland-scanner; do need "$tool"; done
+  out="$(slot_aquamarine_dir)"
+  src="$(mktemp -d)"
+  trap 'rm -rf "$src"; trap - RETURN' RETURN
+  if ! { git -C "$src" init -q && git -C "$src" fetch -q --depth 1 https://github.com/hyprwm/aquamarine.git "$AQUAMARINE_FIX" \
+    && git -C "$src" checkout -q FETCH_HEAD; }; then
+    die "could not fetch aquamarine $AQUAMARINE_FIX"
+  fi
+  if ! { cmake -S "$src" -B "$src/build" -DCMAKE_BUILD_TYPE=Release && cmake --build "$src/build" -j"$(nproc)" --target aquamarine; } >"$src/build.log" 2>&1; then
+    die "aquamarine build failed: $(tail -5 "$src/build.log")"
+  fi
+  mkdir -p "$out"
+  command cp -a "$src"/build/libaquamarine.so* "$out/"
+  printf 'aquamarine %s built into %s\n' "${AQUAMARINE_FIX:0:7}" "$out"
+}
+
+# Only the render node exists in the sandbox's /dev, so the nested Aquamarine cannot open a card:
+# with a card node it started a DRM backend on the real panel. /run is empty (no system bus,
+# no logind seat) and the root is read-only, so nothing in it reaches the owner's session.
+slot_start_desktop() {
+  local name="$1" size="$2" scale="$3" qs_path="$4" hypr="$5" clock="$6" dir rt node aq i inside=/run/drive-slot
+  ((${#name} <= 8)) || die "a desktop slot NAME has at most 8 characters (socket path limit)"
+  [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
+  [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
+  [[ -z "$hypr" || -f "$hypr" ]] || die "--hypr '$hypr' does not exist"
+  [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
+  [[ -z "$clock" || -f /usr/lib/faketime/libfaketime.so.1 ]] || die "--clock needs libfaketime (pacman -S libfaketime)"
+  local tool
+  for tool in bwrap sway swaymsg niri start-hyprland qs dbus-run-session pkg-config; do need "$tool"; done
+  slot_alive "$name" && die "slot '$name' is already running"
+  aq="$(slot_aquamarine_lib)" || exit 1
+  node="$(slot_render_node)"
+  [[ -n "$node" ]] || die "no non-nvidia render node for the desktop slot"
+  dir="$(slot_dir "$name")"
+  rt="$(slot_desktop_rt "$name")"
+  rm -rf "${SLOT_ROOT:?}/${name:?}" "$rt"
+  mkdir -p "$dir" "$rt"
+  chmod 700 "$rt"
+  slot_write_desktop_config "$dir" "$size" "$scale" "$hypr" "$inside"
+  env -i HOME="$HOME" USER="${USER:-}" PATH="$PATH" LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="$rt" \
+    DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_AQUAMARINE="$aq" \
+    setsid bwrap --ro-bind / / --dev /dev --tmpfs /dev/shm --dev-bind "$node" "$node" --proc /proc \
+    --tmpfs /run --bind "$rt" "$rt" --bind "$dir" "$inside" --tmpfs /tmp \
+    --unshare-pid --unshare-ipc --new-session \
+    "$MOTION_DIR/slot-desktop" "$inside" "$qs_path" </dev/null >"$dir/sandbox.log" 2>&1 &
+  echo $! >"$dir/pid"
+  for ((i = 0; i < 150; i++)); do
+    [[ -s "$dir/inner" ]] && break
+    kill -0 "$(cat "$dir/pid")" 2>/dev/null || break
+    sleep 0.2
+  done
+  [[ -s "$dir/inner" ]] || {
+    slot_kill "$name"
+    die "the nested desktop did not start in slot '$name' (logs were in $dir)"
+  }
+  slot_publish_desktop "$name" "$size" "$scale" "$qs_path"
+  slot_hold "$name"
+  printf 'slot %s: desktop=%s output=%s size=%s scale=%s hyprland=%s pid=%s\n' "$name" "$qs_path" \
+    "$(slot_field "$name" SLOT_OUTPUT)" "$size" "$scale" "$(slot_field "$name" SLOT_HYPR_SIG)" "$(cat "$dir/pid")"
+}
+
+slot_publish_desktop() {
+  local name="$1" size="$2" scale="$3" qs_path="$4" dir rt sock out
+  dir="$(slot_dir "$name")"
+  rt="$(slot_desktop_rt "$name")"
+  sock="$(find "$rt" -maxdepth 1 -name 'sway-ipc.*.sock' | head -1)"
+  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs | jq -r '.[0].name')" || die "could not read the slot output"
+  {
+    printf 'SLOT_KIND=desktop\nSLOT_PID=%s\nSLOT_RT=%q\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%q\n' "$(cat "$dir/pid")" "$rt" "$(cat "$dir/display")" "$sock"
+    printf 'SLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=gles2\nSLOT_QS_PATH=%q\n' "$out" "$size" "$scale" "$qs_path"
+    cat "$dir/inner"
+  } >"$dir/state"
+  printf '0 0\n' >"$dir/pos"
+}
+
 slot_run() {
   local name="${1:-}"
   [[ -n "$name" && "${2:-}" == "--" && $# -ge 3 ]] || die "slot run needs NAME -- CMD..."
   slot_load "$name"
   shift 2
+  # A desktop slot's clients join the nested Hyprland, and hyprctl talks to it alone.
+  [[ "${SLOT_KIND:-}" != desktop ]] || exec env -u DISPLAY QT_QPA_PLATFORM=wayland XDG_RUNTIME_DIR="$SLOT_RT" \
+    WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" HYPRLAND_INSTANCE_SIGNATURE="$SLOT_HYPR_SIG" "$@"
   # A slot client must never reach the owner's compositor: a Hyprland-aware shell would dispatch to it.
   QT_QPA_PLATFORM=wayland exec env -u HYPRLAND_INSTANCE_SIGNATURE -u DISPLAY "$@"
 }
@@ -162,7 +325,7 @@ slot_kill() {
   done
   # shellcheck disable=SC2046
   kill -9 $(slot_pids "$name") 2>/dev/null
-  rm -rf "${SLOT_ROOT:?}/${name:?}"
+  rm -rf "${SLOT_ROOT:?}/${name:?}" "$(slot_desktop_rt "$name")"
   rmdir "$SLOT_ROOT" 2>/dev/null
 }
 
@@ -260,6 +423,11 @@ slot_budget() {
 # The Workbench item tree of the slot, in the shape geom.jq reads.
 slot_tree() {
   local pid
+  if [[ "$(slot_field "$1" SLOT_KIND)" == desktop ]]; then
+    slot_load "$1"
+    XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm inspect WAYLAND-1 true || die "qs ipc inspect failed in slot '$1'"
+    return
+  fi
   pid="$(jq -er .pid "$(slot_dir "$1")/bench.json" 2>/dev/null)" || die "no workbench in slot '$1' (drive slot bench $1 ROOT KEY)"
   qsm-workbench session request --pid "$pid" --json '{"version":1,"op":"inspect"}' | jq -f "$MOTION_DIR/slot-tree.jq" \
     || die "workbench inspect failed in slot '$1'"
@@ -269,8 +437,8 @@ cmd_slot() {
   local verb="${1:-}"
   shift || true
   case "$verb" in
-    start | run | bench | stop | ls | budget | tree) "slot_$verb" "$@" ;;
-    *) die "slot needs start NAME | run NAME -- CMD | bench NAME ROOT KEY | stop NAME | ls | budget | tree NAME" ;;
+    start | run | bench | stop | ls | budget | tree | aquamarine) "slot_$verb" "$@" ;;
+    *) die "slot needs start NAME | run NAME -- CMD | bench NAME ROOT KEY | stop NAME | ls | budget | tree NAME | aquamarine" ;;
   esac
 }
 
@@ -334,7 +502,7 @@ slot_scroll() {
 
 slot_type() {
   need wtype
-  wtype -- "$1" || die "type failed"
+  WAYLAND_DISPLAY="${SLOT_KEYBOARD:-$WAYLAND_DISPLAY}" wtype -- "$1" || die "type failed"
   sleep "${2:-0.4}"
 }
 
@@ -375,7 +543,7 @@ slot_key() {
   for m in $mods; do args+=(-M "$(slot_mod "$m")"); done
   args+=(-k "$(slot_xkb "$key")")
   for m in $mods; do args+=(-m "$(slot_mod "$m")"); done
-  wtype "${args[@]}" || die "key failed"
+  WAYLAND_DISPLAY="${SLOT_KEYBOARD:-$WAYLAND_DISPLAY}" wtype "${args[@]}" || die "key failed"
   sleep "$settle"
 }
 
