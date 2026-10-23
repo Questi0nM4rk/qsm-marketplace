@@ -48,9 +48,10 @@ configuration change or diagnosis, not an explanation alone.
 
 ### Requirement: Raw git worktree commands are blocked in favor of `wt`
 
-Before a git worktree subcommand runs, the plugin SHALL deny it and name the
-`wt` equivalent, because `wt` addresses a workspace by branch name with a
-computed path while raw git leaves the caller to track the path itself.
+Before a git worktree subcommand runs, the plugin SHALL deny it, name the
+`wt` equivalent, and name the qsm-worktrunk:worktrunk skill for more, because
+`wt` addresses a workspace by branch name with a computed path while raw git
+leaves the caller to track the path itself.
 
 #### Scenario: Agent attempts to add a workspace with raw git
 
