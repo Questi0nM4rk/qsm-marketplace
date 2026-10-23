@@ -7,6 +7,8 @@
 # found by environment even after a client detaches from its parent.
 
 SLOT_ROOT="${DRIVE_SLOT_DIR:-${XDG_RUNTIME_DIR:-/tmp}/drive-slots}"
+# Aquamarine's wayland backend names the nested Hyprland's one output.
+SLOT_NESTED_OUTPUT=WAYLAND-1
 in_slot() { [[ -n "${DRIVE_SLOT:-}" ]]; }
 slot_dir() { printf '%s/%s\n' "$SLOT_ROOT" "$1"; }
 
@@ -25,12 +27,20 @@ slot_load() {
   # shellcheck disable=SC1090,SC1091
   source "$(slot_dir "$1")/state"
   DRIVE_SLOT_ID="$(slot_dir "$1")"
-  export WAYLAND_DISPLAY="$SLOT_DISPLAY" SWAYSOCK="$SLOT_SWAYSOCK" DRIVE_SLOT_ID
-  # A desktop slot's sockets live in its own runtime dir; the session's XDG_RUNTIME_DIR stays, so a nested drive finds the slot.
-  [[ "${SLOT_KIND:-}" != desktop ]] || export WAYLAND_DISPLAY="$SLOT_RT/$SLOT_DISPLAY"
-  # Keys go to the nested Hyprland itself: niri reads keycodes with its own keymap, so wtype's
-  # per-device keymap would arrive as other letters, while Hyprland honours it.
-  SLOT_KEYBOARD="${SLOT_KIND:+$SLOT_RT/$SLOT_CLIENT_DISPLAY}"
+  # A desktop slot's sockets live in its own runtime dir and are named by absolute path (libwayland's own
+  # rule), so the session's XDG_RUNTIME_DIR stays and a nested drive still finds the slot.
+  export WAYLAND_DISPLAY="${SLOT_RT:+$SLOT_RT/}$SLOT_DISPLAY" SWAYSOCK="$SLOT_SWAYSOCK" DRIVE_SLOT_ID
+  # Keys go where a client's keyboard is: in a desktop slot the nested Hyprland, because niri reads
+  # keycodes with its own keymap and wtype's per-device keymap would arrive as other letters.
+  SLOT_KEYBOARD="${SLOT_CLIENT_DISPLAY:+$SLOT_RT/$SLOT_CLIENT_DISPLAY}"
+  SLOT_KEYBOARD="${SLOT_KEYBOARD:-$WAYLAND_DISPLAY}"
+}
+
+# The name of the one output a headless sway publishes, read through its IPC socket.
+slot_output_name() {
+  local outputs
+  outputs="$(SWAYSOCK="$1" swaymsg -t get_outputs)" || die "could not read the slot output"
+  jq -r '.[0].name' <<<"$outputs"
 }
 
 # First render node that is not nvidia: the iGPU renders a headless slot, the dGPU stays asleep.
@@ -72,8 +82,7 @@ slot_publish() {
   local dir="$1" size="$2" scale="$3" renderer="$4" pid sock out
   pid="$(cat "$dir/pid")"
   sock="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$pid.sock"
-  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs)" || die "could not read the slot output"
-  out="$(jq -r '.[0].name' <<<"$out")"
+  out="$(slot_output_name "$sock")" || exit 1
   printf 'SLOT_PID=%s\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%s\nSLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=%s\n' \
     "$pid" "$(cat "$dir/display")" "$sock" "$out" "$size" "$scale" "$renderer" >"$dir/state"
   printf '0 0\n' >"$dir/pos"
@@ -186,7 +195,7 @@ CFG
     printf -- '-- drive desktop slot: the consumer config with process starts stubbed, then the nested output.\n'
     printf 'hl.exec_cmd = function() end\n'
     [[ -z "$hypr" ]] || printf 'dofile("%s")\n' "$hypr"
-    printf 'hl.monitor({ output = "WAYLAND-1", mode = "%s", position = "0x0", scale = %s })\n' "$size" "$scale"
+    printf 'hl.monitor({ output = "%s", mode = "%s", position = "0x0", scale = %s })\n' "$SLOT_NESTED_OUTPUT" "$size" "$scale"
     printf 'hl.config({ misc = { disable_hyprland_logo = true, disable_splash_rendering = true }, debug = { disable_logs = false } })\n'
     # Binds resolve a keycode through the configured layout, and wtype's keycodes are its own: resolve by its keysym.
     printf 'hl.device({ name = "hl-virtual-keyboard-unknown", resolve_binds_by_sym = true })\n'
@@ -242,8 +251,10 @@ slot_start_desktop() {
   [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
   [[ -z "$hypr" || -f "$hypr" ]] || die "--hypr '$hypr' does not exist"
   # The sandbox mounts its own empty /tmp and /run, so a file there is not what the nested desktop would read.
-  [[ "$qs_path$hypr" != *"/tmp/"* && "$qs_path$hypr" != *"/run/"* && "$qs_path" != /tmp* && "$qs_path" != /run* ]] \
-    || die "--desktop and --hypr cannot live under /tmp or /run (the sandbox hides both)"
+  local p
+  for p in "$qs_path" "$hypr"; do
+    case "$p" in /tmp | /tmp/* | /run | /run/*) die "--desktop and --hypr cannot live under /tmp or /run (the sandbox hides both): $p" ;; *) ;; esac
+  done
   [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
   [[ -z "$clock" || -f /usr/lib/faketime/libfaketime.so.1 ]] || die "--clock needs libfaketime (pacman -S libfaketime)"
   local tool
@@ -285,8 +296,7 @@ slot_publish_desktop() {
   dir="$(slot_dir "$name")"
   rt="$(slot_desktop_rt "$name")"
   sock="$(find "$rt" -maxdepth 1 -name 'sway-ipc.*.sock' | head -1)"
-  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs)" || die "could not read the slot output"
-  out="$(jq -r '.[0].name' <<<"$out")"
+  out="$(slot_output_name "$sock")" || exit 1
   {
     printf 'SLOT_KIND=desktop\nSLOT_PID=%s\nSLOT_RT=%q\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%q\n' "$(cat "$dir/pid")" "$rt" "$(cat "$dir/display")" "$sock"
     printf 'SLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=gles2\nSLOT_QS_PATH=%q\n' "$out" "$size" "$scale" "$qs_path"
@@ -435,7 +445,7 @@ slot_tree() {
   if [[ "$(slot_field "$1" SLOT_KIND)" == desktop ]]; then
     slot_load "$1"
     local tree
-    tree="$(XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm inspect WAYLAND-1 true)" \
+    tree="$(slot_run "$1" -- qs ipc --path "$SLOT_QS_PATH" call qsm inspect "$SLOT_NESTED_OUTPUT" true)" \
       || die "qs ipc inspect failed in slot '$1'"
     # A shell with no scene answers with an error object, not a tree.
     jq -e .tree >/dev/null 2>&1 <<<"$tree" || die "inspect in slot '$1' returned no tree: ${tree:0:200}"
@@ -516,7 +526,7 @@ slot_scroll() {
 
 slot_type() {
   need wtype
-  WAYLAND_DISPLAY="${SLOT_KEYBOARD:-$WAYLAND_DISPLAY}" wtype -- "$1" || die "type failed"
+  WAYLAND_DISPLAY="$SLOT_KEYBOARD" wtype -- "$1" || die "type failed"
   sleep "${2:-0.4}"
 }
 
@@ -529,7 +539,7 @@ slot_xkb() {
     PAGEUP | PGUP) echo Page_Up ;;
     PAGEDOWN | PGDN) echo Page_Down ;;
     BACKSPACE) echo BackSpace ;;
-    SLASH) echo slash ;;
+    MINUS | COMMA | PERIOD | EQUAL | SLASH | BACKSLASH | SEMICOLON) echo "${1,,}" ;;
     ?) echo "${1,,}" ;;
     F[0-9] | F[0-9][0-9]) echo "${1^^}" ;;
     *) local low="${1,,}" && echo "${low^}" ;;
@@ -558,7 +568,7 @@ slot_key() {
   for m in $mods; do args+=(-M "$(slot_mod "$m")"); done
   args+=(-k "$(slot_xkb "$key")")
   for m in $mods; do args+=(-m "$(slot_mod "$m")"); done
-  WAYLAND_DISPLAY="${SLOT_KEYBOARD:-$WAYLAND_DISPLAY}" wtype "${args[@]}" || die "key failed"
+  WAYLAND_DISPLAY="$SLOT_KEYBOARD" wtype "${args[@]}" || die "key failed"
   sleep "$settle"
 }
 

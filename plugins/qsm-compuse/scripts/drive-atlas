@@ -48,8 +48,7 @@ atlas_ipc() {
   local -a args
   split="$(xargs -n1 printf '%s\n' <<<"$2" 2>&1)" || die "ipc arguments do not parse (an unmatched quote?): $2"
   mapfile -t args <<<"$split"
-  XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm "${args[@]}" >/dev/null \
-    || die "ipc failed: $2"
+  (slot_run "$1" -- qs ipc --path "$SLOT_QS_PATH" call qsm "${args[@]}") >/dev/null || die "ipc failed: $2"
 }
 
 # wait-clients N: until the nested Hyprland maps exactly N windows (10 s at most).
@@ -74,22 +73,23 @@ atlas_wait_shell() {
   die "the shell in slot '$1' never answered (see $(slot_dir "$1")/qs.log)"
 }
 
-# Waits until two captures 150 ms apart show no changed area, so a shot never lands mid-animation.
-# A screen that never stills (a looping animation) is shot after 5 s and the shot is marked moving.
+# Shoots OUT once two captures 150 ms apart show no changed area, so a shot never lands mid-animation;
+# the last capture is the shot. A screen that never stills (a looping animation) is shot after 5 s
+# and marked moving.
 atlas_still() {
-  local a="$1.still-a.png" b="$1.still-b.png" i
+  local out="$1" a="$1.still.png" i
   grim -o "$SLOT_OUTPUT" "$a" || die "grim failed in the atlas slot"
   for ((i = 0; i < 33; i++)); do
     sleep 0.15
-    grim -o "$SLOT_OUTPUT" "$b" || die "grim failed in the atlas slot"
-    if [[ -z "$(atlas_areas "$a" "$b")" ]]; then
-      rm -f "$a" "$b"
+    grim -o "$SLOT_OUTPUT" "$out" || die "grim failed in the atlas slot"
+    if [[ -z "$(atlas_areas "$a" "$out")" ]]; then
+      rm -f "$a"
       echo still
       return
     fi
-    command mv -f "$b" "$a"
+    command mv -f "$out" "$a"
   done
-  rm -f "$a" "$b"
+  command mv -f "$a" "$out"
   echo moving
 }
 
@@ -117,33 +117,35 @@ atlas_step() {
 
 # One journey in a fresh desktop slot; prints "journey<TAB>shot<TAB>step<TAB>still" per shot.
 atlas_journey() {
-  local scenario="$1" journey="$2" run="$3" slot="$4" settle="$5" n=0 line name still
+  local scenario="$1" journey="$2" run="$3" slot="$4" settle="$5" n line name still
+  local -a steps
   shift 5
-  slot_start_desktop "$slot" "$@" >/dev/null
+  slot_start "$slot" "$@" >/dev/null
   export DRIVE_SLOT="$slot"
   slot_load "$slot"
   atlas_wait_shell "$slot"
   sleep 1
-  while IFS= read -r line; do
-    n=$((n + 1))
+  mapfile -t steps < <(atlas_steps "$scenario" "$journey")
+  for ((n = 0; n < ${#steps[@]}; n++)); do
+    line="${steps[n]}"
     if [[ "$line" == shot\ * || "$line" == shot-now\ * ]]; then
       name="$journey--${line#* }"
       [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "shot names are letters, digits, dot, dash and underscore: '$name'"
       # shot-now catches a state that times out (an armed button), so it waits for nothing.
       if [[ "$line" == shot-now\ * ]]; then
+        OUT_DIR="$run/shots" cmd_shot - "$name" >/dev/null
         still=now
       else
-        still="$(atlas_still "$run/$name")" || exit 1
+        still="$(atlas_still "$run/shots/$name.png")" || exit 1
       fi
-      OUT_DIR="$run/shots" cmd_shot - "$name" >/dev/null
       slot_tree "$slot" >"$run/trees/$name.json"
-      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#* }" "$n" "$still"
+      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#* }" "$((n + 1))" "$still"
     else
       atlas_step "$slot" "$line"
       # A step right before shot-now gets no settle, or the state it caught is already gone.
-      [[ "$(atlas_steps "$scenario" "$journey" | sed -n "$((n + 1))p")" == shot-now\ * ]] || sleep "$settle"
+      [[ "${steps[n + 1]:-}" == shot-now\ * ]] || sleep "$settle"
     fi
-  done < <(atlas_steps "$scenario" "$journey")
+  done
   slot_kill "$slot"
   unset DRIVE_SLOT
 }
@@ -151,6 +153,7 @@ atlas_journey() {
 # A run is built under a dot name and renamed when it completes, so a failed run is never a baseline.
 atlas_run() {
   local scenario="${1:-}" desktop="" hypr="" clock="" settle=0.6 opt dir id run slot journey prev
+  local -a start
   [[ -f "$scenario" ]] || die "atlas run needs a SCENARIO file"
   while IFS= read -r opt; do printf -v "${opt%%=*}" '%s' "${opt#*=}"; done < <(atlas_settings "$scenario")
   desktop="$(atlas_path "$desktop")"
@@ -165,10 +168,13 @@ atlas_run() {
   command cp "$scenario" "$run/scenario"
   printf '%s\n' "$(git -C "$desktop" describe --always --dirty 2>/dev/null || echo unknown)" >"$run/desktop-version"
   slot="at$((RANDOM % 100000))"
+  start=(--desktop "$desktop")
+  [[ -z "$hypr" ]] || start+=(--hypr "$hypr")
+  [[ -z "$clock" ]] || start+=(--clock "$clock")
   trap 'slot_kill "'"$slot"'" 2>/dev/null; rm -rf "'"$run"'"' EXIT
   for journey in $(atlas_journeys "$scenario"); do
     printf 'journey %s\n' "$journey" >&2
-    atlas_journey "$scenario" "$journey" "$run" "$slot" "$settle" 1920x1080 1.25 "$desktop" "$hypr" "$clock" >>"$run/shots.tsv"
+    atlas_journey "$scenario" "$journey" "$run" "$slot" "$settle" "${start[@]}" >>"$run/shots.tsv"
   done
   trap - EXIT
   command mv "$run" "$dir/$id"
