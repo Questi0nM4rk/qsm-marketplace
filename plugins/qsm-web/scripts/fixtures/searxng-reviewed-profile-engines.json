@@ -30,5 +30,6 @@
     "pixabay videos",
     "sepiasearch",
     "sogou videos"
-  ]
+  ],
+  "news": ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"]
 }

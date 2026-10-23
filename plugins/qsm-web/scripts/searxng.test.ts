@@ -468,6 +468,7 @@ describe("qsm-web searxng search profiles", () => {
     ["it", it],
     ["images", reviewed.images],
     ["videos", reviewed.videos],
+    ["news", reviewed.news],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
@@ -567,7 +568,7 @@ describe("qsm-web searxng search profiles", () => {
     }
     const unknown = await searchVerb(inst, "--profile", "unknown");
     expect(unknown.exit).toBe(2);
-    expect(unknown.stderr).toContain("videos");
+    expect(unknown.stderr).toContain("news");
     expect(inst.seen).toHaveLength(0);
   });
 
@@ -586,7 +587,7 @@ describe("qsm-web searxng search profiles", () => {
     const help = await run(["searxng", "search", "--help"]);
     expect(help.exit).toBe(0);
     expect(help.stdout).not.toContain("--category");
-    expect(help.stdout).toContain("academic|it|images|videos");
+    expect(help.stdout).toContain("academic|it|images|videos|news");
   });
 
   for (const [profile, names] of profiles) {
@@ -646,5 +647,37 @@ describe("qsm-web searxng search profiles", () => {
     expect(resultsOf(envelope)[0]?.engines).toEqual(["mwmbl"]);
     expect(envelope.warnings.join(" ")).toContain("boardreader (timeout)");
     expect(inst.seen).toHaveLength(2);
+  });
+
+  test("news links survive a Naver timeout warning without retry or source removal", async () => {
+    const names = reviewed.news;
+    const inst = instance((url) =>
+      url.pathname === "/config"
+        ? catalog(names)
+        : json({
+            results: [
+              {
+                ...page,
+                url: "https://news.test/story",
+                title: "Regional news story",
+                engine: "brave.news",
+                engines: ["brave.news"],
+                category: "news",
+              },
+            ],
+            unresponsive_engines: [["naver news", "timeout"]],
+          }),
+    );
+    const { exit, envelope } = await searchJson(inst, "--profile", "news");
+    expect(exit).toBe(0);
+    expect(envelope.code).toBe("ok");
+    expect(resultsOf(envelope)).toMatchObject([
+      { url: "https://news.test/story", engine: "brave.news", category: "news" },
+    ]);
+    expect(envelope.warnings).toContain("engine suspended: naver news (timeout)");
+    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config", "/search"]);
+    expect(inst.seen[0]?.searchParams.has("engines")).toBe(false);
+    expect(inst.seen[1]?.searchParams.get("engines")).toBe(names.join(","));
+    expect(inst.seen[1]?.searchParams.has("categories")).toBe(false);
   });
 });

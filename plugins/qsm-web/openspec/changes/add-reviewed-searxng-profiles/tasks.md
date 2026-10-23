@@ -18,7 +18,7 @@ integrates each returned diff before the next starts.
       result/media/iframe metadata without playback. Proof: the same real-entry suite includes
       Videos selection and refusal cases and retains existing result tests. Blocks on 1.1
       integration.
-- [ ] 1.3 Add `news` with all five specified engines, including `naver news`, across the common file
+- [x] 1.3 Add `news` with all five specified engines, including `naver news`, across the common file
       set and fixture. Add one real-entry case returning useful links plus Naver diagnostics and
       verify the warning is preserved; preserve failed-empty behavior. Proof: the real-entry suite
       passes without retry or silent source removal. Blocks on 1.2 integration.
