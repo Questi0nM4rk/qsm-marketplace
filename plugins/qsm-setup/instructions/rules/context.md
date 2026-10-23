@@ -61,12 +61,10 @@ already said.
    research or the reverse, because progress on several fronts is worth less than one thing done.
 6. Read a file before you write over it, and read a large file in parts (offset and limit),
    because the harness drops a blind overwrite and stops a read at about 10k tokens.
-7. Parallel work is separate agent calls, or one command run in the background, never `&` inside
-   one Bash call, because the call returns, the parent exits, and the children are orphaned.
-8. An operation that may run over about 60 seconds shows progress (the monitor tool, or a script
+7. An operation that may run over about 60 seconds shows progress (the monitor tool, or a script
    that prints each iteration) and has an iteration cap and a wall-clock timeout, because a
    silent long run looks like a hang.
-9. After two failed attempts at debugging below the application (kernel, drivers, filesystem,
+8. After two failed attempts at debugging below the application (kernel, drivers, filesystem,
    boot), stop and search the exact error message, because someone has hit it and blind
    iteration costs boot cycles.
 
