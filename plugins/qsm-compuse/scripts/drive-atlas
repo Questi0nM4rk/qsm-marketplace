@@ -10,7 +10,8 @@
 #   settle SECONDS          the pause after each step (default 0.6)
 #   journey NAME            starts a journey; the steps below belong to it
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
-# plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, wait-clients N,
+# plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, eval LUA (a
+# config call such as a window rule), wait-clients N,
 # ipc FN ARGS (the shell's own IPC: open a surface, post mock data),
 # shot NAME (taken once the screen is still), shot-now NAME (taken at once, for a state that times out).
 
@@ -100,6 +101,7 @@ atlas_step() {
       # hyprctl exits 0 on a lua error and prints it, so the output decides.
       [[ "$( (slot_run "$slot" -- hyprctl dispatch "${line#dispatch }") 2>&1)" == ok ]] || die "dispatch failed: $line"
       ;;
+    eval) [[ "$( (slot_run "$slot" -- hyprctl eval "${line#eval }") 2>&1)" == ok ]] || die "eval failed: $line" ;;
     wait-clients) atlas_wait_clients "$slot" "$a" ;;
     ipc) atlas_ipc "$slot" "${line#ipc }" ;;
     *) route_step "$verb" "$a" "$b" "$rest" || die "unknown atlas step '$line'" ;;
