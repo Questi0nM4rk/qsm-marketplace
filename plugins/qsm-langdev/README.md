@@ -21,8 +21,7 @@ it, "the agent checked its work" is a sentence, not a fact.
 | Kind | Name | What it does |
 | --- | --- | --- |
 | CLI | `qsm-langdev` | 10 verbs, see [USAGE.md](USAGE.md) |
-| Hook | `tool.call` on Bash | Denies `git commit --no-verify` and `git push --no-verify` |
-| Hook | `tool.check` on Bash | Asks you before a command that sets `QSM_LANGDEV_ALLOW` runs |
+| Hook | `tool.call` on Bash | Denies `git commit --no-verify`, `git push --no-verify`, and an agent's `QSM_LANGDEV_ALLOW` |
 | Hook | `tool.call` on Write, Edit, NotebookEdit | Fixes the file, then tells the model its findings against HEAD. Never blocks |
 | Hook | `SubagentStop` | Blocks a stop when the agent's edited tree got worse, a capped number of times |
 | MCP server | `sentrux` | Architecture queries over the tree: scan, health, dsm, check_rules, test_gaps |
@@ -61,8 +60,9 @@ The edit hook, the stop gate, and the installed git hooks do nothing in a reposi
 - No warnings and no suppression comments: a rule fails or is off.
 - A missing checker binary or missing scaffolded config fails `check`; `qsm-langdev doctor` names
   what to install.
-- To let one measured regression pass: `QSM_LANGDEV_ALLOW="<why>" git commit`. `--no-verify` is
-  denied in a session.
+- To let one measured regression pass, type it yourself in the prompt:
+  `! QSM_LANGDEV_ALLOW="<why>" git commit`. An agent's allow and `--no-verify` are denied in a
+  session.
 - semgrep Pro (cross-file) needs `semgrep login` and `semgrep install-semgrep-pro`; without it the
   community engine runs.
 - Everything else: `qsm-langdev --help`.

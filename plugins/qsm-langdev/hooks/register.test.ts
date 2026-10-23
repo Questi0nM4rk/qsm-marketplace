@@ -1,5 +1,5 @@
 // claude plugin test plugins/qsm-langdev: drives register.tsx against the engine itself. What only
-// this file proves: the guard's deny rides `tool.call` and its ask rides `tool.check`, and the edit
+// this file proves: the guard denies at `tool.call`, the allow included, and the edit
 // hook hands the `edited` verb's text back as the result's context. The rule behind the guard is
 // lib/blocked-git.test.ts, the verb is scripts/edit-hook.test.ts. `process.run`, `session.id` and
 // `ui.*` are host operations the test answers itself.
@@ -44,7 +44,7 @@ function host(on: On, answer?: { exit: number; data: unknown }) {
   return runs;
 }
 
-test("a commit that skips the git hooks is denied with the way to ask", async ($, on) => {
+test("a commit that skips the git hooks is denied with the way the person lets it pass", async ($, on) => {
   host(on);
 
   const r = await $.tool.call({ tool: "Bash", command: SKIPPING });
@@ -52,26 +52,23 @@ test("a commit that skips the git hooks is denied with the way to ask", async ($
   expect(r.deny).toContain("QSM_LANGDEV_ALLOW");
 });
 
-test("an ordinary commit runs and is not put to the person", async ($, on) => {
+test("an ordinary commit runs", async ($, on) => {
   host(on);
 
   const r = await $.tool.call({ tool: "Bash", command: "git commit -m x" });
-  const check = await $.tool.check({ tool: "Bash", input: { command: "git commit -m x" } });
 
   expect(r.deny).toBeUndefined();
-  expect(check.reason ?? "").not.toContain("a person decides");
 });
 
-test("QSM_LANGDEV_ALLOW is put to the person", async ($, on) => {
+test("QSM_LANGDEV_ALLOW from an agent is refused and handed to the person", async ($, on) => {
   host(on);
 
-  const check = await $.tool.check({
+  const r = await $.tool.call({
     tool: "Bash",
-    input: { command: 'QSM_LANGDEV_ALLOW="known" git commit -m x' },
+    command: 'QSM_LANGDEV_ALLOW="known" git commit -m x',
   });
 
-  expect(check.decision).toBe("ask");
-  expect(check.reason).toContain("a person decides");
+  expect(r.deny).toContain("! QSM_LANGDEV_ALLOW=");
 });
 
 test("a Write gets the findings back as context, with the file and who edited", async ($, on) => {
