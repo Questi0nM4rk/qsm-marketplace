@@ -245,7 +245,7 @@ test("the stage tool answers what the stage asks, and every prompt carries where
   const band = await drawnBand($);
 
   expect(seen[0]?.join(" ")).toContain("qsm stage: not said yet");
-  expect(String(answer.result)).toContain("Next: LEARN");
+  expect(String(answer.result)).toContain("next LEARN");
   expect(String(wrong.result)).toContain("stage must be one of");
   expect(seen[1]?.join(" ")).toContain("qsm stage: VERIFY");
   expect(seen[1]?.join(" ")).toContain("bun test");

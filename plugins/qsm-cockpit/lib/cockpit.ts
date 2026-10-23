@@ -20,39 +20,60 @@ export const OUTCOME_WORD: Readonly<Record<string, string>> = {
   error: "failed",
 };
 
-/** What each stage asks, when it is done, and where the loop goes next: the loop of the instructions. */
-const GUIDE: Record<Stage, { asks: string; done: string; next: Stage }> = {
+/**
+ * Each stage as the one sentence its switch answers: what to do ideally, what to output, the
+ * tools, the skills that own it (loaded by the agent, never pushed), and where the loop goes next.
+ */
+const GUIDE: Record<
+  Stage,
+  { does: string; output: string; tools: string; skills: string[]; next: Stage }
+> = {
   LOAD: {
-    asks: "read the notes for this tree, the ready tasks and the spec that governs the change; search past sessions before asking twice",
-    done: "you know what was decided and what is open",
+    does: "read the notes for this tree, the ready tasks and the governing spec, and search past sessions before asking twice",
+    output: "what was decided and what is open",
+    tools: "qsm-memory notes and search, the task tool's ready list",
+    skills: ["qsm-memory:memory", "qsm-tasks:task-tool"],
     next: "PLAN",
   },
   PLAN: {
-    asks: "the six questions, a probe for what exists, the size: a fix goes to EXECUTE; an epic goes through grilling (intent, criteria), the split, and a spec per piece",
-    done: "the person said yes to the epic, the split and the spec",
+    does: "the six questions, a probe for what exists, the size; a fix goes to EXECUTE, an epic through grilling, the split and a spec per piece",
+    output: "the person's yes",
+    tools: "the question tool, the task tool, openspec",
+    skills: ["qsm-plan:plan", "qsm-plan:grilling", "qsm-openspec:spec-propose"],
     next: "EXECUTE",
   },
   EXECUTE: {
-    asks: "apply the spec change, claim the task, delegate and take the work back",
-    done: "the change is in and the run that proves it is ready",
+    does: "apply the spec change, claim the task, work in a worktree, delegate and take the work back",
+    output: "the change in and the run that proves it ready",
+    tools: "wt, Agent, the task tool",
+    skills: ["qsm-openspec:spec-apply", "qsm-essentials:subagents"],
     next: "VERIFY",
   },
   VERIFY: {
-    asks: "run the real path end to end; lint and typecheck; a skill passes its eval",
-    done: "you read the output and it holds; a failure goes back to EXECUTE",
+    does: "search the task tool for an open hold, run the real path end to end, lint, typecheck and the eval of a changed skill",
+    output: "the lines that decide, a failure back to EXECUTE",
+    tools: "bun run validate, lint, typecheck and eval, the runner agent",
+    skills: ["qsm-essentials:run-and-verify", "qsm-review:review"],
     next: "LEARN",
   },
   LEARN: {
-    asks: "a rule found into its instruction file or skill, a tool defect into a task, a decision's reason into the spec design or the commit",
-    done: "nothing learned is left only in the chat",
+    does: "each rule found into its instruction file or skill, a tool defect into a feedback task, a decision's reason into the spec design or the commit",
+    output: "nothing left only in the chat",
+    tools: "the task tool, Edit",
+    skills: [],
     next: "CLOSE",
   },
   CLOSE: {
-    asks: "spec-archive closes the change's task; the epic closes when every task is done, its criteria hold, test-it passed and the work is pushed after review; a note when work stays open",
-    done: "the task is closed or the note is written",
+    does: "spec-archive the change and close its task, push after review, close the epic only when every task is done, its criteria hold and test-it passed, a note when work stays open",
+    output: "the closed task or the note",
+    tools: "openspec archive, git push, qsm-memory note",
+    skills: ["qsm-openspec:spec-archive", "qsm-memory:memory"],
     next: "LOAD",
   },
 };
+
+/** Every skill a stage sentence names, for the test that each one exists. */
+export const STAGE_SKILLS: string[] = STAGES.flatMap((stage) => GUIDE[stage].skills);
 
 // differs: hooks sandbox (the hooks module imports this file, and root lib/ is out of its reach)
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -79,10 +100,11 @@ export function tierOf(model: string): string {
   return Object.keys(TIER_COLOR).find((tier) => model.includes(tier)) ?? model;
 }
 
-/** What the stage tool answers: the stage's ask, its done test, and the next stage. */
+/** What the stage tool answers: the stage's one sentence. */
 export function guideText(stage: Stage): string {
-  const { asks, done, next } = GUIDE[stage];
-  return `${stage}. Asks: ${asks}. Done when: ${done}. Next: ${next}; call stage again when you move, back to EXECUTE included.`;
+  const { does, output, tools, skills, next } = GUIDE[stage];
+  const load = skills.length === 0 ? "" : `; load ${skills.join(" and ")} if not loaded`;
+  return `You are in ${stage}: ${does}; output ${output}; tools: ${tools}${load}; next ${next}, and call stage again when you move.`;
 }
 
 /** The one line every prompt carries, so the main chat always knows where it stands. */
