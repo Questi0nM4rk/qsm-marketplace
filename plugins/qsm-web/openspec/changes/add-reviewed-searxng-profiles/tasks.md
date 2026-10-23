@@ -41,18 +41,18 @@ integrates each returned diff before the next starts.
 
 ## 2. Integrated verification and review
 
-- [ ] 2.1 Regenerate and verify all generated surfaces once on the combined result; run
+- [x] 2.1 Regenerate and verify all generated surfaces once on the combined result; run
       `mise exec -- bun run validate`, `mise exec -- bun run lint`,
       `mise exec -- bun run typecheck`, `mise exec -- bun test ./ ./.gates`,
       `mise exec -- bun run test:hooks`, and the normal quality gate without threshold changes or
       waivers. Verify new fixture memberships against the delta spec and unchanged old source lists.
       Model eval runs stay paused, and unavailable `/simplify` is explicitly named rather than
       claimed. Blocks on 1.7.
-- [ ] 2.2 Compile the combined qsm-web binary and drive every added profile through the compiled
+- [x] 2.2 Compile the combined qsm-web binary and drive every added profile through the compiled
       entry against one loopback SearXNG-shaped fixture, including exact selection, source
       attribution, warnings and missing-engine/conflict/category failures. Do not replay provider
       challenges or treat local proof as new live-provider health evidence. Blocks on 2.1.
-- [ ] 2.3 Obtain one independent Luna-high review of the pinned combined diff against the proposal,
+- [x] 2.3 Obtain one independent Luna-high review of the pinned combined diff against the proposal,
       design and delta spec; verify and address every supported finding and repeat the bounded
       review until zero findings. Blocks on 2.2.
 
