@@ -8,11 +8,13 @@ import {
   stringList,
 } from "../../../lib/cli-base.ts";
 import { fail, messageOf, type Outcome, ok, UsageError } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import {
   DEFAULT_NUM_RESULTS,
   DEFAULT_TIMEOUT_MS,
   formatResults,
   parseInstance,
+  parseSearchProfile,
   resolveInstance,
   type SearchOptions,
   type SearchOutcome,
@@ -52,6 +54,14 @@ function searchOptions(call: Call): SearchOptions {
     throw new UsageError("the query must not be blank");
   }
   const engines = optionalString(call, "engines");
+  const rawProfile = optionalString(call, "profile");
+  const profile = rawProfile === undefined ? undefined : parseSearchProfile(rawProfile);
+  if (
+    profile !== undefined &&
+    (engines !== undefined || optionalString(call, "category") !== undefined)
+  ) {
+    throw new UsageError("--profile cannot be combined with --engines or --category");
+  }
   const list =
     engines === undefined
       ? undefined
@@ -66,6 +76,7 @@ function searchOptions(call: Call): SearchOptions {
   return {
     query,
     numResults: positive(optionalNumber(call, "numResults"), DEFAULT_NUM_RESULTS, "--num-results"),
+    ...(profile === undefined ? {} : { profile }),
     ...(list === undefined || list.length === 0 ? {} : { engines: list }),
     ...(timeRange === undefined ? {} : { timeRange }),
     ...(category === undefined ? {} : { category }),
@@ -97,7 +108,7 @@ async function searchVerb(call: Call): Promise<Outcome> {
   try {
     outcome = await search(instance, opts, timeout);
   } catch (err: unknown) {
-    if (err instanceof UsageError) {
+    if (err instanceof UsageError || err instanceof QsmError) {
       throw err;
     }
     return fail("failed", messageOf(err));

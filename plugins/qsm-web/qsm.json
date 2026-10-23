@@ -43,6 +43,12 @@
             "description": "how many results to keep (default 10)"
           },
           {
+            "name": "profile",
+            "type": "string",
+            "choices": ["default", "niche", "academic"],
+            "description": "source selection: server defaults, personal sites/discussions, or academic publications; exclusive with --engines and --category"
+          },
+          {
             "name": "engines",
             "type": "string",
             "description": "restrict to these engines, comma separated; an empty value sends none"
