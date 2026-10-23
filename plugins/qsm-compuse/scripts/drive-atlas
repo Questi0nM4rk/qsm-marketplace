@@ -17,7 +17,8 @@
 # shot NAME (taken once the screen is still), shot-now NAME (taken at once, for a state that times out).
 #
 # A run is <scenario>/<date>-<time>-<rng>/: index.html (everything on one page), shots/ (the
-# captures as taken), trees/ (the item tree of each shot), diff-<run>/ (a comparison with that run).
+# captures as taken), trees/ (the item tree of each shot), logs/ (the shell's log per journey),
+# diff-<run>/ (a comparison with that run).
 
 ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
 # A changed pixel differs by more than this share in one channel; a changed area is a connected
@@ -147,6 +148,8 @@ atlas_journey() {
       [[ "${steps[n + 1]:-}" == shot-now\ * ]] || sleep "$settle"
     fi
   done
+  # The shell's log is the one record of what it saw; the slot dir goes with the slot.
+  command cp "$(slot_dir "$slot")/qs.log" "$run/logs/$journey.qs.log"
   slot_kill "$slot"
   unset DRIVE_SLOT
 }
@@ -166,10 +169,10 @@ atlas_run() {
   prev="$(atlas_runs "$dir" | tail -1)"
   id="$(date +%Y%m%d-%H%M%S)-$(printf '%04x' "$RANDOM")"
   run="$dir/.$id"
-  mkdir -p "$run/shots" "$run/trees"
+  mkdir -p "$run/shots" "$run/trees" "$run/logs"
   command cp "$scenario" "$run/scenario"
   printf '%s\n' "$(git -C "$desktop" describe --always --dirty 2>/dev/null || echo unknown)" >"$run/desktop-version"
-  slot="at$((RANDOM % 100000))"
+  slot="at$((RANDOM % 10000))"
   start=(--desktop "$desktop")
   [[ -z "$hypr" ]] || start+=(--hypr "$hypr")
   [[ -z "$clock" ]] || start+=(--clock "$clock")

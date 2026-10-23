@@ -247,7 +247,11 @@ slot_aquamarine() {
 # no logind seat) and the root is read-only, so nothing in it reaches the owner's session.
 slot_start_desktop() {
   local name="$1" size="$2" scale="$3" qs_path="$4" hypr="$5" clock="$6" fixtures="$7" dir rt node aq i inside=/run/drive-slot
-  ((${#name} <= 8)) || die "a desktop slot NAME has at most 8 characters (socket path limit)"
+  # The shell reaches Hyprland's event socket, $rt/hypr/<signature of up to 62>/.socket2.sock,
+  # through Qt, which refuses a path of 107 bytes or more (measured). Past it the shell starts
+  # without window and workspace events, and the rail never shows a window or an urgent one.
+  local longest=$((106 - 82 - ${#XDG_RUNTIME_DIR} - 4))
+  ((${#name} <= longest)) || die "a desktop slot NAME has at most $longest characters (Hyprland event socket path limit)"
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
   [[ -z "$hypr" || -f "$hypr" ]] || die "--hypr '$hypr' does not exist"
