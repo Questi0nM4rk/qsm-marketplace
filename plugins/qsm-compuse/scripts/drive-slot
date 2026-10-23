@@ -250,7 +250,8 @@ slot_start_desktop() {
   # The shell reaches Hyprland's event socket, $rt/hypr/<signature of up to 62>/.socket2.sock,
   # through Qt, which refuses a path of 107 bytes or more (measured). Past it the shell starts
   # without window and workspace events, and the rail never shows a window or an urgent one.
-  local longest=$((106 - 82 - ${#XDG_RUNTIME_DIR} - 4))
+  local around="$XDG_RUNTIME_DIR/ds-/hypr//.socket2.sock" longest
+  longest=$((106 - ${#around} - 62))
   ((${#name} <= longest)) || die "a desktop slot NAME has at most $longest characters (Hyprland event socket path limit)"
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
