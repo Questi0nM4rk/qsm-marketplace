@@ -32,5 +32,6 @@
     "sogou videos"
   ],
   "news": ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"],
-  "music": ["deezer", "mixcloud", "soundcloud"]
+  "music": ["deezer", "mixcloud", "soundcloud"],
+  "map": ["apple maps", "photon"]
 }

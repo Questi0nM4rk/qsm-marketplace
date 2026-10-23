@@ -34,6 +34,7 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `videos` | Video discovery metadata and source links across video platforms and indexes. The exact 12-engine set is in [USAGE.md](../../USAGE.md#search-profiles). Results may include iframe or media metadata. |
 | `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. The exact five-engine set is in [USAGE.md](../../USAGE.md#search-profiles). It does not guarantee freshness, language, or journalism-only results. |
 | `music` | Music catalog metadata and source discovery through `deezer`, `mixcloud` and `soundcloud`. It does not play or download media. |
+| `map` | Place and geocoding result links through `apple maps` and `photon`. This is not routing and does not access your location. |
 
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
@@ -43,6 +44,7 @@ qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
+qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -59,6 +61,8 @@ Videos returns metadata and source links only. It does not play videos, fetch me
 to reuse content.
 Music finds catalog metadata and source links only. It does not play or download music, or grant
 rights to reuse it.
+Map returns place and geocoding result links only. It does not provide routes or guarantee
+coordinates.
 
 ## Red flags
 

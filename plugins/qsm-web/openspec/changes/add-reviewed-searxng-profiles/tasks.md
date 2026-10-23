@@ -26,7 +26,7 @@ integrates each returned diff before the next starts.
       fixture. Teach catalog discovery rather than playback. Proof: the real-entry suite proves
       exact membership, preflight refusal and unchanged normalized results. Blocks on 1.3
       integration.
-- [ ] 1.5 Add `map` with `apple maps`, `photon` across the common file set and fixture. Teach
+- [x] 1.5 Add `map` with `apple maps`, `photon` across the common file set and fixture. Teach
       place/geocoding links without adding routing, location access or result fields. Proof: the
       real-entry suite proves exact membership, preflight refusal and unchanged result shape. Blocks
       on 1.4 integration.

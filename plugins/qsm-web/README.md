@@ -56,6 +56,7 @@ qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
+qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -72,8 +73,9 @@ qsm-web browserbox stop "$name"
 - `--profile` selects a named set: `default` follows server defaults, `niche` searches personal
   sites and discussions, `academic` searches publications, `it` searches technical sources,
   `images` discovers images, icons, art and memes, `videos` finds video metadata links, `news`
-  finds regional news links, including Korean Naver and Chinese WeChat sources, and `music` finds
-  catalog metadata and source links from Deezer, Mixcloud and SoundCloud. News does not
+  finds regional news links, including Korean Naver and Chinese WeChat sources, `music` finds
+  catalog metadata and source links from Deezer, Mixcloud and SoundCloud, and `map` finds place and
+  geocoding result links. Map is not routing and does not guarantee coordinates. News does not
   guarantee freshness, language or journalism-only results. Manual `--engines` is an alternative,
   not combinable with a profile. Targeted profiles require every engine in the instance's `/config`
   catalog. Image results may include media URLs, but this tool does not fetch media or grant reuse

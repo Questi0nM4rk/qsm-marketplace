@@ -6,7 +6,7 @@ warnings, data }` on stdout. Codes: `ok` 0, `failed` 1, `usage` 2, `missing` 4.
 ```bash
 qsm-web searxng search <query...> [--instance url] [--num-results n] [--timeout ms]
                         [--engines a,b] [--language en] [--safesearch 0|1|2]
-                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news|music]
+                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news|music|map]
 qsm-web opensrc get <spec|address> [--project <dir>]
 qsm-web doctor        # bins, tvly, the Tavily skills, the Context7 skill
 qsm-web browserbox start | ls | stop <name> | stop --all
@@ -44,6 +44,7 @@ Profiles select sources for one query without changing the instance's defaults:
 | `videos` | Video discovery metadata and source links across video platforms and indexes. Exact set below. Results may include iframe or media metadata. |
 | `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. Exact set below. It does not guarantee freshness, language, or journalism-only results. |
 | `music` | Music catalog metadata and source discovery. Exact set below. It does not play or download media. |
+| `map` | Place and geocoding result links. It is not routing and does not guarantee coordinates. |
 
 The IT set contains these 36 engines:
 
@@ -79,6 +80,10 @@ The Music profile selects these three sources:
 
 `deezer`, `mixcloud`, `soundcloud`.
 
+The Map profile selects these two sources, in this order:
+
+`apple maps`, `photon`.
+
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
@@ -87,6 +92,7 @@ qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
+qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 ```
 
 `--profile` is the only named source-selection flag. It is exclusive with `--engines`, including
