@@ -54,9 +54,10 @@
               "videos",
               "news",
               "music",
-              "map"
+              "map",
+              "files"
             ],
-            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery, video metadata links, regional news, music catalog or place/geocoding links; exclusive with --engines"
+            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery, video metadata links, regional news, music catalog, place/geocoding links or narrow file indexes; exclusive with --engines"
           },
           {
             "name": "engines",

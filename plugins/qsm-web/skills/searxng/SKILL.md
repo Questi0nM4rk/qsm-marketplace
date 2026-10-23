@@ -35,6 +35,7 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. The exact five-engine set is in [USAGE.md](../../USAGE.md#search-profiles). It does not guarantee freshness, language, or journalism-only results. |
 | `music` | Music catalog metadata and source discovery through `deezer`, `mixcloud` and `soundcloud`. It does not play or download media. |
 | `map` | Place and geocoding result links through `apple maps` and `photon`. This is not routing and does not access your location. |
+| `files` | Torrent metadata through `bt4g` and Sailfish app listings through `openrepos`, not comprehensive file discovery. Results do not grant reuse rights. |
 
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
@@ -45,6 +46,7 @@ qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web searxng search "Brandenburg Gate Berlin" --profile map
+qsm-web searxng search "Sailfish OS apps" --profile files
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -63,6 +65,8 @@ Music finds catalog metadata and source links only. It does not play or download
 rights to reuse it.
 Map returns place and geocoding result links only. It does not provide routes or guarantee
 coordinates.
+Files searches only the `bt4g` and `openrepos` indexes. It does not download files, open magnet
+links, or establish content reuse rights.
 
 ## Red flags
 

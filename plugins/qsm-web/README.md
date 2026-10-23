@@ -57,6 +57,7 @@ qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web searxng search "Brandenburg Gate Berlin" --profile map
+qsm-web searxng search "Sailfish OS apps" --profile files
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -71,17 +72,18 @@ qsm-web browserbox stop "$name"
 - Search needs an instance: `--instance <url>` or `QSM_SEARXNG_INSTANCE`. The instance owns the
   engine and policy defaults; only the flags you pass are sent.
 - `--profile` selects a named set: `default` follows server defaults, `niche` searches personal
-  sites and discussions, `academic` searches publications, `it` searches technical sources,
-  `images` discovers images, icons, art and memes, `videos` finds video metadata links, `news`
-  finds regional news links, including Korean Naver and Chinese WeChat sources, `music` finds
-  catalog metadata and source links from Deezer, Mixcloud and SoundCloud, and `map` finds place and
-  geocoding result links. Map is not routing and does not guarantee coordinates. News does not
-  guarantee freshness, language or journalism-only results. Manual `--engines` is an alternative,
-  not combinable with a profile. Targeted profiles require every engine in the instance's `/config`
-  catalog. Image results may include media URLs, but this tool does not fetch media or grant reuse
-  rights. Video results may include iframe/media metadata, but this tool does not play videos, fetch
-  media or grant reuse rights. Music discovery does not play or download media or grant reuse
-  rights. See [USAGE.md](USAGE.md) for the sets and failures.
+  sites and discussions, `academic` searches publications, `it` searches technical sources, `images`
+  discovers images, icons, art and memes, `videos` finds video metadata links, `news` finds regional
+  news links, including Korean Naver and Chinese WeChat sources, `music` finds catalog metadata and
+  source links from Deezer, Mixcloud and SoundCloud, `map` finds place and geocoding result links,
+  and `files` searches torrent metadata (`bt4g`) and Sailfish app listings (`openrepos`). Files
+  search is not comprehensive and grants no reuse rights. Map is not routing and does not guarantee
+  coordinates. News does not guarantee freshness, language or journalism-only results. Manual
+  `--engines` is an alternative, not combinable with a profile. Targeted profiles require every
+  engine in the instance's `/config` catalog. Image results may include media URLs, but this tool
+  does not fetch media or grant reuse rights. Video results may include iframe/media metadata, but
+  this tool does not play videos, fetch media or grant reuse rights. Music discovery does not play
+  or download media or grant reuse rights. See [USAGE.md](USAGE.md) for the sets and failures.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.

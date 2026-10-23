@@ -30,7 +30,7 @@ integrates each returned diff before the next starts.
       place/geocoding links without adding routing, location access or result fields. Proof: the
       real-entry suite proves exact membership, preflight refusal and unchanged result shape. Blocks
       on 1.4 integration.
-- [ ] 1.6 Add `files` with `bt4g`, `openrepos` across the common file set and fixture. State narrow
+- [x] 1.6 Add `files` with `bt4g`, `openrepos` across the common file set and fixture. State narrow
       metadata coverage and no inferred reuse rights; add no download action or blanket protocol
       filter. Proof: the real-entry suite proves exact membership and refusal without executing a
       result link. Blocks on 1.5 integration.

@@ -33,5 +33,6 @@
   ],
   "news": ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"],
   "music": ["deezer", "mixcloud", "soundcloud"],
-  "map": ["apple maps", "photon"]
+  "map": ["apple maps", "photon"],
+  "files": ["bt4g", "openrepos"]
 }

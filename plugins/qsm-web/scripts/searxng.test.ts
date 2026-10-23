@@ -471,6 +471,7 @@ describe("qsm-web searxng search profiles", () => {
     ["news", reviewed.news],
     ["music", reviewed.music],
     ["map", reviewed.map],
+    ["files", reviewed.files],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
@@ -589,7 +590,7 @@ describe("qsm-web searxng search profiles", () => {
     const help = await run(["searxng", "search", "--help"]);
     expect(help.exit).toBe(0);
     expect(help.stdout).not.toContain("--category");
-    expect(help.stdout).toContain("academic|it|images|videos|news|music|map");
+    expect(help.stdout).toContain("academic|it|images|videos|news|music|map|files");
   });
 
   for (const [profile, names] of profiles) {
