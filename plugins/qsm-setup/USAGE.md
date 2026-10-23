@@ -13,14 +13,21 @@ flags.
 Exit codes: 0 done, 1 a plugin failed or doctor found a FAIL (or `relink --check` found it stale),
 2 usage, 4 no marketplace root or no `origin/main`.
 
+Plugins declare checkout-local helper links once in `qsm.links` in their `qsm.json`, for example
+`{"qsm":{"links":{"helper":"scripts/helper"},"commands":{}}}`. The shared installer creates
+the links. Cleanup preserves only exact declared names and targets, including helpers of plugins
+not selected for this install. Undeclared checkout links remain obsolete. Invalid or conflicting
+declarations fail before cleanup. These helpers are not compiled CLI declarations or completions.
+
 ## What `activate` does
 
 `activate qsm-setup` writes `CLAUDE.md`, `rules/implementation.md`, `rules/context.md`,
-`rules/git.md` and `output-styles/qsm.md` into `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and selects the
-`qsm` output style. In every file the generated text sits between a `<!-- qsm-setup-begin: ... -->`
-and a `<!-- qsm-setup-end: ... -->` line: qsm-setup owns that area and rewrites it; text outside it is
-yours. The output style keeps its frontmatter first, above the area, and the frontmatter is qsm's
-too: an edit to it is replaced, and the result says `replaced the frontmatter`.
+`rules/git.md` and `output-styles/qsm.md` into `~/.claude` (or `$CLAUDE_CONFIG_DIR`), and selects
+the `qsm` output style. In every file the generated text sits between a
+`<!-- qsm-setup-begin: ... -->` and a `<!-- qsm-setup-end: ... -->` line: qsm-setup owns that area
+and rewrites it; text outside it is yours. The output style keeps its frontmatter first, above the
+area, and the frontmatter is qsm's too: an edit to it is replaced, and the result says
+`replaced the frontmatter`.
 
 `--instructions` applies to every file. `replace` rewrites only the marked area and keeps every byte
 outside it. `overwrite` rewrites the whole file. `skip` leaves every file, `settings.json` and the

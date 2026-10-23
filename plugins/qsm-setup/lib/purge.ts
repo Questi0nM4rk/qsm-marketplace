@@ -10,7 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { binDir, claudeDir, type Env, fishCompletionDir, home } from "../../../lib/paths.ts";
 import { isLink, purgeFarm } from "../../../lib/legacy-farm.ts";
 
@@ -23,10 +23,12 @@ export interface PurgeReport {
 
 export interface PurgeOptions {
   readonly env: Env;
-  /** the marketplace checkout; a symlink into it is an old link farm */
+  /** the marketplace checkout; undeclared links into it are old link-farm entries */
   readonly root: string;
   readonly marketplace: string;
   readonly plugins: ReadonlySet<string>;
+  /** Exact helper basename and resolved source pairs from the current plugin manifests. */
+  readonly links?: ReadonlyMap<string, string>;
   readonly check: boolean;
 }
 
@@ -91,6 +93,9 @@ function oldLink(path: string, root: string): { why: string; uvTool?: string } |
 function purgeLinks(bins: string, o: PurgeOptions, found: string[]) {
   const names = existsSync(bins) ? readdirSync(bins) : [];
   for (const path of names.map((n) => join(bins, n)).filter(isLink)) {
+    if (o.links?.get(basename(path)) === linkTarget(path)) {
+      continue;
+    }
     const old = oldLink(path, o.root);
     if (old === null) {
       continue;

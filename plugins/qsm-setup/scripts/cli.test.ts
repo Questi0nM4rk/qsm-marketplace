@@ -1,7 +1,15 @@
 // qsm-setup through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { dataOf, envelopeOf, isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { commit, git } from "../../../lib/fixtures/git.ts";
@@ -109,6 +117,95 @@ describe("qsm-setup cli", () => {
 });
 
 describe("install selection", () => {
+  test("declared helpers survive full install and relink while obsolete checkout links are removed", () => {
+    const home = sandboxDir("qsm-setup-helpers-");
+    const root = join(home, "repo");
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    for (const name of ["qsm-helper", "qsm-other", "qsm-setup"]) {
+      const dir = join(root, "plugins", name);
+      mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+      mkdirSync(join(dir, "scripts"), { recursive: true });
+      writeFileSync(join(dir, ".claude-plugin/plugin.json"), JSON.stringify({ name }));
+      writeFileSync(
+        join(dir, "scripts/install.ts"),
+        `import { installScript } from ${JSON.stringify(join(ROOT, "lib/install-base.ts"))};\nexport const install = installScript(import.meta);\n`,
+      );
+      writeFileSync(join(dir, "qsm.json"), JSON.stringify({ qsm: { commands: {} } }));
+    }
+    const manifest = join(root, "plugins/qsm-helper/qsm.json");
+    const source = join(root, "plugins/qsm-helper/scripts/helper");
+    const declared = { qsm: { links: { helper: "scripts/helper" }, commands: {} } };
+    writeFileSync(manifest, JSON.stringify(declared));
+    writeFileSync(source, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    symlinkSync(source, join(bin, "obsolete"));
+    const foreign = join(home, "foreign");
+    writeFileSync(foreign, "mine");
+    symlinkSync(foreign, join(bin, "mine"));
+    const env = isolatedEnv(home, { QSM_BIN_DIR: bin, QSM_SETUP_STATE_DIR: join(home, "state") });
+    const invoke = (args: string[]) => runBin(CLI, [...args, "--root", root, "--json"], { env });
+    const plan = invoke(["install", "--all", "--dry-run"]);
+    expect(plan.exit).toBe(0);
+    expect(plan.stdout).toContain(`would remove ${join(bin, "obsolete")}`);
+    expect(plan.stdout).not.toContain(`would remove ${join(bin, "helper")}`);
+    expect(plan.stdout).toContain(`would link ${join(bin, "helper")}`);
+    expect(existsSync(join(bin, "helper"))).toBe(false);
+    expect(readlinkSync(join(bin, "obsolete"))).toBe(source);
+    const installed = invoke(["install", "--all"]);
+    expect(envelopeOf(installed.stdout).code).toBe("ok");
+    expect(installed.stdout).not.toContain("left behind");
+    expect(existsSync(join(bin, "obsolete"))).toBe(false);
+    expect(readlinkSync(join(bin, "helper"))).toBe(source);
+    expect(readlinkSync(join(bin, "mine"))).toBe(foreign);
+    const again = invoke(["install", "--all"]);
+    expect(envelopeOf(again.stdout).code).toBe("ok");
+    expect(again.stdout).toContain("purge: nothing older to remove");
+    expect(invoke(["install", "qsm-other"]).exit).toBe(0);
+    expect(readlinkSync(join(bin, "helper"))).toBe(source);
+    expect(invoke(["relink", "--check"]).exit).toBe(0);
+    // Use the real bootstrap installer source, relocating only its imports into the fixture.
+    const bootstrap = join(root, "plugins/qsm-setup/scripts/install.ts");
+    writeFileSync(
+      bootstrap,
+      readFileSync(join(import.meta.dir, "install.ts"), "utf8")
+        .replace(
+          '"../../../lib/install-base.ts"',
+          JSON.stringify(join(ROOT, "lib/install-base.ts")),
+        )
+        .replace(
+          '"../lib/discover.ts"',
+          JSON.stringify(join(ROOT, "plugins/qsm-setup/lib/discover.ts")),
+        ),
+    );
+    // Invalid or conflicting declarations must fail before even obsolete links are removed.
+    for (const links of [{ helper: "scripts/missing" }, { helper: "../../outside" }]) {
+      const farm = join(home, "data/qsm/bin");
+      mkdirSync(farm, { recursive: true });
+      symlinkSync(source, join(farm, "helper"));
+      symlinkSync(source, join(bin, "obsolete"));
+      writeFileSync(manifest, JSON.stringify({ qsm: { links, commands: {} } }));
+      expect(runBin(bootstrap, ["--json"], { env }).exit).not.toBe(0);
+      expect(readlinkSync(join(farm, "helper"))).toBe(source);
+      const failed = invoke(["install", "--all"]);
+      expect(failed.exit).not.toBe(0);
+      expect(failed.stdout).toContain("qsm.links.helper");
+      expect(readlinkSync(join(bin, "obsolete"))).toBe(source);
+      writeFileSync(manifest, JSON.stringify(declared));
+      expect(invoke(["install", "--all"]).exit).toBe(0);
+    }
+    const otherManifest = join(root, "plugins/qsm-other/qsm.json");
+    writeFileSync(join(root, "plugins/qsm-other/scripts/helper"), "#!/bin/sh\n", { mode: 0o755 });
+    writeFileSync(otherManifest, JSON.stringify(declared));
+    symlinkSync(source, join(bin, "obsolete"));
+    expect(invoke(["install", "--all"]).stdout).toContain("already owned by");
+    expect(readlinkSync(join(bin, "obsolete"))).toBe(source);
+    writeFileSync(otherManifest, JSON.stringify({ qsm: { commands: {} } }));
+    writeFileSync(manifest, JSON.stringify({ qsm: { commands: {} } }));
+    expect(invoke(["install", "--all"]).exit).toBe(0);
+    expect(existsSync(join(bin, "helper"))).toBe(false);
+    expect(readlinkSync(join(bin, "mine"))).toBe(foreign);
+  }, 30_000);
+
   test("An unknown plugin name", () => {
     const r = run(["install", "nope", "--root", ROOT, "--json"]);
     expect(r.exit).toBe(2);

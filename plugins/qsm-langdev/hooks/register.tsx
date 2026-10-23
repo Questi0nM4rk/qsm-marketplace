@@ -3,7 +3,7 @@
 // `edited` verb's. The stop gate (hooks.json, dist/gate-hook) stays a classic command hook: its
 // event is SubagentStop, which has no function form, and a function hook cannot block a stop.
 import type { Caught, EngineInterface, On } from "claude-code";
-import { gitDecision } from "../lib/blocked-git.ts";
+import { gitDenial } from "../lib/blocked-git.ts";
 import { registerNoun } from "./noun.generated.ts";
 
 const EDIT_TOOLS: ReadonlySet<string> = new Set(["Write", "Edit", "NotebookEdit"]);
@@ -31,23 +31,14 @@ function stringField(value: unknown, key: string): string | null {
   return typeof field === "string" ? field : null;
 }
 
-/** A commit or push that skips the git hooks is refused; `QSM_LANGDEV_ALLOW` goes to the person.
- * The guard fails closed. */
+/** A commit or push that skips the git hooks is refused, and so is any `QSM_LANGDEV_ALLOW`: the
+ * person runs that one themselves with `!`. The guard fails closed. */
 function registerGuard(on: On): void {
   on("tool.call", { tool: "Bash" }, (_$, e, next) => {
-    const answer = e.tool === "Bash" ? gitDecision(e.command) : null;
-    return answer?.decision === "deny" ? { deny: answer.reason } : next(e);
+    const denial = e.tool === "Bash" ? gitDenial(e.command) : null;
+    return denial === null ? next(e) : { deny: denial };
   }).catch(($, _e, next) => ({
     deny: `qsm-langdev guard failed: ${failed($, "tool.call", next.error)}`,
-  }));
-
-  on("tool.check", { tool: "Bash" }, (_$, e, next) => {
-    const command = stringField(e.input, "command");
-    const answer = command === null ? null : gitDecision(command);
-    return answer?.decision === "ask" ? { decision: "ask", reason: answer.reason } : next(e);
-  }).catch(($, _e, next) => ({
-    decision: "deny",
-    reason: `qsm-langdev guard failed: ${failed($, "tool.check", next.error)}`,
   }));
 }
 

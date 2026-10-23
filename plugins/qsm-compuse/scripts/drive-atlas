@@ -6,7 +6,7 @@
 # Scenario, one directive per line ('#' starts a comment, ~ is the home directory):
 #   desktop PATH            the shell's Quickshell path (required)
 #   hypr FILE               the Hyprland lua config the nested desktop reads
-#   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock for the shell (needs libfaketime)
+#   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock, handed to the shell as DRIVE_CLOCK
 #   settle SECONDS          the pause after each step (default 0.6)
 #   journey NAME            starts a journey; the steps below belong to it
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),

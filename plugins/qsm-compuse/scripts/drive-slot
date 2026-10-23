@@ -256,7 +256,7 @@ slot_start_desktop() {
     case "$p" in /tmp | /tmp/* | /run | /run/*) die "--desktop and --hypr cannot live under /tmp or /run (the sandbox hides both): $p" ;; *) ;; esac
   done
   [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
-  [[ -z "$clock" || -f /usr/lib/faketime/libfaketime.so.1 ]] || die "--clock needs libfaketime (pacman -S libfaketime)"
+  [[ -z "$clock" || "$clock" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] || die "--clock must be YYYY-MM-DD HH:MM:SS: $clock"
   local tool
   for tool in bwrap sway swaymsg niri start-hyprland qs dbus-run-session pkg-config; do need "$tool"; done
   slot_alive "$name" && die "slot '$name' is already running"
