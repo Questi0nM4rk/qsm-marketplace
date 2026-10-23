@@ -48,16 +48,14 @@ done
 awk '/^cursor_flash_time=/ { next } { print } /^\[Interface\]$/ { print "cursor_flash_time=0"; done = 1 }
   END { if (!done) print "[Interface]\ncursor_flash_time=0" }' "$home_cfg/qt6ct/qt6ct.conf" 2>/dev/null >"$cfg/qt6ct/qt6ct.conf"
 # DRIVE_CLOCK is the fixed wall clock a desktop shows and DRIVE_FIXTURES the directory of recorded
-# readings it shows instead of live ones (see USAGE.md); either is unset when the slot has none.
-# hyprlock shows the time itself and, unlike qs (jemalloc), runs under libfaketime, so the
-# shell finds a hyprlock on its PATH that reads the fixed clock.
-[[ -n "${DRIVE_FIXTURES:-}" ]] || unset DRIVE_FIXTURES
-if [[ -n "${DRIVE_CLOCK:-}" && -x /usr/bin/hyprlock ]]; then
+# readings it shows instead of live ones (see USAGE.md); both are empty when the slot has none.
+# DRIVE_FAKETIME is set with a clock when hyprlock exists: the shell then finds a hyprlock on its
+# PATH that shows the fixed clock too.
+if [[ -n "${DRIVE_FAKETIME:-}" ]]; then
   mkdir -p "$dir/bin"
-  printf '#!/bin/sh\nLD_PRELOAD=/usr/lib/faketime/libfaketime.so.1 FAKETIME="@%s" exec /usr/bin/hyprlock "$@"\n' "$DRIVE_CLOCK" >"$dir/bin/hyprlock"
+  printf '#!/bin/sh\nLD_PRELOAD=%s FAKETIME="@%s" FAKETIME_DONT_FAKE_MONOTONIC=1 exec /usr/bin/hyprlock "$@"\n' "$DRIVE_FAKETIME" "${DRIVE_CLOCK:?}" >"$dir/bin/hyprlock"
   chmod +x "$dir/bin/hyprlock"
   PATH="$dir/bin:$PATH"
 fi
-[[ -n "${DRIVE_CLOCK:-}" ]] || unset DRIVE_CLOCK
 XDG_CONFIG_HOME="$cfg" QT_QPA_PLATFORMTHEME=qt6ct dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 wait

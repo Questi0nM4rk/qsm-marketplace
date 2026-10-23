@@ -258,9 +258,15 @@ slot_start_desktop() {
     case "$p" in /tmp | /tmp/* | /run | /run/*) die "--desktop, --hypr and --fixtures cannot live under /tmp or /run (the sandbox hides both): $p" ;; *) ;; esac
   done
   [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
-  [[ -z "$clock" || "$clock" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] || die "--clock must be YYYY-MM-DD HH:MM:SS: $clock"
-  [[ -z "$clock" || ! -x /usr/bin/hyprlock || -f /usr/lib/faketime/libfaketime.so.1 ]] \
-    || die "--clock needs libfaketime for the slot's hyprlock (pacman -S libfaketime)"
+  # The round trip through date rejects a value out of range (month 13, 30 February), which the
+  # shell would show as an invalid date or roll over.
+  [[ -z "$clock" || "$(date -d "$clock" '+%F %T' 2>/dev/null)" == "$clock" ]] || die "--clock must be a real YYYY-MM-DD HH:MM:SS: $clock"
+  # hyprlock draws its own time and, unlike qs (jemalloc), runs under libfaketime.
+  local faketime=""
+  if [[ -n "$clock" && -x /usr/bin/hyprlock ]]; then
+    faketime=/usr/lib/faketime/libfaketime.so.1
+    [[ -f "$faketime" ]] || die "--clock needs libfaketime for the slot's hyprlock (pacman -S libfaketime)"
+  fi
   local tool
   for tool in bwrap sway swaymsg niri start-hyprland qs dbus-run-session pkg-config; do need "$tool"; done
   slot_alive "$name" && die "slot '$name' is already running"
@@ -274,7 +280,7 @@ slot_start_desktop() {
   chmod 700 "$rt"
   slot_write_desktop_config "$dir" "$size" "$scale" "$hypr" "$inside"
   env -i HOME="$HOME" USER="${USER:-}" PATH="$PATH" LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="$rt" \
-    DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_FIXTURES="$fixtures" DRIVE_AQUAMARINE="$aq" \
+    DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_FIXTURES="$fixtures" DRIVE_FAKETIME="$faketime" DRIVE_AQUAMARINE="$aq" \
     setsid bwrap --ro-bind / / --dev /dev --tmpfs /dev/shm --dev-bind "$node" "$node" --proc /proc \
     --tmpfs /run --bind "$rt" "$rt" --bind "$dir" "$inside" --tmpfs /tmp \
     --unshare-pid --unshare-ipc --new-session \
