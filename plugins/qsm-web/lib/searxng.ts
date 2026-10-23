@@ -4,6 +4,23 @@ import { z } from "zod";
 import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
+const SEARCH_PROFILE = z.enum(["default", "niche", "academic"]);
+export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
+
+const PROFILE_ENGINES = {
+  niche: ["searchmysite", "wiby", "mwmbl", "boardreader"],
+  academic: ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"],
+} as const;
+
+/** Validate the caller's profile name before it reaches the search request. */
+export function parseSearchProfile(raw: string): SearchProfile {
+  const profile = SEARCH_PROFILE.safeParse(raw);
+  if (!profile.success) {
+    throw new UsageError("--profile must be default, niche or academic");
+  }
+  return profile.data;
+}
+
 export interface SearchResult {
   readonly url: string;
   readonly title: string;
@@ -22,11 +39,23 @@ export interface SearchResult {
 export interface SearchOptions {
   readonly query: string;
   readonly numResults: number;
+  readonly profile?: SearchProfile;
   readonly engines?: readonly string[];
   readonly timeRange?: string;
   readonly category?: string;
   readonly language?: string;
   readonly safesearch?: number;
+}
+
+/** A profile owns source selection; explicit engines and categories belong to unprofiled calls. */
+function profileEngines(opts: SearchOptions): readonly string[] | undefined {
+  if (opts.profile === undefined) {
+    return undefined;
+  }
+  if (opts.engines !== undefined || opts.category !== undefined) {
+    throw new UsageError("--profile cannot be combined with --engines or --category");
+  }
+  return opts.profile === "default" ? undefined : PROFILE_ENGINES[opts.profile];
 }
 
 /** How many results the client keeps when nothing else is asked for. */
@@ -116,6 +145,44 @@ const RESPONSE = z.object({
   unresponsive_engines: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
 
+const ENGINE_CATALOG = z.object({
+  engines: z.array(z.object({ name: z.string().trim().min(1) })),
+});
+
+/** Reject unreadable JSON without echoing any part of the instance's response body. */
+function readJson(address: string, raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new QsmError("failed", `${address} answered with text that is not JSON`, { cause: err });
+  }
+}
+
+/** Missing names must not turn a targeted profile into the server's default search. */
+async function requireProfileEngines(
+  instance: string,
+  engines: readonly string[],
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${instance}/config`, { signal });
+  if (!response.ok) {
+    throw new QsmError("failed", `${instance}/config answered HTTP ${response.status}`);
+  }
+  const parsed = readJson(`${instance}/config`, await response.text());
+  const catalog = ENGINE_CATALOG.safeParse(parsed);
+  if (!catalog.success) {
+    throw new QsmError("failed", `${instance}/config answered with an invalid engine catalog`);
+  }
+  const registered = new Set(catalog.data.engines.map((engine) => engine.name));
+  const missing = engines.filter((name) => !registered.has(name));
+  if (missing.length > 0) {
+    throw new QsmError(
+      "missing",
+      `profile engines are not registered: ${missing.join(", ")}; use --engines to choose available sources`,
+    );
+  }
+}
+
 type RawResult = z.infer<typeof RAW_RESULT>;
 type SearxngResponse = z.infer<typeof RESPONSE>;
 
@@ -178,12 +245,7 @@ function readResponse(body: SearxngResponse, numResults: number): SearchOutcome 
  * a body this client cannot read are two different faults, and neither is echoed.
  */
 function readOutcome(instance: string, raw: string, numResults: number): SearchOutcome {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err: unknown) {
-    throw new QsmError("failed", `${instance} answered with text that is not JSON`, { cause: err });
-  }
+  const parsed = readJson(instance, raw);
   const body = RESPONSE.safeParse(parsed);
   if (!body.success) {
     throw new QsmError("failed", `${instance} answered with a JSON shape this client cannot read`);
@@ -204,12 +266,19 @@ export async function search(
   opts: SearchOptions,
   timeoutMs: number,
 ): Promise<SearchOutcome> {
-  const url = buildSearchUrl(instance, opts);
+  const selectedEngines = profileEngines(opts);
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort(new Error(`no answer within ${timeoutMs} ms`));
   }, timeoutMs);
   try {
+    if (selectedEngines !== undefined) {
+      await requireProfileEngines(instance, selectedEngines, controller.signal);
+    }
+    const url = buildSearchUrl(
+      instance,
+      selectedEngines === undefined ? opts : { ...opts, engines: selectedEngines },
+    );
     const resp = await fetch(url, { signal: controller.signal });
     if (!resp.ok) {
       throw new QsmError("failed", `${instance} answered HTTP ${resp.status}`);

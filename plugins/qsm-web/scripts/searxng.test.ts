@@ -460,3 +460,137 @@ describe("qsm-web searxng search answers it cannot use", () => {
     });
   }
 });
+
+describe("qsm-web searxng search profiles", () => {
+  const profiles = [
+    ["niche", ["searchmysite", "wiby", "mwmbl", "boardreader"]],
+    ["academic", ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"]],
+  ] as const;
+  const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
+  const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
+
+  // Catalog shape follows SearXNG's /config response. Default-disabled engines are still loaded.
+  function catalog(names: readonly string[]): Response {
+    return json({ engines: names.map((name) => ({ name, enabled: false })) });
+  }
+
+  test("default leaves server selection alone and skips the catalog", async () => {
+    const inst = withResults([PAGE]);
+    const r = await searchVerb(inst, "--profile", "default", "--language", "cs");
+    expect(r.exit).toBe(0);
+    expect(inst.seen).toHaveLength(1);
+    expect(asked(inst).pathname).toBe("/search");
+    expect([...asked(inst).searchParams.keys()].toSorted()).toEqual(["format", "language", "q"]);
+    expect(asked(inst).searchParams.get("language")).toBe("cs");
+  });
+
+  for (const [profile, names] of profiles) {
+    test(`${profile} selects exactly its registered engines without a category`, async () => {
+      const inst = instance((url) =>
+        url.pathname.endsWith("/config")
+          ? catalog(names)
+          : json({ results: [{ ...page, engine: names[0], engines: [names[0]] }] }),
+      );
+      const r = await run([
+        "searxng",
+        "search",
+        "personal websites",
+        "--instance",
+        `${inst.base}/searx/`,
+        "--profile",
+        profile,
+        "--language",
+        "en",
+        "--time-range",
+        "year",
+        "--num-results",
+        "1",
+      ]);
+      expect(r.exit).toBe(0);
+      expect(inst.seen.map((url) => url.pathname)).toEqual(["/searx/config", "/searx/search"]);
+      const params = inst.seen.at(1)?.searchParams;
+      expect(params?.get("engines")).toBe(names.join(","));
+      expect(params?.has("categories")).toBe(false);
+      expect(params?.has("profile")).toBe(false);
+      expect(params?.get("language")).toBe("en");
+      expect(params?.get("time_range")).toBe("year");
+      expect(Results.parse(JSON.parse(r.stdout))).toHaveLength(1);
+    });
+  }
+
+  test("unknown profiles and conflicting selections fail before any request", async () => {
+    const inst = withResults([PAGE]);
+    for (const profile of ["default", "niche", "academic"]) {
+      for (const selection of [
+        ["--engines", "wiby"],
+        ["--engines", ""],
+        ["--category", "general"],
+        ["--category", ""],
+      ]) {
+        const r = await searchVerb(inst, "--profile", profile, ...selection);
+        expect(r.exit).toBe(2);
+        expect(r.stderr).toContain("--profile");
+      }
+    }
+    const unknown = await searchVerb(inst, "--profile", "unknown");
+    expect(unknown.exit).toBe(2);
+    expect(inst.seen).toHaveLength(0);
+  });
+
+  test("one missing engine refuses the whole profile without a search", async () => {
+    const inst = instance(() => catalog(["searchmysite", "wiby", "boardreader"]));
+    const { exit, envelope } = await searchJson(inst, "--profile", "niche");
+    expect(exit).toBe(4);
+    expect(envelope.code).toBe("missing");
+    expect(envelope.message).toContain("mwmbl");
+    expect(envelope.message).toContain("--engines");
+    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+  });
+
+  const unusableCatalogs = [
+    ["HTTP error", () => new Response("private catalog body", { status: 503 })],
+    ["non-JSON", () => new Response("private catalog body")],
+    ["wrong shape", () => json({ engines: [{ name: 17 }], body: "private catalog body" })],
+  ] as const;
+  for (const [what, response] of unusableCatalogs) {
+    test(`a catalog with ${what} fails without searching or printing its body`, async () => {
+      const inst = instance(() => response());
+      const { exit, envelope } = await searchJson(inst, "--profile", "niche");
+      expect(exit).toBe(1);
+      expect(envelope.code).toBe("failed");
+      expect(envelope.message).not.toContain("private catalog body");
+      expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+    });
+  }
+
+  test("a stalled catalog body times out without sending a search", async () => {
+    const inst = instance(() => stalled());
+    const { exit, envelope } = await searchJson(inst, "--profile", "niche", "--timeout", "150");
+    expect(exit).toBe(1);
+    expect(envelope.message).toContain("no answer within 150 ms");
+    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+  });
+
+  test("inventory and search share one deadline rather than receiving a budget each", async () => {
+    const inst = instance(async (url) => {
+      await Bun.sleep(350);
+      return url.pathname === "/config" ? catalog(niche) : json({ results: [page] });
+    });
+    const { exit, envelope } = await searchJson(inst, "--profile", "niche", "--timeout", "600");
+    expect(exit).toBe(1);
+    expect(envelope.message).toContain("no answer within 600 ms");
+  });
+
+  test("provider warnings survive a successful profile preflight", async () => {
+    const inst = instance((url) =>
+      url.pathname === "/config"
+        ? catalog(niche)
+        : json({ results: [page], unresponsive_engines: [["boardreader", "timeout"]] }),
+    );
+    const { exit, envelope } = await searchJson(inst, "--profile", "niche");
+    expect(exit).toBe(0);
+    expect(resultsOf(envelope)[0]?.engines).toEqual(["mwmbl"]);
+    expect(envelope.warnings.join(" ")).toContain("boardreader (timeout)");
+    expect(inst.seen).toHaveLength(2);
+  });
+});

@@ -10,6 +10,7 @@ export type Web = {
   searxngSearch(options: {
     query: (string)[];
     numResults?: number;
+    profile?: "default" | "niche" | "academic";
     engines?: string;
     category?: string;
     timeRange?: "day" | "week" | "month" | "year";
