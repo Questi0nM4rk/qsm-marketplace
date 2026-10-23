@@ -83,18 +83,13 @@ copy.
 
 ## The loop
 
-| Step | What it does | Where the detail lives |
-| ------ | -------------- | ------------------------ |
-| LOAD | the notes for this tree, the ready tasks, and the spec that governs the change; a search of past sessions before asking twice | the memory skill and `qsm-memory`, the task-tool skill |
-| PLAN | the six questions, a probe for what already exists, the size (a fix is a commit; anything else is an epic): grilling writes the epic's intent and acceptance criteria, plan splits it into tasks that each get a spec; each gate is the person's yes | `qsm-plan` for intake, sizing, grilling, and the split; `qsm-openspec` for spec-propose |
-| EXECUTE | apply the spec change, claim the task, delegate and take the work back | `qsm-openspec` spec-apply, the task-tool skill, the subagents skill |
-| VERIFY | the real path ran end to end; first a search of the task tool for an open hold on a gate (a task titled or labelled hold), because a paused gate gives a verdict nobody checked; then a skill passes `bun run eval <plugin>` unless held | the run-and-verify and debugging skills, `qsm-review`, the context rule |
-| LEARN | a rule found goes into the instruction file or skill it belongs to; a tool defect into a task; a decision's reason into the spec's design or the commit | the writing skill, the task-tool skill, `qsm-openspec` |
-| CLOSE | spec-archive merges the deltas and closes the change's task; the epic closes only when all its tasks are done, its criteria hold, test-it passed, and the work is pushed after review; a note for the next session when work stays open | `qsm-openspec`, the memory skill and `qsm-memory` |
-
-When a `stage` tool is offered, call it each time you enter a step, back to EXECUTE after a failed
-VERIFY included, with a few words on what you do there: it answers what the step asks and the next
-one, and the person watches the loop by it.
+Work moves through six steps, LOAD, PLAN, EXECUTE, VERIFY, LEARN and CLOSE, in any order, back to
+EXECUTE after a failed VERIFY included. The loop exists because work started without its context
+repeats a settled decision, work without a plan builds a guess, and work nobody verified or learned
+from returns as the same bug. Two gates hold it: the person's yes before code, and an output you
+read before anything is called done. When a `stage` tool is offered, call it each time you enter a
+step, with a few words on what you do there: its answer is that step's one sentence, what to do,
+what to output, the tools and the skill to load, and the person watches the loop by it.
 
 ## Feedback on how agents and tools behave
 

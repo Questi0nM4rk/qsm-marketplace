@@ -43,7 +43,7 @@ export function denialFor(command: string): string | null {
 function denial(subcommand: string): string {
   const replacement = SUBCOMMAND_REPLACEMENT[subcommand] ?? GENERIC_REPLACEMENT;
   const named = subcommand.length > 0 ? `git worktree ${subcommand}` : "git worktree";
-  return `qsm-worktrunk: ${named} is blocked. Use wt instead: ${replacement}. wt addresses a workspace by branch name and computes its path; raw git leaves the path yours to track.`;
+  return `qsm-worktrunk: ${named} is blocked. Use wt instead: ${replacement}. wt addresses a workspace by branch name and computes its path; raw git leaves the path yours to track. For more, load the qsm-worktrunk:worktrunk skill.`;
 }
 
 /** The `git worktree` subcommand this one command runs, "" for a bare
