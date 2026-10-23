@@ -33,6 +33,7 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `images` | Mixed image, icon, art and meme discovery. Sources are the exact 16-engine set in [USAGE.md](../../USAGE.md#search-profiles). Results may include image and thumbnail URLs. |
 | `videos` | Video discovery metadata and source links across video platforms and indexes. The exact 12-engine set is in [USAGE.md](../../USAGE.md#search-profiles). Results may include iframe or media metadata. |
 | `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. The exact five-engine set is in [USAGE.md](../../USAGE.md#search-profiles). It does not guarantee freshness, language, or journalism-only results. |
+| `music` | Music catalog metadata and source discovery through `deezer`, `mixcloud` and `soundcloud`. It does not play or download media. |
 
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
@@ -41,6 +42,7 @@ qsm-web searxng search "AbortController" --profile it
 qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
+qsm-web searxng search "ambient electronic albums" --profile music
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -55,6 +57,8 @@ narrow documentation query, select its engines manually instead of widening the 
 Images is source discovery only: it does not fetch media or grant rights to reuse content.
 Videos returns metadata and source links only. It does not play videos, fetch media, or grant rights
 to reuse content.
+Music finds catalog metadata and source links only. It does not play or download music, or grant
+rights to reuse it.
 
 ## Red flags
 

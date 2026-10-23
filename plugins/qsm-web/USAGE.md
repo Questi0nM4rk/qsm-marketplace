@@ -6,7 +6,7 @@ warnings, data }` on stdout. Codes: `ok` 0, `failed` 1, `usage` 2, `missing` 4.
 ```bash
 qsm-web searxng search <query...> [--instance url] [--num-results n] [--timeout ms]
                         [--engines a,b] [--language en] [--safesearch 0|1|2]
-                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news]
+                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news|music]
 qsm-web opensrc get <spec|address> [--project <dir>]
 qsm-web doctor        # bins, tvly, the Tavily skills, the Context7 skill
 qsm-web browserbox start | ls | stop <name> | stop --all
@@ -43,6 +43,7 @@ Profiles select sources for one query without changing the instance's defaults:
 | `images` | Mixed image, icon, art and meme discovery. Exact set below. Results may include image and thumbnail URLs. |
 | `videos` | Video discovery metadata and source links across video platforms and indexes. Exact set below. Results may include iframe or media metadata. |
 | `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. Exact set below. It does not guarantee freshness, language, or journalism-only results. |
+| `music` | Music catalog metadata and source discovery. Exact set below. It does not play or download media. |
 
 The IT set contains these 36 engines:
 
@@ -74,6 +75,10 @@ The News profile selects these five sources:
 
 `brave.news`, `duckduckgo news`, `il post`, `naver news`, `sogou wechat`.
 
+The Music profile selects these three sources:
+
+`deezer`, `mixcloud`, `soundcloud`.
+
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
@@ -81,6 +86,7 @@ qsm-web searxng search "AbortController" --profile it
 qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
+qsm-web searxng search "ambient electronic albums" --profile music
 ```
 
 `--profile` is the only named source-selection flag. It is exclusive with `--engines`, including
@@ -100,6 +106,8 @@ Images combines image, icon, art and meme sources. It does not fetch media or gr
 content.
 Videos returns metadata and source links, including any iframe/media fields supplied in results. It
 does not play videos, fetch media or grant rights to reuse content.
+Music returns catalog metadata and source links only. It does not play or download media or grant
+rights to reuse content.
 
 ## shot-scraper
 

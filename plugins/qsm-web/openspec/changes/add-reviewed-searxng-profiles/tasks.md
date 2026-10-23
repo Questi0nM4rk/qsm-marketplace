@@ -22,7 +22,7 @@ integrates each returned diff before the next starts.
       set and fixture. Add one real-entry case returning useful links plus Naver diagnostics and
       verify the warning is preserved; preserve failed-empty behavior. Proof: the real-entry suite
       passes without retry or silent source removal. Blocks on 1.2 integration.
-- [ ] 1.4 Add `music` with `deezer`, `mixcloud`, `soundcloud` across the common file set and
+- [x] 1.4 Add `music` with `deezer`, `mixcloud`, `soundcloud` across the common file set and
       fixture. Teach catalog discovery rather than playback. Proof: the real-entry suite proves
       exact membership, preflight refusal and unchanged normalized results. Blocks on 1.3
       integration.

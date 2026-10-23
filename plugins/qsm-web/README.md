@@ -55,6 +55,7 @@ qsm-web searxng search "AbortController" --profile it
 qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web searxng search "conference talks on Rust" --profile videos
 qsm-web searxng search "Seoul transit policy" --profile news
+qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -70,13 +71,15 @@ qsm-web browserbox stop "$name"
   engine and policy defaults; only the flags you pass are sent.
 - `--profile` selects a named set: `default` follows server defaults, `niche` searches personal
   sites and discussions, `academic` searches publications, `it` searches technical sources,
-  `images` discovers images, icons, art and memes, `videos` finds video metadata links, and `news`
-  finds regional news links, including Korean Naver and Chinese WeChat sources. News does not
+  `images` discovers images, icons, art and memes, `videos` finds video metadata links, `news`
+  finds regional news links, including Korean Naver and Chinese WeChat sources, and `music` finds
+  catalog metadata and source links from Deezer, Mixcloud and SoundCloud. News does not
   guarantee freshness, language or journalism-only results. Manual `--engines` is an alternative,
   not combinable with a profile. Targeted profiles require every engine in the instance's `/config`
   catalog. Image results may include media URLs, but this tool does not fetch media or grant reuse
   rights. Video results may include iframe/media metadata, but this tool does not play videos, fetch
-  media or grant reuse rights. See [USAGE.md](USAGE.md) for the sets and failures.
+  media or grant reuse rights. Music discovery does not play or download media or grant reuse
+  rights. See [USAGE.md](USAGE.md) for the sets and failures.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.

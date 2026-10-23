@@ -31,5 +31,6 @@
     "sepiasearch",
     "sogou videos"
   ],
-  "news": ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"]
+  "news": ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"],
+  "music": ["deezer", "mixcloud", "soundcloud"]
 }

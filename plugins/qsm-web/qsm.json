@@ -45,8 +45,8 @@
           {
             "name": "profile",
             "type": "string",
-            "choices": ["default", "niche", "academic", "it", "images", "videos", "news"],
-            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery, video metadata links or regional news discovery; exclusive with --engines"
+            "choices": ["default", "niche", "academic", "it", "images", "videos", "news", "music"],
+            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery, video metadata links, regional news or music catalog discovery; exclusive with --engines"
           },
           {
             "name": "engines",
