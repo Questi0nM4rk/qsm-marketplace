@@ -135,7 +135,9 @@ never the installed tree.
 
 Run `mise exec -- bun install` once after a clone: its `prepare` script points git at `hooks/` and
 installs each plugin's own dependencies, so the pre-commit and pre-push gates run in that copy.
-Git never takes hooks from a clone by itself.
+Git never takes hooks from a clone by itself. A worktree is a fresh tree too: run
+`mise exec -- bun install` and `mise exec -- bun run plugin-types` in it before the gates, or every
+type-aware finding is measured without the dependencies and the engine types.
 
 ```text
 mise exec -- bun run validate
