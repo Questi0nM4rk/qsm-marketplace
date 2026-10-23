@@ -1298,6 +1298,8 @@ describe("guard", () => {
     [`curl -H 'Authorization: ${placeholderOf("cap_1")}' https://x`, "single-quoted-placeholder"],
     [`bash -c "curl -H 'A: ${placeholderOf("cap_1")}' https://x"`, "single-quoted-placeholder"],
     ["cat .env", "credential-file"],
+    ["rtk cat .env", "credential-file"],
+    ["rtk read .env", "credential-file"],
     ["qsm-secrets env k=V -- secret-tool lookup a b", "vault-reader"],
     [`qsm-secrets pipe k -- cat ${keyrings}/login.keyring`, "keyring-files"],
     ["qsm-secrets check k=V -- rbw get foo", "vault-reader"],

@@ -7,6 +7,7 @@
 import { realpathSync } from "node:fs";
 import {
   type CallExprNode,
+  type CustomWrapperResolver,
   findAll,
   ParseSizeError,
   ParseSyntaxError,
@@ -162,6 +163,9 @@ const NAMES_ONLY: ReadonlySet<string> = new Set([
 ]);
 
 const FILE_READERS: ReadonlySet<string> = new Set([
+  // `rtk read <file>` once the rtk wrapper is unwrapped; the shell builtin's arguments are variable
+  // names, which no credential file pattern matches.
+  "read",
   "cat",
   "bat",
   "batcat",
@@ -633,12 +637,17 @@ async function judgeLayer(
 }
 
 /** One call, through its wrapper chain. */
+/** qsm-usage's output filter puts `rtk` in front of a command before this guard may read it:
+ * `rtk cat .env` runs `cat .env`, so the guard judges the command after it. */
+const rtkInner: CustomWrapperResolver = ({ cmd }) =>
+  nameOf(cmd) === "rtk" ? { innerArgIndex: 0 } : undefined;
+
 async function judgeChain(
   call: CallExprNode,
   ctx: Context,
   exempt: Set<string>,
 ): Promise<Refusal | null> {
-  for (const layer of await unwrapDeepParsed(call, parseBash)) {
+  for (const layer of await unwrapDeepParsed(call, parseBash, { wrapperResolver: rtkInner })) {
     const refusal = await judgeLayer(layer, call, ctx, exempt);
     if (refusal !== null) {
       return refusal;
