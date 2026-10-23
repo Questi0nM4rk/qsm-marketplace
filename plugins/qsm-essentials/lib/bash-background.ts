@@ -1,7 +1,7 @@
 // Whether one Bash call sends a command to the background with `&`: the call returns, its shell
 // exits, and the children are orphaned. A function of the command line alone.
 
-export const BACKGROUND_DENIAL =
+const BACKGROUND_DENIAL =
   "qsm-essentials: `&` inside one Bash call is blocked, because the call returns and its children are orphaned. Run the command with run_in_background on the Bash call, or as separate agent calls. For more, load the qsm-essentials:subagents skill.";
 
 /** Quoted text and comments, removed so an `&` inside them is not read as a job. */
