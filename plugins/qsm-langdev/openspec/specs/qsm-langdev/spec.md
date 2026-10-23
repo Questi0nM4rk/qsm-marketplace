@@ -197,13 +197,13 @@ found even when both files are scanned together. So at pre-commit (the commit ho
 the stop gate, and `check`, whose default is pre-commit) every semgrep checker SHALL scan the
 `changed` set with the community engine, whatever the login, and SHALL NOT ask for the login. At
 pre-push (the push hook and `check --at pre-push`) every semgrep checker SHALL scan the `given` set,
-the whole tree by default, with a limit of 160 s, twice the slower full run measured on this
-repository (63 s a side under the Pro engine, 78 s under the community engine, 374 TypeScript
-files). The Pro engine follows a flow across files for TypeScript, JavaScript, Python and C#, and at
-pre-push a checker for one of those (`semgrep-ts`, `semgrep-py`, `semgrep-dotnet`) SHALL run
-`semgrep --pro` under the Pro engine with the side's root directory as its one target and no file
-list: semgrep's inter-file analysis refuses a list of files ("Inter-file analysis can only take a
-single target"). `semgrep-rust`, `semgrep-bash` and `semgrep-dockerfile` SHALL declare no Pro form
+the whole tree by default, with a limit of 420 s, above the full run measured on this repository
+with every core busy (both sides at once under the Pro engine, 523 TypeScript files: 128 s quiet,
+373 s under load). The Pro engine follows a flow across files for TypeScript, JavaScript, Python and
+C#, and at pre-push a checker for one of those (`semgrep-ts`, `semgrep-py`, `semgrep-dotnet`) SHALL
+run `semgrep --pro` under the Pro engine with the side's root directory as its one target and no
+file list: semgrep's inter-file analysis refuses a list of files ("Inter-file analysis can only take
+a single target"). `semgrep-rust`, `semgrep-bash` and `semgrep-dockerfile` SHALL declare no Pro form
 and run the community engine on every machine. A pre-push run SHALL choose its engine once, and only
 when a checker with a Pro form is selected: logged in and the Pro engine binary installed (the path
 `semgrep --dump-engine-path --pro` names holds a file) is the Pro engine; anything else is the
@@ -227,11 +227,11 @@ measured, naming the limit and the retry, and SHALL NOT be reported as worse. So
 whose run ended with output its parser cannot read, a tool error rather than findings:
 `<checker>: not measured: <cause>; retry`, the cause the tool's own words (semgrep's JSON `errors`,
 else the first line of stderr that says something, or the last when a Python traceback opens it,
-else the exit code), and it SHALL NOT be stored.
-Output the parser reads is measured whatever the exit code: semgrep exiting 1 with results is
-findings. A run with a checker not measured and none worse answers `blocked`, never `ok`: nothing
-proved the tree no worse. A worse checker in the same run answers `worse`. The stop gate logs a
-checker not measured as a warning and does not hold the agent.
+else the exit code), and it SHALL NOT be stored. Output the parser reads is measured whatever the
+exit code: semgrep exiting 1 with results is findings. A run with a checker not measured and none
+worse answers `blocked`, never `ok`: nothing proved the tree no worse. A worse checker in the same
+run answers `worse`. The stop gate logs a checker not measured as a warning and does not hold the
+agent.
 
 #### Scenario: A bash script piping a download into bash
 
