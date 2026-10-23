@@ -83,7 +83,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-compuse`, `qsm
 
 | Plugin | Why it exists | Ships |
 | --- | --- | --- |
-| [qsm-essentials](plugins/qsm-essentials/README.md) | Without a shared method, every session relearns how this person works: it builds before it understands, settles design by default, forgets what an earlier session decided, and either does everything itself or hands everything away. | 10 skills, 4 agents, 2 hooks |
+| [qsm-essentials](plugins/qsm-essentials/README.md) | Without a shared method, every session relearns how this person works: it builds before it understands, settles design by default, forgets what an earlier session decided, and either does everything itself or hands everything away. | 10 skills, 4 agents, 3 hooks |
 
 ### Planning
 
@@ -123,7 +123,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-compuse`, `qsm
 | [qsm-compuse](plugins/qsm-compuse/README.md) | An agent that checks a shell UI through its own dispatchers gets silent wrong answers: a compositor warp emits no motion event so hover never fires, and an injected shortcut skips the keybind table. | 1 skill |
 | [qsm-cockpit](plugins/qsm-cockpit/README.md) | A session that runs a loop of steps and several agents at once hides both in a scrolling transcript, so the person cannot tell at a glance where the work stands or which model each agent spends. | CLI, 10 hooks |
 | [qsm-builder](plugins/qsm-builder/README.md) | This marketplace has rules that are easy to state and easy to break in the moment of adding something, and prompts that are easy to write and hard to write well. | 7 skills, CLI, 3 hooks |
-| [qsm-forge](plugins/qsm-forge/README.md) | The harness default for review threads is raw `gh api`, `glab api` and `curl` calls, several per step: a GraphQL listing, a lookup of the thread behind a comment, then the mutation. | 1 skill, CLI, 1 hook |
+| [qsm-forge](plugins/qsm-forge/README.md) | The harness default for review threads is raw `gh api`, `glab api` and `curl` calls, several per step: a GraphQL listing, a lookup of the thread behind a comment, then the mutation. | 1 skill, CLI, 2 hooks |
 | [qsm-index](plugins/qsm-index/README.md) | Grep finds words, and an agent that navigates a codebase by words misses what the code means and how it hangs together. | 1 skill, CLI, 4 hooks |
 | [qsm-opencode](plugins/qsm-opencode/README.md) | Claude Code is the main harness, but a bounded task can sometimes be handed to an OpenCode worker without moving the whole session there. | 1 skill |
 | [qsm-setup](plugins/qsm-setup/README.md) | A marketplace is useful only when a machine reaches it in one step, and an agent works with it properly only when it knows, in every session, who it works for, where things live and where feedback goes. | 1 skill, CLI, 1 hook |

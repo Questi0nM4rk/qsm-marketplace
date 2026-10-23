@@ -246,6 +246,33 @@ mutates pull or merge request review state.
   state, such as clone, creation, listing, or releases
 - **THEN** the hook SHALL allow it
 
+### Requirement: The git rule's forms are refused with the right form named
+
+A `tool.call` hook on Bash SHALL refuse, naming the right form: a gh command split by a backslash
+continuation (one line, because permission matching reads one line); a gh command with backticks in
+`--body` or `--notes` (`--body-file` or `--notes-file`); a lightweight `git tag`, one with none of
+`-a`, `-s`, `-m`, `-d`, `-l` and their long forms (`git tag -a`, because push `--follow-tags` skips
+a lightweight tag); and `git pull --rebase` or `-r` without `=merges` (`git pull --rebase=merges`,
+because a plain rebase flattens a merge commit). A gh refusal SHALL name the
+qsm-forge:review-threads skill. A `git push` in a call that does not first run
+`git pull --rebase=merges` SHALL fetch, and SHALL be refused when the upstream is ahead of HEAD.
+
+#### Scenario: A lightweight tag
+
+- **WHEN** an agent runs `git tag v1.2.0`
+- **THEN** the call is refused and the refusal names `git tag -a`
+
+#### Scenario: A push behind its upstream
+
+- **WHEN** an agent runs `git push` while origin/main holds a commit HEAD does not
+- **THEN** the call is refused and the refusal names `git pull --rebase=merges`
+
+#### Scenario: The correct forms pass
+
+- **WHEN** an agent runs `git pull --rebase=merges && git push`, `git tag -a v1 -m x`, or
+  `gh pr create --body-file b.md`
+- **THEN** the hook lets the call run
+
 ### Requirement: Review-thread skill
 
 A skill SHALL trigger when an agent is asked to read, reply to, resolve,
