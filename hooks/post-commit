@@ -18,6 +18,7 @@ unset $(git rev-parse --local-env-vars)
     set -euo pipefail
     echo "== $(date -Is) $(git -C "$1" rev-parse --short HEAD)"
     cd "$1"
+    mise exec -C "$1" -- bun plugins/qsm-setup/scripts/install.ts
     mise exec -C "$1" -- qsm-setup install --all --root "$1"
     jq -r ".plugins | keys[] | select(endswith(\"@qsm-marketplace\"))" "$2/plugins/installed_plugins.json" |
       while read -r plugin; do claude plugin update "$plugin"; done

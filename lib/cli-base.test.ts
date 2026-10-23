@@ -279,6 +279,22 @@ describe("typed arg accessors and the manifest parser", () => {
     expect(() => parseManifest(bad, "plugins/x/qsm.json")).toThrow(
       /^plugins\/x\/qsm\.json: qsm\.commands\.qsm-x go\.description:/,
     );
+    for (const links of [
+      { "../escape": "scripts/helper" },
+      { helper: "../outside" },
+      { helper: "/outside" },
+      { helper: "" },
+      { helper: 1 },
+    ]) {
+      expect(() => parseManifest({ qsm: { links, commands: {} } }, "plugins/x/qsm.json")).toThrow(
+        /^plugins\/x\/qsm\.json: qsm\.links\./,
+      );
+    }
+    expect(() =>
+      parseManifest({
+        qsm: { bin: { helper: "cli.ts" }, links: { helper: "script" }, commands: {} },
+      }),
+    ).toThrow("not declared as a compiled bin");
   });
 });
 

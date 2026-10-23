@@ -60,6 +60,17 @@ export interface InstallBaseConfig {
 
 type ExtraSteps = Step | readonly Step[];
 
+/** The same declared helper links in the plan and the real install. */
+function helperSteps(
+  config: InstallBaseConfig,
+  manifest: QsmManifest,
+  ctx: InstallContext,
+): Step[] {
+  return Object.entries(manifest.qsm.links ?? {}).map(([name, source]) =>
+    linkBin(ctx, name, resolve(config.pluginRoot, source)),
+  );
+}
+
 /** The extra steps as a list, empty when the plugin has none. */
 async function extraSteps(config: InstallBaseConfig, ctx: InstallContext): Promise<Step[]> {
   if (config.extra === undefined) {
@@ -477,6 +488,7 @@ async function run(
     ...Object.keys(manifest.qsm.bin ?? {}).map((bin) =>
       completionStep(completionDir, bin, manifest),
     ),
+    ...helperSteps(config, manifest, ctx),
     ...(await extraSteps(config, ctx)),
   ];
   return steps;
@@ -499,6 +511,7 @@ export function installBase(config: InstallBaseConfig): InstallFn {
     if (ctx.dryRun) {
       const steps = [
         ...plan(config, manifest, ctx),
+        ...helperSteps(config, manifest, ctx),
         ...(await extraSteps(config, ctx)).map((s) => planStep(s.detail)),
       ];
       // A plugin with nothing to plan answers what the real run answers.
@@ -506,7 +519,8 @@ export function installBase(config: InstallBaseConfig): InstallFn {
         return { tool, status: "already", detail: NOTHING, steps: [] };
       }
       const lines = steps.map((st) => st.detail);
-      return { tool, status: "skipped", detail: `[dry-run] ${lines.join("; ")}`, steps };
+      const status = steps.some((st) => st.status === "error") ? "error" : "skipped";
+      return { tool, status, detail: `[dry-run] ${lines.join("; ")}`, steps };
     }
     if (!ctx.probe("bun")) {
       const step: Step = {

@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { isRecord } from "../../../lib/outcome.ts";
-import { type CommandDecl, parseManifest } from "../../../lib/qsm-manifest.ts";
+import { type CommandDecl, loadManifest, ManifestError } from "../../../lib/qsm-manifest.ts";
 
 export interface PluginNode {
   readonly name: string;
@@ -15,25 +15,50 @@ export interface PluginNode {
   readonly activation: string | null;
   /** bin name to source entry, from qsm.json. */
   readonly bins: Readonly<Record<string, string>>;
+  /** Helper basename to source file relative to the plugin root. */
+  readonly links?: Readonly<Record<string, string>>;
   /** "<bin> <verb>" to its declaration, from qsm.json. */
   readonly commands: Readonly<Record<string, CommandDecl>>;
   /** A shell probe that exits 0 when the plugin is healthy. */
   readonly doctor: string | null;
 }
 
-function readQsm(dir: string): Pick<PluginNode, "bins" | "commands" | "doctor"> {
+function readQsm(dir: string): Pick<PluginNode, "bins" | "links" | "commands" | "doctor"> {
   const path = join(dir, "qsm.json");
   if (!existsSync(path)) {
     return { bins: {}, commands: {}, doctor: null };
   }
-  const { qsm } = parseManifest(JSON.parse(readFileSync(path, "utf8")), path);
+  const { qsm } = loadManifest(dir);
   const commands = Object.fromEntries(
     Object.entries(qsm.commands).map(([key, value]): [string, CommandDecl] => [
       key,
       { description: value.description, args: value.args ?? [] },
     ]),
   );
-  return { bins: qsm.bin ?? {}, commands, doctor: qsm.doctor ?? null };
+  return {
+    bins: qsm.bin ?? {},
+    ...(qsm.links && { links: qsm.links }),
+    commands,
+    doctor: qsm.doctor ?? null,
+  };
+}
+
+/** Reject ambiguous helper ownership before any caller can clean installed artifacts. */
+function validateHelperOwners(nodes: readonly PluginNode[]): void {
+  const owners = new Map(
+    nodes.flatMap((n) => Object.keys(n.bins).map((bin) => [bin, n.name] as const)),
+  );
+  for (const node of nodes) {
+    for (const name of Object.keys(node.links ?? {})) {
+      const owner = owners.get(name);
+      if (owner !== undefined) {
+        throw new ManifestError(
+          `${node.dir}/qsm.json: qsm.links.${name}: already owned by ${owner}`,
+        );
+      }
+      owners.set(name, node.name);
+    }
+  }
 }
 
 export function discoverPlugins(root: string): PluginNode[] {
@@ -67,5 +92,6 @@ export function discoverPlugins(root: string): PluginNode[] {
       ...readQsm(dir),
     });
   }
+  validateHelperOwners(nodes);
   return nodes.toSorted((a, b) => a.name.localeCompare(b.name));
 }
