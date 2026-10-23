@@ -1,6 +1,6 @@
 // qsm.json, the one source of truth for a plugin's binaries and their verbs.
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { isAbsolute, normalize, resolve, sep } from "node:path";
 
 export interface CommandArg {
   /** camelCase; a flag is `--kebab-case` on the command line */
@@ -32,6 +32,8 @@ export interface QsmManifest {
   readonly qsm: {
     /** bin name -> entry script, relative to the plugin root */
     readonly bin?: Readonly<Record<string, string>>;
+    /** helper basename -> source file relative to this plugin, not a compiled CLI */
+    readonly links?: Readonly<Record<string, string>>;
     readonly noun?: string;
     /** a shell command that reports whether the plugin's upstream tools are present */
     readonly doctor?: string;
@@ -124,6 +126,20 @@ function readBin(v: unknown, where: At): Record<string, string> {
   return Object.fromEntries(Object.entries(r).map(([k, x]) => [k, readString(x, at(where, k))]));
 }
 
+function readLinks(v: unknown, where: At): Record<string, string> {
+  const links = readBin(v, where);
+  for (const [name, source] of Object.entries(links)) {
+    if (name === "" || name === "." || name === ".." || /[/\\\0]/.test(name)) {
+      fail(at(where, name), "a nonempty bin basename");
+    }
+    const path = normalize(source);
+    if (source === "" || isAbsolute(source) || path === ".." || path.startsWith(`..${sep}`)) {
+      fail(at(where, name), "a relative source path confined to the plugin");
+    }
+  }
+  return links;
+}
+
 /** Checks every field of a parsed qsm.json and returns it typed; throws a ManifestError naming
  * the file and the first field that is wrong. */
 export function parseManifest(raw: unknown, file = "qsm.json"): QsmManifest {
@@ -134,10 +150,19 @@ export function parseManifest(raw: unknown, file = "qsm.json"): QsmManifest {
   const name = readOptString(root["name"], { file, field: "name" });
   const noun = readOptString(qsm["noun"], at(where, "noun"));
   const doctor = readOptString(qsm["doctor"], at(where, "doctor"));
+  const bin = qsm["bin"] === undefined ? undefined : readBin(qsm["bin"], at(where, "bin"));
+  const links =
+    qsm["links"] === undefined ? undefined : readLinks(qsm["links"], at(where, "links"));
+  for (const helper of Object.keys(links ?? {})) {
+    if (bin?.[helper] !== undefined) {
+      fail(at(at(where, "links"), helper), "a helper name not declared as a compiled bin");
+    }
+  }
   return {
     ...(name !== undefined && { name }),
     qsm: {
-      ...(qsm["bin"] !== undefined && { bin: readBin(qsm["bin"], at(where, "bin")) }),
+      ...(bin !== undefined && { bin }),
+      ...(links !== undefined && { links }),
       ...(noun !== undefined && { noun }),
       ...(doctor !== undefined && { doctor }),
       commands: Object.fromEntries(
@@ -150,7 +175,18 @@ export function parseManifest(raw: unknown, file = "qsm.json"): QsmManifest {
 export function loadManifest(pluginRoot: string): QsmManifest {
   const file = resolve(pluginRoot, "qsm.json");
   const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
-  return parseManifest(raw, file);
+  const manifest = parseManifest(raw, file);
+  for (const [name, source] of Object.entries(manifest.qsm.links ?? {})) {
+    const path = resolve(pluginRoot, source);
+    const where = { file, field: `qsm.links.${name}` };
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      fail(where, `an existing source file (${source})`);
+    }
+    if (!realpathSync(path).startsWith(`${realpathSync(pluginRoot)}${sep}`)) {
+      fail(where, "a source file confined to the plugin");
+    }
+  }
+  return manifest;
 }
 
 /** The declaration of a verb that matchVerb or verbsOf already named; a missing one is a defect. */

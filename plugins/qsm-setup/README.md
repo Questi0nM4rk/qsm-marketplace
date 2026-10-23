@@ -50,6 +50,11 @@ qsm-setup tools --fetch
 
 Or ask: "set up qsm on this machine" loads the `setup` skill.
 
+Install and relink preserve helper links declared in a plugin's `qsm.links`, matching both name
+and target, while removing undeclared checkout links. The canonical refresh hook bootstraps
+qsm-setup before full installation so cleanup uses the checkout's code. Details are in
+[INSTALL.md](INSTALL.md) and [USAGE.md](USAGE.md).
+
 ## Using this marketplace from OpenCode V2
 
 Claude Code stays the canonical harness. OpenCode V2 reads the same files without a runtime plugin

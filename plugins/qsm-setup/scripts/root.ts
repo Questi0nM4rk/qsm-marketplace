@@ -54,6 +54,13 @@ export function purgeMachine(
     root,
     marketplace: name,
     plugins: new Set(nodes.map((n) => n.name)),
+    links: new Map(
+      nodes.flatMap((n) =>
+        Object.entries(n.links ?? {}).map(
+          ([helper, source]) => [helper, resolve(n.dir, source)] as const,
+        ),
+      ),
+    ),
     check,
   });
 }
