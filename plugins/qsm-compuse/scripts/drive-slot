@@ -72,7 +72,8 @@ slot_publish() {
   local dir="$1" size="$2" scale="$3" renderer="$4" pid sock out
   pid="$(cat "$dir/pid")"
   sock="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$pid.sock"
-  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs | jq -r '.[0].name')" || die "could not read the slot output"
+  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs)" || die "could not read the slot output"
+  out="$(jq -r '.[0].name' <<<"$out")"
   printf 'SLOT_PID=%s\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%s\nSLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=%s\n' \
     "$pid" "$(cat "$dir/display")" "$sock" "$out" "$size" "$scale" "$renderer" >"$dir/state"
   printf '0 0\n' >"$dir/pos"
@@ -217,10 +218,14 @@ slot_aquamarine() {
   trap 'rm -rf "$src"; trap - RETURN' RETURN
   if ! { git -C "$src" init -q && git -C "$src" fetch -q --depth 1 https://github.com/hyprwm/aquamarine.git "$AQUAMARINE_FIX" \
     && git -C "$src" checkout -q FETCH_HEAD; }; then
+    rm -rf "$src"
     die "could not fetch aquamarine $AQUAMARINE_FIX"
   fi
   if ! { cmake -S "$src" -B "$src/build" -DCMAKE_BUILD_TYPE=Release && cmake --build "$src/build" -j"$(nproc)" --target aquamarine; } >"$src/build.log" 2>&1; then
-    die "aquamarine build failed: $(tail -5 "$src/build.log")"
+    local log
+    log="$(tail -5 "$src/build.log")"
+    rm -rf "$src"
+    die "aquamarine build failed: $log"
   fi
   mkdir -p "$out"
   command cp -a "$src"/build/libaquamarine.so* "$out/"
@@ -236,6 +241,9 @@ slot_start_desktop() {
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
   [[ -z "$hypr" || -f "$hypr" ]] || die "--hypr '$hypr' does not exist"
+  # The sandbox mounts its own empty /tmp and /run, so a file there is not what the nested desktop would read.
+  [[ "$qs_path$hypr" != *"/tmp/"* && "$qs_path$hypr" != *"/run/"* && "$qs_path" != /tmp* && "$qs_path" != /run* ]] \
+    || die "--desktop and --hypr cannot live under /tmp or /run (the sandbox hides both)"
   [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
   [[ -z "$clock" || -f /usr/lib/faketime/libfaketime.so.1 ]] || die "--clock needs libfaketime (pacman -S libfaketime)"
   local tool
@@ -277,7 +285,8 @@ slot_publish_desktop() {
   dir="$(slot_dir "$name")"
   rt="$(slot_desktop_rt "$name")"
   sock="$(find "$rt" -maxdepth 1 -name 'sway-ipc.*.sock' | head -1)"
-  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs | jq -r '.[0].name')" || die "could not read the slot output"
+  out="$(SWAYSOCK="$sock" swaymsg -t get_outputs)" || die "could not read the slot output"
+  out="$(jq -r '.[0].name' <<<"$out")"
   {
     printf 'SLOT_KIND=desktop\nSLOT_PID=%s\nSLOT_RT=%q\nSLOT_DISPLAY=%s\nSLOT_SWAYSOCK=%q\n' "$(cat "$dir/pid")" "$rt" "$(cat "$dir/display")" "$sock"
     printf 'SLOT_OUTPUT=%s\nSLOT_SIZE=%s\nSLOT_SCALE=%s\nSLOT_RENDERER=gles2\nSLOT_QS_PATH=%q\n' "$out" "$size" "$scale" "$qs_path"
@@ -425,7 +434,12 @@ slot_tree() {
   local pid
   if [[ "$(slot_field "$1" SLOT_KIND)" == desktop ]]; then
     slot_load "$1"
-    XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm inspect WAYLAND-1 true || die "qs ipc inspect failed in slot '$1'"
+    local tree
+    tree="$(XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm inspect WAYLAND-1 true)" \
+      || die "qs ipc inspect failed in slot '$1'"
+    # A shell with no scene answers with an error object, not a tree.
+    jq -e .tree >/dev/null 2>&1 <<<"$tree" || die "inspect in slot '$1' returned no tree: ${tree:0:200}"
+    printf '%s\n' "$tree"
     return
   fi
   pid="$(jq -er .pid "$(slot_dir "$1")/bench.json" 2>/dev/null)" || die "no workbench in slot '$1' (drive slot bench $1 ROOT KEY)"
