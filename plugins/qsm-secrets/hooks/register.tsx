@@ -14,6 +14,9 @@ const GUARD_TIMEOUT_MS = 5000;
 
 // A backend that wants an unlock prompt must not hold the prompt for long.
 const CAPTURE_TIMEOUT_MS = 10_000;
+// Where the hooks run the bin: it reads stdin only, and the session's directory can be gone (a
+// removed worktree), which fails every spawn with ENOENT and withholds every row of the chat.
+const RUN_DIR = "/";
 
 // What a person typed or pasted: the terminal, the remote bridge, the SDK host, a channel's human. Every
 // other origin is text the engine, another session or a model wrote (a task notification, a subagent
@@ -144,7 +147,11 @@ const RECOVERY = /^\s*qsm-secrets doctor\s*$/;
 function registerGuard(on: On): void {
   on("tool.call", { tool: "Bash" }, async ($, e, next) => {
     const argv = argvOf(verbOf("guard"));
-    const ran = await $.process.run(argv, { stdin: e.command, timeoutMs: GUARD_TIMEOUT_MS });
+    const ran = await $.process.run(argv, {
+      stdin: e.command,
+      timeoutMs: GUARD_TIMEOUT_MS,
+      cwd: RUN_DIR,
+    });
     const reason = refusalOf(ran);
     if (reason === null) {
       return next(e);
@@ -283,6 +290,7 @@ function registerMask(on: On): void {
     const ran = await $.process.run(argv, {
       stdin: JSON.stringify(texts),
       timeoutMs: CAPTURE_TIMEOUT_MS,
+      cwd: RUN_DIR,
     });
     const done = [...dataOf(argv, ran, isMaskData).texts];
     if (done.length !== texts.length) {
@@ -368,7 +376,11 @@ export function register(on: On): void {
       return next(e);
     }
     const argv = argvOf(verbOf("capture"));
-    const ran = await $.process.run(argv, { stdin: e.text, timeoutMs: CAPTURE_TIMEOUT_MS });
+    const ran = await $.process.run(argv, {
+      stdin: e.text,
+      timeoutMs: CAPTURE_TIMEOUT_MS,
+      cwd: RUN_DIR,
+    });
     const done = dataOf(argv, ran, isCaptureData);
     if (done.captured.length === 0) {
       return next(e);
