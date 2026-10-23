@@ -1,9 +1,16 @@
-// qsm-essentials' function-hooks module: every agent names its model, and the transcript shows it.
-// The rules are lib/agent-model.ts; the hooks only refuse, tag and draw.
+// qsm-essentials' function-hooks module: every agent names its model, and the transcript shows it;
+// no Bash call sends a job to the background with `&`. The rules are lib/agent-model.ts and
+// lib/bash-background.ts; the hooks only refuse, tag and draw.
 import type { On } from "claude-code";
 import { NO_MODEL, TIER_COLOR, tagged, tierOf } from "../lib/agent-model.ts";
+import { backgroundDenial } from "../lib/bash-background.ts";
 
 export function register(on: On): void {
+  on("tool.call", { tool: "Bash" }, (_$, e, next) => {
+    const denial = backgroundDenial(e.command);
+    return denial === null ? next(e) : { deny: denial };
+  });
+
   on("agent.spawn", (_$, e, next) => {
     if (e.fork) {
       return next(e);

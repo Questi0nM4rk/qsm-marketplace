@@ -223,6 +223,23 @@ glance. The hooks SHALL raise no toast.
 - **THEN** its description starts with `[sonnet]`, and its transcript row starts with `sonnet` in
   cyan
 
+### Requirement: No Bash call sends a job to the background
+
+A `tool.call` hook on Bash SHALL refuse a command with a lone `&` outside quotes and comments,
+because the call returns and its children are orphaned, and SHALL name `run_in_background`,
+separate agent calls, and the qsm-essentials:subagents skill. `&&`, `|&` and the redirections
+`2>&1`, `&>` and `>&2` SHALL pass.
+
+#### Scenario: A job sent to the background
+
+- **WHEN** an agent runs `sleep 5 &` in one Bash call
+- **THEN** the call is refused and the refusal names `run_in_background`
+
+#### Scenario: A redirection
+
+- **WHEN** an agent runs `bun test 2>&1 | tail`
+- **THEN** the hook lets the call run
+
 ### Requirement: The core names no plug-in and declares no dependency
 
 The plugin SHALL have no `dependencies` in plugin.json, and its skills, agents, README and spec
