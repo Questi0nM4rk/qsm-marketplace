@@ -15,6 +15,7 @@ const SEARCH_PROFILE = z.enum([
   "music",
   "map",
   "files",
+  "social-media",
 ]);
 export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
 
@@ -95,6 +96,17 @@ const PROFILE_ENGINES = {
   music: ["deezer", "mixcloud", "soundcloud"],
   map: ["apple maps", "photon"],
   files: ["bt4g", "openrepos"],
+  "social-media": [
+    "9gag",
+    "boardreader",
+    "lemmy comments",
+    "lemmy communities",
+    "lemmy posts",
+    "lemmy users",
+    "mastodon hashtags",
+    "mastodon users",
+    "tootfinder",
+  ],
 } as const;
 
 /** Validate the caller's profile name before it reaches the search request. */
@@ -102,7 +114,7 @@ export function parseSearchProfile(raw: string): SearchProfile {
   const profile = SEARCH_PROFILE.safeParse(raw);
   if (!profile.success) {
     throw new UsageError(
-      "--profile must be default, niche, academic, it, images, videos, news, music, map or files",
+      "--profile must be default, niche, academic, it, images, videos, news, music, map, files or social-media",
     );
   }
   return profile.data;

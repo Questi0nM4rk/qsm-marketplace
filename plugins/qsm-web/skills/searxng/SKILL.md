@@ -36,8 +36,10 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `music` | Music catalog metadata and source discovery through `deezer`, `mixcloud` and `soundcloud`. It does not play or download media. |
 | `map` | Place and geocoding result links through `apple maps` and `photon`. This is not routing and does not access your location. |
 | `files` | Torrent metadata through `bt4g` and Sailfish app listings through `openrepos`, not comprehensive file discovery. Results do not grant reuse rights. |
+| `social-media` | Public social discovery across posts, users, communities, forums and hashtags. The exact nine-engine set is in [USAGE.md](../../USAGE.md#search-profiles). |
 
 ```bash
+qsm-web searxng search "current events" --profile default
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
 qsm-web searxng search "AbortController" --profile it
@@ -47,6 +49,7 @@ qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 qsm-web searxng search "Sailfish OS apps" --profile files
+qsm-web searxng search "Lemmy communities about gardening" --profile social-media
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -57,16 +60,10 @@ catalog stops the query rather than silently searching different sources.
 `--profile` is the only named source-selection flag. Use `--engines` without a profile for another
 explicit selection. Combining a profile and engines, even an empty engine value, is a usage error.
 IT includes specialist catalogs, so returned links do not guarantee relevance or freshness. For a
-narrow documentation query, select its engines manually instead of widening the whole IT set.
-Images is source discovery only: it does not fetch media or grant rights to reuse content.
-Videos returns metadata and source links only. It does not play videos, fetch media, or grant rights
-to reuse content.
-Music finds catalog metadata and source links only. It does not play or download music, or grant
-rights to reuse it.
-Map returns place and geocoding result links only. It does not provide routes or guarantee
+narrow documentation query, select its engines manually instead of widening the whole IT set. Search
+profiles return links and metadata. The search command does not fetch or play media, download files,
+or grant content reuse rights. Map results are place links, not routes, and do not guarantee
 coordinates.
-Files searches only the `bt4g` and `openrepos` indexes. It does not download files, open magnet
-links, or establish content reuse rights.
 
 ## Red flags
 

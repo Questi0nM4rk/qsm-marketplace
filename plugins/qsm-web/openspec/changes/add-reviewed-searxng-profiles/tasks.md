@@ -34,7 +34,7 @@ integrates each returned diff before the next starts.
       metadata coverage and no inferred reuse rights; add no download action or blanket protocol
       filter. Proof: the real-entry suite proves exact membership and refusal without executing a
       result link. Blocks on 1.5 integration.
-- [ ] 1.7 Add `social-media` with its exact nine-engine set, including `boardreader`, across the
+- [x] 1.7 Add `social-media` with its exact nine-engine set, including `boardreader`, across the
       common file set and fixture. Teach mixed post/user/community/hashtag links without changing
       their normalized shape. Proof: the real-entry suite passes and CLI/noun/help expose
       `social-media`, not an alias. Blocks on 1.6 integration.

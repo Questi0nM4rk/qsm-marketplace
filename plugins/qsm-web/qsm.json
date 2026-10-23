@@ -55,9 +55,10 @@
               "news",
               "music",
               "map",
-              "files"
+              "files",
+              "social-media"
             ],
-            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery, video metadata links, regional news, music catalog, place/geocoding links or narrow file indexes; exclusive with --engines"
+            "description": "named source selection; exclusive with --engines"
           },
           {
             "name": "engines",

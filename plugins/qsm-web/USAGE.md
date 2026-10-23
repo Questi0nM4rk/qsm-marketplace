@@ -6,7 +6,7 @@ warnings, data }` on stdout. Codes: `ok` 0, `failed` 1, `usage` 2, `missing` 4.
 ```bash
 qsm-web searxng search <query...> [--instance url] [--num-results n] [--timeout ms]
                         [--engines a,b] [--language en] [--safesearch 0|1|2]
-                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news|music|map|files]
+                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images|videos|news|music|map|files|social-media]
 qsm-web opensrc get <spec|address> [--project <dir>]
 qsm-web doctor        # bins, tvly, the Tavily skills, the Context7 skill
 qsm-web browserbox start | ls | stop <name> | stop --all
@@ -46,6 +46,7 @@ Profiles select sources for one query without changing the instance's defaults:
 | `music` | Music catalog metadata and source discovery. Exact set below. It does not play or download media. |
 | `map` | Place and geocoding result links. It is not routing and does not guarantee coordinates. |
 | `files` | Torrent metadata (`bt4g`) and Sailfish app listings (`openrepos`), not comprehensive file discovery or a reuse-rights guarantee. |
+| `social-media` | Public posts, users, communities, forums and hashtags. |
 
 The IT set contains these 36 engines:
 
@@ -89,7 +90,13 @@ The Files profile searches these two metadata indexes, not a comprehensive set o
 
 `bt4g`, `openrepos`.
 
+The Social media profile selects these nine sources for mixed public discovery:
+
+`9gag`, `boardreader`, `lemmy comments`, `lemmy communities`, `lemmy posts`, `lemmy users`,
+`mastodon hashtags`, `mastodon users`, `tootfinder`.
+
 ```bash
+qsm-web searxng search "current events" --profile default
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
 qsm-web searxng search "AbortController" --profile it
@@ -99,6 +106,7 @@ qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 qsm-web searxng search "Sailfish OS apps" --profile files
+qsm-web searxng search "Lemmy communities about gardening" --profile social-media
 ```
 
 `--profile` is the only named source-selection flag. It is exclusive with `--engines`, including
@@ -114,12 +122,9 @@ profile does not request the catalog.
 
 IT is a broad discovery set, not a guarantee of relevance or freshness. Package and model catalogs
 can add noise to a documentation query. Use manual `--engines` when a narrower selection is needed.
-Images combines image, icon, art and meme sources. It does not fetch media or grant rights to reuse
-content.
-Videos returns metadata and source links, including any iframe/media fields supplied in results. It
-does not play videos, fetch media or grant rights to reuse content.
-Music returns catalog metadata and source links only. It does not play or download media or grant
-rights to reuse content.
+Search profiles return links and metadata. The search command does not fetch or play media, download
+files, or grant content reuse rights. Map results are place links, not routes, and do not guarantee
+coordinates.
 
 ## shot-scraper
 

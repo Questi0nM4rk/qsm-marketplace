@@ -49,6 +49,7 @@ Ask the agent: "look up how React hooks handle cleanup", or hand a question to `
 
 ```bash
 qsm-web searxng search "io uring vs epoll" --time-range year
+qsm-web searxng search "current events" --profile default
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic
 qsm-web searxng search "AbortController" --profile it
@@ -58,6 +59,7 @@ qsm-web searxng search "Seoul transit policy" --profile news
 qsm-web searxng search "ambient electronic albums" --profile music
 qsm-web searxng search "Brandenburg Gate Berlin" --profile map
 qsm-web searxng search "Sailfish OS apps" --profile files
+qsm-web searxng search "Lemmy communities about gardening" --profile social-media
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -76,14 +78,13 @@ qsm-web browserbox stop "$name"
   discovers images, icons, art and memes, `videos` finds video metadata links, `news` finds regional
   news links, including Korean Naver and Chinese WeChat sources, `music` finds catalog metadata and
   source links from Deezer, Mixcloud and SoundCloud, `map` finds place and geocoding result links,
-  and `files` searches torrent metadata (`bt4g`) and Sailfish app listings (`openrepos`). Files
-  search is not comprehensive and grants no reuse rights. Map is not routing and does not guarantee
-  coordinates. News does not guarantee freshness, language or journalism-only results. Manual
+  `files` searches torrent metadata (`bt4g`) and Sailfish app listings (`openrepos`), and
+  `social-media` discovers public posts, users, communities, forums and hashtags. Files is not
+  comprehensive. News does not guarantee freshness, language or journalism-only results. Map is not
+  routing and does not guarantee coordinates. Search profiles return links and metadata. The search
+  command does not fetch or play media, download files, or grant content reuse rights. Manual
   `--engines` is an alternative, not combinable with a profile. Targeted profiles require every
-  engine in the instance's `/config` catalog. Image results may include media URLs, but this tool
-  does not fetch media or grant reuse rights. Video results may include iframe/media metadata, but
-  this tool does not play videos, fetch media or grant reuse rights. Music discovery does not play
-  or download media or grant reuse rights. See [USAGE.md](USAGE.md) for the sets and failures.
+  engine in the instance's `/config` catalog. See [USAGE.md](USAGE.md) for exact sets and failures.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.

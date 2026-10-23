@@ -472,6 +472,7 @@ describe("qsm-web searxng search profiles", () => {
     ["music", reviewed.music],
     ["map", reviewed.map],
     ["files", reviewed.files],
+    ["social-media", reviewed["social-media"]],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
@@ -545,6 +546,8 @@ describe("qsm-web searxng search profiles", () => {
       const results = Results.parse(JSON.parse(r.stdout));
       expect(results).toHaveLength(1);
       const [result] = results;
+      expect(result?.engine).toBe(names[0]);
+      expect(result?.engines).toEqual([names[0]]);
       if (profile === "images") {
         expect(result).toMatchObject({
           img_src: "https://img.test/image.png",
