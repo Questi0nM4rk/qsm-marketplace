@@ -4,19 +4,57 @@ import { z } from "zod";
 import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
-const SEARCH_PROFILE = z.enum(["default", "niche", "academic"]);
+const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it"]);
 export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
 
 const PROFILE_ENGINES = {
   niche: ["searchmysite", "wiby", "mwmbl", "boardreader"],
   academic: ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"],
+  it: [
+    "alpine linux packages",
+    "apple app store",
+    "askubuntu",
+    "cachy os packages",
+    "caddy.community",
+    "codeberg",
+    "crates.io",
+    "discuss.python",
+    "docker hub",
+    "fdroid",
+    "free software directory",
+    "gentoo",
+    "gitea.com",
+    "github",
+    "gitlab",
+    "google play apps",
+    "hackernews",
+    "hex",
+    "hoogle",
+    "huggingface",
+    "huggingface datasets",
+    "huggingface spaces",
+    "lib.rs",
+    "mankier",
+    "mdn",
+    "microsoft learn",
+    "national vulnerability database",
+    "nixos wiki",
+    "packagist",
+    "pi-hole.community",
+    "pkg.go.dev",
+    "pub.dev",
+    "sourcehut",
+    "stackoverflow",
+    "superuser",
+    "voidlinux",
+  ],
 } as const;
 
 /** Validate the caller's profile name before it reaches the search request. */
 export function parseSearchProfile(raw: string): SearchProfile {
   const profile = SEARCH_PROFILE.safeParse(raw);
   if (!profile.success) {
-    throw new UsageError("--profile must be default, niche or academic");
+    throw new UsageError("--profile must be default, niche, academic or it");
   }
   return profile.data;
 }
@@ -42,18 +80,17 @@ export interface SearchOptions {
   readonly profile?: SearchProfile;
   readonly engines?: readonly string[];
   readonly timeRange?: string;
-  readonly category?: string;
   readonly language?: string;
   readonly safesearch?: number;
 }
 
-/** A profile owns source selection; explicit engines and categories belong to unprofiled calls. */
+/** A profile owns source selection; explicit engines belong to unprofiled calls. */
 function profileEngines(opts: SearchOptions): readonly string[] | undefined {
   if (opts.profile === undefined) {
     return undefined;
   }
-  if (opts.engines !== undefined || opts.category !== undefined) {
-    throw new UsageError("--profile cannot be combined with --engines or --category");
+  if (opts.engines !== undefined) {
+    throw new UsageError("--profile cannot be combined with --engines");
   }
   return opts.profile === "default" ? undefined : PROFILE_ENGINES[opts.profile];
 }
@@ -112,9 +149,6 @@ function buildSearchUrl(instance: string, opts: SearchOptions): string {
   }
   if (opts.timeRange !== undefined) {
     params.set("time_range", opts.timeRange);
-  }
-  if (opts.category !== undefined) {
-    params.set("categories", opts.category);
   }
   if (opts.language !== undefined) {
     params.set("language", opts.language);

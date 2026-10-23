@@ -8,6 +8,7 @@ import { z } from "zod";
 import { envelopeOf, isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { Envelope } from "../../../lib/outcome.ts";
+import it from "./fixtures/searxng-it-engines.json";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
@@ -229,8 +230,6 @@ describe("qsm-web searxng search", () => {
       "2",
       "--engines",
       " duckduckgo , google ",
-      "--category",
-      "it",
       "--time-range",
       "week",
       "--language",
@@ -241,7 +240,7 @@ describe("qsm-web searxng search", () => {
     expect(r.exit).toBe(0);
     const params = asked(inst).searchParams;
     expect(params.get("engines")).toBe("duckduckgo,google");
-    expect(params.get("categories")).toBe("it");
+    expect(params.has("categories")).toBe(false);
     expect(params.get("time_range")).toBe("week");
     expect(params.get("language")).toBe("en");
     expect(params.get("safesearch")).toBe("1");
@@ -264,7 +263,6 @@ describe("qsm-web searxng search", () => {
       ["searxng", "search", "q", "--instance", inst.base, "--num-results", "0"],
       ["searxng", "search", "q", "--instance", inst.base, "--num-results", "1.5"],
       ["searxng", "search", "q", "--instance", inst.base, "--timeout", "0"],
-      ["searxng", "search", "q", "--instance", inst.base, "--category", ""],
       ["searxng", "search", "q", "--instance", inst.base, "--language", ""],
       ["searxng", "search", "q", "--instance", inst.base, "--safesearch", "3"],
       ["searxng", "search", "q", "--instance", inst.base, "--time-range", "fortnight"],
@@ -398,6 +396,7 @@ describe("qsm-web searxng search", () => {
     const { exit, envelope } = await searchJson(inst);
     const [first] = resultsOf(envelope);
     expect(first?.engines).toEqual(["duckduckgo"]);
+    expect(first?.category).toBe("it");
     expect(first?.publishedDate).toBeNull();
     expect(exit).toBe(0);
   });
@@ -465,6 +464,7 @@ describe("qsm-web searxng search profiles", () => {
   const profiles = [
     ["niche", ["searchmysite", "wiby", "mwmbl", "boardreader"]],
     ["academic", ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"]],
+    ["it", it],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
@@ -472,6 +472,11 @@ describe("qsm-web searxng search profiles", () => {
   // Catalog shape follows SearXNG's /config response. Default-disabled engines are still loaded.
   function catalog(names: readonly string[]): Response {
     return json({ engines: names.map((name) => ({ name, enabled: false })) });
+  }
+
+  /** A preflight failure must not send a search request or retry the catalog. */
+  function expectOnlyCatalog(inst: Instance): void {
+    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
   }
 
   test("default leaves server selection alone and skips the catalog", async () => {
@@ -520,12 +525,10 @@ describe("qsm-web searxng search profiles", () => {
 
   test("unknown profiles and conflicting selections fail before any request", async () => {
     const inst = withResults([PAGE]);
-    for (const profile of ["default", "niche", "academic"]) {
+    for (const profile of ["default", "niche", "academic", "it"]) {
       for (const selection of [
         ["--engines", "wiby"],
         ["--engines", ""],
-        ["--category", "general"],
-        ["--category", ""],
       ]) {
         const r = await searchVerb(inst, "--profile", profile, ...selection);
         expect(r.exit).toBe(2);
@@ -537,15 +540,35 @@ describe("qsm-web searxng search profiles", () => {
     expect(inst.seen).toHaveLength(0);
   });
 
-  test("one missing engine refuses the whole profile without a search", async () => {
-    const inst = instance(() => catalog(["searchmysite", "wiby", "boardreader"]));
-    const { exit, envelope } = await searchJson(inst, "--profile", "niche");
-    expect(exit).toBe(4);
-    expect(envelope.code).toBe("missing");
-    expect(envelope.message).toContain("mwmbl");
-    expect(envelope.message).toContain("--engines");
-    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+  test("category input is rejected with and without profiles before any request", async () => {
+    const inst = withResults([PAGE]);
+    for (const profile of [undefined, "default", "niche", "academic", "it"]) {
+      for (const value of ["it", ""]) {
+        const flags = profile === undefined ? [] : ["--profile", profile];
+        const { exit, envelope } = await searchJson(inst, ...flags, "--category", value);
+        expect(exit).toBe(2);
+        expect(envelope.code).toBe("usage");
+        expect(envelope.message).toContain("--category");
+      }
+    }
+    expect(inst.seen).toHaveLength(0);
+    const help = await run(["searxng", "search", "--help"]);
+    expect(help.exit).toBe(0);
+    expect(help.stdout).not.toContain("--category");
+    expect(help.stdout).toContain("academic|it");
   });
+
+  for (const [profile, names] of profiles) {
+    test(`one missing engine refuses the whole ${profile} profile without a search`, async () => {
+      const inst = instance(() => catalog(names.slice(1)));
+      const { exit, envelope } = await searchJson(inst, "--profile", profile);
+      expect(exit).toBe(4);
+      expect(envelope.code).toBe("missing");
+      expect(envelope.message).toContain(names[0]);
+      expect(envelope.message).toContain("--engines");
+      expectOnlyCatalog(inst);
+    });
+  }
 
   const unusableCatalogs = [
     ["HTTP error", () => new Response("private catalog body", { status: 503 })],
@@ -559,7 +582,7 @@ describe("qsm-web searxng search profiles", () => {
       expect(exit).toBe(1);
       expect(envelope.code).toBe("failed");
       expect(envelope.message).not.toContain("private catalog body");
-      expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+      expectOnlyCatalog(inst);
     });
   }
 
@@ -568,7 +591,7 @@ describe("qsm-web searxng search profiles", () => {
     const { exit, envelope } = await searchJson(inst, "--profile", "niche", "--timeout", "150");
     expect(exit).toBe(1);
     expect(envelope.message).toContain("no answer within 150 ms");
-    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config"]);
+    expectOnlyCatalog(inst);
   });
 
   test("inventory and search share one deadline rather than receiving a budget each", async () => {

@@ -20,7 +20,7 @@ loop and clears its own walls, it has no reason to exist.
 | Kind | Name | What it does |
 | --- | --- | --- |
 | Skill | `web-ladder` | Runs the loop: searxng search, up to three keyword rounds, Context7 for a library, Tavily when the keywords will not come, one page in a browser, the person on a wall. |
-| Skill | `searxng` | Searches through your own SearXNG instance, named by a flag or the environment, and narrows by source profile, engine, category, time range or language. |
+| Skill | `searxng` | Searches through your own SearXNG instance, named by a flag or the environment, and narrows by source profile, engine, time range or language. |
 | Skill | `browserbox` | Opens one page in a real browser, scripts a sequence, and hands a captcha to the person. |
 | Skill | `opensrc` | Puts a library's source on disk at the version the project pins, to read. |
 | Agent | `web-research` | Runs the loop away from the main context, handles a wall itself, and returns an answer with sources. |
@@ -51,6 +51,7 @@ Ask the agent: "look up how React hooks handle cleanup", or hand a question to `
 qsm-web searxng search "io uring vs epoll" --time-range year
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic
+qsm-web searxng search "AbortController" --profile it
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -64,9 +65,11 @@ qsm-web browserbox stop "$name"
 
 - Search needs an instance: `--instance <url>` or `QSM_SEARXNG_INSTANCE`. The instance owns the
   engine and policy defaults; only the flags you pass are sent.
-- `--profile default` follows server defaults. `niche` selects personal sites and discussions,
-  while `academic` selects publication sources. Targeted profiles require their engines in the
-  instance's `/config` catalog. See [USAGE.md](USAGE.md) for the lists and failure behavior.
+- `--profile` selects a named set: `default` follows server defaults, `niche` searches personal
+  sites and discussions, `academic` searches publications, and `it` searches technical sources.
+  Manual `--engines` is an alternative, not combinable with a profile. Targeted profiles require
+  every engine in the instance's `/config` catalog. See [USAGE.md](USAGE.md) for the sets and
+  failures.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.
