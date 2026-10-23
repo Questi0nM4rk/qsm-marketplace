@@ -107,7 +107,7 @@ const GLOB = /[*?[{]/;
 
 /** The paths a tsconfig's `include` and `files` name, cut at the first glob segment, relative to
  * the tree's root; one that leaves the tree is not the tree's input. */
-function tsconfigInputs(dir: string, config: string): string[] {
+export function tsconfigInputs(dir: string, config: string): string[] {
   const parsed = recordOf(Bun.JSONC.parse(readFileSync(join(dir, config), "utf8")));
   const entries = [...(arrayOf(parsed?.include) ?? []), ...(arrayOf(parsed?.files) ?? [])];
   const inputs: string[] = [];
