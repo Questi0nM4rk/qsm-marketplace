@@ -8,7 +8,7 @@ predecessor. Shared ownership is sequential, not concurrent. The common file set
 tracker/spec planning state, merge, push or install. The main agent accepts the real-entry proof and
 integrates each returned diff before the next starts.
 
-- [ ] 1.1 Add `images` with its exact 16-engine set across the common file set. Extend existing
+- [x] 1.1 Add `images` with its exact 16-engine set across the common file set. Extend existing
       parameterized tests and establish the independently recorded fixture for new sets. Derive
       conflict/category-rejection coverage from all profile names so later additions need no copied
       loops. Proof: `mise exec -- bun test plugins/qsm-web/scripts/searxng.test.ts` shows exact

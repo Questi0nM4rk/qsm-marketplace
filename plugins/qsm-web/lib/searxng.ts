@@ -4,7 +4,7 @@ import { z } from "zod";
 import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
-const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it"]);
+const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it", "images"]);
 export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
 
 const PROFILE_ENGINES = {
@@ -48,13 +48,31 @@ const PROFILE_ENGINES = {
     "superuser",
     "voidlinux",
   ],
+  images: [
+    "artic",
+    "artstation",
+    "brave.images",
+    "devicons",
+    "duckduckgo images",
+    "findthatmeme",
+    "flaticon",
+    "frinkiac",
+    "giphy",
+    "iconify",
+    "lucide",
+    "material icons",
+    "pinterest",
+    "public domain image archive",
+    "selfhst icons",
+    "uxwing",
+  ],
 } as const;
 
 /** Validate the caller's profile name before it reaches the search request. */
 export function parseSearchProfile(raw: string): SearchProfile {
   const profile = SEARCH_PROFILE.safeParse(raw);
   if (!profile.success) {
-    throw new UsageError("--profile must be default, niche, academic or it");
+    throw new UsageError("--profile must be default, niche, academic, it or images");
   }
   return profile.data;
 }

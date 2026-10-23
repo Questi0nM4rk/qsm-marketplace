@@ -9,6 +9,7 @@ import { envelopeOf, isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { Envelope } from "../../../lib/outcome.ts";
 import it from "./fixtures/searxng-it-engines.json";
+import reviewed from "./fixtures/searxng-reviewed-profile-engines.json";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
@@ -465,9 +466,11 @@ describe("qsm-web searxng search profiles", () => {
     ["niche", ["searchmysite", "wiby", "mwmbl", "boardreader"]],
     ["academic", ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"]],
     ["it", it],
+    ["images", reviewed.images],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
+  const profileNames = ["default", ...profiles.map(([profile]) => profile)];
 
   // Catalog shape follows SearXNG's /config response. Default-disabled engines are still loaded.
   function catalog(names: readonly string[]): Response {
@@ -494,7 +497,21 @@ describe("qsm-web searxng search profiles", () => {
       const inst = instance((url) =>
         url.pathname.endsWith("/config")
           ? catalog(names)
-          : json({ results: [{ ...page, engine: names[0], engines: [names[0]] }] }),
+          : json({
+              results: [
+                {
+                  ...page,
+                  engine: names[0],
+                  engines: [names[0]],
+                  ...(profile === "images"
+                    ? {
+                        img_src: "https://img.test/image.png",
+                        thumbnail_src: "https://img.test/thumb.png",
+                      }
+                    : {}),
+                },
+              ],
+            }),
       );
       const r = await run([
         "searxng",
@@ -519,13 +536,21 @@ describe("qsm-web searxng search profiles", () => {
       expect(params?.has("profile")).toBe(false);
       expect(params?.get("language")).toBe("en");
       expect(params?.get("time_range")).toBe("year");
-      expect(Results.parse(JSON.parse(r.stdout))).toHaveLength(1);
+      const results = Results.parse(JSON.parse(r.stdout));
+      expect(results).toHaveLength(1);
+      const [result] = results;
+      if (profile === "images") {
+        expect(result).toMatchObject({
+          img_src: "https://img.test/image.png",
+          thumbnail_src: "https://img.test/thumb.png",
+        });
+      }
     });
   }
 
   test("unknown profiles and conflicting selections fail before any request", async () => {
     const inst = withResults([PAGE]);
-    for (const profile of ["default", "niche", "academic", "it"]) {
+    for (const profile of profileNames) {
       for (const selection of [
         ["--engines", "wiby"],
         ["--engines", ""],
@@ -542,7 +567,7 @@ describe("qsm-web searxng search profiles", () => {
 
   test("category input is rejected with and without profiles before any request", async () => {
     const inst = withResults([PAGE]);
-    for (const profile of [undefined, "default", "niche", "academic", "it"]) {
+    for (const profile of [undefined, ...profileNames]) {
       for (const value of ["it", ""]) {
         const flags = profile === undefined ? [] : ["--profile", profile];
         const { exit, envelope } = await searchJson(inst, ...flags, "--category", value);
@@ -555,7 +580,7 @@ describe("qsm-web searxng search profiles", () => {
     const help = await run(["searxng", "search", "--help"]);
     expect(help.exit).toBe(0);
     expect(help.stdout).not.toContain("--category");
-    expect(help.stdout).toContain("academic|it");
+    expect(help.stdout).toContain("academic|it|images");
   });
 
   for (const [profile, names] of profiles) {

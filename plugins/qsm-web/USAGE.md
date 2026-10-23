@@ -6,7 +6,7 @@ warnings, data }` on stdout. Codes: `ok` 0, `failed` 1, `usage` 2, `missing` 4.
 ```bash
 qsm-web searxng search <query...> [--instance url] [--num-results n] [--timeout ms]
                         [--engines a,b] [--language en] [--safesearch 0|1|2]
-                        [--time-range day|week|month|year] [--profile default|niche|academic|it]
+                        [--time-range day|week|month|year] [--profile default|niche|academic|it|images]
 qsm-web opensrc get <spec|address> [--project <dir>]
 qsm-web doctor        # bins, tvly, the Tavily skills, the Context7 skill
 qsm-web browserbox start | ls | stop <name> | stop --all
@@ -40,6 +40,7 @@ Profiles select sources for one query without changing the instance's defaults:
 | `niche` | `searchmysite`, `wiby`, `mwmbl`, `boardreader` |
 | `academic` | `arxiv`, `crossref`, `openalex`, `semantic scholar`, `pubmed`, `europepmc` |
 | `it` | Technical documentation, repositories, packages, apps, questions, discussions, model catalogs and vulnerability records. Exact set below. |
+| `images` | Mixed image, icon, art and meme discovery. Exact set below. Results may include image and thumbnail URLs. |
 
 The IT set contains these 36 engines:
 
@@ -56,25 +57,34 @@ The IT set contains these 36 engines:
 | AI catalogs | `huggingface`, `huggingface datasets`, `huggingface spaces` |
 | Security | `national vulnerability database` |
 
+The Images profile selects these 16 sources:
+
+`artic`, `artstation`, `brave.images`, `devicons`, `duckduckgo images`, `findthatmeme`, `flaticon`,
+`frinkiac`, `giphy`, `iconify`, `lucide`, `material icons`, `pinterest`,
+`public domain image archive`, `selfhst icons`, `uxwing`.
+
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
 qsm-web searxng search "AbortController" --profile it
+qsm-web searxng search "minimal mountain icon" --profile images
 ```
 
 `--profile` is the only named source-selection flag. It is exclusive with `--engines`, including
 empty values. Conflicts and unknown profiles return `usage` before a request. Other filters work
 with profiles. The result's `category` field is metadata, not an input selector.
 
-Niche, academic and IT first read `/config` and require every listed engine to be registered. An
-engine may be disabled by default and still be used. Missing engines return `missing` with their
-names and no search request. A failed or unreadable catalog returns `failed`. There is no retry,
-silent removal of engines, or substitution of server defaults. Availability is not a guarantee
-that a provider will answer; search warnings retain their normal behavior. The default profile
-does not request the catalog.
+Niche, academic, IT and Images first read `/config` and require every listed engine to be
+registered. An engine may be disabled by default and still be used. Missing engines return `missing`
+with their names and no search request. A failed or unreadable catalog returns `failed`. There is no
+retry, silent removal of engines, or substitution of server defaults. Availability is not a
+guarantee that a provider will answer; search warnings retain their normal behavior. The default
+profile does not request the catalog.
 
 IT is a broad discovery set, not a guarantee of relevance or freshness. Package and model catalogs
 can add noise to a documentation query. Use manual `--engines` when a narrower selection is needed.
+Images combines image, icon, art and meme sources. It does not fetch media or grant rights to reuse
+content.
 
 ## shot-scraper
 

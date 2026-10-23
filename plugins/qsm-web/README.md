@@ -52,6 +52,7 @@ qsm-web searxng search "io uring vs epoll" --time-range year
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic
 qsm-web searxng search "AbortController" --profile it
+qsm-web searxng search "minimal mountain icon" --profile images
 qsm-web opensrc get react --project .
 name=$(qsm-web browserbox start --json | jq -r .data.name)
 qsm-web browserbox fetch https://example.test --in "$name" --html
@@ -66,10 +67,11 @@ qsm-web browserbox stop "$name"
 - Search needs an instance: `--instance <url>` or `QSM_SEARXNG_INSTANCE`. The instance owns the
   engine and policy defaults; only the flags you pass are sent.
 - `--profile` selects a named set: `default` follows server defaults, `niche` searches personal
-  sites and discussions, `academic` searches publications, and `it` searches technical sources.
-  Manual `--engines` is an alternative, not combinable with a profile. Targeted profiles require
-  every engine in the instance's `/config` catalog. See [USAGE.md](USAGE.md) for the sets and
-  failures.
+  sites and discussions, `academic` searches publications, `it` searches technical sources, and
+  `images` discovers images, icons, art and memes. Manual `--engines` is an alternative, not
+  combinable with a profile. Targeted profiles require every engine in the instance's `/config`
+  catalog. Image results may include media URLs, but this tool does not fetch media or grant reuse
+  rights. See [USAGE.md](USAGE.md) for the sets and failures.
 - `opensrc get` of a package spec needs `opensrc` on `PATH`.
 - Only the browser step needs docker or podman. The first `browserbox start` builds an image
   (minutes, about 1 GB), and a start after the plugin's `docker/` files changed builds it again.
