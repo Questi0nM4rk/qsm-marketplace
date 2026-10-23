@@ -33,6 +33,7 @@ describe("denialFor, on a command that hides the subcommand", () => {
     expect(denialFor("git -c core.editor=true worktree prune")).not.toBeNull();
     expect(denialFor("/usr/bin/git worktree list")).not.toBeNull();
     expect(denialFor("sudo git worktree remove ../tree")).not.toBeNull();
+    expect(denialFor("rtk git worktree lock /x")).not.toBeNull();
     expect(denialFor("GIT_PAGER=cat git worktree list")).not.toBeNull();
   });
 

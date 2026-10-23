@@ -24,8 +24,9 @@ const VALUE_OPTIONS = new Set([
   "--exec-path",
 ]);
 
-/** Words that wrap a command without changing what it is. */
-const WRAPPERS = new Set(["sudo", "command", "nohup", "time", "env"]);
+/** Words that wrap a command without changing what it is; rtk is the output filter qsm-usage puts
+ * in front of a Bash command before this block reads it. */
+const WRAPPERS = new Set(["sudo", "command", "nohup", "time", "env", "rtk"]);
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
