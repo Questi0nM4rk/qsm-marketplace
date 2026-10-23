@@ -467,6 +467,7 @@ describe("qsm-web searxng search profiles", () => {
     ["academic", ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"]],
     ["it", it],
     ["images", reviewed.images],
+    ["videos", reviewed.videos],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
@@ -509,6 +510,7 @@ describe("qsm-web searxng search profiles", () => {
                         thumbnail_src: "https://img.test/thumb.png",
                       }
                     : {}),
+                  ...(profile === "videos" ? { iframe_src: "https://video.test/embed/clip" } : {}),
                 },
               ],
             }),
@@ -545,6 +547,9 @@ describe("qsm-web searxng search profiles", () => {
           thumbnail_src: "https://img.test/thumb.png",
         });
       }
+      if (profile === "videos") {
+        expect(result).toMatchObject({ iframe_src: "https://video.test/embed/clip" });
+      }
     });
   }
 
@@ -562,6 +567,7 @@ describe("qsm-web searxng search profiles", () => {
     }
     const unknown = await searchVerb(inst, "--profile", "unknown");
     expect(unknown.exit).toBe(2);
+    expect(unknown.stderr).toContain("videos");
     expect(inst.seen).toHaveLength(0);
   });
 
@@ -580,7 +586,7 @@ describe("qsm-web searxng search profiles", () => {
     const help = await run(["searxng", "search", "--help"]);
     expect(help.exit).toBe(0);
     expect(help.stdout).not.toContain("--category");
-    expect(help.stdout).toContain("academic|it|images");
+    expect(help.stdout).toContain("academic|it|images|videos");
   });
 
   for (const [profile, names] of profiles) {

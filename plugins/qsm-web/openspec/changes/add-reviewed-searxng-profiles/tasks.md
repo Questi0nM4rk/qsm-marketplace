@@ -14,7 +14,7 @@ integrates each returned diff before the next starts.
       loops. Proof: `mise exec -- bun test plugins/qsm-web/scripts/searxng.test.ts` shows exact
       source selection, disabled-default selection, missing-engine refusal, conflict/category
       rejection and preserved media fields. Blocks on spec approval.
-- [ ] 1.2 Add `videos` with its exact 12-engine set across the common file set and fixture. Keep
+- [x] 1.2 Add `videos` with its exact 12-engine set across the common file set and fixture. Keep
       result/media/iframe metadata without playback. Proof: the same real-entry suite includes
       Videos selection and refusal cases and retains existing result tests. Blocks on 1.1
       integration.

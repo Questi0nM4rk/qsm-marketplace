@@ -31,12 +31,14 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `academic` | Publications: `arxiv`, `crossref`, `openalex`, `semantic scholar`, `pubmed`, `europepmc` |
 | `it` | Broad technical discovery across documentation, repositories, packages, apps, Q&A, discussions, model catalogs and vulnerability records. The exact 36-engine set is in [USAGE.md](../../USAGE.md#search-profiles). |
 | `images` | Mixed image, icon, art and meme discovery. Sources are the exact 16-engine set in [USAGE.md](../../USAGE.md#search-profiles). Results may include image and thumbnail URLs. |
+| `videos` | Video discovery metadata and source links across video platforms and indexes. The exact 12-engine set is in [USAGE.md](../../USAGE.md#search-profiles). Results may include iframe or media metadata. |
 
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
 qsm-web searxng search "AbortController" --profile it
 qsm-web searxng search "minimal mountain icon" --profile images
+qsm-web searxng search "conference talks on Rust" --profile videos
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -49,6 +51,8 @@ explicit selection. Combining a profile and engines, even an empty engine value,
 IT includes specialist catalogs, so returned links do not guarantee relevance or freshness. For a
 narrow documentation query, select its engines manually instead of widening the whole IT set.
 Images is source discovery only: it does not fetch media or grant rights to reuse content.
+Videos returns metadata and source links only. It does not play videos, fetch media, or grant rights
+to reuse content.
 
 ## Red flags
 

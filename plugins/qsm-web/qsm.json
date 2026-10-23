@@ -45,8 +45,8 @@
           {
             "name": "profile",
             "type": "string",
-            "choices": ["default", "niche", "academic", "it", "images"],
-            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources or image/icon/art discovery; exclusive with --engines"
+            "choices": ["default", "niche", "academic", "it", "images", "videos"],
+            "description": "source selection: server defaults, personal sites/discussions, academic publications, technical sources, image/icon/art discovery or video metadata links; exclusive with --engines"
           },
           {
             "name": "engines",

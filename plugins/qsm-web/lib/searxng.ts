@@ -4,7 +4,7 @@ import { z } from "zod";
 import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
-const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it", "images"]);
+const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it", "images", "videos"]);
 export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
 
 const PROFILE_ENGINES = {
@@ -66,13 +66,27 @@ const PROFILE_ENGINES = {
     "selfhst icons",
     "uxwing",
   ],
+  videos: [
+    "360search videos",
+    "bilibili",
+    "brave.videos",
+    "dailymotion",
+    "duckduckgo videos",
+    "ina",
+    "media.ccc.de",
+    "mediathekviewweb",
+    "odysee",
+    "pixabay videos",
+    "sepiasearch",
+    "sogou videos",
+  ],
 } as const;
 
 /** Validate the caller's profile name before it reaches the search request. */
 export function parseSearchProfile(raw: string): SearchProfile {
   const profile = SEARCH_PROFILE.safeParse(raw);
   if (!profile.success) {
-    throw new UsageError("--profile must be default, niche, academic, it or images");
+    throw new UsageError("--profile must be default, niche, academic, it, images or videos");
   }
   return profile.data;
 }
