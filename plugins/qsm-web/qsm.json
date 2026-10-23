@@ -45,18 +45,13 @@
           {
             "name": "profile",
             "type": "string",
-            "choices": ["default", "niche", "academic"],
-            "description": "source selection: server defaults, personal sites/discussions, or academic publications; exclusive with --engines and --category"
+            "choices": ["default", "niche", "academic", "it"],
+            "description": "source selection: server defaults, personal sites/discussions, academic publications, or technical sources; exclusive with --engines"
           },
           {
             "name": "engines",
             "type": "string",
             "description": "restrict to these engines, comma separated; an empty value sends none"
-          },
-          {
-            "name": "category",
-            "type": "string",
-            "description": "restrict to one category"
           },
           {
             "name": "timeRange",

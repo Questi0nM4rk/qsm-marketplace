@@ -56,11 +56,8 @@ function searchOptions(call: Call): SearchOptions {
   const engines = optionalString(call, "engines");
   const rawProfile = optionalString(call, "profile");
   const profile = rawProfile === undefined ? undefined : parseSearchProfile(rawProfile);
-  if (
-    profile !== undefined &&
-    (engines !== undefined || optionalString(call, "category") !== undefined)
-  ) {
-    throw new UsageError("--profile cannot be combined with --engines or --category");
+  if (profile !== undefined && engines !== undefined) {
+    throw new UsageError("--profile cannot be combined with --engines");
   }
   const list =
     engines === undefined
@@ -70,7 +67,6 @@ function searchOptions(call: Call): SearchOptions {
           .map((e) => e.trim())
           .filter(Boolean);
   const timeRange = optionalString(call, "timeRange");
-  const category = filter(call, "category", "--category");
   const language = filter(call, "language", "--language");
   const safesearch = optionalNumber(call, "safesearch");
   return {
@@ -79,7 +75,6 @@ function searchOptions(call: Call): SearchOptions {
     ...(profile === undefined ? {} : { profile }),
     ...(list === undefined || list.length === 0 ? {} : { engines: list }),
     ...(timeRange === undefined ? {} : { timeRange }),
-    ...(category === undefined ? {} : { category }),
     ...(language === undefined ? {} : { language }),
     ...(safesearch === undefined ? {} : { safesearch }),
   };

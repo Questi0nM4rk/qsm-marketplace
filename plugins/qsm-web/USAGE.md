@@ -5,8 +5,8 @@ warnings, data }` on stdout. Codes: `ok` 0, `failed` 1, `usage` 2, `missing` 4.
 
 ```bash
 qsm-web searxng search <query...> [--instance url] [--num-results n] [--timeout ms]
-                        [--engines a,b] [--category c] [--language en] [--safesearch 0|1|2]
-                        [--time-range day|week|month|year] [--profile default|niche|academic]
+                        [--engines a,b] [--language en] [--safesearch 0|1|2]
+                        [--time-range day|week|month|year] [--profile default|niche|academic|it]
 qsm-web opensrc get <spec|address> [--project <dir>]
 qsm-web doctor        # bins, tvly, the Tavily skills, the Context7 skill
 qsm-web browserbox start | ls | stop <name> | stop --all
@@ -39,21 +39,42 @@ Profiles select sources for one query without changing the instance's defaults:
 | `default` | Current server defaults, identical to omitting the profile |
 | `niche` | `searchmysite`, `wiby`, `mwmbl`, `boardreader` |
 | `academic` | `arxiv`, `crossref`, `openalex`, `semantic scholar`, `pubmed`, `europepmc` |
+| `it` | Technical documentation, repositories, packages, apps, questions, discussions, model catalogs and vulnerability records. Exact set below. |
+
+The IT set contains these 36 engines:
+
+| Purpose | Engines |
+| --- | --- |
+| Packages | `alpine linux packages`, `cachy os packages`, `crates.io`, `hex`, `lib.rs`, `packagist`, `pkg.go.dev`, `pub.dev`, `voidlinux` |
+| Apps | `apple app store`, `fdroid`, `google play apps` |
+| Questions | `askubuntu`, `stackoverflow`, `superuser` |
+| Discussions | `caddy.community`, `discuss.python`, `hackernews`, `pi-hole.community` |
+| Repositories | `codeberg`, `gitea.com`, `github`, `gitlab`, `sourcehut` |
+| Software catalogs | `docker hub`, `free software directory` |
+| Documentation | `gentoo`, `mankier`, `mdn`, `microsoft learn`, `nixos wiki` |
+| Code reference | `hoogle` |
+| AI catalogs | `huggingface`, `huggingface datasets`, `huggingface spaces` |
+| Security | `national vulnerability database` |
 
 ```bash
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
+qsm-web searxng search "AbortController" --profile it
 ```
 
-`--profile` is exclusive with `--engines` and `--category`, including empty values. Conflicts and
-unknown profiles return `usage` before a request. Other filters work with profiles.
+`--profile` is the only named source-selection flag. It is exclusive with `--engines`, including
+empty values. Conflicts and unknown profiles return `usage` before a request. Other filters work
+with profiles. The result's `category` field is metadata, not an input selector.
 
-Niche and academic first read `/config` and require every listed engine to be registered. An
+Niche, academic and IT first read `/config` and require every listed engine to be registered. An
 engine may be disabled by default and still be used. Missing engines return `missing` with their
 names and no search request. A failed or unreadable catalog returns `failed`. There is no retry,
 silent removal of engines, or substitution of server defaults. Availability is not a guarantee
 that a provider will answer; search warnings retain their normal behavior. The default profile
 does not request the catalog.
+
+IT is a broad discovery set, not a guarantee of relevance or freshness. Package and model catalogs
+can add noise to a documentation query. Use manual `--engines` when a narrower selection is needed.
 
 ## shot-scraper
 
