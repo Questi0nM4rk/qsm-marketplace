@@ -1,0 +1,251 @@
+# shellcheck shell=bash
+# Sourced by drive: the atlas verbs. A scenario names a desktop and its journeys; every journey
+# runs in a fresh desktop slot, every `shot` step writes the screen and its item tree, and each
+# run is kept beside the earlier ones and compared with the one before it, shot by shot.
+#
+# Scenario, one directive per line ('#' starts a comment, ~ is the home directory):
+#   desktop PATH            the shell's Quickshell path (required)
+#   hypr FILE               the Hyprland lua config the nested desktop reads
+#   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock for the shell (needs libfaketime)
+#   settle SECONDS          the pause after each step (default 0.6)
+#   journey NAME            starts a journey; the steps below belong to it
+# Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
+# plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, wait-clients N,
+# ipc FN ARGS (the shell's own IPC: open a surface, post mock data),
+# shot NAME (taken once the screen is still).
+
+ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
+# A changed pixel differs by more than this share in one channel; a changed area is a connected
+# region of at least this many pixels. Below both lies GPU noise.
+ATLAS_FUZZ="${DRIVE_ATLAS_FUZZ:-3}"
+ATLAS_MIN_AREA="${DRIVE_ATLAS_MIN_AREA:-16}"
+
+atlas_path() { printf '%s\n' "${1/#\~/$HOME}"; }
+
+# The scenario's settings as NAME=VALUE lines; journeys stay in the file.
+atlas_settings() {
+  awk '$1 ~ /^(desktop|hypr|clock|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
+}
+
+# The steps of one journey, without indentation or comments.
+atlas_steps() {
+  awk -v j="$2" '
+    /^[ \t]*(#|$)/ { next }
+    $1 == "journey" { on = ($2 == j); next }
+    on { sub(/^[ \t]+/, ""); print }' "$1"
+}
+
+# ipc FN ARGS: a call into the shell's `qsm` IPC target, so a scenario opens a surface or posts
+# mock data directly (a look and feel check, not a functional one). Quoted args keep their spaces.
+atlas_ipc() {
+  local -a args
+  mapfile -t args < <(xargs -n1 printf '%s\n' <<<"$2")
+  XDG_RUNTIME_DIR="$SLOT_RT" WAYLAND_DISPLAY="$SLOT_CLIENT_DISPLAY" qs ipc --path "$SLOT_QS_PATH" call qsm "${args[@]}" >/dev/null \
+    || die "ipc failed: $2"
+}
+
+# wait-clients N: until the nested Hyprland maps exactly N windows (10 s at most).
+atlas_wait_clients() {
+  local i
+  [[ "$2" =~ ^[0-9]+$ ]] || die "wait-clients needs a count"
+  for ((i = 0; i < 40; i++)); do
+    [[ "$( (slot_run "$1" -- hyprctl clients -j) | jq length)" == "$2" ]] && return
+    sleep 0.25
+  done
+  die "the nested desktop never reached $2 windows"
+}
+
+atlas_journeys() { awk '$1 == "journey" { print $2 }' "$1"; }
+
+# Waits until the shell answers its inspect call, so the first shot sees a loaded desktop.
+atlas_wait_shell() {
+  local i
+  for ((i = 0; i < 60; i++)); do
+    # A subshell: slot_tree dies (exits) while the shell is still loading.
+    (slot_tree "$1") >/dev/null 2>&1 && return
+    sleep 0.25
+  done
+  die "the shell in slot '$1' never answered (see $(slot_dir "$1")/qs.log)"
+}
+
+# Waits until two captures 150 ms apart show no changed area, so a shot never lands mid-animation.
+# A screen that never stills (a looping animation) is shot after 5 s and the shot is marked moving.
+atlas_still() {
+  local a="$1.still-a.png" b="$1.still-b.png" i
+  grim -o "$SLOT_OUTPUT" "$a" || die "grim failed in the atlas slot"
+  for ((i = 0; i < 33; i++)); do
+    sleep 0.15
+    grim -o "$SLOT_OUTPUT" "$b" || die "grim failed in the atlas slot"
+    if [[ -z "$(atlas_areas "$a" "$b")" ]]; then
+      rm -f "$a" "$b"
+      echo still
+      return
+    fi
+    command mv -f "$b" "$a"
+  done
+  rm -f "$a" "$b"
+  echo moving
+}
+
+atlas_step() {
+  local slot="$1" line="$2" verb a b rest
+  read -r verb a b rest <<<"$line"
+  case "$verb" in
+    type) slot_type "${line#type }" 0 ;;
+    exec)
+      [[ "$line" != *"]]"* ]] || die "an exec command must not hold ']]' (it is a lua long string): $line"
+      (slot_run "$slot" -- hyprctl dispatch "hl.dsp.exec_cmd([[${line#exec }]])") >/dev/null || die "exec failed: $line"
+      ;;
+    dispatch) (slot_run "$slot" -- hyprctl dispatch "${line#dispatch }") >/dev/null || die "dispatch failed: $line" ;;
+    wait-clients) atlas_wait_clients "$slot" "$a" ;;
+    ipc) atlas_ipc "$slot" "${line#ipc }" ;;
+    *) route_step "$verb" "$a" "$b" "$rest" || die "unknown atlas step '$line'" ;;
+  esac
+}
+
+# One journey in a fresh desktop slot; prints "journey<TAB>shot<TAB>step" per shot.
+atlas_journey() {
+  local scenario="$1" journey="$2" run="$3" slot="$4" settle="$5" n=0 line name still
+  shift 5
+  slot_start_desktop "$slot" "$@" >/dev/null
+  export DRIVE_SLOT="$slot"
+  slot_load "$slot"
+  atlas_wait_shell "$slot"
+  sleep 1
+  while IFS= read -r line; do
+    n=$((n + 1))
+    if [[ "$line" == shot\ * ]]; then
+      name="$journey--${line#shot }"
+      [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "shot names are letters, digits, dot, dash and underscore: '$name'"
+      still="$(atlas_still "$run/$name")"
+      OUT_DIR="$run" cmd_shot - "$name" >/dev/null
+      slot_tree "$slot" >"$run/$name.tree.json"
+      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#shot }" "$n" "$still"
+    else
+      atlas_step "$slot" "$line"
+      sleep "$settle"
+    fi
+  done < <(atlas_steps "$scenario" "$journey")
+  slot_kill "$slot"
+  unset DRIVE_SLOT
+}
+
+atlas_run() {
+  local scenario="${1:-}" desktop="" hypr="" clock="" settle=0.6 opt dir run slot journey prev
+  [[ -f "$scenario" ]] || die "atlas run needs a SCENARIO file"
+  while IFS= read -r opt; do printf -v "${opt%%=*}" '%s' "${opt#*=}"; done < <(atlas_settings "$scenario")
+  desktop="$(atlas_path "$desktop")"
+  hypr="$(atlas_path "$hypr")"
+  [[ -n "$desktop" ]] || die "the scenario names no desktop"
+  [[ -n "$(atlas_journeys "$scenario")" ]] || die "the scenario has no journey"
+  dir="$ATLAS_ROOT/$(basename "${scenario%.*}")"
+  prev="$(atlas_runs "$dir" | tail -1)"
+  run="$dir/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$run"
+  command cp "$scenario" "$run/scenario"
+  printf '%s\n' "$(git -C "$desktop" describe --always --dirty 2>/dev/null || echo unknown)" >"$run/desktop-version"
+  slot="at$((RANDOM % 100000))"
+  trap 'slot_kill "'"$slot"'" 2>/dev/null' EXIT
+  for journey in $(atlas_journeys "$scenario"); do
+    printf 'journey %s\n' "$journey" >&2
+    atlas_journey "$scenario" "$journey" "$run" "$slot" "$settle" 1920x1080 1.25 "$desktop" "$hypr" "$clock" >>"$run/shots.tsv"
+  done
+  trap - EXIT
+  [[ -z "$prev" ]] || atlas_compare "$dir/$prev" "$run" >"$run/diff.tsv"
+  atlas_report "$run" "${prev:+$dir/$prev}"
+  printf '%s/index.html\n' "$run"
+}
+
+atlas_runs() { find "$1" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' -printf '%f\n' 2>/dev/null | sort; }
+
+# The changed areas of one shot: "x y w h" per connected region over the noise floor.
+atlas_areas() {
+  magick "$1" "$2" -compose difference -composite -separate -evaluate-sequence max \
+    -threshold "$ATLAS_FUZZ%" -define connected-components:verbose=true \
+    -define connected-components:area-threshold="$ATLAS_MIN_AREA" -connected-components 8 null: \
+    | awk '/gray\(255\)|#FFFFFF|white/ { split($2, g, /[x+]/); print g[3], g[4], g[1], g[2] }'
+}
+
+# Every item as "path<TAB>x y w h", the path built from types and same-type sibling indices.
+atlas_items() {
+  jq -r 'def items($p): [$p, .x, .y, .w, .h], ((.children // []) as $k
+      | [range(0; $k | length)] | map(. as $i | $k[$i] + {_n: ([$k[:$i][] | select(.type == $k[$i].type)] | length)})[]
+      | items($p + "/" + .type + "[" + (._n | tostring) + "]"));
+    .tree | items(.type) | "\(.[0])\t\(.[1] | round) \(.[2] | round) \(.[3] | round) \(.[4] | round)"' "$1"
+}
+
+# Per shot both runs hold: changed pixels, changed areas, and the items that moved, appeared or went.
+atlas_compare() {
+  local a="$1" b="$2" png name areas moved
+  for png in "$b"/*.png; do
+    name="$(basename "$png" .png)"
+    [[ "$name" == *.diff ]] && continue
+    [[ -f "$a/$name.png" ]] || continue
+    areas="$(atlas_areas "$a/$name.png" "$png" | tee "$b/$name.areas" | wc -l)"
+    if ((areas > 0)); then
+      magick "$png" \( "$a/$name.png" "$png" -compose difference -composite -separate -evaluate-sequence max \
+        -threshold "$ATLAS_FUZZ%" -fill '#ff3df0' -opaque white -transparent black \) -compose over -composite "$b/$name.diff.png"
+    fi
+    moved="$(join -t $'\t' -a1 -a2 -e GONE -o 0,1.2,2.2 <(atlas_items "$a/$name.tree.json" | sort) <(atlas_items "$b/$name.tree.json" | sort) \
+      | awk -F'\t' '$2 != $3' | tee "$b/$name.items" | wc -l)"
+    printf '%s\t%s\t%s\n' "$name" "$areas" "$moved"
+  done
+}
+
+cmd_atlas() {
+  local verb="${1:-}"
+  shift || true
+  case "$verb" in
+    run) atlas_run "$@" ;;
+    ls) for d in "$ATLAS_ROOT"/*/; do [[ -d "$d" ]] && printf '%s %s\n' "$(basename "$d")" "$(atlas_runs "$d" | tr '\n' ' ')"; done ;;
+    *) die "atlas needs run SCENARIO | ls" ;;
+  esac
+}
+
+atlas_html() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
+# One page per run: every shot by journey, its changed areas and items against the previous run.
+atlas_report() {
+  local run="$1" prev="${2:-}" journey shot step still name img areas moved last=""
+  {
+    cat <<HTML
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atlas $(basename "$(dirname "$run")")</title><style>
+:root{--bg:#120d1c;--card:#1d1629;--line:#2c2340;--text:#ece6f6;--muted:#a99cbf;--accent:#c5a5e9;--change:#ff3df0}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1280px;margin:0 auto}h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:32px 0 12px;color:var(--accent)}
+p{margin:0;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}
+figure{margin:0;background:var(--card);border-radius:12px;overflow:hidden}figure img{display:block;width:100%;height:auto}
+figcaption{padding:10px 12px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}figcaption b{font-weight:600}
+.same{color:var(--muted)}.changed{color:var(--change);font-weight:600}a{color:var(--accent)}
+details{padding:0 12px 10px;color:var(--muted);font-size:13px}pre{white-space:pre-wrap;margin:6px 0 0}
+</style></head><body><main>
+<h1>Atlas $(basename "$(dirname "$run")") · $(basename "$run")</h1>
+<p>desktop $(atlas_html <"$run/desktop-version") · $(if [[ -n "$prev" ]]; then printf 'compared with %s' "$(basename "$prev")"; else printf 'first run, nothing to compare'; fi)</p>
+HTML
+    while IFS=$'\t' read -r journey shot step still; do
+      [[ "$journey" == "$last" ]] || { [[ -z "$last" ]] || echo '</div>'; printf '<h2>%s</h2><div class="grid">\n' "$journey"; last="$journey"; }
+      name="$journey--$shot"
+      read -r areas moved < <(awk -F'\t' -v n="$name" '$1 == n { print $2, $3 }' "$run/diff.tsv" 2>/dev/null)
+      img="$name"
+      [[ -f "$run/$name.diff.png" ]] && img="$name.diff"
+      printf '<figure><a href="%s.png"><img src="%s.png" alt="%s"></a><figcaption><b>%s</b><span class="same">step %s</span>' \
+        "$name" "$img" "$shot" "$shot" "$step"
+      [[ "$still" == still ]] || printf '<span class="changed">never still</span>'
+      if [[ -z "$prev" || -z "$areas" ]]; then printf '<span class="same">new</span>'
+      elif ((areas == 0 && moved == 0)); then printf '<span class="same">unchanged</span>'
+      else printf '<span class="changed">areas changed: %s · items changed: %s</span>' "$areas" "$moved"; fi
+      printf '</figcaption>'
+      printf '<details><summary>surfaces</summary><pre>%s</pre></details>' \
+        "$(GEOM_TREE="$run/$name.tree.json" "$MOTION_DIR/geom" dump --depth 3 | atlas_html)"
+      if [[ -s "$run/$name.areas" ]]; then
+        printf '<details><summary>changed areas (x y w h, device px)</summary><pre>%s</pre></details>' "$(head -40 "$run/$name.areas" | atlas_html)"
+      fi
+      if [[ -s "$run/$name.items" ]]; then
+        printf '<details><summary>items that moved, appeared or went (before, after)</summary><pre>%s</pre></details>' "$(head -40 "$run/$name.items" | atlas_html)"
+      fi
+      printf '</figure>\n'
+    done <"$run/shots.tsv"
+    printf '</div></main></body></html>\n'
+  } >"$run/index.html"
+}

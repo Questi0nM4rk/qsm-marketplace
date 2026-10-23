@@ -515,6 +515,7 @@ slot_xkb() {
     PAGEUP | PGUP) echo Page_Up ;;
     PAGEDOWN | PGDN) echo Page_Down ;;
     BACKSPACE) echo BackSpace ;;
+    SLASH) echo slash ;;
     ?) echo "${1,,}" ;;
     F[0-9] | F[0-9][0-9]) echo "${1^^}" ;;
     *) local low="${1,,}" && echo "${low^}" ;;

@@ -35,8 +35,8 @@ WAYLAND_DISPLAY="$(sed -n 2p "$rt/hypr/$sig/hyprland.lock")"
 export WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE="$sig" QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hyprland QS_DISABLE_CRASH_HANDLER=1
 # A fixed wall clock for the shell only (libfaketime); monotonic time stays real so timers run.
 if [[ -n "${DRIVE_CLOCK:-}" ]]; then
-  LD_PRELOAD=/usr/lib/faketime/libfaketime.so.1 FAKETIME="@$DRIVE_CLOCK" FAKETIME_DONT_FAKE_MONOTONIC=1 \
-    dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
+  dbus-run-session -- env LD_PRELOAD=/usr/lib/faketime/libfaketime.so.1 FAKETIME="@$DRIVE_CLOCK" \
+    FAKETIME_DONT_FAKE_MONOTONIC=1 qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 else
   dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 fi
