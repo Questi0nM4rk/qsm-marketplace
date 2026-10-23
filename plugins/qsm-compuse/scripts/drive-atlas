@@ -12,7 +12,7 @@
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
 # plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, wait-clients N,
 # ipc FN ARGS (the shell's own IPC: open a surface, post mock data),
-# shot NAME (taken once the screen is still).
+# shot NAME (taken once the screen is still), shot-now NAME (taken at once, for a state that times out).
 
 ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
 # A changed pixel differs by more than this share in one channel; a changed area is a connected
@@ -96,7 +96,10 @@ atlas_step() {
       [[ "$line" != *"]]"* ]] || die "an exec command must not hold ']]' (it is a lua long string): $line"
       (slot_run "$slot" -- hyprctl dispatch "hl.dsp.exec_cmd([[${line#exec }]])") >/dev/null || die "exec failed: $line"
       ;;
-    dispatch) (slot_run "$slot" -- hyprctl dispatch "${line#dispatch }") >/dev/null || die "dispatch failed: $line" ;;
+    dispatch)
+      # hyprctl exits 0 on a lua error and prints it, so the output decides.
+      [[ "$( (slot_run "$slot" -- hyprctl dispatch "${line#dispatch }") 2>&1)" == ok ]] || die "dispatch failed: $line"
+      ;;
     wait-clients) atlas_wait_clients "$slot" "$a" ;;
     ipc) atlas_ipc "$slot" "${line#ipc }" ;;
     *) route_step "$verb" "$a" "$b" "$rest" || die "unknown atlas step '$line'" ;;
@@ -114,16 +117,18 @@ atlas_journey() {
   sleep 1
   while IFS= read -r line; do
     n=$((n + 1))
-    if [[ "$line" == shot\ * ]]; then
-      name="$journey--${line#shot }"
+    if [[ "$line" == shot\ * || "$line" == shot-now\ * ]]; then
+      name="$journey--${line#* }"
       [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "shot names are letters, digits, dot, dash and underscore: '$name'"
-      still="$(atlas_still "$run/$name")"
+      # shot-now catches a state that times out (an armed button), so it waits for nothing.
+      if [[ "$line" == shot-now\ * ]]; then still=now; else still="$(atlas_still "$run/$name")"; fi
       OUT_DIR="$run" cmd_shot - "$name" >/dev/null
       slot_tree "$slot" >"$run/$name.tree.json"
-      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#shot }" "$n" "$still"
+      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#* }" "$n" "$still"
     else
       atlas_step "$slot" "$line"
-      sleep "$settle"
+      # A step right before shot-now gets no settle, or the state it caught is already gone.
+      [[ "$(atlas_steps "$scenario" "$journey" | sed -n "$((n + 1))p")" == shot-now\ * ]] || sleep "$settle"
     fi
   done < <(atlas_steps "$scenario" "$journey")
   slot_kill "$slot"
@@ -231,7 +236,7 @@ HTML
       [[ -f "$run/$name.diff.png" ]] && img="$name.diff"
       printf '<figure><a href="%s.png"><img src="%s.png" alt="%s"></a><figcaption><b>%s</b><span class="same">step %s</span>' \
         "$name" "$img" "$shot" "$shot" "$step"
-      [[ "$still" == still ]] || printf '<span class="changed">never still</span>'
+      [[ "$still" != moving ]] || printf '<span class="changed">never still</span>'
       if [[ -z "$prev" || -z "$areas" ]]; then printf '<span class="same">new</span>'
       elif ((areas == 0 && moved == 0)); then printf '<span class="same">unchanged</span>'
       else printf '<span class="changed">areas changed: %s · items changed: %s</span>' "$areas" "$moved"; fi
