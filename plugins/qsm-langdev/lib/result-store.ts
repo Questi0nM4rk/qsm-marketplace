@@ -12,6 +12,7 @@ import type { Finding, Tally } from "./findings.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { isErrno } from "./errors.ts";
 import { recordOf } from "./json.ts";
+import { tsconfigInputs } from "./tree.ts";
 import type { EnforcementPoint } from "./registry.ts";
 
 /**
@@ -116,10 +117,30 @@ function installedState(root: string, treeFiles: readonly string[]): string {
   return hashOf([...held, contentHash(root, lockfiles)]);
 }
 
+/** Every file under the paths a read tsconfig names that git does not hold, such as generated
+ * declarations, linked into the side from the live checkout: path and content, so a result scored
+ * without them is never reused where they are, nor the reverse. */
+function linkedInputs(root: string, treeFiles: readonly string[], read: readonly string[]): string {
+  const held = new Set(treeFiles);
+  const named = read
+    .filter((path) => /(?:^|\/)tsconfig(?:\.[^/]*)?\.json$/.test(path))
+    .flatMap((config) => tsconfigInputs(root, config))
+    .filter((path) => !held.has(path) && existsSync(join(root, path)));
+  const files = [...new Set(named)].flatMap((path) =>
+    statSync(join(root, path)).isDirectory()
+      ? readdirSync(join(root, path), { recursive: true, encoding: "utf8" })
+          .map((inner) => join(path, inner))
+          .filter((inner) => statSync(join(root, inner)).isFile())
+      : [path],
+  );
+  return contentHash(root, files);
+}
+
 /** The hash of what a checker was told and what it read besides the scored
  * files: its argv with those files taken out, every config file of the
- * side's tree that one of `patterns` matches, path and content, and, for a
- * checker that resolves imports, which packages are installed. */
+ * side's tree that one of `patterns` matches, path and content, the ignored
+ * inputs those tsconfigs name, and, for a checker that resolves imports,
+ * which packages are installed. */
 export function configHash(
   root: string,
   treeFiles: readonly string[],
@@ -129,7 +150,11 @@ export function configHash(
 ): string {
   const globs = patterns.map((pattern) => new Glob(pattern));
   const read = treeFiles.filter((path) => globs.some((glob) => glob.match(path)));
-  const parts = [JSON.stringify(argv), contentHash(root, read)];
+  const parts = [
+    JSON.stringify(argv),
+    contentHash(root, read),
+    linkedInputs(root, treeFiles, read),
+  ];
   return hashOf(resolvesInstalled ? [...parts, installedState(root, treeFiles)] : parts);
 }
 

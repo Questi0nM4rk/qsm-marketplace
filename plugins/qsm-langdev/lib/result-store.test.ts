@@ -44,3 +44,15 @@ test("a lockfile-only bump is a miss for a checker that resolves imports, and no
 
   expectKeyMissOnlyWhenResolving(before, hashes(root, tree));
 });
+
+test("a result scored without the generated declarations a tsconfig names is not reused with them", () => {
+  const root = sandboxDir("qsm-langdev-key-");
+  writeIn(root, "hooks/tsconfig.json", '{ "include": ["../.claude/types", "register.tsx"] }');
+  const tree = ["hooks/tsconfig.json"];
+  const key = () => configHash(root, tree, ["**/tsconfig.json"], []);
+  const without = key();
+
+  writeIn(root, ".claude/types/claude-code.d.ts", "declare module 'claude-code' {}");
+
+  expect(key()).not.toBe(without);
+});
