@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Runs INSIDE the desktop slot's sandbox (drive-slot starts it under bwrap with only the
+# render node in /dev/dri): headless sway -> niri (winit) -> nested Hyprland -> the shell.
+# sway and weston are too old a parent for Aquamarine (xdg_wm_base 5, wl_compositor 5);
+# niri speaks 6, and the outer sway gives the stack a capturable output and an input seat.
+#   slot-desktop DIR QS_PATH   (DIR holds sway.conf, niri.kdl, hyprland.lua; logs go there)
+set -u
+dir="$1"
+qs_path="$2"
+rt="${XDG_RUNTIME_DIR:?}"
+sig=""
+export LIBSEAT_BACKEND=noop XDG_STATE_HOME="$dir/xdg-state" XDG_CACHE_HOME="$dir/xdg-cache" XDG_DATA_HOME="$dir/xdg-data"
+mkdir -p "$XDG_STATE_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME"
+
+WLR_BACKENDS=headless WLR_RENDERER=gles2 WLR_RENDER_DRM_DEVICE="${DRIVE_RENDER_NODE:?}" WLR_LIBINPUT_NO_DEVICES=1 \
+  sway -c "$dir/sway.conf" >"$dir/sway.log" 2>&1 &
+for ((i = 0; i < 50; i++)); do
+  [[ -s "$dir/display" ]] && break
+  sleep 0.2
+done
+[[ -s "$dir/display" ]] || exit 3
+
+# DRIVE_AQUAMARINE is empty when the installed library is fixed (see slot_aquamarine_lib in drive-slot).
+WAYLAND_DISPLAY="$(cat "$dir/display")" dbus-run-session -- niri -c "$dir/niri.kdl" -- \
+  env ${DRIVE_AQUAMARINE:+LD_LIBRARY_PATH="$DRIVE_AQUAMARINE"} start-hyprland -- --config "$dir/hyprland.lua" >"$dir/niri.log" 2>&1 &
+for ((i = 0; i < 100; i++)); do
+  sig="$(find "$rt/hypr" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | head -1)"
+  [[ -n "$sig" && -s "$rt/hypr/$sig/hyprland.lock" && -S "$rt/hypr/$sig/.socket.sock" ]] && break
+  sleep 0.2
+done
+[[ -S "$rt/hypr/$sig/.socket.sock" ]] || exit 4
+printf 'SLOT_HYPR_SIG=%s\nSLOT_CLIENT_DISPLAY=%s\n' "$sig" "$(sed -n 2p "$rt/hypr/$sig/hyprland.lock")" >"$dir/inner"
+
+WAYLAND_DISPLAY="$(sed -n 2p "$rt/hypr/$sig/hyprland.lock")"
+export WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE="$sig" QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hyprland QS_DISABLE_CRASH_HANDLER=1
+# A fixed wall clock for the shell only (libfaketime); monotonic time stays real so timers run.
+if [[ -n "${DRIVE_CLOCK:-}" ]]; then
+  dbus-run-session -- env LD_PRELOAD=/usr/lib/faketime/libfaketime.so.1 FAKETIME="@$DRIVE_CLOCK" \
+    FAKETIME_DONT_FAKE_MONOTONIC=1 qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
+else
+  dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
+fi
+wait

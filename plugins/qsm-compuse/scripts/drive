@@ -308,6 +308,12 @@ drive — sudo-free computer use on Hyprland/Wayland
     slot ls | slot stop NAME                   list slots with RSS | kill the whole tree, remove its files
     slot budget [--reserve-mb N] [--per-slot-mb N] [--provider ROOT] [--story KEY] [--remeasure]   slots that fit in MemAvailable (cost measured by a probe slot, cached)
 
+  ATLAS (the whole desktop, nested and sandboxed in a desktop slot per journey)
+    slot start NAME --desktop QS_PATH [--hypr LUA] [--clock TIME]   one desktop slot (NAME <= 8 chars)
+    slot aquamarine          build the Aquamarine fix a nested Hyprland needs (once, into the cache)
+    atlas run SCENARIO       every journey in a fresh desktop slot; shots, trees, diff with the last run, index.html
+    atlas ls                 scenarios and their kept runs
+
   FLOW
     until 'CMD' [tries]      poll CMD until it exits 0 (beats a blind sleep)
     record SECS [OUT|X,Y,WxH] [--fps N]  real-frame video + measured cadence (never CFR)
@@ -328,6 +334,8 @@ source "$MOTION_DIR/drive-motion"
 source "$MOTION_DIR/drive-slot"
 # shellcheck source=drive-hitmap
 source "$MOTION_DIR/drive-hitmap"
+# shellcheck source=drive-atlas
+source "$MOTION_DIR/drive-atlas"
 
 # A capture or an input on the owner's session is opt-in: a screencopy cut short crashed the
 # owner's Hyprland once (SIGBUS in copyShm), and an agent's stray click lands in the owner's work.
@@ -341,7 +349,7 @@ dispatch() {
   in_slot && slot_refuse "${1:-}"
   live_gate "${1:-}"
   case "${1:-}" in
-    slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | hitmap | l2p | until)
+    atlas | slot | move | warp | nudge | record | frames | route | key | sendkey | click | press | release | rclick | mclick | type | scroll | shot | hitmap | l2p | until)
       local verb="cmd_$1"
       shift
       "$verb" "$@"
