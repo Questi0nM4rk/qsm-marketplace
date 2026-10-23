@@ -390,20 +390,23 @@ is read per run and never stored.
 ### Requirement: The guard keeps the git hooks in the loop
 
 A function hook on the Bash tool SHALL deny, at `tool.call`, a line where `git`
-runs `commit` with `--no-verify` or `-n`, or `push` with `--no-verify`, naming
-`QSM_LANGDEV_ALLOW`, and SHALL ask the person, at `tool.check`, before a
-command that sets `QSM_LANGDEV_ALLOW` runs. It is a guardrail: a command
-written to evade it evades it. It SHALL fail closed: a guard that breaks denies.
+runs `commit` with `--no-verify` or `-n`, or `push` with `--no-verify`, and a
+line that sets `QSM_LANGDEV_ALLOW`, and SHALL tell the agent to send the person
+the command to run as `! QSM_LANGDEV_ALLOW="<why>" <command>`. A `!` command in
+the prompt runs past every tool hook and only the person can type it, so the
+allow never depends on a permission prompt, an auto mode, or the order of other
+plugins' hooks. It is a guardrail: a command written to evade it evades it. It
+SHALL fail closed: a guard that breaks denies.
 
 #### Scenario: A commit or a push that skips the hooks is denied
 
 - **WHEN** an agent runs `git commit -n` or `git push --no-verify`
-- **THEN** the guard SHALL deny the call, naming `QSM_LANGDEV_ALLOW`
+- **THEN** the guard SHALL deny the call, naming the `!` form with `QSM_LANGDEV_ALLOW`
 
-#### Scenario: Allowing a regression asks the person
+#### Scenario: Allowing a regression is the person's command
 
 - **WHEN** an agent runs a command that sets `QSM_LANGDEV_ALLOW`
-- **THEN** the guard SHALL ask the person whether it runs
+- **THEN** the guard SHALL deny the call and name the `!` form the person runs
 
 #### Scenario: An ordinary commit passes the guard untouched
 

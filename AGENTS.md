@@ -153,5 +153,5 @@ mise exec -- bun run test:hooks
   result is a signal to read, not a verdict.
 - One agent, one tree: an implementer works in its own worktree, and the orchestrator reviews,
   merges and deletes it, because the stop gate scores a whole tree.
-- The langdev guard blocks `--no-verify`; a person lets a measured regression pass once with
-  `QSM_LANGDEV_ALLOW="<why>"` before the command, which always asks.
+- The langdev guard blocks `--no-verify` and any `QSM_LANGDEV_ALLOW` an agent sets; the person lets
+  a measured regression pass once by typing `! QSM_LANGDEV_ALLOW="<why>" <command>` in the prompt.
