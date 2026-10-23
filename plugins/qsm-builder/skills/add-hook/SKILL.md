@@ -55,6 +55,16 @@ does not decide whether the capability should exist (add-plugin does).
    because the module is typechecked against the shipped engine types. Gate: `bun run typecheck`.
 10. `hooks/register.test.ts` covers each event and each `.catch` through `claude plugin test`,
     because a stub alone never proves a seam. Gate: `bun run test:hooks`.
+11. A hook that reads a Bash command reads the command behind its wrappers: a pattern anywhere
+    in the line, or shell-ast's unwrap with a resolver, because qsm-usage rewrites `git worktree
+    lock /x` to `rtk git worktree lock /x` before later hooks see it, and a guard that reads the
+    first word lets it pass. Gate: a test case with the `rtk` prefix.
+12. A `$.process.run` of a bin that reads only stdin passes `cwd: "/"`, because the session's
+    directory can be removed under it (a worktree), and every spawn there fails with
+    `ENOENT: posix_spawn '<bin>'`, the same text a missing binary gives. Gate: review.
+13. A `tool.check` allow never lifts a managed deny rule (`~/.claude/remote-settings.json`), so a
+    permission hook starts from the effective deny rules, because the engine keeps the deny and
+    only reports it. Gate: a live run in a fresh session.
 
 ## Done means
 
@@ -64,6 +74,9 @@ Run as `mise exec -- ...`, all passing:
 - `bun test ./ ./.gates`
 - `bun run test:hooks`, which must not skip: `claude` is on PATH
 - a real run of the verb the hook calls, in a shell, with its output read
+- the hook firing in a fresh session (`claude -p --model haiku "<the call>"`), because a running
+  session keeps the module it loaded; a `-p` session has no scratchpad, so a scratchpad case
+  needs an interactive one
 
 Then hand the diff to the `qsm-review` strict-reviewer agent with the Hard rules as its checklist;
 the build is done when every command passes and the review returns no blocker.
