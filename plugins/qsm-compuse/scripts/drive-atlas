@@ -7,6 +7,7 @@
 #   desktop PATH            the shell's Quickshell path (required)
 #   hypr FILE               the Hyprland lua config the nested desktop reads
 #   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock, handed to the shell as DRIVE_CLOCK
+#   fixtures DIR            recorded readings the shell shows instead of live ones (DRIVE_FIXTURES)
 #   settle SECONDS          the pause after each step (default 0.6)
 #   journey NAME            starts a journey; the steps below belong to it
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
@@ -28,7 +29,7 @@ atlas_path() { printf '%s\n' "${1/#\~/$HOME}"; }
 
 # The scenario's settings as NAME=VALUE lines; journeys stay in the file.
 atlas_settings() {
-  awk '$1 ~ /^(desktop|hypr|clock|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
+  awk '$1 ~ /^(desktop|hypr|clock|fixtures|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
 }
 
 # The steps of one journey, without indentation or comments.
@@ -152,12 +153,13 @@ atlas_journey() {
 
 # A run is built under a dot name and renamed when it completes, so a failed run is never a baseline.
 atlas_run() {
-  local scenario="${1:-}" desktop="" hypr="" clock="" settle=0.6 opt dir id run slot journey prev
+  local scenario="${1:-}" desktop="" hypr="" clock="" fixtures="" settle=0.6 opt dir id run slot journey prev
   local -a start
   [[ -f "$scenario" ]] || die "atlas run needs a SCENARIO file"
   while IFS= read -r opt; do printf -v "${opt%%=*}" '%s' "${opt#*=}"; done < <(atlas_settings "$scenario")
   desktop="$(atlas_path "$desktop")"
   hypr="$(atlas_path "$hypr")"
+  fixtures="$(atlas_path "$fixtures")"
   [[ -n "$desktop" ]] || die "the scenario names no desktop"
   [[ -n "$(atlas_journeys "$scenario")" ]] || die "the scenario has no journey"
   dir="$ATLAS_ROOT/$(basename "${scenario%.*}")"
@@ -171,6 +173,7 @@ atlas_run() {
   start=(--desktop "$desktop")
   [[ -z "$hypr" ]] || start+=(--hypr "$hypr")
   [[ -z "$clock" ]] || start+=(--clock "$clock")
+  [[ -z "$fixtures" ]] || start+=(--fixtures "$fixtures")
   trap 'slot_kill "'"$slot"'" 2>/dev/null; rm -rf "'"$run"'"' EXIT
   for journey in $(atlas_journeys "$scenario"); do
     printf 'journey %s\n' "$journey" >&2
