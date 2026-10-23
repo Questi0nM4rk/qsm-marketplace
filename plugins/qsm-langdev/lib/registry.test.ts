@@ -9,7 +9,7 @@ import { OWN_RULES } from "./rules-data.ts";
 const semgrep = REGISTRY.filter((spec) => spec.binary === "semgrep");
 
 /** The limit a full semgrep run at pre-push gets: about twice the slowest measured. */
-const PUSH_LIMIT_S = 160;
+const PUSH_LIMIT_S = 420;
 
 describe("semgrep checkers", () => {
   test("each runs the packs and rules decided for it", () => {

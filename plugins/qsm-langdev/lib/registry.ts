@@ -265,9 +265,11 @@ const SEMGREP_ENGINE_SET = "changed";
 
 /**
  * Pre-push is semgrep's full run: the whole tree, where a flow the Pro engine follows across files
- * has every file it passes through.
+ * has every file it passes through. Its limit covers a machine under load: both sides at once took
+ * 128 s quiet and 373 s with every core busy (measured 2026-10-22, 12 cores). Changed files alone
+ * cannot take Pro: its inter-file analysis accepts a single target only.
  */
-const SEMGREP_PUSH: PrePush = { fileSet: "given", timeoutMs: 160_000 };
+const SEMGREP_PUSH: PrePush = { fileSet: "given", timeoutMs: 420_000 };
 
 /** A checker that writes a report is always built with the directory the run made for it. */
 function reportDirOf(reportDir: string | undefined): string {
