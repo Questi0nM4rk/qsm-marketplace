@@ -33,11 +33,21 @@ printf 'SLOT_HYPR_SIG=%s\nSLOT_CLIENT_DISPLAY=%s\n' "$sig" "$(sed -n 2p "$rt/hyp
 
 WAYLAND_DISPLAY="$(sed -n 2p "$rt/hypr/$sig/hyprland.lock")"
 export WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE="$sig" QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=Hyprland QS_DISABLE_CRASH_HANDLER=1
-# A fixed wall clock for the shell only (libfaketime); monotonic time stays real so timers run.
-if [[ -n "${DRIVE_CLOCK:-}" ]]; then
-  dbus-run-session -- env LD_PRELOAD=/usr/lib/faketime/libfaketime.so.1 FAKETIME="@$DRIVE_CLOCK" \
-    FAKETIME_DONT_FAKE_MONOTONIC=1 qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
-else
-  dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
-fi
+# The shell gets the owner's config with the owner's Qt theme (qt6ct), except that the text caret
+# never blinks, so a shot of a focused field is the same on every run: a config dir of links to
+# the owner's, with qt6ct's own file copied and cursor_flash_time=0 in it.
+home_cfg="$HOME/.config"
+cfg="$dir/xdg-config"
+mkdir -p "$cfg/qt6ct"
+for entry in "$home_cfg"/* "$home_cfg"/.[!.]*; do
+  [[ -e "$entry" && "$entry" != "$home_cfg/qt6ct" ]] && ln -sfn "$entry" "$cfg/${entry##*/}"
+done
+for entry in "$home_cfg"/qt6ct/*; do
+  [[ -e "$entry" && "$entry" != */qt6ct.conf ]] && ln -sfn "$entry" "$cfg/qt6ct/${entry##*/}"
+done
+awk '/^cursor_flash_time=/ { next } { print } /^\[Interface\]$/ { print "cursor_flash_time=0"; done = 1 }
+  END { if (!done) print "[Interface]\ncursor_flash_time=0" }' "$home_cfg/qt6ct/qt6ct.conf" 2>/dev/null >"$cfg/qt6ct/qt6ct.conf"
+# DRIVE_CLOCK, when set, is the fixed wall clock a desktop shows (see USAGE.md).
+[[ -n "${DRIVE_CLOCK:-}" ]] || unset DRIVE_CLOCK
+XDG_CONFIG_HOME="$cfg" QT_QPA_PLATFORMTHEME=qt6ct dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 wait
