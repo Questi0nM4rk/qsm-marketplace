@@ -83,7 +83,7 @@ These plugins need no other plugin and no plugin needs them: `qsm-compuse`, `qsm
 
 | Plugin | Why it exists | Ships |
 | --- | --- | --- |
-| [qsm-essentials](plugins/qsm-essentials/README.md) | Without a shared method, every session relearns how this person works: it builds before it understands, settles design by default, forgets what an earlier session decided, and either does everything itself or hands everything away. | 10 skills, 4 agents, 3 hooks |
+| [qsm-essentials](plugins/qsm-essentials/README.md) | Without a shared method, every session relearns how this person works: it builds before it understands, settles design by default, forgets what an earlier session decided, and either does everything itself or hands everything away. | 10 skills, 4 agents, 4 hooks |
 
 ### Planning
 

@@ -240,6 +240,26 @@ separate agent calls, and the qsm-essentials:subagents skill. `&&`, `|&` and the
 - **WHEN** an agent runs `bun test 2>&1 | tail`
 - **THEN** the hook lets the call run
 
+### Requirement: An agent removes inside its own scratchpad without a prompt
+
+A `tool.check` hook on Bash SHALL allow, without a permission prompt, a line that is one `rm` or
+`rmdir` whose every target is an absolute path inside this session's scratchpad,
+`/tmp/claude-<uid>/<project>/<session id>/scratchpad/`, below the scratchpad itself, with no `.` or
+`..` segment and a glob only in the last segment. A line with any shell syntax (quotes, `$`,
+backticks, `~`, chaining, redirection), a relative target, or a target elsewhere SHALL take the
+normal permission decision. A word after `--` SHALL count as a target. This lets an agent clean up
+what it made, because a leftover in `/tmp`, a RAM-backed filesystem, costs memory until removed.
+
+#### Scenario: A scratch repo is removed without a prompt
+
+- **WHEN** an agent runs `rm -rf <scratchpad>/hooks-test`
+- **THEN** the call runs without a permission prompt
+
+#### Scenario: A target outside the scratchpad
+
+- **WHEN** an agent runs `rm -rf <scratchpad>/x /home/me` or `rm -rf <scratchpad>/../other`
+- **THEN** the hook leaves the call to the normal permission decision
+
 ### Requirement: The core names no plug-in and declares no dependency
 
 The plugin SHALL have no `dependencies` in plugin.json, and its skills, agents, README and spec
