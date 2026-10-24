@@ -45,8 +45,20 @@
           {
             "name": "profile",
             "type": "string",
-            "choices": ["default", "niche", "academic", "it"],
-            "description": "source selection: server defaults, personal sites/discussions, academic publications, or technical sources; exclusive with --engines"
+            "choices": [
+              "default",
+              "niche",
+              "academic",
+              "it",
+              "images",
+              "videos",
+              "news",
+              "music",
+              "map",
+              "files",
+              "social-media"
+            ],
+            "description": "named source selection; exclusive with --engines"
           },
           {
             "name": "engines",

@@ -4,7 +4,19 @@ import { z } from "zod";
 import { messageOf, UsageError } from "../../../lib/outcome.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
-const SEARCH_PROFILE = z.enum(["default", "niche", "academic", "it"]);
+const SEARCH_PROFILE = z.enum([
+  "default",
+  "niche",
+  "academic",
+  "it",
+  "images",
+  "videos",
+  "news",
+  "music",
+  "map",
+  "files",
+  "social-media",
+]);
 export type SearchProfile = z.infer<typeof SEARCH_PROFILE>;
 
 const PROFILE_ENGINES = {
@@ -48,13 +60,62 @@ const PROFILE_ENGINES = {
     "superuser",
     "voidlinux",
   ],
+  images: [
+    "artic",
+    "artstation",
+    "brave.images",
+    "devicons",
+    "duckduckgo images",
+    "findthatmeme",
+    "flaticon",
+    "frinkiac",
+    "giphy",
+    "iconify",
+    "lucide",
+    "material icons",
+    "pinterest",
+    "public domain image archive",
+    "selfhst icons",
+    "uxwing",
+  ],
+  videos: [
+    "360search videos",
+    "bilibili",
+    "brave.videos",
+    "dailymotion",
+    "duckduckgo videos",
+    "ina",
+    "media.ccc.de",
+    "mediathekviewweb",
+    "odysee",
+    "pixabay videos",
+    "sepiasearch",
+    "sogou videos",
+  ],
+  news: ["brave.news", "duckduckgo news", "il post", "naver news", "sogou wechat"],
+  music: ["deezer", "mixcloud", "soundcloud"],
+  map: ["apple maps", "photon"],
+  files: ["bt4g", "openrepos"],
+  "social-media": [
+    "9gag",
+    "boardreader",
+    "lemmy comments",
+    "lemmy communities",
+    "lemmy posts",
+    "lemmy users",
+    "mastodon hashtags",
+    "mastodon users",
+    "tootfinder",
+  ],
 } as const;
 
 /** Validate the caller's profile name before it reaches the search request. */
 export function parseSearchProfile(raw: string): SearchProfile {
   const profile = SEARCH_PROFILE.safeParse(raw);
   if (!profile.success) {
-    throw new UsageError("--profile must be default, niche, academic or it");
+    throw new UsageError(
+      "--profile must be default, niche, academic, it, images, videos, news, music, map, files or social-media",
+    );
   }
   return profile.data;
 }

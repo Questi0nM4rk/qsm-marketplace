@@ -9,6 +9,7 @@ import { envelopeOf, isolatedEnv } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import type { Envelope } from "../../../lib/outcome.ts";
 import it from "./fixtures/searxng-it-engines.json";
+import reviewed from "./fixtures/searxng-reviewed-profile-engines.json";
 
 const PLUGIN = resolve(import.meta.dir, "..");
 const CLI = join(PLUGIN, "scripts", "cli.ts");
@@ -465,9 +466,17 @@ describe("qsm-web searxng search profiles", () => {
     ["niche", ["searchmysite", "wiby", "mwmbl", "boardreader"]],
     ["academic", ["arxiv", "crossref", "openalex", "semantic scholar", "pubmed", "europepmc"]],
     ["it", it],
+    ["images", reviewed.images],
+    ["videos", reviewed.videos],
+    ["news", reviewed.news],
+    ["music", reviewed.music],
+    ["map", reviewed.map],
+    ["files", reviewed.files],
+    ["social-media", reviewed["social-media"]],
   ] as const;
   const niche = ["searchmysite", "wiby", "mwmbl", "boardreader"];
   const page = { ...PAGE, engine: "mwmbl", engines: ["mwmbl"], category: "general" };
+  const profileNames = ["default", ...profiles.map(([profile]) => profile)];
 
   // Catalog shape follows SearXNG's /config response. Default-disabled engines are still loaded.
   function catalog(names: readonly string[]): Response {
@@ -494,7 +503,22 @@ describe("qsm-web searxng search profiles", () => {
       const inst = instance((url) =>
         url.pathname.endsWith("/config")
           ? catalog(names)
-          : json({ results: [{ ...page, engine: names[0], engines: [names[0]] }] }),
+          : json({
+              results: [
+                {
+                  ...page,
+                  engine: names[0],
+                  engines: [names[0]],
+                  ...(profile === "images"
+                    ? {
+                        img_src: "https://img.test/image.png",
+                        thumbnail_src: "https://img.test/thumb.png",
+                      }
+                    : {}),
+                  ...(profile === "videos" ? { iframe_src: "https://video.test/embed/clip" } : {}),
+                },
+              ],
+            }),
       );
       const r = await run([
         "searxng",
@@ -519,13 +543,26 @@ describe("qsm-web searxng search profiles", () => {
       expect(params?.has("profile")).toBe(false);
       expect(params?.get("language")).toBe("en");
       expect(params?.get("time_range")).toBe("year");
-      expect(Results.parse(JSON.parse(r.stdout))).toHaveLength(1);
+      const results = Results.parse(JSON.parse(r.stdout));
+      expect(results).toHaveLength(1);
+      const [result] = results;
+      expect(result?.engine).toBe(names[0]);
+      expect(result?.engines).toEqual([names[0]]);
+      if (profile === "images") {
+        expect(result).toMatchObject({
+          img_src: "https://img.test/image.png",
+          thumbnail_src: "https://img.test/thumb.png",
+        });
+      }
+      if (profile === "videos") {
+        expect(result).toMatchObject({ iframe_src: "https://video.test/embed/clip" });
+      }
     });
   }
 
   test("unknown profiles and conflicting selections fail before any request", async () => {
     const inst = withResults([PAGE]);
-    for (const profile of ["default", "niche", "academic", "it"]) {
+    for (const profile of profileNames) {
       for (const selection of [
         ["--engines", "wiby"],
         ["--engines", ""],
@@ -537,12 +574,13 @@ describe("qsm-web searxng search profiles", () => {
     }
     const unknown = await searchVerb(inst, "--profile", "unknown");
     expect(unknown.exit).toBe(2);
+    expect(unknown.stderr).toContain("news");
     expect(inst.seen).toHaveLength(0);
   });
 
   test("category input is rejected with and without profiles before any request", async () => {
     const inst = withResults([PAGE]);
-    for (const profile of [undefined, "default", "niche", "academic", "it"]) {
+    for (const profile of [undefined, ...profileNames]) {
       for (const value of ["it", ""]) {
         const flags = profile === undefined ? [] : ["--profile", profile];
         const { exit, envelope } = await searchJson(inst, ...flags, "--category", value);
@@ -555,7 +593,7 @@ describe("qsm-web searxng search profiles", () => {
     const help = await run(["searxng", "search", "--help"]);
     expect(help.exit).toBe(0);
     expect(help.stdout).not.toContain("--category");
-    expect(help.stdout).toContain("academic|it");
+    expect(help.stdout).toContain("academic|it|images|videos|news|music|map|files");
   });
 
   for (const [profile, names] of profiles) {
@@ -615,5 +653,37 @@ describe("qsm-web searxng search profiles", () => {
     expect(resultsOf(envelope)[0]?.engines).toEqual(["mwmbl"]);
     expect(envelope.warnings.join(" ")).toContain("boardreader (timeout)");
     expect(inst.seen).toHaveLength(2);
+  });
+
+  test("news links survive a Naver timeout warning without retry or source removal", async () => {
+    const names = reviewed.news;
+    const inst = instance((url) =>
+      url.pathname === "/config"
+        ? catalog(names)
+        : json({
+            results: [
+              {
+                ...page,
+                url: "https://news.test/story",
+                title: "Regional news story",
+                engine: "brave.news",
+                engines: ["brave.news"],
+                category: "news",
+              },
+            ],
+            unresponsive_engines: [["naver news", "timeout"]],
+          }),
+    );
+    const { exit, envelope } = await searchJson(inst, "--profile", "news");
+    expect(exit).toBe(0);
+    expect(envelope.code).toBe("ok");
+    expect(resultsOf(envelope)).toMatchObject([
+      { url: "https://news.test/story", engine: "brave.news", category: "news" },
+    ]);
+    expect(envelope.warnings).toContain("engine suspended: naver news (timeout)");
+    expect(inst.seen.map((url) => url.pathname)).toEqual(["/config", "/search"]);
+    expect(inst.seen[0]?.searchParams.has("engines")).toBe(false);
+    expect(inst.seen[1]?.searchParams.get("engines")).toBe(names.join(","));
+    expect(inst.seen[1]?.searchParams.has("categories")).toBe(false);
   });
 });

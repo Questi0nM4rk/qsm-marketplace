@@ -30,11 +30,26 @@ Use a profile instead of rebuilding an engine list for a common search intent:
 | `niche` | Personal websites and discussions: `searchmysite`, `wiby`, `mwmbl`, `boardreader` |
 | `academic` | Publications: `arxiv`, `crossref`, `openalex`, `semantic scholar`, `pubmed`, `europepmc` |
 | `it` | Broad technical discovery across documentation, repositories, packages, apps, Q&A, discussions, model catalogs and vulnerability records. The exact 36-engine set is in [USAGE.md](../../USAGE.md#search-profiles). |
+| `images` | Mixed image, icon, art and meme discovery. Sources are the exact 16-engine set in [USAGE.md](../../USAGE.md#search-profiles). Results may include image and thumbnail URLs. |
+| `videos` | Video discovery metadata and source links across video platforms and indexes. The exact 12-engine set is in [USAGE.md](../../USAGE.md#search-profiles). Results may include iframe or media metadata. |
+| `news` | Regional news discovery, including Korean Naver and Chinese WeChat sources. The exact five-engine set is in [USAGE.md](../../USAGE.md#search-profiles). It does not guarantee freshness, language, or journalism-only results. |
+| `music` | Music catalog metadata and source discovery through `deezer`, `mixcloud` and `soundcloud`. It does not play or download media. |
+| `map` | Place and geocoding result links through `apple maps` and `photon`. This is not routing and does not access your location. |
+| `files` | Torrent metadata through `bt4g` and Sailfish app listings through `openrepos`, not comprehensive file discovery. Results do not grant reuse rights. |
+| `social-media` | Public social discovery across posts, users, communities, forums and hashtags. The exact nine-engine set is in [USAGE.md](../../USAGE.md#search-profiles). |
 
 ```bash
+qsm-web searxng search "current events" --profile default
 qsm-web searxng search "personal Linux websites" --profile niche
 qsm-web searxng search "graph neural networks" --profile academic --language en
 qsm-web searxng search "AbortController" --profile it
+qsm-web searxng search "minimal mountain icon" --profile images
+qsm-web searxng search "conference talks on Rust" --profile videos
+qsm-web searxng search "Seoul transit policy" --profile news
+qsm-web searxng search "ambient electronic albums" --profile music
+qsm-web searxng search "Brandenburg Gate Berlin" --profile map
+qsm-web searxng search "Sailfish OS apps" --profile files
+qsm-web searxng search "Lemmy communities about gardening" --profile social-media
 ```
 
 Profiles affect only the query. They do not enable engines globally or change the server. A
@@ -45,7 +60,10 @@ catalog stops the query rather than silently searching different sources.
 `--profile` is the only named source-selection flag. Use `--engines` without a profile for another
 explicit selection. Combining a profile and engines, even an empty engine value, is a usage error.
 IT includes specialist catalogs, so returned links do not guarantee relevance or freshness. For a
-narrow documentation query, select its engines manually instead of widening the whole IT set.
+narrow documentation query, select its engines manually instead of widening the whole IT set. Search
+profiles return links and metadata. The search command does not fetch or play media, download files,
+or grant content reuse rights. Map results are place links, not routes, and do not guarantee
+coordinates.
 
 ## Red flags
 
