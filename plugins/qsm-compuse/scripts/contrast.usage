@@ -1,5 +1,10 @@
 drive contrast A B [--screen MON] [--min RATIO]
+drive contrast each SEL --min RATIO [--screen MON | --shot PNG]
 
   A, B   geom selector (see: drive geom) or logical point X,Y; selector@ink = glyph pixel
   Prints both hex colours and the WCAG ratio (L1+0.05)/(L2+0.05); --min makes it a check (exit 1).
   Captures the output with grim; logical -> physical uses the monitor scale.
+  each   every match of SEL a person can see: its ink (the pixel farthest from its rect's median)
+         against that median, one PASS/FAIL line each; exit 1 if any fails.
+  --shot read this capture and the tree in GEOM_TREE instead of the live screen (no grim, no
+         Hyprland); the scale is the capture's width over the tree's.

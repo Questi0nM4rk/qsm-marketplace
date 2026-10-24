@@ -32,7 +32,7 @@ fetch_tree() {
 # Needed positional count per check; dump takes 0 or 1.
 arity() {
   case "$1" in
-    insets | overlap | target | rect) echo 1 ;;
+    insets | overlap | target | rect | rects) echo 1 ;;
     inside | centre) echo 2 ;;
     dump) echo 0 ;;
     *) return 1 ;;
@@ -64,7 +64,7 @@ main() {
   out="$(fetch_tree "$screen" | jq -r --arg mode "$check" --arg sel "${pos[0]:-}" --arg sel2 "${pos[1]:-}" \
     --arg tol "$tol" --arg min "$min" --arg floor "$floor" --arg axis "$axis" --arg depth "$depth" \
     -f "$here/geom.jq")" || exit 2
-  printf '%s\n' "$out"
+  [[ -z "$out" ]] || printf '%s\n' "$out"
   if grep -q ': FAIL$' <<<"$out"; then exit 1; fi
 }
 

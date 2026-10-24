@@ -19,7 +19,7 @@ def flat($id; $anc):
     (($node.children // []) | to_entries[] | . as $e
       | $e.value | flat($id + "." + ($e.key | tostring); $anc + [$id]));
 
-# Selector: seg/seg/...; seg = type|* then [N] index or [attr=value] filters.
+# Selector: seg/seg/...; seg = type (or Type|Type|...) or *, then [N] index or [attr=value] filters.
 # Each step searches the descendants of the previous step's matches.
 def parse_seg:
   capture("^(?<t>[^\\[]+)(?<q>(\\[[^\\]]*\\])*)$")
@@ -29,14 +29,17 @@ def attr_ok($q): . as $n
       capture("^(?<k>[^=]+)=(?<v>.*)$") as $kv | ($n[$kv.k] | tostring) == $kv.v);
 def step($all; $prev; $seg):
   [$all[]
-    | select(($seg.t == "*" or .type == $seg.t) and attr_ok($seg.q))
+    | select(. as $n | ($seg.t == "*" or any($seg.t | split("|")[]; . == $n.type)) and attr_ok($seg.q))
     | select($prev == null or (._anc | any(. as $a | $prev | index($a))))]
   | ($seg.q | map(select(test("^[0-9]+$")) | tonumber) | first) as $i
   | if $i == null then . else [.[$i] // empty] end;
-def sel($all; $s):
+def matches($all; $s):
   reduce ($s | split("/")[] | parse_seg) as $seg (null;
-    step($all; (. // null) | if . == null then null else map(._id) end; $seg))
-  | if length == 0 then fail("no node matches '\($s)'") else . end;
+    step($all; (. // null) | if . == null then null else map(._id) end; $seg));
+def sel($all; $s): matches($all; $s) | if length == 0 then fail("no node matches '\($s)'") else . end;
+# The matches a person can see: neither the node nor an ancestor has opacity 0, and it has an area.
+def shown($all; $s): ([$all[] | select(.opacity == 0) | ._id]) as $hidden
+  | [matches($all; $s)[] | select(.w > 0 and .h > 0 and ([._id] + ._anc | any(. as $i | $hidden | index($i))) == false)];
 
 # A node's rect with its StateLayer's padded hit area applied, or the plain
 # rect when it has none. The shell reports the layer's own rect and `pad`, the
@@ -117,4 +120,5 @@ def dump($all; $depth):
   elif $mode == "target" then target($all; num($floor; 24))
   elif $mode == "dump" then dump($all; num($depth; 3))
   elif $mode == "rect" then sel($all; $sel)[0] | "\(.x) \(.y) \(.w) \(.h)"
+  elif $mode == "rects" then shown($all; $sel)[] | "\(.x) \(.y) \(.w) \(.h) \(.type) \(.color // "-")"
   else fail("unknown check '\($mode)'") end

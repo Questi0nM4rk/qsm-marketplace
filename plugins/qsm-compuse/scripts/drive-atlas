@@ -9,6 +9,7 @@
 #   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock, handed to the shell as DRIVE_CLOCK
 #   fixtures DIR            recorded readings the shell shows instead of live ones (DRIVE_FIXTURES)
 #   settle SECONDS          the pause after each step (default 0.6)
+#   check CMD               the consumer's laws, run after every shot (see atlas_check)
 #   journey NAME            starts a journey; the steps below belong to it
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
 # plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, eval LUA (a
@@ -18,6 +19,7 @@
 #
 # A run is <scenario>/<date>-<time>-<rng>/: index.html (everything on one page), shots/ (the
 # captures as taken), trees/ (the item tree of each shot), logs/ (the shell's log per journey),
+# checks/ (what the scenario's check printed per shot),
 # diff-<run>/ (a comparison with that run, see atlas_compare).
 
 ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
@@ -30,7 +32,7 @@ atlas_path() { printf '%s\n' "${1/#\~/$HOME}"; }
 
 # The scenario's settings as NAME=VALUE lines; journeys stay in the file.
 atlas_settings() {
-  awk '$1 ~ /^(desktop|hypr|clock|fixtures|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
+  awk '$1 ~ /^(desktop|hypr|clock|fixtures|settle|check)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
 }
 
 # The steps of one journey, without indentation or comments.
@@ -117,11 +119,23 @@ atlas_step() {
   esac
 }
 
-# One journey in a fresh desktop slot; prints "journey<TAB>shot<TAB>step<TAB>still" per shot.
+# Runs the scenario's check on one shot: CMD gets ATLAS_SHOT, ATLAS_TREE (also GEOM_TREE),
+# ATLAS_JOURNEY, ATLAS_NAME and DRIVE_SLOT; what it prints goes to checks/NAME.txt. A line ending
+# ": FAIL" is a failed law, exit 0 or 1 is a verdict, any other exit means the check could not run.
+# Prints the count of failed laws, or "error".
+atlas_check() {
+  local cmd="$1" run="$2" journey="$3" name="$4" slot="$5" rc
+  ATLAS_SHOT="$run/shots/$name.png" ATLAS_TREE="$run/trees/$name.json" GEOM_TREE="$run/trees/$name.json" \
+    ATLAS_JOURNEY="$journey" ATLAS_NAME="$name" DRIVE_SLOT="$slot" bash -c "$cmd" >"$run/checks/$name.txt" 2>&1
+  rc=$?
+  if ((rc > 1)); then echo error; else grep -c ': FAIL$' "$run/checks/$name.txt"; fi
+}
+
+# One journey in a fresh desktop slot; prints "journey<TAB>shot<TAB>step<TAB>still<TAB>fails" per shot.
 atlas_journey() {
-  local scenario="$1" journey="$2" run="$3" slot="$4" settle="$5" n line name still
+  local scenario="$1" journey="$2" run="$3" slot="$4" settle="$5" check="$6" n line name still fails
   local -a steps
-  shift 5
+  shift 6
   slot_start "$slot" "$@" >/dev/null
   export DRIVE_SLOT="$slot"
   slot_load "$slot"
@@ -141,7 +155,9 @@ atlas_journey() {
         still="$(atlas_still "$run/shots/$name.png")" || exit 1
       fi
       slot_tree "$slot" >"$run/trees/$name.json"
-      printf '%s\t%s\t%s\t%s\n' "$journey" "${line#* }" "$((n + 1))" "$still"
+      fails=""
+      [[ -z "$check" ]] || fails="$(atlas_check "$check" "$run" "$journey" "$name" "$slot")"
+      printf '%s\t%s\t%s\t%s\t%s\n' "$journey" "${line#* }" "$((n + 1))" "$still" "$fails"
     else
       atlas_step "$slot" "$line"
       # A step right before shot-now gets no settle, or the state it caught is already gone.
@@ -156,20 +172,21 @@ atlas_journey() {
 
 # A run is built under a dot name and renamed when it completes, so a failed run is never a baseline.
 atlas_run() {
-  local scenario="${1:-}" desktop="" hypr="" clock="" fixtures="" settle=0.6 opt dir id run slot journey prev
+  local scenario="${1:-}" desktop="" hypr="" clock="" fixtures="" check="" settle=0.6 opt dir id run slot journey prev failed
   local -a start
   [[ -f "$scenario" ]] || die "atlas run needs a SCENARIO file"
   while IFS= read -r opt; do printf -v "${opt%%=*}" '%s' "${opt#*=}"; done < <(atlas_settings "$scenario")
   desktop="$(atlas_path "$desktop")"
   hypr="$(atlas_path "$hypr")"
   fixtures="$(atlas_path "$fixtures")"
+  check="$(atlas_path "$check")"
   [[ -n "$desktop" ]] || die "the scenario names no desktop"
   [[ -n "$(atlas_journeys "$scenario")" ]] || die "the scenario has no journey"
   dir="$ATLAS_ROOT/$(basename "${scenario%.*}")"
   prev="$(atlas_runs "$dir" | tail -1)"
   id="$(date +%Y%m%d-%H%M%S)-$(printf '%04x' "$RANDOM")"
   run="$dir/.$id"
-  mkdir -p "$run/shots" "$run/trees" "$run/logs"
+  mkdir -p "$run/shots" "$run/trees" "$run/logs" "$run/checks"
   command cp "$scenario" "$run/scenario"
   printf '%s\n' "$(git -C "$desktop" describe --always --dirty 2>/dev/null || echo unknown)" >"$run/desktop-version"
   slot="at$((RANDOM % 10000))"
@@ -180,7 +197,7 @@ atlas_run() {
   trap 'slot_kill "'"$slot"'" 2>/dev/null; rm -rf "'"$run"'"' EXIT
   for journey in $(atlas_journeys "$scenario"); do
     printf 'journey %s\n' "$journey" >&2
-    atlas_journey "$scenario" "$journey" "$run" "$slot" "$settle" "${start[@]}" >>"$run/shots.tsv"
+    atlas_journey "$scenario" "$journey" "$run" "$slot" "$settle" "$check" "${start[@]}" >>"$run/shots.tsv"
   done
   trap - EXIT
   command mv "$run" "$dir/$id"
@@ -188,6 +205,9 @@ atlas_run() {
   if [[ -n "$prev" ]]; then atlas_compare "$dir/$prev" "$run"; fi
   atlas_report "$run" "$prev"
   printf '%s/index.html\n' "$run"
+  # The run is kept either way; the exit code tells an agent a law failed.
+  failed="$(awk -F'\t' '$5 != "" && $5 != "0"' "$run/shots.tsv" | wc -l)"
+  ((failed == 0)) || die "$failed shots failed their check (see checks/ in the run)"
 }
 
 # The completed runs of one scenario dir, oldest first.
@@ -306,7 +326,7 @@ details{padding:0 12px 10px;color:var(--muted);font-size:13px}pre{white-space:pr
 <h1>Atlas $(basename "$(dirname "$run")") · $(basename "$run")</h1>
 <p>desktop $(atlas_html <"$run/desktop-version") · $(if [[ -n "$against" ]]; then printf 'compared with %s' "$against"; else printf 'first run, nothing to compare'; fi)</p>
 HTML
-    while IFS=$'\t' read -r journey shot step still; do
+    while IFS=$'\t' read -r journey shot step still fails; do
       [[ "$journey" == "$last" ]] || { [[ -z "$last" ]] || echo '</div>'; printf '<h2>%s</h2><div class="grid">\n' "$journey"; last="$journey"; }
       name="$journey--$shot"
       areas="" moved=""
@@ -319,7 +339,14 @@ HTML
       if [[ -z "$areas" ]]; then printf '<span class="same">new</span>'
       elif ((areas == 0 && moved == 0)); then printf '<span class="same">unchanged</span>'
       else printf '<span class="changed">areas changed: %s · measures changed: %s</span>' "$areas" "$moved"; fi
+      case "$fails" in
+        "") ;;
+        0) printf '<span class="same">checks ok</span>' ;;
+        error) printf '<span class="changed">check could not run</span>' ;;
+        *) printf '<span class="changed">checks: %s FAIL</span>' "$fails" ;;
+      esac
       printf '</figcaption>'
+      [[ ! -s "$run/checks/$name.txt" ]] || printf '<details><summary>checks</summary><pre>%s</pre></details>' "$(atlas_html <"$run/checks/$name.txt")"
       printf '<details><summary>surfaces</summary><pre>%s</pre></details>' \
         "$(GEOM_TREE="$run/trees/$name.json" "$MOTION_DIR/geom" dump --depth 3 | atlas_html)"
       if [[ -n "$diff" && -s "$run/$diff/$name.areas" ]]; then

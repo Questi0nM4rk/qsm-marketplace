@@ -3,6 +3,8 @@
 # A region is a geom selector (median colour of its rect, shrunk 2 physical px) or
 # a logical "X,Y" point. Append @ink to a selector to take the pixel farthest from
 # the median instead (the glyph colour inside a rect that is mostly background).
+#   contrast each SEL --min R [--shot PNG]: every visible match's ink against its own rect's median.
+# --shot reads a capture with the tree in GEOM_TREE instead of the live screen (an atlas check).
 set -uo pipefail
 
 here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
@@ -15,9 +17,9 @@ die() {
 usage() { cat "$here/contrast.usage"; }
 
 # stdin: "r g b" per pixel. Prints "r g b" of the median (mode=median) or of the pixel
-# farthest from the median (mode=ink).
+# farthest from the median, or from the ground REF when given (mode=ink).
 pick() {
-  gawk -v mode="$1" -f "$here/pick.awk"
+  gawk -v mode="$1" -v ref="${2:-}" -f "$here/pick.awk"
 }
 
 # Logical rect "x y w h" -> physical crop "WxH+X+Y", shrunk by 2 physical px per side (never below 1).
@@ -50,22 +52,74 @@ sample() {
     | sed -n 's/.*(\([0-9]*\),\([0-9]*\),\([0-9]*\).*/\1 \2 \3/p' | pick "$mode"
 }
 
+# Prints "ink<TAB>ground" of one logical rect "x y w h" in a capture; nothing when it lies outside.
+# The ground is the median of a ring RING px wide just outside the rect, because inside a small
+# text rect the glyph's own antialiased pixels pull the median toward the ink. The ink is the
+# node's own opaque colour ($4, "#rrggbb" or "#ffrrggbb") when it has one, because a 12 px stroke
+# never reaches its full colour on screen (text declared at 4.50:1 measured 4.35); otherwise the
+# pixel inside the rect farthest from the ground.
+RING=3
+ink_on() {
+  local x y w h px ground
+  px="$(magick "$2" -crop "$(crop_of "$1" "$3")" +repage -depth 8 txt:- 2>/dev/null \
+    | sed -n 's/.*(\([0-9]*\),\([0-9]*\),\([0-9]*\).*/\1 \2 \3/p')"
+  [[ -n "$px" ]] || return 0
+  read -r x y w h <<<"$(awk -v r="$RING" -v s="$3" '{ printf "%d %d %d %d\n", $1 * s - r, $2 * s - r, $3 * s + 2 * r, $4 * s + 2 * r }' <<<"$1")"
+  ground="$(magick "$2" -crop "${w}x${h}+${x}+${y}" +repage -alpha set -region "$((w - 2 * RING))x$((h - 2 * RING))+${RING}+${RING}" \
+    -alpha transparent +region -depth 8 txt:- 2>/dev/null \
+    | sed -n '/,255)/s/.*(\([0-9]*\),\([0-9]*\),\([0-9]*\).*/\1 \2 \3/p' | pick median)"
+  [[ -n "$ground" ]] || return 0
+  local ink
+  if [[ "$4" =~ ^#(ff)?([0-9a-f]{6})$ ]]; then
+    ink="$(printf '%d %d %d' "0x${BASH_REMATCH[2]:0:2}" "0x${BASH_REMATCH[2]:2:2}" "0x${BASH_REMATCH[2]:4:2}")"
+  else
+    ink="$(pick ink "$ground" <<<"$px")"
+  fi
+  printf '%s\t%s\n' "$ink" "$ground"
+}
+
+each() {
+  local sel="$1" min="$2" shot="$3" screen="$4" png scale rects pair
+  [[ -n "$min" ]] || die "each needs --min RATIO"
+  if [[ -n "$shot" ]]; then
+    [[ -f "$shot" && -f "${GEOM_TREE:-}" ]] || die "--shot needs a capture and its tree in GEOM_TREE"
+    png="$shot"
+    scale="$(awk -v a="$(magick identify -format '%w' "$png")" -v b="$(jq '.width' "$GEOM_TREE")" 'BEGIN { print a / b }')"
+  else
+    [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
+    scale="$(hyprctl monitors -j | jq -r --arg m "$screen" '.[]|select(.name==$m)|.scale')"
+    png="$("$here/drive" shot "$screen" contrast)" || exit 2
+  fi
+  rects="$("$here/geom" rects "$sel" ${screen:+--screen "$screen"})" || exit 2
+  local x y w h type colour
+  while read -r x y w h type colour; do
+    [[ -n "$x" ]] || continue
+    pair="$(ink_on "$x $y $w $h" "$png" "$scale" "${colour,,}")"
+    [[ -z "$pair" ]] || printf '%s\t%s\n' "$x $y $w $h $type" "$pair"
+  done <<<"$rects" | gawk -v min="$min" -f "$here/lum.awk" -f "$here/each.awk"
+}
+
 main() {
-  local pos=() screen="" min=""
+  local pos=() screen="" min="" shot=""
   while (($#)); do
     case "$1" in
       --screen) screen="${2:?--screen needs a value}" && shift 2 ;;
       --min) min="${2:?--min needs a value}" && shift 2 ;;
+      --shot) shot="${2:?--shot needs a capture}" && shift 2 ;;
       -h | --help) usage && return 0 ;;
       *) pos+=("$1") && shift ;;
     esac
   done
+  command -v magick >/dev/null 2>&1 || die "missing magick (ImageMagick)"
+  if [[ "${pos[0]:-}" == each && ${#pos[@]} == 2 ]]; then
+    each "${pos[1]}" "$min" "$shot" "$screen"
+    return
+  fi
   ((${#pos[@]} == 2)) || {
     usage
     return 2
   }
   command -v grim >/dev/null 2>&1 || die "missing grim (see: drive doctor)"
-  command -v magick >/dev/null 2>&1 || die "missing magick (ImageMagick)"
   [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
   local scale png a b
   scale="$(hyprctl monitors -j | jq -r --arg m "$screen" '.[]|select(.name==$m)|.scale')"
@@ -73,7 +127,7 @@ main() {
   png="$("$here/drive" shot "$screen" contrast)" || exit 2
   a="$(sample "${pos[0]}" "$png" "$scale" "$screen")" || exit 2
   b="$(sample "${pos[1]}" "$png" "$scale" "$screen")" || exit 2
-  awk -v a="$a" -v b="$b" -v pa="${pos[0]}" -v pb="${pos[1]}" -v min="$min" -v scale="$scale" -v png="$png" -f "$here/ratio.awk"
+  awk -v a="$a" -v b="$b" -v pa="${pos[0]}" -v pb="${pos[1]}" -v min="$min" -v scale="$scale" -v png="$png" -f "$here/lum.awk" -f "$here/ratio.awk"
 }
 
 main "$@"
