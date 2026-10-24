@@ -18,7 +18,7 @@
 #
 # A run is <scenario>/<date>-<time>-<rng>/: index.html (everything on one page), shots/ (the
 # captures as taken), trees/ (the item tree of each shot), logs/ (the shell's log per journey),
-# diff-<run>/ (a comparison with that run).
+# diff-<run>/ (a comparison with that run, see atlas_compare).
 
 ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
 # A changed pixel differs by more than this share in one channel; a changed area is a connected
@@ -201,20 +201,35 @@ atlas_areas() {
     | awk '/gray\(255\)|#FFFFFF|white/ { split($2, g, /[x+]/); print g[3], g[4], g[1], g[2] }'
 }
 
-# Every item as "path<TAB>x y w h", the path built from types and same-type sibling indices.
-atlas_items() {
-  jq -r 'def items($p): [$p, .x, .y, .w, .h], ((.children // []) as $k
-      | [range(0; $k | length)] | map(. as $i | $k[$i] + {_n: ([$k[:$i][] | select(.type == $k[$i].type)] | length)})[]
-      | items($p + "/" + .type + "[" + (._n | tostring) + "]"));
-    .tree | items(.type) | "\(.[0])\t\(.[1] | round) \(.[2] | round) \(.[3] | round) \(.[4] | round)"' "$1" \
-    || die "not an item tree: $1"
+# Every measure of a shot's item tree as "key<TAB>value", the key a path of types and same-type
+# sibling indices plus the measure: #rect (x y w h, logical px), #radius, #color, #opacity, #text, and
+# #gap-y / #gap-x from an item to the next sibling below or to its right that it lines up with.
+atlas_measures() {
+  jq -r 'def r1: (. * 10 | round) / 10;
+    def named($p): (.children // []) as $k | [range(0; $k | length) | . as $i | $k[$i]
+      + {_p: ($p + "/" + $k[$i].type + "[" + ([$k[:$i][] | select(.type == $k[$i].type)] | length | tostring) + "]")}];
+    def gaps: [.[] | select(.w > 0 and .h > 0)] as $k
+      | (($k | sort_by(.y, .x)) as $v | range(1; $v | length) as $i | $v[$i - 1] as $a | $v[$i] as $b
+          | select($a.x < $b.x + $b.w and $b.x < $a.x + $a.w and $b.y >= $a.y + $a.h)
+          | ["\($a._p)#gap-y:\($b._p | split("/") | last)", ($b.y - $a.y - $a.h | r1 | tostring)]),
+        (($k | sort_by(.x, .y)) as $v | range(1; $v | length) as $i | $v[$i - 1] as $a | $v[$i] as $b
+          | select($a.y < $b.y + $b.h and $b.y < $a.y + $a.h and $b.x >= $a.x + $a.w)
+          | ["\($a._p)#gap-x:\($b._p | split("/") | last)", ($b.x - $a.x - $a.w | r1 | tostring)]);
+    def measures($p): ["\($p)#rect", "\(.x | round) \(.y | round) \(.w | round) \(.h | round)"],
+      (select(.radius != null) | ["\($p)#radius", (.radius | tostring)]),
+      (select(.color != null) | ["\($p)#color", .color]),
+      (select(.opacity != null) | ["\($p)#opacity", (.opacity | tostring)]),
+      (select(.text != null) | ["\($p)#text", .text]),
+      (named($p) as $k | ($k | gaps), ($k[] | measures(._p)));
+    .tree | measures(.type) | join("\t")' "$1" || die "not an item tree: $1"
 }
 
-# Run B against run A, per shot both hold, into B/diff-<A>/: the overlay of a changed shot
-# (NAME.png), its changed areas (NAME.areas), the items that moved, appeared or went (NAME.items),
-# and summary.tsv (name, areas, items).
+# Run B against run A, per shot both hold, into B/diff-<A>/: NAME.png (run A beside run B, each
+# changed area boxed, B's changed pixels marked), NAME.areas (x y w h, device px), NAME.measures
+# (key, before, after for every measure that changed), summary.tsv (name, areas, measures) and
+# diff.json (the same per shot: areas and changes).
 atlas_compare() {
-  local a="$1" b="$2" out png name areas moved
+  local a="$1" b="$2" out png name areas changed draw x y w h width
   out="$b/diff-$(basename "$a")"
   rm -rf "$out"
   mkdir -p "$out"
@@ -223,13 +238,24 @@ atlas_compare() {
     [[ -f "$a/shots/$name.png" ]] || continue
     areas="$(atlas_areas "$a/shots/$name.png" "$png" | tee "$out/$name.areas" | wc -l)"
     if ((areas > 0)); then
-      magick "$png" \( "$a/shots/$name.png" "$png" -compose difference -composite -separate -evaluate-sequence max \
-        -threshold "$ATLAS_FUZZ%" -fill '#ff3df0' -opaque white -transparent black \) -compose over -composite "$out/$name.png"
+      width="$(magick identify -format '%w' "$png")"
+      draw=""
+      while read -r x y w h; do
+        draw+=" rectangle $((x - 3)),$((y - 3)) $((x + w + 2)),$((y + h + 2))"
+        draw+=" rectangle $((width + x - 3)),$((y - 3)) $((width + x + w + 2)),$((y + h + 2))"
+      done <"$out/$name.areas"
+      magick "$a/shots/$name.png" \( "$png" \( "$a/shots/$name.png" "$png" -compose difference -composite -separate \
+        -evaluate-sequence max -threshold "$ATLAS_FUZZ%" -fill '#ff3df0' -opaque white -transparent black \) \
+        -compose over -composite \) +append -fill none -stroke '#ff3df0' -strokewidth 3 -draw "$draw" "$out/$name.png"
     fi
-    moved="$(join -t $'\t' -a1 -a2 -e GONE -o 0,1.2,2.2 <(atlas_items "$a/trees/$name.json" | sort) <(atlas_items "$b/trees/$name.json" | sort) \
-      | awk -F'\t' '$2 != $3' | tee "$out/$name.items" | wc -l)"
-    printf '%s\t%s\t%s\n' "$name" "$areas" "$moved" >>"$out/summary.tsv"
+    changed="$(join -t $'\t' -a1 -a2 -e GONE -o 0,1.2,2.2 <(atlas_measures "$a/trees/$name.json" | sort) \
+      <(atlas_measures "$b/trees/$name.json" | sort) | awk -F'\t' '$2 != $3' | tee "$out/$name.measures" | wc -l)"
+    printf '%s\t%s\t%s\n' "$name" "$areas" "$changed" >>"$out/summary.tsv"
+    jq -cn --arg name "$name" --rawfile areas "$out/$name.areas" --rawfile changes "$out/$name.measures" '{name: $name,
+      areas: [$areas | splits("\n") | select(length > 0) | split(" ") | map(tonumber) | {x: .[0], y: .[1], w: .[2], h: .[3]}],
+      changes: [$changes | splits("\n") | select(length > 0) | split("\t") | {key: .[0], before: .[1], after: .[2]}]}' >>"$out/diff.jsonl"
   done
+  jq -s . "$out/diff.jsonl" >"$out/diff.json" && rm -f "$out/diff.jsonl"
 }
 
 # atlas diff RUN [AGAINST]: compare any two kept runs (paths); AGAINST defaults to the run before RUN.
@@ -260,7 +286,7 @@ cmd_atlas() {
 
 atlas_html() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
 
-# One page per run: every shot by journey, its changed areas and items against the run it was compared with.
+# One page per run: every shot by journey, its changed areas and measures against the run it was compared with.
 atlas_report() {
   local run="$1" against="${2:-}" diff="" journey shot step still name img areas moved last=""
   [[ -z "$against" ]] || diff="diff-$against"
@@ -292,15 +318,15 @@ HTML
       [[ "$still" != moving ]] || printf '<span class="changed">never still</span>'
       if [[ -z "$areas" ]]; then printf '<span class="same">new</span>'
       elif ((areas == 0 && moved == 0)); then printf '<span class="same">unchanged</span>'
-      else printf '<span class="changed">areas changed: %s · items changed: %s</span>' "$areas" "$moved"; fi
+      else printf '<span class="changed">areas changed: %s · measures changed: %s</span>' "$areas" "$moved"; fi
       printf '</figcaption>'
       printf '<details><summary>surfaces</summary><pre>%s</pre></details>' \
         "$(GEOM_TREE="$run/trees/$name.json" "$MOTION_DIR/geom" dump --depth 3 | atlas_html)"
       if [[ -n "$diff" && -s "$run/$diff/$name.areas" ]]; then
         printf '<details><summary>changed areas (x y w h, device px)</summary><pre>%s</pre></details>' "$(head -40 "$run/$diff/$name.areas" | atlas_html)"
       fi
-      if [[ -n "$diff" && -s "$run/$diff/$name.items" ]]; then
-        printf '<details><summary>items that moved, appeared or went (before, after)</summary><pre>%s</pre></details>' "$(head -40 "$run/$diff/$name.items" | atlas_html)"
+      if [[ -n "$diff" && -s "$run/$diff/$name.measures" ]]; then
+        printf '<details><summary>measures that changed (before, after; GONE = absent)</summary><pre>%s</pre></details>' "$(head -40 "$run/$diff/$name.measures" | atlas_html)"
       fi
       printf '</figure>\n'
     done <"$run/shots.tsv"
