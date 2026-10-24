@@ -16,6 +16,7 @@ import {
   storedKeys,
 } from "./entries.ts";
 import { fail } from "./errors.ts";
+import { MIN_MASKED, mapStrings, STRUCTURAL_KEYS } from "./masking.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
 import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
@@ -118,9 +119,6 @@ interface Swap {
   placeholder: string;
 }
 
-/** A stored value shorter than this is not masked: it would match inside ordinary words. */
-const MIN_MASKED = 6;
-
 /** What replaces a value: `{{secret:<id>}}` in the capture namespace, else `{{secret:<namespace>/<key>}}`. */
 function placeholderOf(namespace: string, key: string): string {
   return namespace === CAPTURE_NAMESPACE || namespace === ""
@@ -178,18 +176,6 @@ function transcriptFiles(path: string): string[] {
   return [path, ...(existsSync(own) ? allTranscripts(own) : [])];
 }
 
-/** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
-const STRUCTURAL_KEYS = new Set([
-  "sessionId",
-  "uuid",
-  "parentUuid",
-  "cwd",
-  "transcript_path",
-  "agentId",
-  "toolUseID",
-  "tool_use_id",
-]);
-
 /** The text with every stored value swapped for its placeholder. */
 function swapIn(text: string, values: Swap[]): string {
   let out = text;
@@ -197,25 +183,6 @@ function swapIn(text: string, values: Swap[]): string {
     out = out.replaceAll(value, placeholder);
   }
   return out;
-}
-
-/** The parsed JSON with every stored value swapped inside its string values, structural keys left alone. */
-function swapDeep(node: unknown, values: Swap[]): unknown {
-  if (typeof node === "string") {
-    return swapIn(node, values);
-  }
-  if (Array.isArray(node)) {
-    return node.map((item) => swapDeep(item, values));
-  }
-  if (node !== null && typeof node === "object") {
-    return Object.fromEntries(
-      Object.entries(node).map(([key, child]) => [
-        key,
-        STRUCTURAL_KEYS.has(key) ? child : swapDeep(child, values),
-      ]),
-    );
-  }
-  return node;
 }
 
 /** The line with every stored value swapped; the line itself when nothing changed. */
@@ -231,7 +198,9 @@ function scrubLine(line: string, values: Swap[]): string {
     }));
     return swapIn(swapIn(line, values), escaped);
   }
-  const text = JSON.stringify(swapDeep(parsed, values));
+  const text = JSON.stringify(
+    mapStrings(parsed, (found) => swapIn(found, values), STRUCTURAL_KEYS),
+  );
   return text === JSON.stringify(parsed) ? line : text;
 }
 
