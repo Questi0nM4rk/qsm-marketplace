@@ -7,6 +7,7 @@ import { binCheck } from "./bin.ts";
 import type { Check } from "./doctor.ts";
 import type { Entry } from "./entries.ts";
 import { fail } from "./errors.ts";
+import { runAll } from "./run-all.ts";
 import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
 const BIN = "secret-tool";
@@ -46,14 +47,21 @@ function daemonOwned(): boolean {
   return asked.status === 0 && !asked.stdout.includes("boolean false");
 }
 
-/** Every operation starts here: nothing runs, and nothing falls back, without the tool and a daemon. */
+let readied = false;
+
+/** Every operation starts here: nothing runs, and nothing falls back, without the tool and a daemon.
+ * One process asks once, because a mask reads every entry and each ask is a process of its own. */
 function ready(): void {
+  if (readied) {
+    return;
+  }
   if (!onPath(BIN)) {
     fail(`${BIN} is not on PATH`, INSTALL_FIX, "missing");
   }
   if (!daemonOwned()) {
     fail(`no Secret Service answers on the session bus (${SERVICE})`, START_PROVIDER, "missing");
   }
+  readied = true;
 }
 
 /**
@@ -104,6 +112,17 @@ function read(namespace: string, key: string): Uint8Array | null {
   return result.status === 0 && result.stdout.length > 0 ? new Uint8Array(result.stdout) : null;
 }
 
+async function readAll(rows: readonly Entry[]): Promise<(Uint8Array | null)[]> {
+  ready();
+  const found = await runAll(
+    BIN,
+    rows.map((row) => ["lookup", ...attributes(row.folder, row.name)]),
+  );
+  return found.map((stdout) =>
+    stdout !== null && stdout.length > 0 ? new Uint8Array(stdout) : null,
+  );
+}
+
 /** `secret-tool store` reads the secret from stdin when that is not a terminal. */
 function store(namespace: string, key: string, value?: Uint8Array): void {
   ready();
@@ -145,4 +164,4 @@ function health(namespace: string): Check[] {
 }
 
 /** Shaped like `Backend`; `backend.ts` is where that is checked. */
-export const libsecret = { name: "libsecret", entries, read, store, remove, health };
+export const libsecret = { name: "libsecret", entries, read, readAll, store, remove, health };

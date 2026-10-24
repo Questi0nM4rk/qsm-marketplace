@@ -348,9 +348,13 @@ function registerResultMask(on: On): void {
   });
 }
 
-/** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
+/** Every row the conversation keeps passes through one mask before it is stored. A tool's result is
+ * made from the record the tool.call hook already masked, so its row is not masked twice. */
 function registerMask(on: On): void {
   on("session.append", async ($, e, next) => {
+    if (e.door === "tool-result") {
+      return next(e);
+    }
     const content = await maskWalk($, (map) => mapTexts(e.message.content, map));
     return next(content === undefined ? e : rewritten(e, content));
   }).catch(($, e, next) => {

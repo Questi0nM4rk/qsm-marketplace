@@ -19,6 +19,11 @@ export interface Backend {
   /** The value as bytes, or null when the key is not stored. */
   read: (namespace: string, key: string) => Uint8Array | null;
   /**
+   * Every row's value as `read` gives it, in the order of `rows`. The reads run at the same time,
+   * because one read is one process and the mask of every tool result waits on all of them.
+   */
+  readAll: (rows: readonly Entry[]) => Promise<(Uint8Array | null)[]>;
+  /**
    * Stores a key. Without a value it is typed into the backend's own prompt; a caller that already
    * holds the value (a captured paste) passes it, and it travels on stdin, never in argv.
    */
@@ -65,11 +70,11 @@ export function readSetup(env: Record<string, string | undefined>): { [key: stri
 
 /** The `secrets.backend` of a setup object as written, undefined when absent. */
 export function setupBackend(file: { [key: string]: Json }): Json | undefined {
-  const secrets = file.secrets;
-  if (typeof secrets !== "object" || secrets === null || Array.isArray(secrets)) {
+  const section = file.secrets;
+  if (typeof section !== "object" || section === null || Array.isArray(section)) {
     return undefined;
   }
-  return secrets.backend;
+  return section.backend;
 }
 
 const isChoice = (name: string): name is Choice => Object.hasOwn(CHOICES, name);

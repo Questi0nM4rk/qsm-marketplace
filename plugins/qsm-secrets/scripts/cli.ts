@@ -199,10 +199,10 @@ const mask: Handler = async (call) => {
 };
 
 /** A transcript's captured values swapped for their placeholders; detached for a hook's 1.5 s. */
-const scrub: Handler = (call) => {
+const scrub: Handler = async (call) => {
   const target = requiredString(call, "transcript");
   if (!flagArg(call, "detach")) {
-    const done = runScrub(target);
+    const done = await runScrub(target);
     return ok(done, `scrubbed ${done.scrubbed} value(s) in ${done.path}`);
   }
   const log = join(stateDir(process.env), "secrets-scrub.log");
