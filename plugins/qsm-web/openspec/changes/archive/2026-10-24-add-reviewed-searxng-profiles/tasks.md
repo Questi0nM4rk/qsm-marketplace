@@ -58,13 +58,13 @@ integrates each returned diff before the next starts.
 
 ## 3. Delivery and final test-it
 
-- [ ] 3.1 Merge the reviewed work through normal gates, push main, and refresh qsm-web through its
+- [x] 3.1 Merge the reviewed work through normal gates, push main, and refresh qsm-web through its
       supported install path after inspecting installation effects. Preserve unrelated tools and
       tracker records; an earlier one-merge post-merge waiver does not apply. Blocks on 2.3.
-- [ ] 3.2 Run the installed command's help and all seven profiles against the bounded loopback
+- [x] 3.2 Run the installed command's help and all seven profiles against the bounded loopback
       fixture, verify generated choice exposure and source/warning semantics, and record any safe
       optional live smoke check or explicit cooldown skip. No server setting is edited. Blocks on
       3.1.
-- [ ] 3.3 Fold the delta into the plugin-owned durable spec, archive this change, close its bound
+- [x] 3.3 Fold the delta into the plugin-owned durable spec, archive this change, close its bound
       implementation and final test-it tasks with evidence, check the epic acceptance, and remove
       owned worktrees/branches without discarding unrelated changes. Blocks on 3.2.

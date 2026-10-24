@@ -28,7 +28,7 @@
       validate/lint/typecheck, the existing ordinary and hook gates and quality comparison once
       on the combined result. Obtain independent strict review and resolve supported findings.
       Model evals remain paused. Name unavailable `/simplify` as skipped. Blocks on 2.1.
-- [ ] 2.3 After approval of live installation, merge through normal gates and observe the normal
+- [x] 2.3 After approval of live installation, merge through normal gates and observe the normal
       refresh log through completion. Verify the declared helper target survives, obsolete links
       remain absent and no helper leftover failure occurs. Preserve unrelated tracker work and
       tools. Stop on refresh failure, do not waive checks. Sync/archive the delta and close

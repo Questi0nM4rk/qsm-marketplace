@@ -506,10 +506,11 @@ JSON form, generated from `qsm.json`, and the hooks module SHALL hold no logic o
 
 ### Requirement: qsm-web searxng selects a named search profile
 
-The search verb SHALL accept `--profile default|niche|academic|it` as its only named
-source-selection flag. A profile SHALL affect only its query and SHALL NOT write server or client
-configuration. Calls without a profile SHALL retain existing behavior except that category input
-is unsupported. Profile selection SHALL preserve the existing result and warning contracts.
+The search verb SHALL accept
+`--profile default|niche|academic|it|images|videos|news|music|map|files|social-media` as its only
+named source-selection flag. A profile SHALL affect only its query and SHALL NOT write server or
+client configuration. Calls without a profile SHALL retain existing behavior except that category
+input is unsupported. Profile selection SHALL preserve the existing result and warning contracts.
 
 #### Scenario: The default profile follows the server
 
@@ -548,6 +549,59 @@ is unsupported. Profile selection SHALL preserve the existing result and warning
   - Security: `national vulnerability database`.
 - **AND** the client SHALL NOT send a category parameter or select any additional engine
 
+#### Scenario: The images profile selects image and icon sources
+
+- **WHEN** a query selects `--profile images` and all required engines are registered
+- **THEN** the request SHALL select exactly `artic`, `artstation`, `brave.images`, `devicons`,
+  `duckduckgo images`, `findthatmeme`, `flaticon`, `frinkiac`, `giphy`, `iconify`, `lucide`,
+  `material icons`, `pinterest`, `public domain image archive`, `selfhst icons`, `uxwing`
+- **AND** the existing image and thumbnail fields SHALL remain available without fetching the media
+
+#### Scenario: The videos profile selects video discovery sources
+
+- **WHEN** a query selects `--profile videos` and all required engines are registered
+- **THEN** the request SHALL select exactly `360search videos`, `bilibili`, `brave.videos`,
+  `dailymotion`, `duckduckgo videos`, `ina`, `media.ccc.de`, `mediathekviewweb`, `odysee`,
+  `pixabay videos`, `sepiasearch`, `sogou videos`
+- **AND** the existing iframe/media metadata fields SHALL remain available without playback
+
+#### Scenario: The news profile includes the owner-selected regional source
+
+- **WHEN** a query selects `--profile news` and all required engines are registered
+- **THEN** the request SHALL select exactly `brave.news`, `duckduckgo news`, `il post`,
+  `naver news`, `sogou wechat`
+- **AND** a warning from `naver news` SHALL remain visible alongside useful returned results without
+  retrying or silently removing the engine
+
+#### Scenario: The music profile searches catalog metadata
+
+- **WHEN** a query selects `--profile music` and all required engines are registered
+- **THEN** the request SHALL select exactly `deezer`, `mixcloud`, `soundcloud`
+- **AND** it SHALL retain the existing result-link contract without playback or media download
+
+#### Scenario: The map profile searches places
+
+- **WHEN** a query selects `--profile map` and all required engines are registered
+- **THEN** the request SHALL select exactly `apple maps`, `photon`
+- **AND** the normalized result contract SHALL stay unchanged without implicit user-location access
+  or routing behavior
+
+#### Scenario: The files profile selects the reviewed indexes
+
+- **WHEN** a query selects `--profile files` and all required engines are registered
+- **THEN** the request SHALL select exactly `bt4g`, `openrepos`
+- **AND** it SHALL return the existing search metadata without opening magnet links, downloading
+  files or claiming content reuse rights
+
+#### Scenario: The social-media profile selects public social discovery sources
+
+- **WHEN** a query selects `--profile social-media` and all required engines are registered
+- **THEN** the request SHALL select exactly `9gag`, `boardreader`, `lemmy comments`,
+  `lemmy communities`, `lemmy posts`, `lemmy users`, `mastodon hashtags`, `mastodon users`,
+  `tootfinder`
+- **AND** it SHALL preserve attribution and the existing normalized contract for post, user,
+  community and hashtag result links
+
 #### Scenario: A profile conflicts with an explicit selection
 
 - **WHEN** any profile is combined with supplied `--engines`, including an empty value
@@ -556,11 +610,10 @@ is unsupported. Profile selection SHALL preserve the existing result and warning
 
 ### Requirement: qsm-web searxng checks targeted profile availability
 
-Before sending a niche, academic or IT search, the client SHALL read registered engine names
+Before sending any non-default named-profile search, the client SHALL read registered engine names
 from the selected instance's `/config` endpoint. It SHALL require all profile engines to be
-registered without requiring them to be default-enabled. It SHALL retain reverse-proxy path
-prefixes and SHALL use one `--timeout` budget for the entire inventory and search exchange,
-including bodies.
+registered without requiring them to be default-enabled. It SHALL retain reverse-proxy path prefixes
+and SHALL use one `--timeout` budget for the entire inventory and search exchange, including bodies.
 
 #### Scenario: A profile engine is absent
 
@@ -586,3 +639,27 @@ including bodies.
 - **WHEN** the search returns source links and engine diagnostics after a successful preflight
 - **THEN** the verb SHALL return the links with warnings using its existing output contract
 - **AND** an empty result with engine failures SHALL retain its existing failed outcome
+
+### Requirement: qsm-web exposes and teaches the reviewed profile choices consistently
+
+The CLI help, generated noun and types, runtime validation, SearXNG skill, README and USAGE SHALL
+agree on the eleven supported profile names and the defined source sets. The skill and consumer
+documentation SHALL describe the profiles' actual discovery jobs and relevant result limitations
+without adding a new skill, a subprofile or a server-configuration workflow.
+
+#### Scenario: A person or agent chooses a new profile
+
+- **WHEN** a person reads search help or consumer docs, or an agent loads the SearXNG skill
+- **THEN** all seven added choices and their jobs SHALL be discoverable with usable command examples
+- **AND** documentation SHALL distinguish mixed image/icon discovery, regional news, catalog music,
+  place links, narrow file indexes and mixed social result types without promising freshness,
+  general coverage or reuse rights
+
+#### Scenario: Existing selection boundaries stay intact
+
+- **WHEN** callers use the existing four profiles, manual engines, filters or result metadata
+- **THEN** their existing contracts SHALL remain unchanged
+- **AND** `--category` SHALL remain rejected before network access, while result `category` metadata
+  remains present
+- **AND** no `general`, `science`, `other`, `social` or compatibility-alias profile SHALL be
+  introduced
