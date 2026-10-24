@@ -1287,6 +1287,9 @@ describe("guard", () => {
     [`jq . < ${keyrings}/login.keyring`, "keyring-files"],
     ["cat LINK", "keyring-files"],
     ["python3 -c 'import keyring; print(keyring.get_password(1, 2))'", "keyring-library"],
+    ["python3.14 -c 'import keyring'", "keyring-library"],
+    ["python -c 'import keyring'", "keyring-library"],
+    ["nodejs -e 'require(\"keytar\")'", "keyring-library"],
     ["node -e 'require(\"keytar\").getPassword(1, 2)'", "keyring-library"],
     ["python3 - <<EOF\nimport secretstorage\nEOF", "keyring-library"],
     [`cat ${rendered}`, "rendered-config"],
@@ -1312,6 +1315,8 @@ describe("guard", () => {
     [`cd ${keyrings} && cat login.keyring`, "keyring-files"],
     ["cat $XDG_DATA_HOME/keyr*/login.keyring", "keyring-files"],
     ["cat $XDG_DATA_HOME/k?yrings/login.keyring", "keyring-files"],
+    ["cat $XDG_DATA_HOME/keyr[ai]ngs/login.keyring", "keyring-files"],
+    ["cat $XDG_DATA_HOME/keyr[a-z]ngs/login.keyring", "keyring-files"],
     [`cat \${XDG_DATA_HOME}/keyrings/login.keyring`, "keyring-files"],
     [`cat "\${XDG_DATA_HOME}/keyrings/login.keyring"`, "keyring-files"],
     [`cat \${HOME}/.password-store/work/token.gpg`, "keyring-files"],
@@ -1358,6 +1363,7 @@ describe("guard", () => {
     "echo gopass op",
     `ls ${keyrings}`,
     "python3 -m pytest tests/test_keyring.py",
+    "python3.14-config --help",
     `kubectl --kubeconfig ${rendered} get pods`,
     "qsm-secrets pipe github-token -- gh auth login --with-token",
     "qsm-secrets env npm-token=NPM_TOKEN -- npm publish",
@@ -1387,6 +1393,21 @@ describe("guard", () => {
     "qsm-secrets set my-key --gui",
   ])("%s is allowed", (command) => {
     expect(verdict(command)).toBeNull();
+  });
+
+  test.each([
+    ["z", "ok"],
+    ["", "blocked"],
+  ])("repeated wildcards finish within the guard budget: suffix %s", (suffix, expected) => {
+    const result = spawnSync(process.execPath, [CLI, "guard", "--json"], {
+      env: childEnv({ HOME: "/home/guard" }),
+      input: `cat /home/guard/${"*".repeat(20)}${suffix}`,
+      encoding: "utf8",
+      timeout: 2_000,
+      killSignal: "SIGKILL",
+    });
+    expect(result.error).toBeUndefined();
+    expect(envelope(result).code).toBe(expected);
   });
 
   test("a refusal names the qsm-secrets verb to use instead", () => {

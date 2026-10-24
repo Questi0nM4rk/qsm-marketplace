@@ -627,8 +627,12 @@ resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`, `xarg
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. `${NAME}`
-SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR` and `PASSWORD_STORE_DIR`, and a
+directory, and, after a `cd` to a known directory, by the directory it is relative to.
+Glob matching SHALL take at most work proportional to the pattern length times the path-component
+length. Repeated wildcards SHALL NOT cause regex backtracking, and existing component matching
+and guard decisions SHALL be preserved.
+`${NAME}` SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR` and
+`PASSWORD_STORE_DIR`, and a
 braced form of one of them with an operator (`${NAME:-x}`, `${NAME#x}`, `${!NAME}`) SHALL be refused
 as `unreadable-command`, because its value cannot be known without running the shell. It SHALL deny
 `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`, `kwallet-query` and

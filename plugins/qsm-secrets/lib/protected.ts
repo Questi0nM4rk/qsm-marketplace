@@ -117,8 +117,14 @@ export function reaches(
   );
 }
 
-/** A glob word as a pattern over one path part: `*`, `?` and `[...]` as the shell reads them. */
-function partPattern(part: string): RegExp {
+interface GlobAtom {
+  readonly pattern: RegExp;
+  readonly repeated: boolean;
+}
+
+/** Compile the component spelling into single-character atoms. Only an atom, never its repetition,
+ * becomes a regex, so character classes keep their meaning without backtracking over wildcards. */
+function partAtoms(part: string): GlobAtom[] | null {
   const source = Array.from(part)
     .map((char) => {
       if (char === "*") {
@@ -130,11 +136,48 @@ function partPattern(part: string): RegExp {
       return /[A-Za-z0-9_\-[\]]/.test(char) ? char : `\\${char}`;
     })
     .join("");
-  try {
-    return new RegExp(`^${source}$`);
-  } catch {
-    return /^$/;
+  const atoms: GlobAtom[] = [];
+  for (let at = 0; at < source.length;) {
+    let end = at + 1;
+    if (source[at] === "\\") {
+      end += 1;
+    } else if (source[at] === "[") {
+      while (end < source.length && source[end] !== "]") {
+        end += source[end] === "\\" ? 2 : 1;
+      }
+      if (end === source.length) return null;
+      end += 1;
+    }
+    try {
+      const pattern = new RegExp(`^(?:${source.slice(at, end)})$`);
+      const repeated = source[end] === "*";
+      atoms.push({ pattern, repeated });
+      at = repeated ? end + 1 : end;
+    } catch {
+      return null;
+    }
   }
+  return atoms;
+}
+
+/** Each table cell is visited once. A repeated atom consumes nothing or extends its own row by one
+ * character, rather than trying every split of the input among the wildcards. */
+function matchesGlobPart(part: string, text: string): boolean {
+  const atoms = partAtoms(part);
+  // Invalid components match only the empty component.
+  if (atoms === null) return text === "";
+  let row = Array.from({ length: text.length + 1 }, (_, at) => at === 0);
+  for (const atom of atoms) {
+    const next = row.map((matched) => atom.repeated && matched);
+    for (let at = 1; at <= text.length; at += 1) {
+      if (atom.pattern.test(text[at - 1] ?? "")) {
+        const prefix = atom.repeated ? next[at - 1] : row[at - 1];
+        next[at] = next[at] === true || prefix === true;
+      }
+    }
+    row = next;
+  }
+  return row[text.length] === true;
 }
 
 /** The root a glob word could expand to: `~/.local/share/keyr*\/login.keyring` reaches the keyring
@@ -144,7 +187,7 @@ export function globMentioned(
   roots: readonly Root[],
   env: PathEnv,
 ): Root | undefined {
-  if (!/[*?[]/.test(text)) {
+  if (!["*", "?", "["].some((char) => text.includes(char))) {
     return undefined;
   }
   const parts = normalizePath(expand(text, env)).split("/");
@@ -154,7 +197,7 @@ export function globMentioned(
       parts.length >= rootParts.length &&
       rootParts.every((rootPart, at) => {
         const part = parts[at];
-        return part !== undefined && partPattern(part).test(rootPart);
+        return part !== undefined && matchesGlobPart(part, rootPart);
       })
     );
   });
