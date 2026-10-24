@@ -36,6 +36,10 @@ crop_of() {
 # Prints "r g b" for one region spec.
 sample() {
   local spec="$1" png="$2" scale="$3" mode=median rect crop pt=0 screen="$4"
+  if [[ "$spec" =~ ^#([0-9a-fA-F]{6})$ ]]; then
+    printf '%d %d %d\n' "0x${BASH_REMATCH[1]:0:2}" "0x${BASH_REMATCH[1]:2:2}" "0x${BASH_REMATCH[1]:4:2}"
+    return
+  fi
   if [[ "$spec" == *@ink ]]; then
     mode=ink
     spec="${spec%@ink}"
@@ -119,12 +123,15 @@ main() {
     usage
     return 2
   }
-  command -v grim >/dev/null 2>&1 || die "missing grim (see: drive doctor)"
-  [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
-  local scale png a b
-  scale="$(hyprctl monitors -j | jq -r --arg m "$screen" '.[]|select(.name==$m)|.scale')"
-  [[ -n "$scale" ]] || die "no monitor $screen"
-  png="$("$here/drive" shot "$screen" contrast)" || exit 2
+  local scale=- png=- a b
+  # Two literal colours need no screen.
+  if [[ ! "${pos[0]}${pos[1]}" =~ ^#[0-9a-fA-F]{6}#[0-9a-fA-F]{6}$ ]]; then
+    command -v grim >/dev/null 2>&1 || die "missing grim (see: drive doctor)"
+    [[ -n "$screen" ]] || screen="$(hyprctl monitors -j | jq -r '.[]|select(.focused)|.name')"
+    scale="$(hyprctl monitors -j | jq -r --arg m "$screen" '.[]|select(.name==$m)|.scale')"
+    [[ -n "$scale" ]] || die "no monitor $screen"
+    png="$("$here/drive" shot "$screen" contrast)" || exit 2
+  fi
   a="$(sample "${pos[0]}" "$png" "$scale" "$screen")" || exit 2
   b="$(sample "${pos[1]}" "$png" "$scale" "$screen")" || exit 2
   awk -v a="$a" -v b="$b" -v pa="${pos[0]}" -v pb="${pos[1]}" -v min="$min" -v scale="$scale" -v png="$png" -f "$here/lum.awk" -f "$here/ratio.awk"

@@ -26,7 +26,7 @@ def parse_seg:
   | {t, q: [.q | scan("\\[([^\\]]*)\\]") | .[0]]};
 def attr_ok($q): . as $n
   | all($q[] | select(test("^[0-9]+$") | not);
-      capture("^(?<k>[^=]+)=(?<v>.*)$") as $kv | ($n[$kv.k] | tostring) == $kv.v);
+      capture("^(?<k>[^=!]+)(?<op>!?=)(?<v>.*)$") as $kv | (($n[$kv.k] | tostring) == $kv.v) == ($kv.op == "="));
 def step($all; $prev; $seg):
   [$all[]
     | select(. as $n | ($seg.t == "*" or any($seg.t | split("|")[]; . == $n.type)) and attr_ok($seg.q))
@@ -37,8 +37,9 @@ def matches($all; $s):
   reduce ($s | split("/")[] | parse_seg) as $seg (null;
     step($all; (. // null) | if . == null then null else map(._id) end; $seg));
 def sel($all; $s): matches($all; $s) | if length == 0 then fail("no node matches '\($s)'") else . end;
-# The matches a person can see: neither the node nor an ancestor has opacity 0, and it has an area.
-def shown($all; $s): ([$all[] | select(.opacity == 0) | ._id]) as $hidden
+# The matches a person can see: neither the node nor an ancestor is invisible or at opacity 0,
+# and it has an area.
+def shown($all; $s): ([$all[] | select(.opacity == 0 or .visible == false) | ._id]) as $hidden
   | [matches($all; $s)[] | select(.w > 0 and .h > 0 and ([._id] + ._anc | any(. as $i | $hidden | index($i))) == false)];
 
 # A node's rect with its StateLayer's padded hit area applied, or the plain

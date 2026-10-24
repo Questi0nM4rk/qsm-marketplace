@@ -347,7 +347,7 @@ live_gate() {
 
 dispatch() {
   # contrast over a saved capture touches no session at all.
-  [[ "${1:-}" == contrast && " ${*:2} " == *" --shot "* ]] && exec "$(dirname "$(readlink -f "$0")")/contrast" "${@:2}"
+  [[ "${1:-}" == contrast && (" ${*:2} " == *" --shot "* || "${2:-}${3:-}" =~ ^#[0-9a-fA-F]{6}#[0-9a-fA-F]{6}$) ]] && exec "$(dirname "$(readlink -f "$0")")/contrast" "${@:2}"
   in_slot && slot_refuse "${1:-}"
   live_gate "${1:-}"
   case "${1:-}" in

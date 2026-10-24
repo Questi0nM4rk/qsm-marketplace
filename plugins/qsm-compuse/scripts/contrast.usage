@@ -1,7 +1,8 @@
 drive contrast A B [--screen MON] [--min RATIO]
 drive contrast each SEL --min RATIO [--screen MON | --shot PNG]
 
-  A, B   geom selector (see: drive geom) or logical point X,Y; selector@ink = glyph pixel
+  A, B   geom selector (see: drive geom), logical point X,Y, or a literal colour #rrggbb;
+         selector@ink = glyph pixel. Two literal colours need no screen.
   Prints both hex colours and the WCAG ratio (L1+0.05)/(L2+0.05); --min makes it a check (exit 1).
   Captures the output with grim; logical -> physical uses the monitor scale.
   each   every match of SEL a person can see: its ink (the pixel farthest from its rect's median)

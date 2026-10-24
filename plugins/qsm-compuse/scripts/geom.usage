@@ -7,9 +7,9 @@ drive geom CHECK ARGS [--slot NAME] [--screen MON] [--tol PX] [--min PX] [--floo
   target SEL                 input area (largest MouseArea child, else StateLayer, else node) >= --floor (24) per axis
   dump [SEL]                 listing of nodes with rects, to find selectors (--depth 3)
   rect SEL                   "x y w h" of the first match
-  rects SEL                  "x y w h type color" (color "-" when the node has none) of every match a person can see (no opacity 0 on it or an ancestor); none is no error
+  rects SEL                  "x y w h type color" (color "-" when the node has none) of every match a person can see (not invisible or at opacity 0, nor an ancestor); none is no error
 
 SEL = step/step/...  step = Type | Type|Type|... | *, then [N] (0-based index of the step's matches)
-and/or [attr=value] filters; each step searches the descendants of the previous one.
+and/or [attr=value] / [attr!=value] filters (an absent attr reads "null"); each step searches the descendants of the previous one.
   Rail/RailEntry[2]    Rollout    *[type=Slider]    RailEntry[text=21]
 Env: DRIVE_QS_PATH (default ~/Projects/qsm-desktop/shell), GEOM_TREE (read this JSON file instead).
