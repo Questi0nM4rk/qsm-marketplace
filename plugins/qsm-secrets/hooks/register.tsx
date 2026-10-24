@@ -319,6 +319,8 @@ async function maskWalk<T>(
 function registerResultMask(on: On): void {
   on("tool.call", async ($, e, next) => {
     const out = await next(e);
+    // A refusal quotes only the input the model wrote, so it holds no value the model has not
+    // already sent.
     if (out.deny !== undefined) {
       return out;
     }

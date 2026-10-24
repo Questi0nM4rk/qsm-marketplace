@@ -16,8 +16,12 @@ export const STRUCTURAL_KEYS: ReadonlySet<string> = new Set([
   "tool_use_id",
 ]);
 
+// A media block (an image, an audio clip, a document) is kept whole: its bytes are no text, and a
+// short value could match inside them.
+const MEDIA_TYPES: ReadonlySet<unknown> = new Set(["image", "audio", "document"]);
+
 /** Parsed JSON with every string rewritten by `map`, in a fixed order; a value under a key in `keep`
- * is left as it is. */
+ * and a media block are left as they are. */
 export function mapStrings(
   node: unknown,
   map: (text: string) => string,
@@ -30,6 +34,9 @@ export function mapStrings(
     return node.map((item: unknown) => mapStrings(item, map, keep));
   }
   if (node !== null && typeof node === "object") {
+    if ("type" in node && MEDIA_TYPES.has(node.type)) {
+      return node;
+    }
     return Object.fromEntries(
       Object.entries(node).map(([key, child]) => [
         key,

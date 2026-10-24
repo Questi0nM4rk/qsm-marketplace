@@ -356,14 +356,20 @@ test("a tool's own record is masked before it is kept, and an errored one comes 
   const bash = { tool: "Bash", command: "cat token.txt" } as const;
 
   answer = {
-    result: { stdout: "tok=VALUE", agentId: "VALUE", image: { base64: "VALUE" } },
+    result: {
+      stdout: "tok=VALUE",
+      agentId: "VALUE",
+      file: { base64: "VALUE" },
+      content: [{ type: "image", data: "VALUE" }],
+    },
     context: ["a hook saw VALUE"],
   };
   const kept = await $.tool.call(bash);
   expect(kept.result).toEqual({
     stdout: `tok=${placeholder("cap_1")}`,
     agentId: "VALUE",
-    image: { base64: "VALUE" },
+    file: { base64: "VALUE" },
+    content: [{ type: "image", data: "VALUE" }],
   });
   expect(kept.context).toEqual(["a hook saw VALUE"]);
 
