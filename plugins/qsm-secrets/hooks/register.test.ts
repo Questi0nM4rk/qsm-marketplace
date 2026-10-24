@@ -355,22 +355,19 @@ test("a tool's own record is masked before it is kept, and an errored one comes 
   on("ui.toast", () => ({ value: undefined }));
   const bash = { tool: "Bash", command: "cat token.txt" } as const;
 
-  answer = {
-    result: {
-      stdout: "tok=VALUE",
-      agentId: "VALUE",
-      file: { base64: "VALUE" },
-      content: [{ type: "image", data: "VALUE" }],
-    },
-    context: ["a hook saw VALUE"],
-  };
-  const kept = await $.tool.call(bash);
-  expect(kept.result).toEqual({
-    stdout: `tok=${placeholder("cap_1")}`,
+  // A record whose text is `tok`: structural keys and media bytes keep VALUE, a text source does not.
+  const record = (tok: string) => ({
+    stdout: tok,
     agentId: "VALUE",
     file: { base64: "VALUE" },
-    content: [{ type: "image", data: "VALUE" }],
+    content: [
+      { type: "image", data: "VALUE" },
+      { type: "document", source: { type: "text", data: tok } },
+    ],
   });
+  answer = { result: record("tok=VALUE"), context: ["a hook saw VALUE"] };
+  const kept = await $.tool.call(bash);
+  expect(kept.result).toEqual(record(`tok=${placeholder("cap_1")}`));
   expect(kept.context).toEqual(["a hook saw VALUE"]);
 
   answer = { isError: true, result: "Error: tok=VALUE", text: "Exit code 1\ntok=VALUE" };

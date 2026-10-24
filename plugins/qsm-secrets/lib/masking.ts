@@ -5,7 +5,7 @@
 export const MIN_MASKED = 6;
 
 /** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
-export const STRUCTURAL_KEYS: ReadonlySet<string> = new Set([
+const STRUCTURAL_KEYS: ReadonlySet<string> = new Set([
   "sessionId",
   "uuid",
   "parentUuid",
@@ -16,31 +16,28 @@ export const STRUCTURAL_KEYS: ReadonlySet<string> = new Set([
   "tool_use_id",
 ]);
 
-// A media block (an image, an audio clip, a document) is kept whole: its bytes are no text, and a
-// short value could match inside them.
-const MEDIA_TYPES: ReadonlySet<unknown> = new Set(["image", "audio", "document"]);
+// Bytes are no text, and a short value could match inside them: a `base64` field, and the `data` of
+// a base64 source or of an image or audio block. A document's text source is text, and is masked.
+const BYTES_HOLDERS: ReadonlySet<unknown> = new Set(["base64", "image", "audio"]);
 
-/** Parsed JSON with every string rewritten by `map`, in a fixed order; a value under a key in `keep`
- * and a media block are left as they are. */
-export function mapStrings(
-  node: unknown,
-  map: (text: string) => string,
-  keep: ReadonlySet<string>,
-): unknown {
+function holdsBytes(node: object, key: string): boolean {
+  return key === "base64" || (key === "data" && "type" in node && BYTES_HOLDERS.has(node.type));
+}
+
+/** Parsed JSON with every string rewritten by `map`, in a fixed order; a structural key and a field
+ * of bytes are left as they are. */
+export function mapStrings(node: unknown, map: (text: string) => string): unknown {
   if (typeof node === "string") {
     return map(node);
   }
   if (Array.isArray(node)) {
-    return node.map((item: unknown) => mapStrings(item, map, keep));
+    return node.map((item: unknown) => mapStrings(item, map));
   }
   if (node !== null && typeof node === "object") {
-    if ("type" in node && MEDIA_TYPES.has(node.type)) {
-      return node;
-    }
     return Object.fromEntries(
       Object.entries(node).map(([key, child]) => [
         key,
-        keep.has(key) ? child : mapStrings(child, map, keep),
+        STRUCTURAL_KEYS.has(key) || holdsBytes(node, key) ? child : mapStrings(child, map),
       ]),
     );
   }

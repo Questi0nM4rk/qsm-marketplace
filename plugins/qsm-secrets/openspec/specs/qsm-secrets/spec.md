@@ -570,16 +570,17 @@ the same user can read the file while the session lives.
 The engine keeps a tool's own record (Bash's `stdout` and `stderr`, Read's file) in the transcript
 beside the row, and `session.append` never sees it, so a function hook on `tool.call` SHALL mask
 every string in the record with one `qsm-secrets mask --all` process after the tool answers, before
-the engine keeps it. A media block (an image, an audio clip, a document) and a `base64` field SHALL
-be kept as they are, because their bytes are no text, and so SHALL a structural key the session-end
-scrub keeps, because the engine reads it as a link. A refusal SHALL pass as it is, because it quotes
-only the input the model wrote, which holds no value the model has not already sent. A record the
-mask did not change SHALL be returned as the tool answered it. The context other hooks attached
-SHALL be passed on whole, because the engine refuses a hook that rewrites an entry its `next` gave.
-A hook cannot answer an error, because the engine checks a hook's result against the tool's output
-shape, so an errored result whose text or error record the mask changed SHALL come back as a refusal
-carrying the masked text. When the mask fails, the result SHALL be refused with a withheld notice
-and a toast, because a record that could not be masked may hold a value.
+the engine keeps it. The bytes of a media block (a `base64` field, the `data` of a base64 source or
+of an image or audio block) SHALL be kept as they are, because bytes are no text, while a document's
+text source is masked, and so SHALL a structural key the session-end scrub keeps, because the engine
+reads it as a link. A refusal SHALL pass as it is, because it quotes only the input the model wrote,
+which holds no value the model has not already sent. A record the mask did not change SHALL be
+returned as the tool answered it. The context other hooks attached SHALL be passed on whole, because
+the engine refuses a hook that rewrites an entry its `next` gave. A hook cannot answer an error,
+because the engine checks a hook's result against the tool's output shape, so an errored result
+whose text or error record the mask changed SHALL come back as a refusal carrying the masked text.
+When the mask fails, the result SHALL be refused with a withheld notice and a toast, because a
+record that could not be masked may hold a value.
 
 #### Scenario: a printed value never reaches the record
 
@@ -605,13 +606,13 @@ transcripts of the subagents the session ran, with its placeholder, by rewriting
 atomically in a detached process, and SHALL print no value: the engine stores a submitted prompt and
 an attachment's payload as made, whatever the mask hooks rewrote, so a value named by no placeholder
 in the file is swapped too. A value of fewer than six characters is not swapped. The swap SHALL
-touch only the text inside a line's string values, never a media block nor a structural field
-(`sessionId`, `uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id),
-because a stored value equal to an id would otherwise break the resume and the links between
-transcripts. A scrub that fails leaves its cause in the log, because it runs detached and its
-outcome is seen nowhere else. The scrub SHALL start before the session directory is removed, so a
-failed removal cannot skip it, and the removal SHALL run even when the scrub fails: each step runs
-and reports on its own, and the session ends either way.
+touch only the text inside a line's string values, never a field of bytes nor a structural field
+(`sessionId`, `uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id), because a
+stored value equal to an id would otherwise break the resume and the links between transcripts. A
+scrub that fails leaves its cause in the log, because it runs detached and its outcome is seen
+nowhere else. The scrub SHALL start before the session directory is removed, so a failed removal
+cannot skip it, and the removal SHALL run even when the scrub fails: each step runs and reports on
+its own, and the session ends either way.
 
 #### Scenario: the transcript holds the placeholder after the session ends
 

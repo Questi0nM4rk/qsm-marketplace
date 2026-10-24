@@ -106,10 +106,15 @@ function entries(allowLegacy = false): Entry[] {
   return rows;
 }
 
+/** A lookup's stdout as the value, null when the lookup failed or found nothing. */
+function valueOf(stdout: Buffer | null): Uint8Array | null {
+  return stdout !== null && stdout.length > 0 ? new Uint8Array(stdout) : null;
+}
+
 function read(namespace: string, key: string): Uint8Array | null {
   ready();
   const result = spawnSync(BIN, ["lookup", ...attributes(namespace, key)]);
-  return result.status === 0 && result.stdout.length > 0 ? new Uint8Array(result.stdout) : null;
+  return valueOf(result.status === 0 ? result.stdout : null);
 }
 
 async function readAll(rows: readonly Entry[]): Promise<(Uint8Array | null)[]> {
@@ -118,9 +123,7 @@ async function readAll(rows: readonly Entry[]): Promise<(Uint8Array | null)[]> {
     BIN,
     rows.map((row) => ["lookup", ...attributes(row.folder, row.name)]),
   );
-  return found.map((stdout) =>
-    stdout !== null && stdout.length > 0 ? new Uint8Array(stdout) : null,
-  );
+  return found.map(valueOf);
 }
 
 /** `secret-tool store` reads the secret from stdin when that is not a terminal. */

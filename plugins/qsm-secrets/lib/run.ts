@@ -16,7 +16,7 @@ import {
   storedKeys,
 } from "./entries.ts";
 import { fail } from "./errors.ts";
-import { MIN_MASKED, mapStrings, STRUCTURAL_KEYS } from "./masking.ts";
+import { MIN_MASKED, mapStrings } from "./masking.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
 import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
@@ -199,9 +199,7 @@ function scrubLine(line: string, values: Swap[]): string {
     }));
     return swapIn(swapIn(line, values), escaped);
   }
-  const text = JSON.stringify(
-    mapStrings(parsed, (found) => swapIn(found, values), STRUCTURAL_KEYS),
-  );
+  const text = JSON.stringify(mapStrings(parsed, (found) => swapIn(found, values)));
   return text === JSON.stringify(parsed) ? line : text;
 }
 
