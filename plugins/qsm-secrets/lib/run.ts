@@ -16,6 +16,7 @@ import {
   storedKeys,
 } from "./entries.ts";
 import { fail } from "./errors.ts";
+import { STRUCTURAL_KEYS } from "./structural-keys.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
 import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
@@ -177,18 +178,6 @@ function transcriptFiles(path: string): string[] {
   const own = join(dirname(path), basename(path, ".jsonl"));
   return [path, ...(existsSync(own) ? allTranscripts(own) : [])];
 }
-
-/** Keys of a transcript line that link the record to its session, its parent or its place: never message text. */
-const STRUCTURAL_KEYS = new Set([
-  "sessionId",
-  "uuid",
-  "parentUuid",
-  "cwd",
-  "transcript_path",
-  "agentId",
-  "toolUseID",
-  "tool_use_id",
-]);
 
 /** The text with every stored value swapped for its placeholder. */
 function swapIn(text: string, values: Swap[]): string {

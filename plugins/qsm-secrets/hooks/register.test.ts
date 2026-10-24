@@ -393,17 +393,23 @@ test("a tool's own record is masked before it is kept, and an errored one comes 
   on("ui.toast", () => ({ value: undefined }));
   const bash = { tool: "Bash", command: "cat token.txt" } as const;
 
-  answer = { result: { stdout: "tok=VALUE", stderr: "", image: { base64: "VALUE" } } };
+  answer = {
+    result: { stdout: "tok=VALUE", agentId: "VALUE", image: { base64: "VALUE" } },
+    context: ["a hook saw VALUE"],
+  };
   const kept = await $.tool.call(bash);
   expect(kept.result).toEqual({
     stdout: `tok=${placeholder("cap_1")}`,
-    stderr: "",
+    agentId: "VALUE",
     image: { base64: "VALUE" },
   });
+  expect(kept.context).toEqual(["a hook saw VALUE"]);
 
   answer = { isError: true, result: "Error: tok=VALUE", text: "Exit code 1\ntok=VALUE" };
   const errored = await $.tool.call(bash);
   expect(errored.deny).toBe(`Exit code 1\ntok=${placeholder("cap_1")}`);
+  answer = { isError: true, result: "Error: tok=VALUE" };
+  expect((await $.tool.call(bash)).deny).toBe(`Error: tok=${placeholder("cap_1")}`);
 
   answer = { result: "clean" };
   expect((await $.tool.call(bash)).result).toBe("clean");

@@ -567,10 +567,13 @@ the same user can read the file while the session lives.
 The engine keeps a tool's own record (Bash's `stdout` and `stderr`, Read's file) in the transcript
 beside the row, and `session.append` never sees it, so a function hook on `tool.call` SHALL mask
 every string in the record with one `qsm-secrets mask --all` process after the tool answers, before
-the engine keeps it. A `base64` field SHALL be kept as it is, because it is media. A record the mask
-did not change SHALL be returned as the tool answered it. A hook cannot answer an error, because the
-engine checks a hook's result against the tool's output shape, so an errored result whose text the
-mask changed SHALL come back as a refusal carrying the masked text. When the mask fails, the result
+the engine keeps it. A `base64` field SHALL be kept as it is, because it is media, and so SHALL a
+structural key the session-end scrub keeps, because the engine reads it as a link. A record the mask
+did not change SHALL be returned as the tool answered it. The context other hooks attached SHALL be
+passed on whole, because the engine refuses a hook that rewrites an entry its `next` gave. A hook
+cannot answer an error, because the engine checks a hook's result against the tool's output shape,
+so an errored result whose text or error record the mask changed SHALL come back as a refusal
+carrying the masked text. When the mask fails, the result
 SHALL be refused with a withheld notice and a toast, because a record that could not be masked may
 hold a value.
 

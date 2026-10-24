@@ -6,6 +6,7 @@
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, EngineInterface, On, SessionAppendInput } from "claude-code";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
+import { STRUCTURAL_KEYS } from "../lib/structural-keys.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
 
@@ -277,7 +278,8 @@ function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAp
 
 /**
  * Rewrites every string inside a tool's own record, in a fixed order. A `base64` field is kept as it
- * is, because it is media and a short value could match inside it.
+ * is, because it is media and a short value could match inside it, and so is a structural key, as
+ * the session-end scrub keeps it, because the engine reads it as a link.
  */
 function mapStrings(value: unknown, map: (text: string) => string): unknown {
   if (typeof value === "string") {
@@ -290,7 +292,7 @@ function mapStrings(value: unknown, map: (text: string) => string): unknown {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key,
-        key === "base64" ? item : mapStrings(item, map),
+        key === "base64" || STRUCTURAL_KEYS.has(key) ? item : mapStrings(item, map),
       ]),
     );
   }
@@ -339,12 +341,21 @@ function registerResultMask(on: On): void {
       return out;
     }
     if (out.isError === true) {
-      // An errored call is kept as its error text, which `text` holds as the model reads it. A hook
-      // cannot answer an error, because the engine checks its result against the tool's output
-      // shape, so a masked error comes back as a refusal that carries the masked text.
-      const text = await maskWalk($, (map) => map(out.text ?? ""));
-      return text === undefined ? out : { deny: text };
+      // An errored call is kept as its error text in `result`, and `text` is what the model reads.
+      // A hook cannot answer an error, because the engine checks its result against the tool's
+      // output shape, so a masked error comes back as a refusal that carries the masked text.
+      const masked = await maskWalk($, (map) => ({
+        text: map(out.text ?? ""),
+        result: mapStrings(out.result, map),
+      }));
+      if (masked === undefined) {
+        return out;
+      }
+      const result = typeof masked.result === "string" ? masked.result : "";
+      return { deny: masked.text === "" ? result : masked.text };
     }
+    // The context other hooks added is passed on whole, because the engine refuses a hook that
+    // rewrites an entry its next gave.
     const result = await maskWalk($, (map) => mapStrings(out.result, map));
     return result === undefined ? out : { result, context: out.context };
   }).catch(($, _e, next) => {
