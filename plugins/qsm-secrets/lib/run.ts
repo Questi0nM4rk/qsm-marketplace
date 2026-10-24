@@ -16,7 +16,7 @@ import {
   storedKeys,
 } from "./entries.ts";
 import { fail } from "./errors.ts";
-import { MIN_MASKED, mapStrings, STRUCTURAL_KEYS } from "./masking.ts";
+import { MIN_MASKED, mapStrings } from "./masking.ts";
 import { CAPTURE_NAMESPACE, locate, placeholderIds } from "./substitute.ts";
 import { LEGACY_NAMESPACE, WRAPPER_MARK } from "./vault.ts";
 
@@ -87,8 +87,7 @@ export async function runCapture(): Promise<Capture> {
 }
 
 /** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
-function readToMask(backend: Backend, namespace: string, key: string): Uint8Array {
-  const bytes = backend.read(namespace, key);
+function readToMask(bytes: Uint8Array | null, namespace: string, key: string): Uint8Array {
   if (bytes === null) {
     fail(`cannot read ${namespace}/${key} to mask it`, "unlock the vault", "blocked");
   }
@@ -106,7 +105,7 @@ export async function runMask(ids: readonly string[]): Promise<{ text: string }>
     }
     // ponytail: the value as stored; a command that prints it re-encoded (base64, escaped) is not masked.
     return {
-      value: new TextDecoder().decode(readToMask(backend, namespace, key)),
+      value: new TextDecoder().decode(readToMask(backend.read(namespace, key), namespace, key)),
       placeholder: `{{secret:${id}}}`,
     };
   });
@@ -131,15 +130,17 @@ function placeholderOf(namespace: string, key: string): string {
  * contains another is swapped first and the shorter one cannot leave a stub. A listed key that
  * cannot be read (a locked vault) would pass unmasked: refuse instead.
  */
-function storedValues(): Swap[] {
+async function storedValues(): Promise<Swap[]> {
   if (!backendChosen()) {
     return [];
   }
   const backend = activeBackend();
-  return backend
-    .entries()
-    .flatMap((entry) => {
-      const value = new TextDecoder().decode(readToMask(backend, entry.folder, entry.name));
+  const rows = backend.entries();
+  const read = await backend.readAll(rows);
+  return rows
+    .flatMap((entry, i) => {
+      const bytes = readToMask(read[i] ?? null, entry.folder, entry.name);
+      const value = new TextDecoder().decode(bytes);
       return value.length < MIN_MASKED
         ? []
         : [{ value, placeholder: placeholderOf(entry.folder, entry.name) }];
@@ -156,7 +157,7 @@ export async function runMaskAll(): Promise<{ texts: string[] }> {
   if (!(Array.isArray(parsed) && parsed.every((text) => typeof text === "string"))) {
     fail("mask --all reads a JSON array of strings on stdin", "pipe the array in", "usage");
   }
-  const values = storedValues();
+  const values = await storedValues();
   return { texts: parsed.map((text: string) => swapIn(text, values)) };
 }
 
@@ -198,24 +199,22 @@ function scrubLine(line: string, values: Swap[]): string {
     }));
     return swapIn(swapIn(line, values), escaped);
   }
-  const text = JSON.stringify(
-    mapStrings(parsed, (found) => swapIn(found, values), STRUCTURAL_KEYS),
-  );
+  const text = JSON.stringify(mapStrings(parsed, (found) => swapIn(found, values)));
   return text === JSON.stringify(parsed) ? line : text;
 }
 
 /**
  * `scrub`: in a transcript (a path, or a session id) and in its subagents' every stored value of
- * every namespace that still appears is swapped for its placeholder, because the engine stores an
- * attachment's payload and a tool's structured record as made, whatever the mask hook rewrote. Only
+ * every namespace that still appears is swapped for its placeholder, because the engine stores a
+ * submitted prompt and an attachment's payload as made, whatever the mask hooks rewrote. Only
  * the text inside a line's string values is swapped, never a structural field (`sessionId`, `uuid`,
  * `cwd`...), because a stored value that equals an id would break the resume. The file is replaced by
  * a rename, never edited in place.
  * ponytail: a line appended between the read and the rename is lost; it runs after the session ends.
  */
-export function runScrub(target: string): { path: string; scrubbed: number } {
+export async function runScrub(target: string): Promise<{ path: string; scrubbed: number }> {
   const path = target.includes("/") ? target : locateTranscript(target);
-  const values = storedValues();
+  const values = await storedValues();
   let scrubbed = 0;
   for (const file of transcriptFiles(path)) {
     const lines = readFileSync(file, "utf8").split("\n");

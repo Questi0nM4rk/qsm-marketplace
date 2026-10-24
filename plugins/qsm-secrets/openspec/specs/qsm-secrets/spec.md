@@ -470,25 +470,28 @@ value would silently stand in for the first.
 
 ### Requirement: Every row the conversation keeps is masked
 
-A function hook on `session.append` SHALL mask every row the session keeps, whatever its door (a
-tool result, a response, a prompt, an attachment, a delivery), before it is stored: each text block
-and each tool result's content has every stored value of every namespace replaced by its
-placeholder, `{{secret:<id>}}` in the capture namespace and `{{secret:<namespace>/<key>}}` in any
-other. The hook SHALL run one `qsm-secrets mask --all` process per row, which reads the backend
-once, in `/`, because it reads stdin only and the session's directory can be removed under it. A
-value shorter than six characters SHALL NOT be masked, because it would match inside ordinary words.
-When the mask fails, the row's text SHALL be replaced by a notice that it was withheld and a toast
-SHALL say so, because a row that could not be masked may hold a value. The result of every tool
-takes this door, Read, Grep, an MCP tool and the hand-back of an Agent included, so none has a list
-of its own. What cannot be masked is named, because a reader should not assume it is: a value
-printed re-encoded (base64, escaped); a value of fewer than six characters; a value inside a media
-block (an image or a PDF is kept as it is); the screen, an SDK stream and Remote Control, which may
-show a row just before its rewrite; and an attachment's payload, which the engine stores as made
-(the transcript scrub below covers it once the session ends). Under an organization's
-`cc-plugin-sec-default` module, seated when managed settings exist, the engine passes a user plugin
-over on the `session.append` doors `attachment`, `hook-context` and `compaction`, so those rows are
-not masked, and the session-end scrub covers only the transcript file, not what the engine kept
-elsewhere.
+Every row the session keeps SHALL be masked once, at the earliest hook that holds it: a tool's
+result by the `tool.call` hook of the next requirement, because the engine makes the row from the
+record that hook masked, and every other row (a response, a prompt, an attachment, a delivery) by a
+function hook on `session.append`, before it is stored. Each text has every stored value of every
+namespace replaced by its placeholder, `{{secret:<id>}}` in the capture namespace and
+`{{secret:<namespace>/<key>}}` in any other. A hook SHALL run one `qsm-secrets mask --all` process
+per row or record, in `/`, because it reads stdin only and the session's directory can be removed
+under it, and no process when no text is six characters long. `mask --all` SHALL list the backend
+once and read every value at the same time, because one read is one process and every tool call
+waits on the mask. A value shorter than six characters SHALL NOT be masked, because it would match
+inside ordinary words. When the mask fails, the row's text SHALL be replaced by a notice that it was
+withheld and a toast SHALL say so, because a row that could not be masked may hold a value. The
+result of every tool takes the `tool.call` hook, Read, Grep, an MCP tool and the hand-back of an
+Agent included, so none has a list of its own. What cannot be masked is named, because a reader
+should not assume it is: a value printed re-encoded (base64, escaped); a value of fewer than six
+characters; a value inside a media block (an image or a PDF is kept as it is); the screen, an SDK
+stream and Remote Control, which may show a row just before its rewrite; and an attachment's
+payload, which the engine stores as made (the transcript scrub below covers it once the session
+ends). Under an organization's `cc-plugin-sec-default` module, seated when managed settings exist,
+the engine passes a user plugin over on the `session.append` doors `attachment`, `hook-context` and
+`compaction`, so those rows are not masked, and the session-end scrub covers only the transcript
+file, not what the engine kept elsewhere.
 
 #### Scenario: a value in a tool result is masked
 
@@ -567,15 +570,17 @@ the same user can read the file while the session lives.
 The engine keeps a tool's own record (Bash's `stdout` and `stderr`, Read's file) in the transcript
 beside the row, and `session.append` never sees it, so a function hook on `tool.call` SHALL mask
 every string in the record with one `qsm-secrets mask --all` process after the tool answers, before
-the engine keeps it. A `base64` field SHALL be kept as it is, because it is media, and so SHALL a
-structural key the session-end scrub keeps, because the engine reads it as a link. A record the mask
-did not change SHALL be returned as the tool answered it. The context other hooks attached SHALL be
-passed on whole, because the engine refuses a hook that rewrites an entry its `next` gave. A hook
-cannot answer an error, because the engine checks a hook's result against the tool's output shape,
-so an errored result whose text or error record the mask changed SHALL come back as a refusal
-carrying the masked text. When the mask fails, the result
-SHALL be refused with a withheld notice and a toast, because a record that could not be masked may
-hold a value.
+the engine keeps it. The bytes of a media block (a `base64` field, the `data` of a base64 source or
+of an image or audio block) SHALL be kept as they are, because bytes are no text, while a document's
+text source is masked, and so SHALL a structural key the session-end scrub keeps, because the engine
+reads it as a link. A refusal SHALL pass as it is, because it quotes only the input the model wrote,
+which holds no value the model has not already sent. A record the mask did not change SHALL be
+returned as the tool answered it. The context other hooks attached SHALL be passed on whole, because
+the engine refuses a hook that rewrites an entry its `next` gave. A hook cannot answer an error,
+because the engine checks a hook's result against the tool's output shape, so an errored result
+whose text or error record the mask changed SHALL come back as a refusal carrying the masked text.
+When the mask fails, the result SHALL be refused with a withheld notice and a toast, because a
+record that could not be masked may hold a value.
 
 #### Scenario: a printed value never reaches the record
 
@@ -600,14 +605,14 @@ end SHALL replace every stored value of every namespace still in the transcript,
 transcripts of the subagents the session ran, with its placeholder, by rewriting each file
 atomically in a detached process, and SHALL print no value: the engine stores a submitted prompt and
 an attachment's payload as made, whatever the mask hooks rewrote, so a value named by no placeholder
-in the file is swapped too. A value of fewer than six characters
-is not swapped. The swap SHALL touch only the text inside a line's string values, never a structural
-field (`sessionId`, `uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id),
-because a stored value equal to an id would otherwise break the resume and the links between
-transcripts. A scrub that fails leaves its cause in the log, because it runs detached and its
-outcome is seen nowhere else. The scrub SHALL start before the session directory is removed, so a
-failed removal cannot skip it, and the removal SHALL run even when the scrub fails: each step runs
-and reports on its own, and the session ends either way.
+in the file is swapped too. A value of fewer than six characters is not swapped. The swap SHALL
+touch only the text inside a line's string values, never a field of bytes nor a structural field
+(`sessionId`, `uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id), because a
+stored value equal to an id would otherwise break the resume and the links between transcripts. A
+scrub that fails leaves its cause in the log, because it runs detached and its outcome is seen
+nowhere else. The scrub SHALL start before the session directory is removed, so a failed removal
+cannot skip it, and the removal SHALL run even when the scrub fails: each step runs and reports on
+its own, and the session ends either way.
 
 #### Scenario: the transcript holds the placeholder after the session ends
 

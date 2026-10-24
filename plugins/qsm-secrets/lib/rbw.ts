@@ -5,6 +5,7 @@ import { binCheck } from "./bin.ts";
 import type { Check } from "./doctor.ts";
 import { type Entry, parseEntries } from "./entries.ts";
 import { fail } from "./errors.ts";
+import { runAll } from "./run-all.ts";
 import { WRAPPER_MARK } from "./vault.ts";
 
 const BIN = "rbw";
@@ -48,13 +49,23 @@ function entries(): Entry[] {
   return parseEntries(result.stdout);
 }
 
+/** The value `rbw get` printed, without the newline it adds. */
+function valueOf(stdout: Buffer): Uint8Array {
+  const bytes = new Uint8Array(stdout);
+  return bytes.at(-1) === NEWLINE ? bytes.subarray(0, bytes.length - 1) : bytes;
+}
+
 function read(namespace: string, key: string): Uint8Array | null {
   const result = spawnSync(BIN, ["get", ...folderArgs(namespace), key]);
-  if (result.error !== undefined || result.status !== 0) {
-    return null;
-  }
-  const bytes = new Uint8Array(result.stdout);
-  return bytes.at(-1) === NEWLINE ? bytes.subarray(0, bytes.length - 1) : bytes;
+  return result.error !== undefined || result.status !== 0 ? null : valueOf(result.stdout);
+}
+
+async function readAll(rows: readonly Entry[]): Promise<(Uint8Array | null)[]> {
+  const found = await runAll(
+    BIN,
+    rows.map((row) => ["get", ...folderArgs(row.folder), row.name]),
+  );
+  return found.map((stdout) => (stdout === null ? null : valueOf(stdout)));
 }
 
 /**
@@ -150,4 +161,4 @@ function health(namespace: string, env: Record<string, string | undefined>): Che
 }
 
 /** Shaped like `Backend`; `backend.ts` is where that is checked. */
-export const rbw = { name: BIN, entries, read, store, remove, health };
+export const rbw = { name: BIN, entries, read, readAll, store, remove, health };

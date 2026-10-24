@@ -284,7 +284,7 @@ test("two ids that map to one variable are refused, not run with the second valu
   expect(denied.deny).toContain("would share QSM_SECRET_QSM_A_B");
 });
 
-test("every row is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
+test("every row but a tool result is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
   let toast = "";
   on("ui.toast", (_$, e) => {
     toast = e.text;
@@ -304,7 +304,7 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
     };
   });
   const row = {
-    door: "tool-result" as const,
+    door: "tool-message" as const,
     origin: { kind: "tool" as const, tool: "Read" },
     uuid: "u1",
     message: {
@@ -324,51 +324,18 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
     { type: "text", text: "ok" },
   ]);
 
+  // A tool result's row is made from the record the tool.call hook masked, so it is not masked twice.
+  argv = [];
+  const passed = await $.session.append({ ...row, door: "tool-result" as const });
+  expect(argv).toEqual([]);
+  expect(passed.message?.content).toEqual(row.message.content);
+
   broken = true;
   const failed = await $.session.append(row);
   const texts = (failed.message?.content ?? []).map((b) => String(b.text));
   expect(texts.join("\n")).not.toContain("VALUE");
   expect(texts[0]).toContain("withheld");
   expect(toast).toContain("session.append");
-});
-
-test("a tool result of any tool is masked in its nested text, and a media block is kept as it is", async ($, on) => {
-  let sent: string[] = [];
-  on("process.run", (_$, e) => {
-    const stdin: unknown = JSON.parse(e.init?.stdin ?? "[]");
-    sent = Array.isArray(stdin)
-      ? stdin.filter((text): text is string => typeof text === "string")
-      : [];
-    const texts = sent.map((text) => text.replaceAll("VALUE", "{{secret:cap_1}}"));
-    return { value: maskAnswer(texts) };
-  });
-  const image = {
-    type: "image",
-    source: { type: "base64", media_type: "image/png", data: "VALUE" },
-  };
-  for (const tool of ["Read", "Grep", "mcp__plugin_qsm-memory_qsm-memory__notes", "Agent"]) {
-    const stored = await $.session.append({
-      door: "tool-result" as const,
-      origin: { kind: "tool" as const, tool },
-      uuid: `u-${tool}`,
-      message: {
-        type: "user" as const,
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: "t1",
-            content: [{ type: "text", text: `${tool} says VALUE` }, image],
-          },
-        ],
-      },
-    });
-    const [block] = stored.message?.content ?? [];
-    expect(block?.content).toEqual([
-      { type: "text", text: `${tool} says {{secret:cap_1}}` },
-      image,
-    ]);
-    expect(sent).toEqual([`${tool} says VALUE`]);
-  }
 });
 
 test("a tool's own record is masked before it is kept, and an errored one comes back refused and masked", async ($, on) => {
@@ -388,16 +355,19 @@ test("a tool's own record is masked before it is kept, and an errored one comes 
   on("ui.toast", () => ({ value: undefined }));
   const bash = { tool: "Bash", command: "cat token.txt" } as const;
 
-  answer = {
-    result: { stdout: "tok=VALUE", agentId: "VALUE", image: { base64: "VALUE" } },
-    context: ["a hook saw VALUE"],
-  };
-  const kept = await $.tool.call(bash);
-  expect(kept.result).toEqual({
-    stdout: `tok=${placeholder("cap_1")}`,
+  // A record whose text is `tok`: structural keys and media bytes keep VALUE, a text source does not.
+  const record = (tok: string) => ({
+    stdout: tok,
     agentId: "VALUE",
-    image: { base64: "VALUE" },
+    file: { base64: "VALUE" },
+    content: [
+      { type: "image", data: "VALUE" },
+      { type: "document", source: { type: "text", data: tok } },
+    ],
   });
+  answer = { result: record("tok=VALUE"), context: ["a hook saw VALUE"] };
+  const kept = await $.tool.call(bash);
+  expect(kept.result).toEqual(record(`tok=${placeholder("cap_1")}`));
   expect(kept.context).toEqual(["a hook saw VALUE"]);
 
   answer = { isError: true, result: "Error: tok=VALUE", text: "Exit code 1\ntok=VALUE" };

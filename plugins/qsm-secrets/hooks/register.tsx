@@ -6,7 +6,7 @@
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, EngineInterface, On, SessionAppendInput } from "claude-code";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
-import { MIN_MASKED, mapStrings, STRUCTURAL_KEYS } from "../lib/masking.ts";
+import { MIN_MASKED, mapStrings } from "../lib/masking.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
 
@@ -276,10 +276,6 @@ function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAp
   return { ...e, message: { ...e.message, content } };
 }
 
-// A tool's own record keeps its structural keys, as the session-end scrub does, because the engine
-// reads them as links, and its `base64` media, because a short value could match inside it.
-const RECORD_KEEP: ReadonlySet<string> = new Set([...STRUCTURAL_KEYS, "base64"]);
-
 /**
  * Masks every text a walk visits through one `qsm-secrets mask --all`, by running the walk twice:
  * once to read the texts, once to put the masked ones back in the same order. Undefined when the
@@ -319,6 +315,8 @@ async function maskWalk<T>(
 function registerResultMask(on: On): void {
   on("tool.call", async ($, e, next) => {
     const out = await next(e);
+    // A refusal quotes only the input the model wrote, so it holds no value the model has not
+    // already sent.
     if (out.deny !== undefined) {
       return out;
     }
@@ -328,7 +326,7 @@ function registerResultMask(on: On): void {
       // output shape, so a masked error comes back as a refusal that carries the masked text.
       const masked = await maskWalk($, (map) => ({
         text: map(out.text ?? ""),
-        result: mapStrings(out.result, map, RECORD_KEEP),
+        result: mapStrings(out.result, map),
       }));
       if (masked === undefined) {
         return out;
@@ -338,7 +336,7 @@ function registerResultMask(on: On): void {
     }
     // The context other hooks added is passed on whole, because the engine refuses a hook that
     // rewrites an entry its next gave.
-    const result = await maskWalk($, (map) => mapStrings(out.result, map, RECORD_KEEP));
+    const result = await maskWalk($, (map) => mapStrings(out.result, map));
     return result === undefined ? out : { result, context: out.context };
   }).catch(($, _e, next) => {
     // Fails closed: a record that could not be masked may hold a value, so it is withheld.
@@ -348,9 +346,13 @@ function registerResultMask(on: On): void {
   });
 }
 
-/** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
+/** Every row the conversation keeps passes through one mask before it is stored. A tool's result is
+ * made from the record the tool.call hook already masked, so its row is not masked twice. */
 function registerMask(on: On): void {
   on("session.append", async ($, e, next) => {
+    if (e.door === "tool-result") {
+      return next(e);
+    }
     const content = await maskWalk($, (map) => mapTexts(e.message.content, map));
     return next(content === undefined ? e : rewritten(e, content));
   }).catch(($, e, next) => {
