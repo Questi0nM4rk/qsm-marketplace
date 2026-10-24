@@ -340,12 +340,7 @@ test("a tool result of any tool is masked in its nested text, and a media block 
       ? stdin.filter((text): text is string => typeof text === "string")
       : [];
     const texts = sent.map((text) => text.replaceAll("VALUE", "{{secret:cap_1}}"));
-    return {
-      value: {
-        ...RAN,
-        stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts } }),
-      },
-    };
+    return { value: maskAnswer(texts) };
   });
   const image = {
     type: "image",

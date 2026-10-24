@@ -6,7 +6,7 @@
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
 import type { ApiContentBlock, EngineInterface, On, SessionAppendInput } from "claude-code";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
-import { STRUCTURAL_KEYS } from "../lib/structural-keys.ts";
+import { MIN_MASKED, mapStrings, STRUCTURAL_KEYS } from "../lib/masking.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
 
@@ -276,28 +276,9 @@ function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAp
   return { ...e, message: { ...e.message, content } };
 }
 
-/**
- * Rewrites every string inside a tool's own record, in a fixed order. A `base64` field is kept as it
- * is, because it is media and a short value could match inside it, and so is a structural key, as
- * the session-end scrub keeps it, because the engine reads it as a link.
- */
-function mapStrings(value: unknown, map: (text: string) => string): unknown {
-  if (typeof value === "string") {
-    return map(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((item: unknown) => mapStrings(item, map));
-  }
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        key === "base64" || STRUCTURAL_KEYS.has(key) ? item : mapStrings(item, map),
-      ]),
-    );
-  }
-  return value;
-}
+// A tool's own record keeps its structural keys, as the session-end scrub does, because the engine
+// reads them as links, and its `base64` media, because a short value could match inside it.
+const RECORD_KEEP: ReadonlySet<string> = new Set([...STRUCTURAL_KEYS, "base64"]);
 
 /**
  * Masks every text a walk visits through one `qsm-secrets mask --all`, by running the walk twice:
@@ -313,7 +294,8 @@ async function maskWalk<T>(
     texts.push(text);
     return text;
   });
-  if (texts.every((text) => text === "")) {
+  // A text shorter than the shortest masked value cannot hold one.
+  if (texts.every((text) => text.length < MIN_MASKED)) {
     return undefined;
   }
   const argv = argvOf(verbOf("mask"), { all: true });
@@ -346,7 +328,7 @@ function registerResultMask(on: On): void {
       // output shape, so a masked error comes back as a refusal that carries the masked text.
       const masked = await maskWalk($, (map) => ({
         text: map(out.text ?? ""),
-        result: mapStrings(out.result, map),
+        result: mapStrings(out.result, map, RECORD_KEEP),
       }));
       if (masked === undefined) {
         return out;
@@ -356,7 +338,7 @@ function registerResultMask(on: On): void {
     }
     // The context other hooks added is passed on whole, because the engine refuses a hook that
     // rewrites an entry its next gave.
-    const result = await maskWalk($, (map) => mapStrings(out.result, map));
+    const result = await maskWalk($, (map) => mapStrings(out.result, map, RECORD_KEEP));
     return result === undefined ? out : { result, context: out.context };
   }).catch(($, _e, next) => {
     // Fails closed: a record that could not be masked may hold a value, so it is withheld.
