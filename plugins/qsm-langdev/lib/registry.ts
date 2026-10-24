@@ -1100,6 +1100,10 @@ function semgrepRules(
     ...configs.flatMap((config) => ["--config", rules?.get(config) ?? config]),
     "--json",
     "--quiet",
+    // The gate's outer deadline is the bound; semgrep's own per-rule timeout would
+    // cut a slow (but bounded) scan short and read it as a partial failure.
+    "--timeout",
+    "0",
   ];
   const args: Scoring["args"] = (files, _root, _reportDir, rules) => [
     ...flags(rules),
