@@ -102,6 +102,17 @@ describe("semgrep engines", () => {
     expect(pro).toEqual(["--pro", ...community.slice(0, -2), "/repo"]);
     expect(community.slice(-2)).toEqual(["a.ts", "b.ts"]);
     expect(community).not.toContain("--pro");
+    for (const spec of semgrep) {
+      for (const point of ["pre-commit", "pre-push"] as const) {
+        for (const engine of ["community", "pro"] as const) {
+          const args = asRunAt(spec, point, engine).args(["a.ts"], "/repo");
+          expect(args.slice(args.indexOf("--timeout"), args.indexOf("--timeout") + 2)).toEqual([
+            "--timeout",
+            "0",
+          ]);
+        }
+      }
+    }
   });
 });
 

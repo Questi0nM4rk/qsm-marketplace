@@ -1,7 +1,7 @@
 // Output parsers whose identity rule is not obvious from the tool's format.
 
 import { describe, expect, test } from "bun:test";
-import { countJscpd, countSemgrep, countShellMetrics } from "./findings.ts";
+import { countJscpd, countSemgrep, countShellMetrics, semgrepFailure } from "./findings.ts";
 
 describe("countShellMetrics", () => {
   const output = `==============================================================================
@@ -56,6 +56,49 @@ describe("countSemgrep", () => {
     const tally = countSemgrep(semgrepOutput("python.lang.security.shell-true"), "", 1);
 
     expect(tally?.findings?.[0]?.identity).toBe("python.lang.security.shell-true");
+  });
+});
+
+describe("semgrep failure classification", () => {
+  test("a native rule timeout is a failure even when semgrep labels it a warning and holds findings", () => {
+    const timedOut = JSON.stringify({
+      results: [{ check_id: "r", path: "a.ts", start: { line: 1, col: 1 } }],
+      errors: [{ code: 4, level: "warn", type: "Timeout", message: "semgrep timed out" }],
+    });
+
+    expect(countSemgrep(timedOut, "", 1)).toBeNull();
+    expect(semgrepFailure(timedOut)).toBe("semgrep timed out");
+  });
+
+  test.each([
+    [
+      "Failed to download configuration from https://semgrep.dev/c/p/x HTTP 401.",
+      "Failed to download configuration from https://semgrep.dev/c/p/x HTTP 401.",
+    ],
+    ["", "SemgrepError"],
+  ])("a fatal scan error rejects findings, including an empty message: %s", (message, cause) => {
+    const fatal = JSON.stringify({
+      results: [{ check_id: "r", path: "a.ts", start: { line: 1, col: 1 } }],
+      errors: [{ code: 2, level: "error", type: "SemgrepError", message }],
+    });
+
+    expect(countSemgrep(fatal, "", 1)).toBeNull();
+    expect(semgrepFailure(fatal)).toBe(cause);
+  });
+
+  test("a non-timeout warning keeps its treatment: findings are still measured", () => {
+    const warned = JSON.stringify({
+      results: [{ check_id: "r", path: "a.ts", start: { line: 1, col: 1 } }],
+      errors: [{ code: 3, level: "warn", type: "PartialParsing", message: "Syntax error" }],
+    });
+
+    expect(countSemgrep(warned, "", 1)?.total).toBe(1);
+    expect(semgrepFailure(warned)).toBeUndefined();
+  });
+
+  test("complete findings at a findings exit code are measured", () => {
+    expect(countSemgrep(semgrepOutput("python.lang.security.shell-true"), "", 1)?.total).toBe(1);
+    expect(semgrepFailure(semgrepOutput("python.lang.security.shell-true"))).toBeUndefined();
   });
 });
 

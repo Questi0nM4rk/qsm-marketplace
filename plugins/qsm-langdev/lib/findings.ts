@@ -366,15 +366,39 @@ export function countBanditJson(stdout: string, _stderr: string, _exitCode: numb
   );
 }
 
-/** semgrep --json: `results` with check_id, path, start.line/col. */
+/**
+ * The native failure a semgrep scan hit, if any: a rule `Timeout` — which Semgrep
+ * labels a warning — or a fatal scan error. Both make a scan that returned findings
+ * an incomplete measurement. Other warning kinds retain their treatment.
+ */
+function semgrepFailedError(parsed: Rec | null): Rec | undefined {
+  return recordsOf(parsed?.errors)?.find(
+    (error) => error.type === "Timeout" || error.level !== "warn",
+  );
+}
+
+/**
+ * Why a semgrep run gave no reading: under `--json --quiet` semgrep prints nothing on stderr and
+ * names the cause in its JSON `errors` (an HTTP 401 for a rejected token, measured on 1.153.1), or
+ * hits a native timeout Semgrep labels a warning. The classification is shared with counting, so
+ * a scan semgrep did not finish is never read as findings.
+ */
+export function semgrepFailure(stdout: string): string | undefined {
+  const failure = semgrepFailedError(jsonObject(stdout));
+  if (failure === undefined) {
+    return undefined;
+  }
+  const message = str(failure.message).trim();
+  return message === "" ? str(failure.type) : message;
+}
+
+/** semgrep --json: `results` with check_id, path, start.line/col. A native failure — a rule
+ * `Timeout`, even one reported at warning level with findings, or a fatal scan error — rejects
+ * the output however many findings it holds; complete output at a findings exit code is measured. */
 export function countSemgrep(stdout: string, _stderr: string, _exitCode: number): Tally | null {
   const parsed = jsonObject(stdout);
   const results = recordsOf(parsed?.results);
-  if (results === null) {
-    return null;
-  }
-  const failures = (recordsOf(parsed?.errors) ?? []).filter((error) => error.level !== "warn");
-  if (results.length === 0 && failures.length > 0) {
+  if (results === null || semgrepFailedError(parsed) !== undefined) {
     return null;
   }
   return tallyOf(
@@ -383,21 +407,6 @@ export function countSemgrep(stdout: string, _stderr: string, _exitCode: number)
       return at(ruleIdOf(str(r.check_id)), r.path, num(start.line), num(start.col));
     }),
   );
-}
-
-/**
- * Why a semgrep run gave no reading: under `--json --quiet` semgrep prints nothing on stderr and
- * names the cause in its JSON `errors` (an HTTP 401 for a rejected token, measured on 1.153.1).
- */
-export function semgrepFailure(stdout: string): string | undefined {
-  const errors = recordsOf(jsonObject(stdout)?.errors);
-  if (errors === null) {
-    return undefined;
-  }
-  const failure = errors.find(
-    (error) => error.level !== "warn" && str(error.message).trim() !== "",
-  );
-  return failure === undefined ? undefined : str(failure.message).trim();
 }
 
 /** devskim output is version-dependent: SARIF, or a bare findings array
