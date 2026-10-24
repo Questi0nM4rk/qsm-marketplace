@@ -79,11 +79,33 @@ function lev(a: string, b: string): number {
 const ids = (s: string) =>
   s.match(/[A-Z]{2,}-\d+|![0-9]+|[0-9a-f]{8}-[0-9a-f-]{27}|\b\d[\d.,:/]*\b|\b[a-z]+_[a-z_]+\b/g) ??
   [];
+/** JavaScript's non-Unicode word boundaries count ASCII letters, digits and underscore only. */
+const wordChar = (char: string | undefined): boolean =>
+  char !== undefined &&
+  ((char >= "A" && char <= "Z") ||
+    (char >= "a" && char <= "z") ||
+    (char >= "0" && char <= "9") ||
+    char === "_");
+
+function hasStandaloneNe(text: string): boolean {
+  for (let at = 0; at < text.length - 1; at += 1) {
+    if (
+      (text[at] === "n" || text[at] === "N") &&
+      (text[at + 1] === "e" || text[at + 1] === "E") &&
+      !wordChar(text[at - 1]) &&
+      !wordChar(text[at + 2])
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Negated gold words whose candidate lost the "ne" prefix, plus a lost standalone "ne". */
 function negFlips(g: string, c: string): number {
   const cw = new Set(words(c));
   const lost = words(g).filter((w) => /^ne\p{L}{2,}/u.test(w) && !cw.has(w) && cw.has(w.slice(2)));
-  return lost.length + (/\bne\b/i.test(g) && !/\bne\b/i.test(c) ? 1 : 0);
+  return lost.length + (hasStandaloneNe(g) && !hasStandaloneNe(c) ? 1 : 0);
 }
 // The key comes from the name the model read, so a model that sorts its own key wrong is not
 // a wrong speaker.

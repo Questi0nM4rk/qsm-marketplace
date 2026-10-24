@@ -89,7 +89,21 @@ const BUS_TOOLS: ReadonlySet<string> = new Set([
   "qdbus6",
 ]);
 const QUICKSHELL_TOOLS: ReadonlySet<string> = new Set(["qs", "quickshell"]);
-const INTERPRETERS = /^(python[\d.]*|node|nodejs|bun|deno|ruby|perl)$/;
+const INTERPRETERS: ReadonlySet<string> = new Set([
+  "node",
+  "nodejs",
+  "bun",
+  "deno",
+  "ruby",
+  "perl",
+]);
+function isInterpreter(name: string): boolean {
+  if (!name.startsWith("python")) return INTERPRETERS.has(name);
+  for (const char of name.slice(6)) {
+    if (char !== "." && !"0123456789".includes(char)) return false;
+  }
+  return true;
+}
 const INLINE_CODE_FLAGS: ReadonlySet<string> = new Set(["-c", "-e", "-p", "--eval", "--print"]);
 const KEYRING_LIBRARY = /keyring|secretstorage|keytar|libsecret|org\.freedesktop\.secret/i;
 
@@ -407,7 +421,7 @@ function pathHit(text: string, ctx: Context): Root | undefined {
     return globbed;
   }
   const { at } = ctx.cwd;
-  if (at !== undefined && !/^[/~$-]/.test(text)) {
+  if (at !== undefined && !["/", "~", "$", "-"].includes(text[0] ?? "")) {
     const relative = reaches(`${at}/${text}`, ctx.roots, ctx.env, false);
     if (relative !== undefined) {
       return relative;
@@ -496,7 +510,7 @@ function judgeCall(name: string, words: readonly Word[], ctx: Context): Refusal 
       `${USE_WRAPPER} To browse, \`qsm-secrets list\`.`,
     );
   }
-  if (INTERPRETERS.test(name)) {
+  if (isInterpreter(name)) {
     const inline = texts.some((t) => INLINE_CODE_FLAGS.has(t));
     const module = texts[texts.indexOf("-m") + 1];
     const mentionsLibrary =
@@ -701,7 +715,7 @@ async function judgeFile(ast: ShellFile, ctx: Context): Promise<Refusal | null> 
     if (
       heredoc?.hdoc &&
       first !== undefined &&
-      INTERPRETERS.test(basename(wordToLit(first) ?? "")) &&
+      isInterpreter(basename(wordToLit(first) ?? "")) &&
       KEYRING_LIBRARY.test(textOf(heredoc.hdoc))
     ) {
       return refuse(
