@@ -1,6 +1,6 @@
 // `claude plugin test plugins/qsm-secrets` drives register.tsx against the engine itself: the guard
 // and the prompt capture. blockedCommand and captureSecrets decide; the seam is proved here.
-import type { On } from "claude-code";
+import type { On, ToolCallResult } from "claude-code";
 import { expect, test } from "claude-code/testing";
 
 /** A placeholder, built here so no literal one in this file reads as a captured id. */
@@ -16,11 +16,23 @@ const REFUSED = JSON.stringify({
   data: { code: "vault-reader", command: "rbw get x", reason: REASON },
 });
 
+/** `qsm-secrets mask --all` answering with `texts`. */
+const maskAnswer = (texts: unknown) => ({
+  ...RAN,
+  stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts } }),
+});
+
+/** The texts a `qsm-secrets mask --all` call was given. */
+const maskInput = (stdin: string | undefined): unknown => JSON.parse(stdin ?? "[]");
+
 /** The guard verb's bottom: `process.run` answers `qsm-secrets guard` with `stdout`, and the
- * stdin it was given is kept. */
+ * stdin it was given is kept; the result mask finds nothing. */
 function guardAnswers(on: On, stdout: string): { stdin: string[]; argv: string[] } {
   const seen = { stdin: [] as string[], argv: [] as string[] };
   on("process.run", (_$, e) => {
+    if (e.argv[1] === "mask") {
+      return { value: maskAnswer(maskInput(e.init?.stdin)) };
+    }
     seen.argv = [...e.argv];
     seen.stdin.push(e.init?.stdin ?? "");
     return { value: { ...RAN, stdout } };
@@ -101,6 +113,7 @@ function fileHost(on: On, real?: string): void {
       : { value: { kind: "file", size: 1, mtimeMs: 0, isLink: false, realPath: real } },
   );
   on("tool.call", () => ({ result: "ran" }));
+  on("process.run", (_$, e) => ({ value: maskAnswer(maskInput(e.init?.stdin)) }));
   on("ui.log", () => ({ value: undefined }));
   on("ui.toast", () => ({ value: undefined }));
 }
@@ -272,10 +285,6 @@ test("two ids that map to one variable are refused, not run with the second valu
 });
 
 test("every row is masked through one qsm-secrets mask --all, and withheld when masking fails", async ($, on) => {
-  const answer = (rows: string[]) => ({
-    ...RAN,
-    stdout: JSON.stringify({ code: "ok", exit: 0, message: "", data: { texts: rows } }),
-  });
   let toast = "";
   on("ui.toast", (_$, e) => {
     toast = e.text;
@@ -291,7 +300,7 @@ test("every row is masked through one qsm-secrets mask --all, and withheld when 
     return {
       value: broken
         ? { ...RAN, stdout: "not an envelope" }
-        : answer(["tok={{secret:cap_1}}", "ok"]),
+        : maskAnswer(["tok={{secret:cap_1}}", "ok"]),
     };
   });
   const row = {
@@ -365,6 +374,39 @@ test("a tool result of any tool is masked in its nested text, and a media block 
     ]);
     expect(sent).toEqual([`${tool} says VALUE`]);
   }
+});
+
+test("a tool's own record is masked before it is kept, and an errored one comes back refused and masked", async ($, on) => {
+  let answer: ToolCallResult = { result: "" };
+  on("tool.call", () => answer);
+  on("process.run", (_$, e) => {
+    if (e.argv[1] !== "mask") {
+      return { value: { ...RAN, stdout: ALLOWED } };
+    }
+    const texts = maskInput(e.init?.stdin);
+    const masked = (Array.isArray(texts) ? texts : []).map((t) =>
+      String(t).replace("VALUE", placeholder("cap_1")),
+    );
+    return { value: maskAnswer(masked) };
+  });
+  on("ui.log", () => ({ value: undefined }));
+  on("ui.toast", () => ({ value: undefined }));
+  const bash = { tool: "Bash", command: "cat token.txt" } as const;
+
+  answer = { result: { stdout: "tok=VALUE", stderr: "", image: { base64: "VALUE" } } };
+  const kept = await $.tool.call(bash);
+  expect(kept.result).toEqual({
+    stdout: `tok=${placeholder("cap_1")}`,
+    stderr: "",
+    image: { base64: "VALUE" },
+  });
+
+  answer = { isError: true, result: "Error: tok=VALUE", text: "Exit code 1\ntok=VALUE" };
+  const errored = await $.tool.call(bash);
+  expect(errored.deny).toBe(`Exit code 1\ntok=${placeholder("cap_1")}`);
+
+  answer = { result: "clean" };
+  expect((await $.tool.call(bash)).result).toBe("clean");
 });
 
 /** Toasts are dropped and log lines kept in `logs`, so a test reads what the hook logged. */

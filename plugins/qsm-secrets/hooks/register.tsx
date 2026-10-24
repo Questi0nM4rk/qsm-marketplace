@@ -4,7 +4,7 @@
 // binary, because this sandbox cannot load it), a Read or Grep of the files that hold credentials, and the capture of a pasted secret
 // before the prompt enters the session (the decision is `qsm-secrets capture`), and the use of a
 // captured id: replaced in the command by substitute, masked in the result by `qsm-secrets mask`.
-import type { ApiContentBlock, On, SessionAppendInput } from "claude-code";
+import type { ApiContentBlock, EngineInterface, On, SessionAppendInput } from "claude-code";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
 import { substitute } from "../lib/substitute.ts";
 import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
@@ -275,40 +275,91 @@ function rewritten(e: SessionAppendInput, content: ApiContentBlock[]): SessionAp
   return { ...e, message: { ...e.message, content } };
 }
 
+/**
+ * Rewrites every string inside a tool's own record, in a fixed order. A `base64` field is kept as it
+ * is, because it is media and a short value could match inside it.
+ */
+function mapStrings(value: unknown, map: (text: string) => string): unknown {
+  if (typeof value === "string") {
+    return map(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => mapStrings(item, map));
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        key === "base64" ? item : mapStrings(item, map),
+      ]),
+    );
+  }
+  return value;
+}
+
+/**
+ * Masks every text a walk visits through one `qsm-secrets mask --all`, by running the walk twice:
+ * once to read the texts, once to put the masked ones back in the same order. Undefined when the
+ * mask changed nothing, so the caller keeps what it had.
+ */
+async function maskWalk<T>(
+  $: EngineInterface,
+  walk: (map: (text: string) => string) => T,
+): Promise<T | undefined> {
+  const texts: string[] = [];
+  walk((text) => {
+    texts.push(text);
+    return text;
+  });
+  if (texts.every((text) => text === "")) {
+    return undefined;
+  }
+  const argv = argvOf(verbOf("mask"), { all: true });
+  const ran = await $.process.run(argv, {
+    stdin: JSON.stringify(texts),
+    timeoutMs: CAPTURE_TIMEOUT_MS,
+    cwd: RUN_DIR,
+  });
+  const done = [...dataOf(argv, ran, isMaskData).texts];
+  if (done.length !== texts.length) {
+    throw new Error(`the mask returned ${done.length} texts for ${texts.length}`);
+  }
+  if (done.every((text, i) => text === texts[i])) {
+    return undefined;
+  }
+  return walk(() => done.shift() ?? "");
+}
+
+/** A tool's own record is stored in the transcript as made, beside the row the session.append hook
+ * masks, so the record is masked here, before the engine keeps it. */
+function registerResultMask(on: On): void {
+  on("tool.call", async ($, e, next) => {
+    const out = await next(e);
+    if (out.deny !== undefined) {
+      return out;
+    }
+    if (out.isError === true) {
+      // An errored call is kept as its error text, which `text` holds as the model reads it. A hook
+      // cannot answer an error, because the engine checks its result against the tool's output
+      // shape, so a masked error comes back as a refusal that carries the masked text.
+      const text = await maskWalk($, (map) => map(out.text ?? ""));
+      return text === undefined ? out : { deny: text };
+    }
+    const result = await maskWalk($, (map) => mapStrings(out.result, map));
+    return result === undefined ? out : { result, context: out.context };
+  }).catch(($, _e, next) => {
+    // Fails closed: a record that could not be masked may hold a value, so it is withheld.
+    failure($, "tool.call", next.error, "a tool result could not be masked and was withheld");
+    $.ui.log("the result mask failed; the tool result was withheld");
+    return { deny: withheld(cause(next.error)) };
+  });
+}
+
 /** Every row the conversation keeps, whatever its door, passes through one mask before it is stored. */
 function registerMask(on: On): void {
   on("session.append", async ($, e, next) => {
-    const texts: string[] = [];
-    mapTexts(e.message.content, (text) => {
-      texts.push(text);
-      return text;
-    });
-    if (texts.every((text) => text === "")) {
-      return next(e);
-    }
-    const argv = argvOf(verbOf("mask"), { all: true });
-    const ran = await $.process.run(argv, {
-      stdin: JSON.stringify(texts),
-      timeoutMs: CAPTURE_TIMEOUT_MS,
-      cwd: RUN_DIR,
-    });
-    const done = [...dataOf(argv, ran, isMaskData).texts];
-    if (done.length !== texts.length) {
-      throw new Error(`the mask returned ${done.length} texts for ${texts.length}`);
-    }
-
-    return next(
-      rewritten(
-        e,
-        mapTexts(e.message.content, () => {
-          const text = done.shift();
-          if (text === undefined) {
-            throw new Error("the mask returned too few texts");
-          }
-          return text;
-        }),
-      ),
-    );
+    const content = await maskWalk($, (map) => mapTexts(e.message.content, map));
+    return next(content === undefined ? e : rewritten(e, content));
   }).catch(($, e, next) => {
     // Fails closed: a row that could not be masked may hold a value, so its text is replaced.
     failure($, "session.append", next.error, "a row could not be masked and was withheld");
@@ -365,6 +416,7 @@ export function register(on: On): void {
   registerGuard(on);
   registerFileGuard(on);
   registerSubstitution(on);
+  registerResultMask(on);
   registerMask(on);
   registerScrub(on);
 

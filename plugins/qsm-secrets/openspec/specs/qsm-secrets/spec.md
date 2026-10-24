@@ -483,12 +483,12 @@ takes this door, Read, Grep, an MCP tool and the hand-back of an Agent included,
 of its own. What cannot be masked is named, because a reader should not assume it is: a value
 printed re-encoded (base64, escaped); a value of fewer than six characters; a value inside a media
 block (an image or a PDF is kept as it is); the screen, an SDK stream and Remote Control, which may
-show a row just before its rewrite; and the structured record of a tool result and an attachment's
-payload, which the engine stores as made (the transcript scrub below covers those two once the
-session ends). Under an organization's `cc-plugin-sec-default` module, seated when managed settings
-exist, the engine passes a user plugin over on the `session.append` doors `attachment`,
-`hook-context` and `compaction`, so those rows are not masked, and the session-end scrub covers only
-the transcript file, not what the engine kept elsewhere.
+show a row just before its rewrite; and an attachment's payload, which the engine stores as made
+(the transcript scrub below covers it once the session ends). Under an organization's
+`cc-plugin-sec-default` module, seated when managed settings exist, the engine passes a user plugin
+over on the `session.append` doors `attachment`, `hook-context` and `compaction`, so those rows are
+not masked, and the session-end scrub covers only the transcript file, not what the engine kept
+elsewhere.
 
 #### Scenario: a value in a tool result is masked
 
@@ -562,14 +562,42 @@ the same user can read the file while the session lives.
 - **WHEN** the session ends
 - **THEN** the session's directory no longer exists
 
+### Requirement: A tool's own record is masked before the engine keeps it
+
+The engine keeps a tool's own record (Bash's `stdout` and `stderr`, Read's file) in the transcript
+beside the row, and `session.append` never sees it, so a function hook on `tool.call` SHALL mask
+every string in the record with one `qsm-secrets mask --all` process after the tool answers, before
+the engine keeps it. A `base64` field SHALL be kept as it is, because it is media. A record the mask
+did not change SHALL be returned as the tool answered it. A hook cannot answer an error, because the
+engine checks a hook's result against the tool's output shape, so an errored result whose text the
+mask changed SHALL come back as a refusal carrying the masked text. When the mask fails, the result
+SHALL be refused with a withheld notice and a toast, because a record that could not be masked may
+hold a value.
+
+#### Scenario: a printed value never reaches the record
+
+- **WHEN** a Bash command prints a stored value
+- **THEN** the transcript's record of the call holds the placeholder, and no row holds the value
+  while the session runs
+
+#### Scenario: a failing command prints a stored value
+
+- **WHEN** a Bash command prints a stored value and exits with a non-zero code
+- **THEN** the model reads the exit code and the output with the placeholder, as an error
+
+#### Scenario: a record without a value is kept as answered
+
+- **WHEN** the mask returns every string of a record unchanged
+- **THEN** the hook returns the tool's own answer, untouched
+
 ### Requirement: A session end scrubs stored values from the transcript
 
 The engine writes a submitted prompt raw into the transcript before any hook runs, so the session
 end SHALL replace every stored value of every namespace still in the transcript, and in the
 transcripts of the subagents the session ran, with its placeholder, by rewriting each file
-atomically in a detached process, and SHALL print no value: the engine stores a submitted prompt, a
-tool result's structured record and an attachment's payload as made, whatever the mask hook rewrote,
-so a value named by no placeholder in the file is swapped too. A value of fewer than six characters
+atomically in a detached process, and SHALL print no value: the engine stores a submitted prompt and
+an attachment's payload as made, whatever the mask hooks rewrote, so a value named by no placeholder
+in the file is swapped too. A value of fewer than six characters
 is not swapped. The swap SHALL touch only the text inside a line's string values, never a structural
 field (`sessionId`, `uuid`, `parentUuid`, `cwd`, `transcript_path`, `agentId`, a tool use id),
 because a stored value equal to an id would otherwise break the resume and the links between
