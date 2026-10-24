@@ -101,8 +101,8 @@ function spawnAsync(
   args: string[],
   timeoutMs: number,
 ): Promise<Spawned> {
-  return new Promise((resolvePromise) => {
-    const child = spawnChild(command, args, { cwd });
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawnChild(command, args, { cwd, detached: true });
     let stdout = "";
     let stderr = "";
     let error: NodeJS.ErrnoException | undefined;
@@ -114,7 +114,16 @@ function spawnAsync(
     });
     const timer = setTimeout(() => {
       error = Object.assign(new Error(`${command} timed out`), { code: "ETIMEDOUT" });
-      child.kill("SIGKILL");
+      // The launcher can exit while its engine keeps scanning. This group belongs to this run.
+      if (child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch (cause) {
+          if (!isErrno(cause) || cause.code !== "ESRCH") {
+            rejectPromise(new Error(`could not stop ${command}'s process group`, { cause }));
+          }
+        }
+      }
     }, timeoutMs);
     child.on("error", (err: NodeJS.ErrnoException) => {
       error = err;

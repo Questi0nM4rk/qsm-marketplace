@@ -112,23 +112,24 @@ slot_start_args() {
       --desktop) printf 'desktop=%s\n' "${2:?--desktop needs the Quickshell path of the shell}" && shift 2 ;;
       --hypr) printf 'hypr=%s\n' "${2:?--hypr needs a Hyprland lua config}" && shift 2 ;;
       --clock) printf 'clock=%s\n' "${2:?--clock needs a time like 2026-10-22 10:00:00}" && shift 2 ;;
+      --fixtures) printf 'fixtures=%s\n' "${2:?--fixtures needs a directory of recorded readings}" && shift 2 ;;
       *) die "slot start: unknown option '$1'" ;;
     esac
   done
 }
 
 slot_start() {
-  local name="${1:-}" size="" scale="" desktop="" hypr="" clock="" dir renderer=gles2 opt
+  local name="${1:-}" size="" scale="" desktop="" hypr="" clock="" fixtures="" dir renderer=gles2 opt
   [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "slot start needs NAME (lowercase letters, digits, dashes)"
   shift
   while read -r opt; do
     [[ -z "$opt" ]] || printf -v "${opt%%=*}" '%s' "${opt#*=}"
   done < <(slot_start_args "$@")
   if [[ -n "$desktop" ]]; then
-    slot_start_desktop "$name" "${size:-1920x1080}" "${scale:-1.25}" "$desktop" "$hypr" "$clock"
+    slot_start_desktop "$name" "${size:-1920x1080}" "${scale:-1.25}" "$desktop" "$hypr" "$clock" "$fixtures"
     return
   fi
-  [[ -z "$hypr$clock" ]] || die "--hypr and --clock need --desktop"
+  [[ -z "$hypr$clock$fixtures" ]] || die "--hypr, --clock and --fixtures need --desktop"
   size="${size:-1280x800}" scale="${scale:-1}"
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   need sway
@@ -245,18 +246,32 @@ slot_aquamarine() {
 # with a card node it started a DRM backend on the real panel. /run is empty (no system bus,
 # no logind seat) and the root is read-only, so nothing in it reaches the owner's session.
 slot_start_desktop() {
-  local name="$1" size="$2" scale="$3" qs_path="$4" hypr="$5" clock="$6" dir rt node aq i inside=/run/drive-slot
-  ((${#name} <= 8)) || die "a desktop slot NAME has at most 8 characters (socket path limit)"
+  local name="$1" size="$2" scale="$3" qs_path="$4" hypr="$5" clock="$6" fixtures="$7" dir rt node aq i inside=/run/drive-slot
+  # The shell reaches Hyprland's event socket, $rt/hypr/<signature of up to 62>/.socket2.sock,
+  # through Qt, which refuses a path of 107 bytes or more (measured). Past it the shell starts
+  # without window and workspace events, and the rail never shows a window or an urgent one.
+  local around="$XDG_RUNTIME_DIR/ds-/hypr//.socket2.sock" longest
+  longest=$((106 - ${#around} - 62))
+  ((${#name} <= longest)) || die "a desktop slot NAME has at most $longest characters (Hyprland event socket path limit)"
   [[ "$size" =~ ^[0-9]+x[0-9]+$ && "$scale" =~ ^[0-9.]+$ ]] || die "--size must be WxH and --scale a number"
   [[ -d "$qs_path" ]] || die "--desktop '$qs_path' is not a directory"
   [[ -z "$hypr" || -f "$hypr" ]] || die "--hypr '$hypr' does not exist"
+  [[ -z "$fixtures" || -d "$fixtures" ]] || die "--fixtures '$fixtures' is not a directory"
   # The sandbox mounts its own empty /tmp and /run, so a file there is not what the nested desktop would read.
   local p
-  for p in "$qs_path" "$hypr"; do
-    case "$p" in /tmp | /tmp/* | /run | /run/*) die "--desktop and --hypr cannot live under /tmp or /run (the sandbox hides both): $p" ;; *) ;; esac
+  for p in "$qs_path" "$hypr" "$fixtures"; do
+    case "$p" in /tmp | /tmp/* | /run | /run/*) die "--desktop, --hypr and --fixtures cannot live under /tmp or /run (the sandbox hides both): $p" ;; *) ;; esac
   done
   [[ "$hypr" != *[\"\\]* ]] || die "--hypr path must not hold a quote or a backslash (it is written into a lua string)"
-  [[ -z "$clock" || "$clock" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] || die "--clock must be YYYY-MM-DD HH:MM:SS: $clock"
+  # The round trip through date rejects a value out of range (month 13, 30 February), which the
+  # shell would show as an invalid date or roll over.
+  [[ -z "$clock" || "$(date -d "$clock" '+%F %T' 2>/dev/null)" == "$clock" ]] || die "--clock must be a real YYYY-MM-DD HH:MM:SS: $clock"
+  # hyprlock draws its own time and, unlike qs (jemalloc), runs under libfaketime.
+  local faketime=""
+  if [[ -n "$clock" && -x /usr/bin/hyprlock ]]; then
+    faketime=/usr/lib/faketime/libfaketime.so.1
+    [[ -f "$faketime" ]] || die "--clock needs libfaketime for the slot's hyprlock (pacman -S libfaketime)"
+  fi
   local tool
   for tool in bwrap sway swaymsg niri start-hyprland qs dbus-run-session pkg-config; do need "$tool"; done
   slot_alive "$name" && die "slot '$name' is already running"
@@ -270,7 +285,7 @@ slot_start_desktop() {
   chmod 700 "$rt"
   slot_write_desktop_config "$dir" "$size" "$scale" "$hypr" "$inside"
   env -i HOME="$HOME" USER="${USER:-}" PATH="$PATH" LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="$rt" \
-    DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_AQUAMARINE="$aq" \
+    DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_FIXTURES="$fixtures" DRIVE_FAKETIME="$faketime" DRIVE_AQUAMARINE="$aq" \
     setsid bwrap --ro-bind / / --dev /dev --tmpfs /dev/shm --dev-bind "$node" "$node" --proc /proc \
     --tmpfs /run --bind "$rt" "$rt" --bind "$dir" "$inside" --tmpfs /tmp \
     --unshare-pid --unshare-ipc --new-session \

@@ -475,20 +475,20 @@ tool result, a response, a prompt, an attachment, a delivery), before it is stor
 and each tool result's content has every stored value of every namespace replaced by its
 placeholder, `{{secret:<id>}}` in the capture namespace and `{{secret:<namespace>/<key>}}` in any
 other. The hook SHALL run one `qsm-secrets mask --all` process per row, which reads the backend
-once. A value shorter than six characters SHALL NOT be masked, because it would match inside
-ordinary words. When the mask fails, the row's text SHALL be replaced by a notice that it was
-withheld and a toast SHALL say so, because a row that could not be masked may hold a value. The
-result of every tool takes this door, Read, Grep, an MCP tool and the hand-back of an Agent
-included, so none has a list of its own. What cannot be masked is named, because a reader should
-not assume it is: a value printed re-encoded (base64, escaped); a value of fewer than six
-characters; a value inside a media block (an image or a PDF is kept as it is); the screen, an SDK
-stream and Remote Control, which may show a row just before its rewrite; and the structured record
-of a tool result and an attachment's payload, which the engine stores as made (the transcript
-scrub below covers those two once the session ends). Under an organization's
-`cc-plugin-sec-default` module, seated when managed settings exist, the engine passes a user plugin
-over on the `session.append` doors `attachment`, `hook-context` and `compaction`, so those rows are
-not masked, and the session-end scrub covers only the transcript file, not what the engine kept
-elsewhere.
+once, in `/`, because it reads stdin only and the session's directory can be removed under it. A
+value shorter than six characters SHALL NOT be masked, because it would match inside ordinary words.
+When the mask fails, the row's text SHALL be replaced by a notice that it was withheld and a toast
+SHALL say so, because a row that could not be masked may hold a value. The result of every tool
+takes this door, Read, Grep, an MCP tool and the hand-back of an Agent included, so none has a list
+of its own. What cannot be masked is named, because a reader should not assume it is: a value
+printed re-encoded (base64, escaped); a value of fewer than six characters; a value inside a media
+block (an image or a PDF is kept as it is); the screen, an SDK stream and Remote Control, which may
+show a row just before its rewrite; and the structured record of a tool result and an attachment's
+payload, which the engine stores as made (the transcript scrub below covers those two once the
+session ends). Under an organization's `cc-plugin-sec-default` module, seated when managed settings
+exist, the engine passes a user plugin over on the `session.append` doors `attachment`,
+`hook-context` and `compaction`, so those rows are not masked, and the session-end scrub covers only
+the transcript file, not what the engine kept elsewhere.
 
 #### Scenario: a value in a tool result is masked
 
@@ -516,6 +516,11 @@ elsewhere.
 - **WHEN** `qsm-secrets mask --all` fails for a row
 - **THEN** the row's text is replaced by a withheld notice, a toast says so, and the log names the
   cause
+
+#### Scenario: the session's directory is removed
+
+- **WHEN** the worktree the session stands in is removed and the next row is appended
+- **THEN** the mask still runs and the row is stored masked, not withheld
 
 #### Scenario: one read serves a whole row
 
@@ -622,8 +627,12 @@ resolve every command through `sudo`, `command`, `env`, `nice`, `timeout`, `xarg
 `qsm-secrets env|pipe|check -- <cmd>`, `sh -c` bodies, subshells, command substitutions and
 pipelines, and past a backslash in the command's name, so a reader is judged by the command that
 finally runs. A path word is judged by its spelling, by a glob that can expand to a protected
-directory, and, after a `cd` to a known directory, by the directory it is relative to. `${NAME}`
-SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR` and `PASSWORD_STORE_DIR`, and a
+directory, and, after a `cd` to a known directory, by the directory it is relative to.
+Glob matching SHALL take at most work proportional to the pattern length times the path-component
+length. Repeated wildcards SHALL NOT cause regex backtracking, and existing component matching
+and guard decisions SHALL be preserved.
+`${NAME}` SHALL read as `$NAME` for `HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR` and
+`PASSWORD_STORE_DIR`, and a
 braced form of one of them with an operator (`${NAME:-x}`, `${NAME#x}`, `${!NAME}`) SHALL be refused
 as `unreadable-command`, because its value cannot be known without running the shell. It SHALL deny
 `secret-tool` (every verb), `rbw`, `bw`, `pass`, `gopass`, `keepassxc-cli`, `kwallet-query` and

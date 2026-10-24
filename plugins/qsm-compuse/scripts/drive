@@ -309,7 +309,7 @@ drive — sudo-free computer use on Hyprland/Wayland
     slot budget [--reserve-mb N] [--per-slot-mb N] [--provider ROOT] [--story KEY] [--remeasure]   slots that fit in MemAvailable (cost measured by a probe slot, cached)
 
   ATLAS (the whole desktop, nested and sandboxed in a desktop slot per journey)
-    slot start NAME --desktop QS_PATH [--hypr LUA] [--clock TIME]   one desktop slot; TIME reaches the shell as DRIVE_CLOCK (NAME <= 8 chars)
+    slot start NAME --desktop QS_PATH [--hypr LUA] [--clock TIME] [--fixtures DIR]   one desktop slot; TIME reaches the shell as DRIVE_CLOCK, DIR as DRIVE_FIXTURES (NAME <= 6 chars under /run/user/1000)
     slot aquamarine          build the Aquamarine fix a nested Hyprland needs (once, into the cache)
     atlas run SCENARIO       every journey in a fresh desktop slot; shots, trees, diff with the last run, index.html
     atlas ls                 scenarios and their kept runs

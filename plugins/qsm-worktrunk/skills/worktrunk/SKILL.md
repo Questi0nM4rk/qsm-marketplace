@@ -106,6 +106,9 @@ file; `--yes` belongs to pipelines whose configuration the pipeline controls.
   `post-*` cannot block.
 - When `wt merge` failed on the push, fix and `wt step push`, because a second merge squashes
   again.
+- When you are about to `wt remove` the workspace the shell stands in, `cd` out in a call of its
+  own first, because a removed session directory fails every hook spawn and the secrets mask then
+  withholds the whole chat.
 
 ## Say it in the reply
 

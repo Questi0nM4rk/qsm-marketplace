@@ -539,17 +539,39 @@ const SLOW: CheckSpec = {
   count: () => ({ total: 0 }),
 };
 
-test("A timeout", async () => {
+test("A timeout stops the launcher's engine child", async () => {
   const { root, head } = repoWith({ "a.txt": "alpha\n" });
   write(root, { "a.txt": "alpha and more\n" });
   stage(root);
 
-  const { verdicts } = await runWith(root, head, SLOW, { timeoutMs: 200 });
-
-  expect(verdicts).toHaveLength(1);
-  expect(verdicts[0]?.notMeasured).toBe(true);
-  expect(verdicts[0]?.summary).toBe("slow: not measured: timed out after 0.2s; retry");
-  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
+  const engines = sandboxDir("qsm-langdev-engines-");
+  const checker: CheckSpec = {
+    ...SLOW,
+    binary: "sh",
+    args: () => ["-c", `sleep 5 &\nprintf '%s' "$!" > '${engines}/engine.'$$\nwait`],
+  };
+  try {
+    const { verdicts } = await runWith(root, head, checker, { timeoutMs: 200 });
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]?.notMeasured).toBe(true);
+    expect(verdicts[0]?.summary).toBe("slow: not measured: timed out after 0.2s; retry");
+    expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
+    const pids = readdirSync(engines).map((file) => readFileSync(join(engines, file), "utf8"));
+    expect(pids).toHaveLength(2);
+    for (const pid of pids) {
+      const state = spawnSync("ps", ["-o", "stat=", "-p", pid], { encoding: "utf8" }).stdout.trim();
+      expect(state === "" || state.startsWith("Z")).toBe(true);
+    }
+  } finally {
+    for (const file of readdirSync(engines)) {
+      const pid = Number(readFileSync(join(engines, file), "utf8"));
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch (cause) {
+        expect(cause).toHaveProperty("code", "ESRCH");
+      }
+    }
+  }
 });
 
 test("time limit: a checker's declared pre-push limit is the one its pre-push run gets", async () => {
@@ -1019,8 +1041,10 @@ test("packs: an empty answer is not a pack: the checker is unstored, never run w
  * scored file holding the marker, exiting 1 when there is one, as semgrep
  * does under `--error`-like flags; `fail` is semgrep failing the way a
  * rejected token does under `--json --quiet` (measured on 1.153.1): the cause
- * in the JSON errors, no results, nothing on stderr, exit 7. */
-type FakeEngine = "ok" | "fail";
+ * in the JSON errors, no results, nothing on stderr, exit 7; `timeout` is semgrep
+ * hitting its native rule timeout, which it labels a warning, while it still
+ * holds findings in the JSON results. */
+type FakeEngine = "ok" | "fail" | "timeout";
 
 const REJECTED = "Failed to download configuration from https://semgrep.dev/c/p/x HTTP 401.";
 
@@ -1051,7 +1075,7 @@ function fakeSemgrep(engines: { pro?: FakeEngine; community?: FakeEngine } = {})
       `  if [ -f "$f" ] && grep -q ${MARKER} "$f"; then hit "$f"`,
       `  elif [ -d "$f" ]; then for g in $(grep -rl ${MARKER} "$f"); do hit "$g"; done; fi`,
       "done",
-      String.raw`echo "{\"results\":[$found],\"errors\":[]}"`,
+      String.raw`if [ "$mode" = timeout ]; then echo "{\"results\":[$found],\"errors\":[{\"code\":4,\"level\":\"warn\",\"type\":\"Timeout\",\"message\":\"semgrep timed out\"}]}"; else echo "{\"results\":[$found],\"errors\":[]}"; fi`,
       'if [ -n "$found" ]; then exit 1; fi',
       "",
     ].join("\n"),
@@ -1196,16 +1220,25 @@ test("semgrep engine: pre-push logged in without the Pro engine: community over 
   expect(verdicts.every((v) => v.pass)).toBe(true);
 });
 
-test("semgrep engine: the engine is in the store key, and a second Pro push is a store hit", async () => {
+test("semgrep engine: timeout mode and engine are in the store key, and a second Pro push is a store hit", async () => {
   const { root, head } = importChain();
   const semgrep = fakeSemgrep();
   const spec = semgrepSpec("semgrep-ts", semgrep.binary);
   const community = { ...PRO, semgrepLogin: () => "logged-out" as const };
 
-  await runWith(root, head, spec, community);
+  const nativeDefault: CheckSpec = {
+    ...spec,
+    args: (...params) => {
+      const argv = spec.args(...params);
+      return argv.filter((arg, i) => arg !== "--timeout" && argv[i - 1] !== "--timeout");
+    },
+  };
+  await runWith(root, head, nativeDefault, community);
+  const firstCommunity = await runWith(root, head, spec, community);
   const firstPro = await runWith(root, head, spec, PRO);
   const again = await runWith(root, head, spec, PRO);
 
+  expect(describeStore(firstCommunity.store)[0]).not.toContain("hit");
   expect(describeStore(firstPro.store)[0]).not.toContain("hit");
   expect(describeStore(again.store)[0]).toBe("store: semgrep-ts: reference hit, shipped hit");
 });
@@ -1272,6 +1305,7 @@ test("Both engines fail", async () => {
   expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
   expect(runOutcome(verdicts, true).code).toBe("blocked");
   expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
+  expect(entries(root, "semgrep-ts", "pre-push")).toEqual([]);
 });
 
 test("failed run: a checker whose output cannot be read is not measured, its stderr the cause", async () => {
@@ -1336,22 +1370,30 @@ test("failed run: a checker killed by a signal is not measured, never worse", as
   expect(runOutcome(verdicts, true).code).toBe("blocked");
 });
 
-test("A real finding at a non-zero exit", async () => {
+test.each(["ok", "timeout"] as const)("Semgrep findings at a non-zero exit: %s", async (mode) => {
   const { root, head } = importChain();
   write(root, { "a.ts": `export const a = 2; // ${MARKER}\n` });
   stage(root);
-  const semgrep = fakeSemgrep();
+  const semgrep = fakeSemgrep({ pro: mode, community: mode });
+  const spec = semgrepSpec("semgrep-ts", semgrep.binary);
+  const { verdicts, warnings } = await runWith(root, head, spec, PRO);
 
-  const { verdicts, warnings } = await runWith(
-    root,
-    head,
-    semgrepSpec("semgrep-ts", semgrep.binary),
-    PRO,
-  );
+  if (mode === "ok") {
+    expect(verdicts.map((v) => [v.pass, v.notMeasured === true, v.summary])).toEqual([
+      [false, false, "semgrep-ts: 0 -> 1; worse: a.ts 0 -> 1; 1 new"],
+    ]);
+    expect(warnings).toEqual([]);
+    expect(runOutcome(verdicts, true).code).toBe("worse");
+    return;
+  }
+
+  const again = await runWith(root, head, spec, PRO);
 
   expect(verdicts.map((v) => [v.pass, v.notMeasured === true, v.summary])).toEqual([
-    [false, false, "semgrep-ts: 0 -> 1; worse: a.ts 0 -> 1; 1 new"],
+    [false, true, "semgrep-ts: not measured: semgrep timed out; retry"],
   ]);
-  expect(warnings).toEqual([]);
-  expect(runOutcome(verdicts, true).code).toBe("worse");
+  expect(runOutcome(verdicts, true).code).toBe("blocked");
+  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
+  expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
+  expect(entries(root, "semgrep-ts", "pre-push")).toEqual([]);
 });

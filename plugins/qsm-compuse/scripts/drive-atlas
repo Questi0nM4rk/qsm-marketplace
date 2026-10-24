@@ -7,6 +7,7 @@
 #   desktop PATH            the shell's Quickshell path (required)
 #   hypr FILE               the Hyprland lua config the nested desktop reads
 #   clock YYYY-MM-DD HH:MM:SS   a fixed wall clock, handed to the shell as DRIVE_CLOCK
+#   fixtures DIR            recorded readings the shell shows instead of live ones (DRIVE_FIXTURES)
 #   settle SECONDS          the pause after each step (default 0.6)
 #   journey NAME            starts a journey; the steps below belong to it
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
@@ -16,7 +17,8 @@
 # shot NAME (taken once the screen is still), shot-now NAME (taken at once, for a state that times out).
 #
 # A run is <scenario>/<date>-<time>-<rng>/: index.html (everything on one page), shots/ (the
-# captures as taken), trees/ (the item tree of each shot), diff-<run>/ (a comparison with that run).
+# captures as taken), trees/ (the item tree of each shot), logs/ (the shell's log per journey),
+# diff-<run>/ (a comparison with that run).
 
 ATLAS_ROOT="${DRIVE_ATLAS_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/qsm/compuse/atlas}"
 # A changed pixel differs by more than this share in one channel; a changed area is a connected
@@ -28,7 +30,7 @@ atlas_path() { printf '%s\n' "${1/#\~/$HOME}"; }
 
 # The scenario's settings as NAME=VALUE lines; journeys stay in the file.
 atlas_settings() {
-  awk '$1 ~ /^(desktop|hypr|clock|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
+  awk '$1 ~ /^(desktop|hypr|clock|fixtures|settle)$/ { k = $1; $1 = ""; sub(/^ /, ""); print k "=" $0 }' "$1"
 }
 
 # The steps of one journey, without indentation or comments.
@@ -146,31 +148,35 @@ atlas_journey() {
       [[ "${steps[n + 1]:-}" == shot-now\ * ]] || sleep "$settle"
     fi
   done
+  # The shell's log is the one record of what it saw; the slot dir goes with the slot.
+  command cp "$(slot_dir "$slot")/qs.log" "$run/logs/$journey.qs.log"
   slot_kill "$slot"
   unset DRIVE_SLOT
 }
 
 # A run is built under a dot name and renamed when it completes, so a failed run is never a baseline.
 atlas_run() {
-  local scenario="${1:-}" desktop="" hypr="" clock="" settle=0.6 opt dir id run slot journey prev
+  local scenario="${1:-}" desktop="" hypr="" clock="" fixtures="" settle=0.6 opt dir id run slot journey prev
   local -a start
   [[ -f "$scenario" ]] || die "atlas run needs a SCENARIO file"
   while IFS= read -r opt; do printf -v "${opt%%=*}" '%s' "${opt#*=}"; done < <(atlas_settings "$scenario")
   desktop="$(atlas_path "$desktop")"
   hypr="$(atlas_path "$hypr")"
+  fixtures="$(atlas_path "$fixtures")"
   [[ -n "$desktop" ]] || die "the scenario names no desktop"
   [[ -n "$(atlas_journeys "$scenario")" ]] || die "the scenario has no journey"
   dir="$ATLAS_ROOT/$(basename "${scenario%.*}")"
   prev="$(atlas_runs "$dir" | tail -1)"
   id="$(date +%Y%m%d-%H%M%S)-$(printf '%04x' "$RANDOM")"
   run="$dir/.$id"
-  mkdir -p "$run/shots" "$run/trees"
+  mkdir -p "$run/shots" "$run/trees" "$run/logs"
   command cp "$scenario" "$run/scenario"
   printf '%s\n' "$(git -C "$desktop" describe --always --dirty 2>/dev/null || echo unknown)" >"$run/desktop-version"
-  slot="at$((RANDOM % 100000))"
+  slot="at$((RANDOM % 10000))"
   start=(--desktop "$desktop")
   [[ -z "$hypr" ]] || start+=(--hypr "$hypr")
   [[ -z "$clock" ]] || start+=(--clock "$clock")
+  [[ -z "$fixtures" ]] || start+=(--fixtures "$fixtures")
   trap 'slot_kill "'"$slot"'" 2>/dev/null; rm -rf "'"$run"'"' EXIT
   for journey in $(atlas_journeys "$scenario"); do
     printf 'journey %s\n' "$journey" >&2
