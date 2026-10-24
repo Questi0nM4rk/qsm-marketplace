@@ -20,7 +20,7 @@
       OpenSpec validation, required ordinary/hook gates and quality checks. Obtain independent
       review. Record complete versus blocked honestly, with no threshold waiver, cache deletion,
       repeated blind retry or paused model eval. Blocks on 1.3.
-- [ ] 2.2 After approval of live deployment and green review/gates, merge through normal hooks,
+- [x] 2.2 After approval of live deployment and green review/gates, merge through normal hooks,
       verify refresh and retry the original push through pre-push. Stop on failure. Sync/archive
       this delta and close `qsm-i1u.79` only with the result. Then resume the separately approved
       installer/profile delivery. Preserve unrelated dirty work. Blocks on 2.1.
