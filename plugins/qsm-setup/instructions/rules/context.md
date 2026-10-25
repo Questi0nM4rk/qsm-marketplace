@@ -140,11 +140,12 @@ space of the temporary filesystem first and deletes recordings and captures once
 
 A finished workflow whose work the person has confirmed ends with a lessons pass before the next
 one starts: read what went wrong or cost a retry (the journal, the fix reports, the person's
-corrections), and write each lesson into the one place that owns it, a skill, a rule, a project's
-`AGENTS.md` or its own skill, in every repository the work touched, the marketplace included.
-The person asked for it in their words: "po kazdem done workflow, a confirmed work from user, tak
-udelej review what we learned, a uprav skills, docs". A lesson left in the conversation is lost
-with it.
+corrections), and fix each cause where it lives: the code, the tool, the gate, the hook, or the
+skill or rule that misled, in every repository the work touched, the marketplace included. The
+person asked for it in their words: "po kazdem done workflow, a confirmed work from user, tak udelej
+review what we learned, a uprav skills, docs", and "FIX IT FIRST ALWAYS. To je ten learn, self
+improvement loop". A note that describes a problem without removing it is no lesson, because the
+next agent repeats the problem and reads the note too late.
 
 Every dispatch, alone or inside a workflow: one task in, a short briefing plus a file path out.
 Its description starts with its model, for example `[haiku] runner: bun test`, because the
