@@ -57,9 +57,10 @@ const GUIDE: Record<
     next: "LEARN",
   },
   LEARN: {
-    does: "each rule found into its instruction file or skill, a tool defect into a feedback task, a decision's reason into the spec design or the commit",
-    output: "nothing left only in the chat",
-    tools: "the task tool, Edit",
+    does: "fix the cause of each retry and each correction where it lives (the code, the tool, the gate, the hook, the instruction that misled), so it cannot happen again; a task only for a cause that is not ours to fix now; a decision's reason into the spec design or the commit",
+    output:
+      "each fix and the run that proves it, or the task that says why it waits; a note that describes a problem without removing it is no lesson",
+    tools: "Edit, the tests, the task tool",
     skills: [],
     next: "CLOSE",
   },

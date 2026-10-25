@@ -81,7 +81,7 @@ function registerStage(on: On): void {
       name: "stage",
       isDeferred: false,
       description:
-        "Say which stage of the qsm loop you are in, each time you enter one: LOAD (notes, ready tasks, the governing spec), PLAN (six questions, size, grilling, split, spec-propose), EXECUTE (apply, claim, delegate), VERIFY (the real path ran), LEARN (a rule, a feedback task, a decision reason), CLOSE (archive, push, a note). Call it again when you go back, as VERIFY failing to EXECUTE. It answers what the stage asks, when it is done, and the next stage; the person sees it in the cockpit.",
+        "Say which stage of the qsm loop you are in, each time you enter one: LOAD (notes, ready tasks, the governing spec), PLAN (six questions, size, grilling, split, spec-propose), EXECUTE (apply, claim, delegate), VERIFY (the real path ran), LEARN (fix the cause of a retry or a correction where it lives), CLOSE (archive, push, a note). Call it again when you go back, as VERIFY failing to EXECUTE. It answers what the stage asks, when it is done, and the next stage; the person sees it in the cockpit.",
       inputSchema: {
         type: "object",
         properties: {
