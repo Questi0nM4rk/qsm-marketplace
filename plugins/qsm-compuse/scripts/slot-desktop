@@ -47,10 +47,9 @@ for entry in "$home_cfg"/qt6ct/*; do
 done
 awk '/^cursor_flash_time=/ { next } { print } /^\[Interface\]$/ { print "cursor_flash_time=0"; done = 1 }
   END { if (!done) print "[Interface]\ncursor_flash_time=0" }' "$home_cfg/qt6ct/qt6ct.conf" 2>/dev/null >"$cfg/qt6ct/qt6ct.conf"
-# DRIVE_CLOCK is the fixed wall clock a desktop shows and DRIVE_FIXTURES the directory of recorded
-# readings it shows instead of live ones (see USAGE.md); both are empty when the slot has none.
-# DRIVE_FAKETIME is set with a clock when hyprlock exists: the shell then finds a hyprlock on its
-# PATH that shows the fixed clock too.
+# DRIVE_MOCK is the JSON file of recorded readings the desktop shows instead of live ones (see
+# USAGE.md), empty when the slot has none. DRIVE_FAKETIME is set when the mock names a clock and
+# hyprlock exists: the shell then finds a hyprlock on its PATH that shows that clock (DRIVE_CLOCK).
 if [[ -n "${DRIVE_FAKETIME:-}" ]]; then
   mkdir -p "$dir/bin"
   printf '#!/bin/sh\nLD_PRELOAD=%s FAKETIME="@%s" FAKETIME_DONT_FAKE_MONOTONIC=1 exec /usr/bin/hyprlock "$@"\n' "$DRIVE_FAKETIME" "${DRIVE_CLOCK:?}" >"$dir/bin/hyprlock"
