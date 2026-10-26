@@ -38,14 +38,13 @@ verbs of piece 2 able to sit beside them without a rewrite.
    closed issue prints a message and exits 0, and the verb must tell the caller which happened.
    Reasons are `completed` and `not-planned`; `gh`'s `duplicate` needs `--duplicate-of`, a second
    argument nothing in the task flow uses.
-6. **`ready` is one read and a filter.** `gh issue list --state open --json
-   number,title,url,labels,parent,blockedBy --limit 200` (plus `--label`), then the verb keeps
-   issues with no open blocker and, with `--parent n`, those whose parent is n. Whether
-   `blockedBy` entries carry a state is unverified; task 1 reads one. If they carry none, the
-   verb treats every listed blocker as open only when it is in the same open list, which is
-   correct because the list holds all open issues up to the cap, and a blocker outside the cap
-   triggers the cut-list warning. The 200 cap is a single-maintainer size; hitting it warns, it
-   does not page.
+6. **`ready` is one search.** `gh issue list --state open --search "-is:blocked -type:Epic"
+   --json number,title,url,labels,parent --limit 200` (plus `--label`, and with `--parent n` the
+   rows whose parent is n). Measured on this repository: `-is:blocked` returned the unblocked
+   issues and `is:blocked` the blocked ones, so the verb no longer reads `blockedBy` itself. That a
+   closed blocker stops blocking is unmeasured; the live run (task 6.1) includes one, and the
+   scenario stays. Epics are left out because an epic is finished by its tasks, never picked. The
+   200 cap is a single-maintainer size; hitting it warns, it does not page.
 7. **Outcome codes are the existing ones.** `usage` before any call, `missing` for repository,
    `gh` or a file, `failed` for a GitHub refusal with `gh`'s stderr as the message. The thread
    verbs map errors the same way (`lib/exec.ts` rejects with the command's own words), so no code
@@ -79,5 +78,6 @@ nothing and that a refusal stops the verb at the failing call.
    once the verbs have run live: a guard before the verbs are proven would block the only way to
    file an issue. Not done here, so the guard and its spec scenario ("non-review call attempted")
    are unchanged.
-2. **The `epic` label does not exist in the repository.** Recommended: create it once with
-   `gh label create epic`, as a step of task 6's proof, because a `labels` verb is used once.
+2. **Epic and task are issue types, not labels.** The organization has the issue type `Epic`
+   (and Task, Bug, Feature); `gh issue create --type` sets it, so `create` passes `--type` through
+   and no `epic` label exists. Decided by the owner on moving to the organization.
