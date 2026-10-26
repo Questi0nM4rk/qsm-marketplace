@@ -1,6 +1,6 @@
 ## Why
 
-The epic Questi0nM4rk/qsm-marketplace#3 moves every task of this project from a file in git to a
+The epic qsmark-labs/qsm-marketplace#3 moves every task of this project from a file in git to a
 GitHub issue, because a protected `main` cannot take a status change that needs a pull request. The
 agent must then create, close, comment on, nest and order issues, and the raw route is several
 calls per step: a sub-issue needs the child's numeric id (not its number) fetched first, then a

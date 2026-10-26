@@ -5,10 +5,10 @@
 
 **Small Claude Code plugins that help an agent check its own work.**
 
-[![CI](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
-[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
-[![license](https://img.shields.io/github/license/Questi0nM4rk/qsm-marketplace?color=blue)](./LICENSE)
+[![CI](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml/badge.svg)](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/qsmark-labs/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml)
+[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/qsmark-labs/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/qsmark-labs/qsm-marketplace?color=blue)](./LICENSE)
 
 </div>
 
@@ -153,7 +153,7 @@ The first serves the page on 127.0.0.1:4747. The second writes it as one HTML fi
 ## Quickstart
 
 ```bash
-git clone https://github.com/Questi0nM4rk/qsm-marketplace && cd qsm-marketplace
+git clone https://github.com/qsmark-labs/qsm-marketplace && cd qsm-marketplace
 bun install --frozen-lockfile && bun run validate && bun test
 ```
 
@@ -162,7 +162,7 @@ bun install --frozen-lockfile && bun run validate && bun test
 Use it in Claude Code (`qsm-setup` compiles the binaries and links them onto your `PATH`):
 
 ```sh
-claude plugin marketplace add Questi0nM4rk/qsm-marketplace
+claude plugin marketplace add qsmark-labs/qsm-marketplace
 claude plugin install qsm-setup@qsm-marketplace
 qsm-setup install --profile general
 ```
@@ -180,8 +180,8 @@ The rules are in [AGENTS.md](AGENTS.md).
 
 ## Numbers
 
-[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
-[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Questi0nM4rk/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/Questi0nM4rk/qsm-marketplace/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/qsmark-labs/qsm-marketplace/badges/tests.json&style=flat-square)](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml)
+[![plugins](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/qsmark-labs/qsm-marketplace/badges/plugins.json&style=flat-square)](https://github.com/qsmark-labs/qsm-marketplace/actions/workflows/ci.yml)
 
 | What | How to measure |
 | --- | --- |

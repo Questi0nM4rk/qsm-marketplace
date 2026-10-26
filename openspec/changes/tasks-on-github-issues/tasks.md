@@ -1,4 +1,4 @@
-Piece 3 of epic #3 (<https://github.com/Questi0nM4rk/qsm-marketplace/issues/3>). Paths are from the
+Piece 3 of epic #3 (<https://github.com/qsmark-labs/qsm-marketplace/issues/3>). Paths are from the
 repository root. Every slice ends with `bun run validate`, `bun run lint`, `bun run typecheck` and
 `bun test` green, and a test of a behaviour that is removed is removed with it. Proof is the real
 path or an eval, not a unit test that restates the edit. The order keeps `br` usable until nothing

@@ -1,7 +1,7 @@
 The steps of this one change, in dependency order. Paths are under `plugins/qsm-forge/` unless they
 start with `lib/` of the root. Every step ends with `bun run validate`, `bun run lint`, `bun run
 typecheck` and `bun test` green, and nothing is added beyond the ask. The proof runs on the
-repository Questi0nM4rk/qsm-marketplace with issues titled `test: ...`, all closed at the end.
+repository qsmark-labs/qsm-marketplace with issues titled `test: ...`, all closed at the end.
 
 ## 1. Measure what `gh` does
 
