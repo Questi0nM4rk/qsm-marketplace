@@ -45,7 +45,11 @@ its decision is settled.
 - **One round is the whole frontier.** The frontier is every open question whose prerequisites
   are settled. Send them together, wait for the batch, because one question at a
   time costs a round trip each. A question that depends on an open one waits for the round that
-  settles its parent; asking a child early buys an answer the next round invalidates.
+  settles its parent; asking a child early buys an answer the next round invalidates. A question
+  depends on another whenever that answer could change it, its options or its recommendation, not
+  only when it cannot be stated without it. When one decision shapes the rest (where a thing lives,
+  what it is), ask it alone. The person in their words: "jedna odpověď může měnit zbytek věci,
+  takže mi upe nedává smysl se ptát na tolik broad věci".
 - **Every question carries a recommendation.** It hands over your analysis, so the user confirms
   in one word or corrects with context you lacked. A question without one hands your work back.
   When a trade-off is the question, say what each side costs.
@@ -98,8 +102,9 @@ to plan to split it. A fix has no epic: if the work turns out to be a fix, say s
 
 ## Red flags
 
-- When you ask one question while four more are answerable, send all five, because a lone
-  question wastes a round trip.
+- When you ask one question while four more are answerable and independent of it, send all five,
+  because a lone question wastes a round trip. When an answer could change the others, send it
+  alone, because the batch is then answered against a guess.
 - When the repository would answer it in one search, search, because asking hands your work to
   the user.
 - When the interview wants to end because it felt long, check the frontier instead, because only
