@@ -3,15 +3,23 @@
 ### Requirement: Create an issue
 
 The GitHub bin SHALL create an issue with `qsm-forge gh issue create <title>`, taking the body from
-`--body` or from `--file`, any number of `--label` values, and an optional `--parent <n>` that makes
-the new issue a sub-issue of issue n. It SHALL report the number, URL, title, labels and parent in
-the envelope data (`number`, `url`, `title`, `labels`, `parent`, the last null without a parent).
+`--body` or from `--file`, any number of `--label` values, an optional `--type <name>` that sets the
+organization issue type
+(`Epic`, `Task`), and an optional `--parent <n>` that makes the new issue a sub-issue of issue n.
+It SHALL report the number, URL, title, labels, type and parent in the envelope data (`number`,
+`url`, `title`, `labels`, `type`, `parent`, the last two null without a type or a parent).
 
 #### Scenario: Create with labels and a parent
 
 - **WHEN** the caller creates an issue with two labels and `--parent` naming an open issue
 - **THEN** the issue exists with both labels and appears among the parent's sub-issues, and the
   data holds its number and URL
+
+#### Scenario: Create an epic and a task under it
+
+- **WHEN** the caller creates an issue with `--type Epic` and then another with `--type Task` and
+  `--parent` naming the first
+- **THEN** the first has type Epic, the second has type Task and appears among its sub-issues
 
 #### Scenario: Body from a file
 
@@ -131,7 +139,7 @@ exactly one of `--add <m>` (issue n becomes blocked by issue m) or `--remove <m>
 
 ### Requirement: List the issues that are ready to work
 
-The GitHub bin SHALL list open issues that no open issue blocks, with
+The GitHub bin SHALL list open issues that no open issue blocks and that are not of type Epic, with
 `qsm-forge gh issue ready`, optionally narrowed by `--parent <n>` (the sub-issues of n) and by
 `--label <name>`, in ascending number order. Each row SHALL carry `number`, `title`, `url`,
 `labels` and `parent`. It SHALL read at most 200 issues, and when it hit that cap it SHALL say the
@@ -151,6 +159,11 @@ list is cut, as a warning, still exiting `ok`.
 
 - **WHEN** the caller passes `--parent` naming an epic
 - **THEN** only open, unblocked sub-issues of that epic are listed
+
+#### Scenario: An epic is never ready
+
+- **WHEN** an open epic has no blocker
+- **THEN** it is not listed, and its open sub-issues are
 
 #### Scenario: Nothing ready
 

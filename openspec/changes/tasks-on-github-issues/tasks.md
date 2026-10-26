@@ -3,9 +3,11 @@ repository root. Every slice ends with `bun run validate`, `bun run lint`, `bun 
 `bun test` green, and a test of a behaviour that is removed is removed with it. Proof is the real
 path or an eval, not a unit test that restates the edit. The order keeps `br` usable until nothing
 calls it: readers (groups 2 to 6), then the shim and evals (7), then the skill (8), then the rest (9
-to 10), then the sweep (11). This change waits on `forge-issue-verbs` and `forge-board-verbs` for
-lines 1, 5, 8 and 11; lines 2, 3, 4, 6, 7 need no forge verb and can start now. The bound task lives
-in the epic, the steps live here.
+to 10), then the sweep (11). This change waits on `forge-issue-verbs` and `forge-board-verbs` (the
+verbs and the Action `epic-stage.yml`) for lines 1, 5, 8 and 11; lines 2, 3, 4, 6, 7 need no forge
+verb and can start now. The bound task lives in the epic, the steps live here. The epic is an issue
+of type Epic and the QA stage replaces the test-it task, so every line that named test-it or the
+label `epic` is rewritten for that: 1.1, 4.1, 7, 8, 9, 10 and 11.
 
 ## 1. Reconcile the verb names and prove the lookup
 
@@ -14,8 +16,9 @@ Owns: nothing in the tree except the verb names written in
 design.md. Blocked by: `forge-issue-verbs`.
 
 - [ ] 1.1 Read the archived or applied `forge-issue-verbs` and `forge-board-verbs`; replace the
-      working verb names in this change's design.md table and the spec scenarios if they differ, and
-      settle open question 5 (a `list` and a `view`) with the maintainer
+      working verb names (`list`, `view`) in this change's design.md table and the spec scenarios
+      by the real ones, check the table's flags against them (`create --type`, `board-set --status`
+      and `--stage`, `claim`), and settle open question 5 with the maintainer
 - [ ] 1.2 Proof of the binding: create an issue titled `test: openspec binding` whose first body
       line is `openspec: tasks-on-github-issues`, another `test: openspec binding more` with
       `openspec: tasks-on-github-issues-more`, run the lookup (list plus exact first-line filter)
@@ -55,7 +58,9 @@ answered (recommendation: drop).
 ## 4. qsm-cockpit without the Tasks card
 
 Owns: `plugins/qsm-cockpit/lib/tasks.ts` (delete), `lib/cockpit.ts` (the `br close` id detection
-near line 167 and the Tasks state), `hooks/register.tsx` (the `tasks` atom, the `$.cockpit.tasks()`
+near line 167 and the Tasks state, and the CLOSE stage text on line 68 that says "close the epic
+only when ... test-it passed": it says the epic waits for QA and the owner's acceptance),
+`hooks/register.tsx` (the `tasks` atom, the `$.cockpit.tasks()`
 read, `tasksCard`, the card in the pane), `hooks/register.test.tsx` (the Tasks card tests, near
 lines 270), `hooks/noun.generated.ts`, `scripts/cli.ts` (the `tasks` handler and the `br` probe in
 `doctor`), `scripts/cli.test.ts`, `qsm.json` (the `tasks` verb and the `doctor` description),
@@ -65,7 +70,8 @@ lines 270), `hooks/noun.generated.ts`, `scripts/cli.ts` (the `tasks` handler and
 archive; also the Purpose sentence "the claimed tasks", edited by hand). Blocked by: open question 2
 is answered (recommendation: drop).
 
-- [ ] 4.1 Remove the card, the verb and the probe; regenerate the noun with
+- [ ] 4.1 Remove the card, the verb and the probe, and rewrite the CLOSE text; regenerate the noun
+          with
       `bun lib/generate-noun.ts plugins/qsm-cockpit`
 - [ ] 4.2 Proof: `bun run test:hooks` for the cockpit passes and `/cockpit` opens with Chat, Agents
       and Decisions only (the hooks test renders the pane)
@@ -120,31 +126,41 @@ root `lib` because four plugins' evals use it), and the scaffolds and prompts of
 `plugins/qsm-plan/evals/grilling-settled-facts-and-dependent-questions/prompt.md`,
 `plugins/qsm-plan/evals/grilling-fire/prompt.md`,
 `plugins/qsm-review/evals/release-readiness-czech-saas-launch/` (`.sh`, `prompt.md`,
-`graders/tasks-for-missing.md`). Blocked by: open question 4, group 1 (verb names).
+`graders/tasks-for-missing.md`). Four of them carry test-it and change in what they grade, not only
+in how they scaffold: the `Test it` task of the qsm-tasks scaffold goes, `store-state.md` and
+`child-closed.md` pass when the child is closed with a reason and the epic is not closed and the
+reply says it waits for QA, `epic-closed.md` is rewritten for the owner's acceptance, the
+spec-archive grader `closes-tasks-and-epic.md` (line 8) says the epic waits for QA, and
+`plugins/qsm-plan/evals/plan-three-asks-three-sizes/samples/pass.md` (lines 9 to 11 and 18) has no
+test-it piece. Blocked by: open question 4, group 1 (verb names).
 
 - [ ] 7.1 The stub appends each call's arguments to a file, answers `list` and `view` with canned
       JSON, and is put on PATH by each scaffold in place of `br init` and `br create`
-- [ ] 7.2 Graders read the recorded calls instead of `.beads/issues.jsonl`
+- [ ] 7.2 Graders read the recorded calls instead of `.beads/issues.jsonl`, and grade the QA
+      wording above in place of test-it
 - [ ] 7.3 Proof: `bun run eval qsm-tasks` for `task-tool-last-child-of-epic` passes with the new
-      skill (after line 8); the other four evals pass unchanged in what they grade
+      skill (after line 8), and the plan and openspec evals pass with their rewritten graders
 
 ## 8. The qsm-tasks skill, README and manifest
 
-Owns: `plugins/qsm-tasks/skills/task-tool/SKILL.md` (rewritten: the model rules, working rules, a
-verb map, caveats on offline and the `project` scope, red flags; no `br`, no `.beads`, no `flush`,
-no `redirect`), `README.md` (why it exists, what you get, install, use, caveats),
-`.claude-plugin/plugin.json` (description, keywords, `dependencies: ["qsm-forge"]`),
+Owns: `plugins/qsm-tasks/skills/task-tool/SKILL.md` (rewritten: the model rules with epic as issue
+type and no test-it (lines 24 and 35 and the table row on line 69), the task flow and the epic
+flow with the QA stage, working rules, a verb map, caveats on offline and the `project` scope, red
+flags; no `br`, no `.beads`, no `flush`, no `redirect`), `README.md` (why it exists, what you get,
+install, use, caveats; it names test-it today), `.claude-plugin/plugin.json` (description,
+keywords, which name test-it today, `dependencies: ["qsm-forge"]`),
 `scripts/install.ts` and `scripts/install.test.ts` (delete), `evals/task-tool-fire/`,
 `evals/unrelated-negative/` (unchanged unless the prompt names `br`),
 `openspec/specs/qsm-tasks/spec.md` (the delta, and its Purpose paragraph by hand at archive),
 `skills/task-writing/SKILL.md` (unchanged; check its "GitHub or GitLab issue today" line says
 GitHub). Blocked by: groups 1 and 7.
 
-- [ ] 8.1 Rewrite the skill from the delta spec; at most 8 KB
+- [ ] 8.1 Rewrite the skill from the delta spec, flows included; at most 8 KB
 - [ ] 8.2 Proof: `bun run eval qsm-tasks` (fire, last-child-of-epic, unrelated negative) passes
-- [ ] 8.3 `bun run validate` passes; a grep of the skill for `\bbr\b`, `beads`, `.beads` is empty
+- [ ] 8.3 `bun run validate` passes; a grep of the skill and README for `\bbr\b`, `beads`,
+      `.beads`, `test-it` and the label `epic` is empty
 
-## 9. Skills and specs that stop on "no task store"
+## 9. Skills and specs that stop on "no task store" or name test-it
 
 Owns: `plugins/qsm-openspec/skills/spec-propose/SKILL.md` (step 2, lines 35 to 41: "No task store
 reachable ... offer to initialize one" becomes "task tool not reachable: stop and name the
@@ -153,16 +169,25 @@ closed), `skills/spec-apply/SKILL.md` (line 27, claim: unchanged unless it names
 `openspec/specs/qsm-openspec/spec.md` (at archive), `plugins/qsm-plan/skills/plan/SKILL.md` (a grep,
 lines 29 to 42, 3 hits: the roles stay), `plugins/qsm-plan/skills/grilling/SKILL.md` (lines 81 and
 94: "of kind decision" becomes a label), `plugins/qsm-review/skills/release-readiness/SKILL.md`
-(line 23: no change expected), `plugins/qsm-essentials/skills/{writing,debugging,refactoring,
+(line 23: no change expected), `plugins/qsm-plan/skills/plan/SKILL.md` (lines 86 to 95 and 125:
+"Add the last piece, test-it" and the epic's close rule become the QA stage, and an epic is written
+with type Epic and stage Planning), `plugins/qsm-plan/skills/grilling/SKILL.md` (line 93: "the
+final test-it task checks" becomes "the QA agent checks"), `plugins/qsm-plan/openspec/specs/
+qsm-plan/spec.md` (the Purpose sentence on line 7, by hand at archive; the requirement by the
+delta), `plugins/qsm-openspec/skills/spec-archive/SKILL.md` (lines 58 to 62: the epic close rule
+becomes "report the epic's stage, never close it"), `plugins/qsm-openspec/openspec/specs/
+qsm-openspec/spec.md` (at archive), `plugins/qsm-essentials/skills/{writing,debugging,refactoring,
 subagents}/SKILL.md` (one line each; no change expected, checked by the sweep). Blocked by: group 8.
 
 - [ ] 9.1 Edit the two openspec skills; `bun run eval qsm-openspec` passes
+- [ ] 9.2 Edit the plan and grilling skills; `bun run eval qsm-plan` passes with the rewritten
+      grader sample
 
 ## 10. The feedback rule moves to a GitHub issue epic
 
 Owns: `plugins/qsm-setup/instructions/CLAUDE.md` (the section "Feedback on how agents and tools
 behave", lines 99 to 109: epic `qsm-i1u` and the task-tool commands become the issue titled
-`Feedback on agents and tools` with the label `epic`, found by title, sub-issue with label
+`Feedback on agents and tools` of type `Epic`, found by title, sub-issue with label
 `source:<who>`, filed with the qsm-forge verbs in the marketplace repository),
 `plugins/qsm-web/agents/web-research.md` (line 48: epic `qsm-i1u`),
 `plugins/qsm-usage/skills/usage/SKILL.md` (line 94: "the task tool says how", no change expected),
@@ -179,7 +204,7 @@ triage), `AGENTS.md` (no `br` mention today; checked), `README.md` root (checked
 final grep finds. Blocked by: groups 2 to 10, and the epic's triage task.
 
 - [ ] 11.1 Sweep:
-      `grep -rnIE "\bbr (ready|show|create|close|update|list|dep|comment|sync)|beads|\.beads|beads_rust"`
+      `grep -rnIE "\bbr (ready|show|create|close|update|list|dep|comment|sync)|beads|\.beads|beads_rust|test-it"`
       over the tree outside `openspec/changes/archive/` and `.beads/` returns nothing, and
       `bun run validate` passes
 - [ ] 11.2 Archive: merge the deltas and edit by hand what a delta cannot (the Purpose and design

@@ -60,3 +60,35 @@ plug-in that serves the task port holds the commands.
 - **WHEN** spec-archive archives a change whose pull request, merged with `Closes #N`, closed the
   bound task
 - **THEN** spec-archive SHALL leave it as it is and SHALL close only the other bound tasks
+
+## ADDED Requirements
+
+### Requirement: Archive reports the epic's stage and never closes the epic
+
+After closing the change's task, spec-archive SHALL list the epic's tasks and read the epic's Epic
+stage, and SHALL say what the epic waits for: more tasks, the QA agent, or the owner's acceptance.
+It SHALL NOT close an epic and SHALL NOT set its stage: the move to Ready For Test is a GitHub
+Action's, and the later stages are the QA agent's and the owner's. A fix, which is a commit only,
+has no epic and is not touched by this rule.
+
+#### Scenario: The last task is archived
+
+- **WHEN** archiving closes the last open task of an epic
+- **THEN** spec-archive SHALL leave the epic open, SHALL report its Epic stage, and SHALL say it
+  waits for the QA agent
+
+#### Scenario: Tasks remain
+
+- **WHEN** archiving closes a task and other tasks of the epic are open
+- **THEN** spec-archive SHALL name the open tasks and leave the epic as it is
+
+## REMOVED Requirements
+
+### Requirement: An epic closes only when its close rule holds
+
+**Reason**: The epic no longer closes at archive: its last proof is the QA stage and the owner's
+acceptance, and there is no test-it task to check.
+
+**Migration**: "Archive reports the epic's stage and never closes the epic" and, for the close
+rule, the qsm-tasks requirement "A task closes by merge and an epic closes by the owner's
+acceptance of QA".

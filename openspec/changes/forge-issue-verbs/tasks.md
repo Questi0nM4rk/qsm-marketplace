@@ -10,17 +10,19 @@ Owns: nothing in the tree; the answers go in design.md decisions 3 and 6. Blocke
 - [ ] 1.1 Create a `test: parent` issue and a `test: child` issue by `gh issue create`, once with
       `--parent` and once with a label that does not exist; record whether the failing call left an
       issue behind
-- [ ] 1.2 `gh issue list --json blockedBy` for an issue with a closed blocker; record the fields
+- [ ] 1.2 `gh issue list --search "-is:blocked -type:Epic"` with an issue whose blocker is closed;
+      record whether the closed blocker still blocks
 - [ ] 1.3 Close the test issues; edit the two decisions if reality differs
 
 ## 2. The issue calls behind the `Run` type
 
 Owns: `lib/github-issues.ts` (new), `lib/github-issues.test.ts` (new, recording fake only for the
-filter of `ready` and the failure mapping). Blocked by: 1.
+`--parent` filter of `ready` and the failure mapping). Blocked by: 1.
 
 - [ ] 2.1 `createIssue`, `closeIssue`, `commentOnIssue`, `attachSubIssue`, `setBlockedBy`,
       `readyIssues`, each one `gh issue` call (two for `close`), body text on stdin
-- [ ] 2.2 `ready` keeps only unblocked issues and honours `--parent`, `--label` and the 200 cap
+- [ ] 2.2 `ready` is the one search of design decision 6 and honours `--parent`, `--label` and the
+      200 cap
 
 ## 3. The verbs and their manifest
 
@@ -51,9 +53,10 @@ Owns: `USAGE.md`, `README.md`. Blocked by: 3.
 
 Owns: nothing in the tree; the output goes in the pull request. Blocked by: 4, 5.
 
-- [ ] 6.1 `gh label create epic` once, then through the built binary with `--json`: create `test:
-      epic` (label `epic`), create `test: a` and `test: b` with `--parent`, `blocked-by b --add a`,
-      `ready --parent` lists only a, close a, `ready --parent` lists b, `sub-issue` of a spare
+- [ ] 6.1 Through the built binary with `--json`: create `test: epic` (`--type Epic`), create `test:
+          a` and `test: b` (`--type Task`) with
+      `--parent`, `blocked-by b --add a`, `ready --parent` lists only a, close a, `ready --parent`
+      lists b, `sub-issue` of a spare
       `test: c`, `comment`, `blocked-by --remove`, `close` of each with a reason, `close` again
       reports `alreadyClosed`
 - [ ] 6.2 A refusal: `create --label nonexistent` exits 1 and the issue list shows nothing new

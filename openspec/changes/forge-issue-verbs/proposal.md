@@ -15,14 +15,15 @@ here.
 ## What Changes
 
 - **Six verbs**, all GitHub only, all under `qsm-forge gh issue`:
-  - `create <title>` with `--body` or `--file`, repeatable `--label`, optional `--parent <n>`
+  - `create <title>` with `--body` or `--file`, repeatable `--label`, optional `--type <name>`
+    (the org issue type: `Epic` for an epic, `Task` for a task), optional `--parent <n>`
     (the new issue is born a sub-issue);
   - `close <n>` with `--reason completed|not-planned` and optional `--message`;
   - `comment <n> --message`;
   - `sub-issue <parent> <child>` attaches an existing issue as a child;
   - `blocked-by <n>` with exactly one of `--add <m>` or `--remove <m>`;
-  - `ready` lists open issues that no open issue blocks, optionally under `--parent <n>` or with
-    `--label`, because the task flow needs it to pick the next piece of work.
+  - `ready` lists open issues that no open issue blocks and that are not epics, optionally under
+    `--parent <n>` or with `--label`, because the task flow needs it to pick the next piece of work.
 - **One failure rule**: GitHub refuses (unknown label, unknown issue, a parent in another owner,
   a dependency cycle, a missing scope): the verb exits `failed` (1) with GitHub's cause and does
   nothing else, no retry by another route, no rollback.
@@ -31,7 +32,7 @@ here.
   (`$.forge.ghIssueCreate` and so on).
 
 Not in this change: board verbs (piece 2), GitLab (the maintainer moved to GitHub only), an issue
-`view` or `edit` verb, a `labels` verb (the `epic` label is created once by hand), closing by pull
+`view` or `edit` verb, a `labels` verb, closing by pull
 request (GitHub does it), the qsm-tasks skills (piece 3), a hook that refuses raw `gh issue` calls
 (open decision 1 in design.md), and migrating the `br` tasks.
 
