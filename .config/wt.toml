@@ -1,0 +1,5 @@
+# A fresh worktree runs no gate until its dependencies and the engine types exist (AGENTS.md,
+# "Before a commit"); without them every type-aware finding is measured wrong.
+[post-create]
+deps = "mise exec -- bun install"
+types = "mise exec -- bun run plugin-types"
