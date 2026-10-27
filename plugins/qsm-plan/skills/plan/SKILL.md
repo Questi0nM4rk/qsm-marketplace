@@ -41,6 +41,7 @@ cannot:
 | Why are we doing it? | go on | memory (was it decided before?) |
 | Does something already cover it? | go on | the task tool, the spec tool |
 | Where is it, what does it touch? | go on | code |
+| How is this kind of thing built here? | go on | the project's `AGENTS.md` or `CLAUDE.md` and the builder skill it names |
 | Is information missing that only the user has? | go on | one question to the user |
 
 A small ask is one where the text answers all four: restate it in one line with its size and

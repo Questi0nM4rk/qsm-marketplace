@@ -36,7 +36,7 @@ const GUIDE: Record<
     next: "PLAN",
   },
   PLAN: {
-    does: "the six questions, a probe for what exists, the size; a fix goes to EXECUTE, an epic through grilling, the split and a spec per piece",
+    does: "gather first (the project's rules and builder skill, specs, tasks, memory, code), reason it through, then ask only what is still open; the six questions, the size; a fix goes to EXECUTE, an epic through grilling, the split and a spec per piece",
     output: "the person's yes",
     tools: "the question tool, the task tool, openspec",
     skills: ["qsm-plan:plan", "qsm-plan:grilling", "qsm-openspec:spec-propose"],

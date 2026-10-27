@@ -13,6 +13,20 @@ It ends by writing the epic's intent and acceptance criteria, after his yes. It 
 ask or write the spec. It sits between the business request and plan in the qsm flow, and any flow
 that reaches an unresolved branch comes here.
 
+## Order: gather, reason, then ask
+
+1. **Gather** everything that already answers the ask: the project's `AGENTS.md` or `CLAUDE.md`
+   and the builder skill it names for this kind of thing, the specs, the tasks, memory, the code,
+   the rawest material below. A rule written there (a `--json` door, one binary per plugin) is
+   decided.
+2. **Reason** it through as the professional below: write your own answer to each open point with
+   the evidence behind it, and decide what the evidence decides.
+3. **Ask** only what neither settled: that is the frontier of the rounds.
+
+A question asked before the gathering makes the person repeat the project to you. The person in
+their words: "první musí být gathering, potom deep thinking a reasoning, a potom až otázky na věci
+co si nezjistil".
+
 ## First: see the ask as a top professional would
 
 Before the first round, read the ask as the best professional in its field would, because the
@@ -55,8 +69,8 @@ its decision is settled.
   When a trade-off is the question, say what each side costs.
 - **Facts are fetched, decisions are asked.** What the code, the spec tool, memory, the task tool
   or the documentation answers is not a question; fetch it and do not hold the round for it.
-  What was already settled this session, or in the task or spec, is not asked again, because
-  re-asking invites a second answer that contradicts the first.
+  What was already settled this session, or in the task or spec, or by the project's own rules,
+  is not asked again, because re-asking invites a second answer that contradicts the first.
 - **Done is an empty frontier,** not a question count. A cap ends the interview at an arbitrary
   depth and ships the unasked branch as a guess.
 
