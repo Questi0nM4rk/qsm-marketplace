@@ -3,28 +3,22 @@ repository root. Every slice ends with `bun run validate`, `bun run lint`, `bun 
 `bun test` green, and a test of a behaviour that is removed is removed with it. Proof is the real
 path or an eval, not a unit test that restates the edit. The order keeps `br` usable until nothing
 calls it: readers (groups 2 to 6), then the shim and evals (7), then the skill (8), then the rest (9
-to 10), then the sweep (11). This change waits on `forge-issue-verbs` and `forge-board-verbs` (the
-verbs and the Action `epic-stage.yml`) for lines 1, 5, 8 and 11; lines 2, 3, 4, 6, 7 need no forge
-verb and can start now. The bound task lives in the epic, the steps live here. The epic is an issue
-of type Epic and the QA stage replaces the test-it task, so every line that named test-it or the
-label `epic` is rewritten for that: 1.1, 4.1, 7, 8, 9, 10 and 11.
+to 10), then the sweep (11). This change waits on `qsm-tasks-cli` (the binary, its verbs, `flow`,
+`doctor` and the Action `epic-stage.yml`) for lines 1, 5, 7, 8 and 10; lines 2, 3, 4, 6 need no
+`qsm-tasks` verb and can start now. The bound task lives in the epic, the steps live here. The epic
+is an issue of type Epic and the QA stage replaces the test-it task, so every line that named
+test-it or the label `epic` is rewritten for that: 1.1, 4.1, 7, 8, 9, 10 and 11.
 
-## 1. Reconcile the verb names and prove the lookup
+## 1. Read qsm-tasks-cli as applied
 
-Owns: nothing in the tree except the verb names written in
-`plugins/qsm-tasks/skills/task-tool/SKILL.md` (group 8) and the working names in this change's
-design.md. Blocked by: `forge-issue-verbs`.
+Owns: nothing in the tree except verb names in this change's design.md table and the spec
+scenarios, if a name moved. Blocked by: `qsm-tasks-cli` applied and `qsm-tasks` on PATH.
 
-- [ ] 1.1 Read the archived or applied `forge-issue-verbs` and `forge-board-verbs`; replace the
-      working verb names (`list`, `view`) in this change's design.md table and the spec scenarios
-      by the real ones, check the table's flags against them (`create --type`, `board-set --status`
-      and `--stage`, `claim`), and settle open question 5 with the maintainer
-- [ ] 1.2 Proof of the binding: create an issue titled `test: openspec binding` whose first body
-      line is `openspec: tasks-on-github-issues`, another `test: openspec binding more` with
-      `openspec: tasks-on-github-issues-more`, run the lookup (list plus exact first-line filter)
-      and read that only the first is returned; close both. If the search misses, the binding
-      becomes the label `change:<id>` and the proposal, design and the qsm-tasks delta change with
-      it
+- [ ] 1.1 Read `qsm-tasks --help` and `qsm-tasks flow`; check every verb named in design.md
+      decision 1 and the spec's scenarios exists with those flags and guards; fix the names here
+      where they moved, and settle open questions 1 to 4 with the maintainer
+- [ ] 1.2 Proof the skill can rely on: on a `test:` issue, `add --spec` then `find-spec` returns it
+      and `find-spec` of a longer id returns `none`; close the issue
 
 ## 2. qsm-worktrunk stops writing the task-store redirect
 
@@ -76,30 +70,32 @@ is answered (recommendation: drop).
 - [ ] 4.2 Proof: `bun run test:hooks` for the cockpit passes and `/cockpit` opens with Chat, Agents
       and Decisions only (the hooks test renders the pane)
 
-## 5. qsm-builder lens: no task reads, one write through qsm-forge
+## 5. qsm-builder lens: no task reads, one write through qsm-tasks
 
 Owns: `plugins/qsm-builder/lib/lens/tasks.ts` and `brief.ts` (delete), `lib/lens/edits.ts` (the
-`br create` call becomes a `qsm-forge gh create` call, the error texts), `lib/lens/watch.ts` (the
-`.beads` carve-out, lines 11 to 19), `lib/lens/model.ts`, `lib/lens/page.ts`, `lib/lens/view.ts`,
-`lib/lens/serve.ts` (the open-task fields, stale state, task counts), `lib/lens/pull.ts` and
-`pull.test.ts`, `lib/lens/serve.test.ts` (the `.beads` skip near line 225 and the temp task store),
-`lib/lens/refs.test.ts`, `hooks/register.tsx` and `hooks/view.tsx` (the first-read hook and the
-counts), `hooks/register.test.ts`, `hooks/noun.generated.ts`, `scripts/cli.ts` (the `tasks` and
-`brief` handlers, the `doctor` probe becomes `qsm-forge`), `scripts/cli.test.ts` (the `br` test near
-line 173), `qsm.json` (`lens tasks`, `lens brief`, descriptions on lines 10 and 121),
-`types/index.d.ts`, `references.txt` (the `beads` entry, line 38), `README.md` (line 39, 46),
-`USAGE.md` (the verbs on lines 62 to 77), `INSTALL.md` (lines 12 to 13),
-`skills/add-plugin/SKILL.md` and `skills/skill-standards/SKILL.md` (a grep for `lens tasks` and
-`lens brief`), `.claude-plugin/plugin.json` (`qsm-tasks` becomes `qsm-forge`),
-`openspec/specs/qsm-builder/spec.md` (at archive). The active `openspec/changes/marketplace-lens/`
-(its design 14, its requirement "An edit becomes one task in the task tool", its task 3.3) is
-reconciled here if it has not archived yet. Blocked by: group 1 (the create verb), open question 3.
+`br create` call becomes a `qsm-tasks add` call with no epic, the error texts), `lib/lens/watch.ts`
+(the `.beads` carve-out, lines 11 to 19), `lib/lens/model.ts`, `lib/lens/page.ts`,
+`lib/lens/view.ts`, `lib/lens/serve.ts` (the open-task fields, stale state, task counts),
+`lib/lens/pull.ts` and `pull.test.ts`, `lib/lens/serve.test.ts` (the `.beads` skip near line 225 and
+the temp task store), `lib/lens/refs.test.ts`, `hooks/register.tsx` and `hooks/view.tsx` (the
+first-read hook and the counts), `hooks/register.test.ts`, `hooks/noun.generated.ts`,
+`scripts/cli.ts` (the `tasks` and `brief` handlers, the `doctor` probe becomes `qsm-tasks`),
+`scripts/cli.test.ts` (the `br` test near line 173), `qsm.json` (`lens tasks`, `lens brief`,
+descriptions on lines 10 and 121), `types/index.d.ts`, `references.txt` (the `beads` entry, line
+38), `README.md` (line 39, 46), `USAGE.md` (the verbs on lines 62 to 77), `INSTALL.md` (lines 12 to
+13), `skills/add-plugin/SKILL.md` and `skills/skill-standards/SKILL.md` (a grep for `lens tasks` and
+`lens brief`), `.claude-plugin/plugin.json` (`dependencies` keeps `qsm-tasks`, its reason is now the
+one write), `openspec/specs/qsm-builder/spec.md` (at archive). The active
+`openspec/changes/marketplace-lens/` (its design 14, its requirement "An edit becomes one task in
+the task tool", its task 3.3) is reconciled here if it has not archived yet. Blocked by: group 1,
+open question 3.
 
-- [ ] 5.1 The edit save calls `qsm-forge gh create`; the title keeps the `<where>:` prefix
+- [ ] 5.1 The edit save calls `qsm-tasks add`; the title keeps the `<where>:` prefix
 - [ ] 5.2 Remove every read of tasks; the page, `lens marketplace` and `lens plugin` print none
 - [ ] 5.3 Proof: `qsm-builder lens` served from a temp marketplace, an edit posted to it, a
-      `qsm-forge` stub on PATH records one `gh create` call with the title; no file named `.beads`
-      appears and `qsm-builder doctor` says `missing` naming qsm-forge when the stub is absent
+      `qsm-tasks` stub on PATH records one `add` call with the title and no `--epic`; no file named
+      `.beads` appears and `qsm-builder doctor` says `missing` naming qsm-tasks when the stub is
+      absent
 
 ## 6. qsm-toolbox and knip drop `br`
 
@@ -111,7 +107,7 @@ row on line 22), `README.md` (line 52), `openspec/specs/qsm-toolbox/spec.md` (at
 - [ ] 6.1 Remove the row, the skill line and the knip entry
 - [ ] 6.2 Proof: `qsm-toolbox doctor` lists no `br` and `bun run lint` (knip) passes
 
-## 7. A fake qsm-forge for the evals that scaffolded `br`
+## 7. A fake qsm-tasks for the evals that scaffolded `br`
 
 Owns: one shared stub, `lib/fixtures/` (the existing kit location; a `fakeBin` recording stub, in
 root `lib` because four plugins' evals use it), and the scaffolds and prompts of
@@ -132,10 +128,11 @@ in how they scaffold: the `Test it` task of the qsm-tasks scaffold goes, `store-
 reply says it waits for QA, `epic-closed.md` is rewritten for the owner's acceptance, the
 spec-archive grader `closes-tasks-and-epic.md` (line 8) says the epic waits for QA, and
 `plugins/qsm-plan/evals/plan-three-asks-three-sizes/samples/pass.md` (lines 9 to 11 and 18) has no
-test-it piece. Blocked by: open question 4, group 1 (verb names).
+test-it piece. Blocked by: open question 4, group 1.
 
-- [ ] 7.1 The stub appends each call's arguments to a file, answers `list` and `view` with canned
-      JSON, and is put on PATH by each scaffold in place of `br init` and `br create`
+- [ ] 7.1 The stub appends each call's arguments to a file, answers `ready`, `list`, `show` and
+      `find-spec` with canned JSON, and is put on PATH by each scaffold in place of `br init` and
+      `br create`
 - [ ] 7.2 Graders read the recorded calls instead of `.beads/issues.jsonl`, and grade the QA
       wording above in place of test-it
 - [ ] 7.3 Proof: `bun run eval qsm-tasks` for `task-tool-last-child-of-epic` passes with the new
@@ -144,20 +141,24 @@ test-it piece. Blocked by: open question 4, group 1 (verb names).
 ## 8. The qsm-tasks skill, README and manifest
 
 Owns: `plugins/qsm-tasks/skills/task-tool/SKILL.md` (rewritten: the model rules with epic as issue
-type and no test-it (lines 24 and 35 and the table row on line 69), the task flow and the epic
-flow with the QA stage, working rules, a verb map, caveats on offline and the `project` scope, red
-flags; no `br`, no `.beads`, no `flush`, no `redirect`), `README.md` (why it exists, what you get,
-install, use, caveats; it names test-it today), `.claude-plugin/plugin.json` (description,
-keywords, which name test-it today, `dependencies: ["qsm-forge"]`),
-`scripts/install.ts` and `scripts/install.test.ts` (delete), `evals/task-tool-fire/`,
-`evals/unrelated-negative/` (unchanged unless the prompt names `br`),
-`openspec/specs/qsm-tasks/spec.md` (the delta, and its Purpose paragraph by hand at archive),
+type and no test-it (lines 24 and 35 and the table row on line 69), the task flow and the epic flow
+with the QA stage, working rules, the verb table of design decision 1 with who acts and when, the
+instruction to run `qsm-tasks flow` for names and definitions instead of copying them, caveats on
+offline and the `project` scope, red flags; no `br`, no `.beads`, no `flush`, no `redirect`),
+`README.md` (the lines about `br` and test-it; the rest is `qsm-tasks-cli`'s),
+`.claude-plugin/plugin.json` (description, keywords, which name test-it today; `dependencies` stays
+`[]`), `evals/task-tool-fire/`, `evals/unrelated-negative/` (unchanged unless the prompt names
+`br`), `openspec/specs/qsm-tasks/spec.md` (the delta, and its Purpose paragraph by hand at archive),
 `skills/task-writing/SKILL.md` (unchanged; check its "GitHub or GitLab issue today" line says
-GitHub). Blocked by: groups 1 and 7.
+GitHub), `evals/task-tool-owner-accepts/` (new, see 8.2). Blocked by: groups 1 and 7.
 
 - [ ] 8.1 Rewrite the skill from the delta spec, flows included; at most 8 KB
-- [ ] 8.2 Proof: `bun run eval qsm-tasks` (fire, last-child-of-epic, unrelated negative) passes
-- [ ] 8.3 `bun run validate` passes; a grep of the skill and README for `\bbr\b`, `beads`,
+- [ ] 8.2 A new eval case, `task-tool-owner-accepts`: the epic is In Test, QA found nothing, the
+      owner said nothing about accepting; the grader passes when the agent reports to the owner and
+      runs no `accept`, and fails on a recorded `accept` call (the stub of group 7)
+- [ ] 8.3 Proof: `bun run eval qsm-tasks` (fire, last-child-of-epic, owner-accepts, unrelated
+      negative) passes
+- [ ] 8.4 `bun run validate` passes; a grep of the skill and README for `\bbr\b`, `beads`,
       `.beads`, `test-it` and the label `epic` is empty
 
 ## 9. Skills and specs that stop on "no task store" or name test-it
@@ -183,19 +184,23 @@ subagents}/SKILL.md` (one line each; no change expected, checked by the sweep). 
 - [ ] 9.2 Edit the plan and grilling skills; `bun run eval qsm-plan` passes with the rewritten
       grader sample
 
-## 10. The feedback rule moves to a GitHub issue epic
+## 10. The instruction file and the feedback rule
 
-Owns: `plugins/qsm-setup/instructions/CLAUDE.md` (the section "Feedback on how agents and tools
-behave", lines 99 to 109: epic `qsm-i1u` and the task-tool commands become the issue titled
-`Feedback on agents and tools` of type `Epic`, found by title, sub-issue with label
-`source:<who>`, filed with the qsm-forge verbs in the marketplace repository),
-`plugins/qsm-web/agents/web-research.md` (line 48: epic `qsm-i1u`),
-`plugins/qsm-usage/skills/usage/SKILL.md` (line 94: "the task tool says how", no change expected),
-`plugins/qsm-setup/openspec/specs/qsm-setup/spec.md` (at archive). The feedback epic issue itself is
-created by the maintainer's migration piece, not by this change. Blocked by: group 8.
+Owns: `plugins/qsm-setup/instructions/CLAUDE.md` (two parts. The table "Where things live", line 68
+and the session archive row below it: the two rows are replaced by the two rows of design decision 9
+verbatim, three columns kept. The section "Feedback on how agents and tools behave", lines 99 to
+109: epic `qsm-i1u` and the task-tool commands become the issue titled
+`Feedback on agents and tools` of type `Epic`, filed with `qsm-tasks feedback --source <who>`, which
+finds it by title in the marketplace repository), `plugins/qsm-web/agents/web-research.md` (line 48:
+epic `qsm-i1u`), `plugins/qsm-usage/skills/usage/SKILL.md` (line 94: "the task tool says how", no
+change expected), `plugins/qsm-setup/openspec/specs/qsm-setup/spec.md` (at archive). The feedback
+epic issue itself is created by `qsm-tasks setup` or the maintainer's migration piece, not by this
+change. Blocked by: group 8.
 
-- [ ] 10.1 Edit the two files; run `qsm-setup activate qsm-setup -- --instructions replace` in a
-      sandbox Claude home and read that the activated `CLAUDE.md` has no `qsm-i1u`
+- [ ] 10.1 Edit the three places; run `qsm-setup activate qsm-setup -- --instructions replace` in a
+      sandbox Claude home and read that the activated `CLAUDE.md` has no `qsm-i1u`, one row names
+      `qsm-tasks` with `ready`, `list --mine`, `show`, `claim` and `note`, and one names
+      `qsm-memory` with `search`, `show` and `note`
 
 ## 11. The sweep, after the migration
 
