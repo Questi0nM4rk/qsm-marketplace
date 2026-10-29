@@ -101,7 +101,10 @@ is no case where that is right.
 Prefer fewer agents with more work each over a large fleet. Each new agent starts a new chat and
 writes its whole context into the cache at full price, while an agent that is continued reads its
 cache back cheaply. So give one agent the related work together, and continue an agent that already
-holds the context instead of starting another. The person said: "prefer less agents, that have more
+holds the context instead of starting another: a teammate in its own tmux pane that stays idle
+between tasks keeps its context, takes the next task by message, and reads its cache back instead of
+writing a new one. The cache lives about an hour, so a teammate idle longer pays the full write
+again. The person said: "prefer less agents, that have more
 work, so that we dont burn the cache".
 
 The main agent makes a subagent's worktree before dispatch, reviews the branch there (the

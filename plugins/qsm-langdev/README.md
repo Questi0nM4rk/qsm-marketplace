@@ -50,6 +50,12 @@ qsm-langdev install                                  # write the pre-commit and 
 The edit hook, the stop gate, and the installed git hooks do nothing in a repository that never ran
 `qsm-langdev init`. `check` there says so and exits.
 
+Which languages a repository gates on is that repository's choice, kept in
+`.qsm-langdev/gates.json`: `qsm-langdev languages add py` opts one in, `languages remove py` takes
+it out. A language plugin such as qsm-langdev-py is only the skill that teaches an agent the
+language; uninstalling it changes no gate, so stay installed and remove the language from the
+project that does not need it.
+
 ## Caveats
 
 - Every checker with a safe fix mode is fixed before the check, on an edit and on staged files at
