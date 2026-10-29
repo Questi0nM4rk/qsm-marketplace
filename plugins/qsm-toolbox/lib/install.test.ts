@@ -27,7 +27,7 @@ function fakeContext(options: {
   const failing = new Set(options.failing ?? []);
   return {
     dryRun: false,
-    env: options.env ?? {},
+    env: { HOME: sandboxDir("qsm-toolbox-home-"), ...options.env },
     probe: (cmd) => present.has(cmd),
     run: (cmd, args) => {
       options.log?.push([cmd, ...args].join(" "));

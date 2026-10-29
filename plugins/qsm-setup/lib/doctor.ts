@@ -8,6 +8,7 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   statSync,
 } from "node:fs";
@@ -175,6 +176,17 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
+/** A link an installer makes to a qsm binary beside it, as `qsm-askpass-sudo` to `qsm-secrets`, is
+ * a second name of that binary, not one of its own. */
+function isSiblingLink(path: string): boolean {
+  try {
+    const target = readlinkSync(path);
+    return target.startsWith("qsm-") && !target.includes("/");
+  } catch {
+    return false;
+  }
+}
+
 /** Every qsm-* executable in the directories, first hit per name first. */
 export function qsmBinsIn(dirs: readonly string[]): Map<string, string[]> {
   const found = new Map<string, string[]>();
@@ -187,7 +199,7 @@ export function qsmBinsIn(dirs: readonly string[]): Map<string, string[]> {
     }
     for (const name of names.filter((n) => n.startsWith("qsm-"))) {
       const full = join(dir, name);
-      if (isExecutableFile(full)) {
+      if (isExecutableFile(full) && !isSiblingLink(full)) {
         found.set(name, [...(found.get(name) ?? []), full]);
       }
     }

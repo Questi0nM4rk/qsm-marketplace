@@ -3,7 +3,7 @@
 // completions and pruning, and doctor's orphans and drift.
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fishCompletion, MARKER } from "../../../lib/completions.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
@@ -293,6 +293,7 @@ describe("doctor over PATH", () => {
       writeFileSync(path, "#!/bin/sh\n");
       chmodSync(path, 0o755);
     }
+    symlinkSync("qsm-x", join(binDir, "qsm-x-alias"));
     const recordPath = join(home, "bins.json");
     const hash = createHash("sha256").update("#!/bin/sh\n").digest("hex");
     writeRecord(recordPath, { bins: { "qsm-x": { plugin: "x", sha256: hash } } });
