@@ -190,12 +190,13 @@ Owns: `plugins/qsm-setup/instructions/CLAUDE.md` (two parts. The table "Where th
 and the session archive row below it: the two rows are replaced by the two rows of design decision 9
 verbatim, three columns kept. The section "Feedback on how agents and tools behave", lines 99 to
 109: epic `qsm-i1u` and the task-tool commands become the issue titled
-`Feedback on agents and tools` of type `Epic`, filed with `qsm-tasks feedback --source <who>`, which
-finds it by title in the marketplace repository), `plugins/qsm-web/agents/web-research.md` (line 48:
-epic `qsm-i1u`), `plugins/qsm-usage/skills/usage/SKILL.md` (line 94: "the task tool says how", no
-change expected), `plugins/qsm-setup/openspec/specs/qsm-setup/spec.md` (at archive). The feedback
-epic issue itself is created by `qsm-tasks setup` or the maintainer's migration piece, not by this
-change. Blocked by: group 8.
+`Feedback on agents and tools` of type `Epic`, filed with `qsm-tasks feedback`, which finds it by
+title in the marketplace repository, and the sentence on the label that says who noticed is
+deleted), `plugins/qsm-web/agents/web-research.md` (line 48: epic `qsm-i1u`),
+`plugins/qsm-usage/skills/usage/SKILL.md` (line 94: "the task tool says how", no change expected),
+`plugins/qsm-setup/openspec/specs/qsm-setup/spec.md` (at archive). The feedback epic issue itself is
+created by `qsm-tasks setup` or the maintainer's migration piece, not by this change. Blocked by:
+group 8.
 
 - [ ] 10.1 Edit the three places; run `qsm-setup activate qsm-setup -- --instructions replace` in a
       sandbox Claude home and read that the activated `CLAUDE.md` has no `qsm-i1u`, one row names

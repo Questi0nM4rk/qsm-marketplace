@@ -66,7 +66,7 @@ type), `lib/verbs/create.ts` (`epic`, `add`, `feedback`, `note`), `scripts/cli.t
       `note`; the body reaches `gh` on stdin; the rule that `add` under Ready For Test or In Test
       sets Building and under Done is refused
 - [ ] 3.2 `feedback`: finds the epic by exact title in the `QSM_MARKETPLACE` checkout's repository,
-      comments on an open same-title issue, else creates under it with `source:<who>`
+      comments on an open same-title issue, else creates under it
 - [ ] 3.3 Proof: `epic "test: epic" --intent` a file with backticks, two `add --epic` tasks with
       `--after`, `tree` shows order and stage Planning, `note` posts exactly the text; a `feedback`
       from another directory lands in this repository, a repeat comments instead; `add --epic` on

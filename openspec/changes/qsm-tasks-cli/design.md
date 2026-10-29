@@ -47,7 +47,7 @@ the failure this removes, and hooks need `$.tasks`.
 | | `board` | |
 | create | `epic "<goal>"` | `--intent <file or ->` required: the epic body |
 | | `add "<title>"` | `--epic <n>`, `--after <n>`, `--spec <change-id>`, `--body`/`--body-file`, `--label` |
-| | `feedback "<title>"` | `--source main-agent\|subagent\|user`, `--body`/`--body-file` |
+| | `feedback "<title>"` | `--body`/`--body-file` |
 | | `finding <epic> "<title>"` | `--body`/`--body-file` |
 | edit | `edit <n>` | `--title`, `--body`/`--body-file` |
 | | `move <n>` | `--epic <n>` required |
@@ -71,8 +71,8 @@ refinements and the reason for each:
   flag cannot say which field is meant.
 - `add --epic` is optional: a loose task (a follow-up, a pen edit from the lens) has no epic and is
   never an epic's child; a spec change always passes it.
-- `close` is added (Question 1); `reopen` covers a task; an accepted epic is not reopened
-  (`wrong-kind`), new work is a new epic.
+- `close` is added (decision of 2026-10-29); `reopen` covers a task; an accepted epic is not
+  reopened (`wrong-kind`), new work is a new epic.
 - `plan` is the way back to Planning when an epic is re-planned; `epic` already creates at Planning.
 - `human` and `review` are the two ends of CI: `review` also takes a task back from Ready For Human
   Review when a finding appears.
@@ -136,8 +136,8 @@ verbs, with no change to their contract.
 `epic` creates an issue of type Epic with the intent file as body and sets Epic stage Planning;
 `add` creates a Task, optionally a sub-issue of `--epic` and blocked by `--after`; `feedback` finds
 the marketplace feedback epic, and when an open issue with the same title already exists comments
-the body on it instead (`data.created` false), else creates a sub-issue with the label
-`source:<who>`; `finding` creates a Task under the epic and sets Blocked. `reject` is a finding the
+the body on it instead (`data.created` false), else creates a sub-issue;
+`finding` creates a Task under the epic and sets Blocked. `reject` is a finding the
 owner makes and leaves the epic at Building. Why `reject` creates a task: the Action fires on a
 close, so an epic returned to Building with every task closed would wait forever; the fix task is
 what closes next and carries the owner's reason. Body text goes to `gh` on stdin (`--body-file -`),
@@ -191,8 +191,8 @@ done, so the repeat finishes it: each write is idempotent.
 
 `doctor` checks, one line each with `ok`, `failed` or `manual`: `gh` and its login and the
 `project` scope; the repository and the one linked board; the issue types Epic and Task; the two
-fields with exactly the option names of `lib/flow.ts` and their definitions; the labels `deferred`
-and `source:*`; the feedback epic; the built-in workflows that must be on (auto-add, auto-add
+fields with exactly the option names of `lib/flow.ts` and their definitions; the label `deferred`;
+the feedback epic; the built-in workflows that must be on (auto-add, auto-add
 sub-issues, item added, item closed, pull request merged); the views Tasks and Epics; the file
 `.github/workflows/epic-stage.yml` with its names and the secret `PROJECT_TOKEN`. Each failing line
 names its fix: a `qsm-tasks setup` or the web-UI page. A check the API cannot read is `manual`, and
@@ -216,7 +216,7 @@ names the verbs, is what it also replaces.
 ### 13. Ghost mode
 
 The binary adds nothing of its own to a body, comment, title or label: no footer, no marker, no
-`Co-Authored-By`. The only labels it writes are `deferred`, `source:<who>` (Question 2) and
+`Co-Authored-By`. The only labels it writes are `deferred` and
 `change:<id>` if decision 6 falls back. Commit messages and pull requests are not its business.
 
 ## Data

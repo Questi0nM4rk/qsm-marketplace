@@ -70,7 +70,7 @@ renamed option edits one file), and holds the table below.
 | progress | `qsm-tasks note <id> "<text>"` | anyone, in the owner's name |
 | work for later | `qsm-tasks defer <id> --until <date>` | the main agent |
 | epic check | `qsm-tasks tree <epic>`, `qsm-tasks show <epic>` | after each task closes |
-| feedback | `qsm-tasks feedback "<title>" --source <who>` | any agent, a subagent's one permitted create |
+| feedback | `qsm-tasks feedback "<title>"` | any agent, a subagent's one permitted create |
 
 Alternative rejected: keep `task-tool` free of verb names and point at the binary's own help. The
 agent would learn the flow from two places; one skill that names its verbs is one place to read.
@@ -119,7 +119,7 @@ type `Epic` and the verb `qsm-tasks feedback`, never a number: a number in an in
 the literal that goes stale (the `qsm-i1u` it replaces). The verb finds the epic by exact title in
 the marketplace repository (the checkout `QSM_MARKETPLACE` names, so a subagent in another project
 does not file into that project), comments on an open issue with the same title instead of making a
-second, and labels a new one `source:<who>`. Feedback tasks keep the rules of today: the title names
+second. Feedback tasks keep the rules of today: the title names
 where, a subagent creates only this kind. What the verb does is `qsm-tasks-cli`'s; the instruction
 file says when.
 

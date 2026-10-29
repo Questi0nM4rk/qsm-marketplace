@@ -169,10 +169,10 @@ reaches its limit SHALL say it is cut, as a warning, and still exit `ok`.
 SHALL set its Epic stage to Planning. `add "<title>"` SHALL create a Task, optionally a sub-issue of
 `--epic`, blocked by `--after`, bound to a change by `--spec`, with `--body` or `--body-file` and
 `--label`; it SHALL leave an epic at Ready For Test or In Test at Building and SHALL refuse an epic
-at Done with reason `epic-done`. `feedback "<title>" --source <who>` SHALL find the open issue of
+at Done with reason `epic-done`. `feedback "<title>"` SHALL find the open issue of
 kind Epic titled exactly `Feedback on agents and tools` in the marketplace repository and, when an
 open issue under it already has the same title, comment the body there; otherwise create a Task
-under it labelled `source:<who>`; `<who>` is `main-agent`, `subagent` or `user`. `finding <epic>
+under it. `finding <epic>
 "<title>"` SHALL create a Task under an epic In Test and set the epic to Blocked. Body text SHALL
 reach the backend as a file or stdin, never as an argument. Every create SHALL print the new
 number and URL.
@@ -501,7 +501,7 @@ own binary SHALL replace this plugin for a user without any consumer changing th
 when every check is `ok`, `partial` when only `manual` ones remain, and `missing` or `failed` with
 the cause otherwise. It SHALL check: `gh` on PATH, its login and the `project` scope; the
 repository and the one linked board; the issue types Epic and Task; the two fields with exactly the
-option names and definitions of the flow table; the labels `deferred` and `source:*`; the feedback
+option names and definitions of the flow table; the label `deferred`; the feedback
 epic; the built-in workflows that must be on; the views Tasks and Epics; the file
 `.github/workflows/epic-stage.yml` with names that are options of the board; and the secret
 `PROJECT_TOKEN`. Each failing line SHALL name its fix: a `qsm-tasks setup` or the one place in the
@@ -531,11 +531,10 @@ web UI. A check the backend cannot read SHALL be `manual` and SHALL NOT be repor
 
 `qsm-tasks setup` SHALL, for a repository and its board, create what the API allows and nothing
 else: the two single-select fields with every option and its definition from the flow table, the
-missing issue types Epic and Task, the labels `deferred` and `source:main-agent`,
-`source:subagent` and `source:user`, and the issue titled `Feedback on agents and tools` of kind
-Epic. It SHALL change nothing that exists, so a second run does nothing and says so, and SHALL print
-what it cannot create (the views, the built-in workflows, the secret, the Action file) as the lines
-`doctor` prints for them.
+missing issue types Epic and Task, the label `deferred`, and the issue titled
+`Feedback on agents and tools` of kind Epic. It SHALL change nothing that exists, so a second run
+does nothing and says so, and SHALL print what it cannot create (the views, the built-in workflows,
+the secret, the Action file) as the lines `doctor` prints for them.
 
 #### Scenario: A new board
 
@@ -552,7 +551,7 @@ what it cannot create (the views, the built-in workflows, the secret, the Action
 
 A verb SHALL write to an issue only the text its caller passed and SHALL add no footer, marker,
 trailer, signature or label that names an agent or an AI. The labels the binary writes SHALL be
-`deferred`, `source:<who>` and, if the binding falls back to a label, `change:<id>`.
+`deferred` and, if the binding falls back to a label, `change:<id>`.
 
 #### Scenario: A comment
 

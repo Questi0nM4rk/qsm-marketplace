@@ -44,8 +44,7 @@ done if any step still needs `br`". It depends on `qsm-tasks-cli`.
   are `qsm-tasks-cli`'s. The plugin declares no plug-in dependency.
 - **The feedback rule moves.** `plugins/qsm-setup/instructions/CLAUDE.md` and the web-research agent
   name epic `qsm-i1u` in the task tool; they name instead the issue titled `Feedback on agents and
-  tools` of type `Epic`, filed with `qsm-tasks feedback`, which finds it by title and labels the
-  sub-issue `source:<who>`.
+  tools` of type `Epic`, filed with `qsm-tasks feedback`, which finds it by title.
 - **qsm-worktrunk stops writing `.beads/redirect`.** Issues are on GitHub, so a worktree has nothing
   to point at: `lib/task-store.ts`, the call in the create hook, `StoreIo` in `lib/node-io.ts`, and
   the "shares the task store" requirement go.

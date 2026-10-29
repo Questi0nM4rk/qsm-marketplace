@@ -46,7 +46,7 @@ its token (decision 9), "Done is GitHub's" (decision 8), the two board fields wi
 names and definitions (now `lib/flow.ts`), `ready` as one search (decision 4), the "refused call
 fails loud, does nothing else" rule, and body text on stdin. Left behind and not carried: the `gh`
 and `gl` sub-command shape, `--owner --project` on every call (the board is resolved from the
-repository, decision 3), a guard hook that refuses raw `gh issue` calls (see Questions).
+repository, decision 3), a guard hook that refuses raw `gh issue` calls.
 
 Not in this change: pull requests, review threads, git (qsm-forge), GitLab, a second backend, the
 QA agent itself, the GitHub App bot that opens pull requests, the skills that call the verbs and the
@@ -78,15 +78,14 @@ None. Every requirement lands in the existing `qsm-tasks` capability.
 - Proof runs on `qsmark-labs/qsm-marketplace` and org Project #1 with issues titled `test: ...`,
   all closed afterwards.
 
-## Questions
+## Decisions of 2026-10-29
 
-1. **A `close` verb for a task with no pull request.** The decided set has `drop` (not planned) and
-   no way to finish a decision or spec-only task that no merge closes; the old rule "close without a
-   pull request" needs one. Recommendation: keep `close <id> --reason "<what was done>"`, task only,
-   completed; it is in this spec.
-2. **Feedback label values against ghost mode.** `source:main-agent|subagent|user` names an agent on
-   a public repository. Recommendation: keep the label, because feedback is about agents and the
-   person chose the scheme; if ghost mode wins, the label becomes `source:me` for all.
+1. **`close` stays.** `close <id> --reason "<what was done>"` finishes a task that no merge closes,
+   such as a decision or a spec-only task: task only, state completed.
+2. **Ghost mode wins over the feedback labels.** A label such as `source:main-agent` names an agent
+   on a public repository, which ghost mode forbids, and one value such as `source:me` on every
+   issue says nothing. So `feedback` writes no source label and takes no `--source`; a feedback
+   task is found by its parent, the feedback epic.
 
 ## Critiques
 
