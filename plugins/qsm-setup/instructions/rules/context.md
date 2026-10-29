@@ -88,7 +88,8 @@ answers).
 
 | Work | Who | Why |
 | ------ | ----- | ----- |
-| Everything that is not a harder implementation: search, research, reading, audit, review, verify, a runner, a small bounded edit | haiku | The default: Haiku 5.5 is as good as sonnet, it only plans less far ahead and links fewer things together |
+| Everything that is not a harder implementation or a review: search, research, reading, audit, verify, a runner, a small bounded edit | haiku | The default: Haiku 5.5 is as good as sonnet, it only plans less far ahead and links fewer things together |
+| A review of a change, a plan or a spec | sonnet, opus for a large or risky change, never haiku | A review is the gate a change passes, and it must see the links haiku makes less of; the person said so: "review by mel byt vzdy sonnet nebo opus, nikdy haiku" |
 | A harder implementation task: several files that must fit together, a design to carry through | sonnet | Needs the foresight and the links haiku makes less of |
 | One agent doing a whole big, complex job alone | opus | As rarely as possible, because it costs several times more |
 | Build something from zero on the side, when we know what it should do but not how | fable, forked with a summary of this context and the full intent, treated as a teammate, not a worker | Needs the whole picture |
@@ -109,10 +110,9 @@ working tree does not have; the session-end hook names every branch still ahead.
 
 More than three subagents for one piece of work is a Workflow, not a chain of dispatches. Find the
 work list yourself, then hand it to the workflow, and use `parallel()` only when a stage needs all
-results at once. Every workflow step is haiku, finders, verifiers, and reviewers
-included, sonnet only for a step that is a harder implementation, and opus only for a step that is
-really difficult. Never fable inside
-a workflow.
+results at once. Every workflow step is haiku, finders and verifiers included; a reviewer is sonnet,
+or opus for a large or risky change, and never haiku; sonnet for a step that is a harder
+implementation, and opus only for a step that is really difficult. Never fable inside a workflow.
 
 Review and fix stages are a quarter of the build stage: one reviewer for four builders, reading
 their results together and judging the integration, the flow, and the end-to-end business
