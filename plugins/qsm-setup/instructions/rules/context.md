@@ -88,16 +88,21 @@ answers).
 
 | Work | Who | Why |
 | ------ | ----- | ----- |
-| Everything that is not a harder implementation or a review: search, research, reading, audit, verify, a runner, a small bounded edit | haiku | The default: Haiku 5.5 is as good as sonnet, it only plans less far ahead and links fewer things together |
-| A review of a change, a plan or a spec | sonnet, opus for a large or risky change, never haiku | A review is the gate a change passes, and it must see the links haiku makes less of; the person said so: "review by mel byt vzdy sonnet nebo opus, nikdy haiku" |
-| A harder implementation task: several files that must fit together, a design to carry through | sonnet | Needs the foresight and the links haiku makes less of |
-| One agent doing a whole big, complex job alone | opus | As rarely as possible, because it costs several times more |
+| Most work: search, research, reading, audit, verify, a runner, a small bounded edit | haiku | The default and the best fast all-rounder: Haiku 5.5 is as good as sonnet, it only plans less far ahead and links fewer things together |
+| A review, a job that needs thinking, an implementation of several steps or files that must fit together | sonnet; a review is never haiku | Needs the foresight and the links haiku makes less of; the person said: "review by mel byt vzdy sonnet nebo opus, nikdy haiku" |
+| An end-to-end delivery, the review of a large or risky change, one agent carrying a whole big job | opus | Costs several times more, so only where one mind must hold the whole |
 | Build something from zero on the side, when we know what it should do but not how | fable, forked with a summary of this context and the full intent, treated as a teammate, not a worker | Needs the whole picture |
 
 Every agent anyone starts names its model: an Agent call, a workflow agent, `claude -p`, a
 `claude plugin eval` run and its judge, however deeply nested. Pick the cheapest tier that can do
 the job. A model left to default inherits the session's, usually the most expensive one, and there
 is no case where that is right.
+
+Prefer fewer agents with more work each over a large fleet. Each new agent starts a new chat and
+writes its whole context into the cache at full price, while an agent that is continued reads its
+cache back cheaply. So give one agent the related work together, and continue an agent that already
+holds the context instead of starting another. The person said: "prefer less agents, that have more
+work, so that we dont burn the cache".
 
 The main agent makes a subagent's worktree before dispatch, reviews the branch there (the
 subagents skill says how), merges by merge commit or cherry-pick, then deletes worktree and
@@ -110,9 +115,9 @@ working tree does not have; the session-end hook names every branch still ahead.
 
 More than three subagents for one piece of work is a Workflow, not a chain of dispatches. Find the
 work list yourself, then hand it to the workflow, and use `parallel()` only when a stage needs all
-results at once. Every workflow step is haiku, finders and verifiers included; a reviewer is sonnet,
-or opus for a large or risky change, and never haiku; sonnet for a step that is a harder
-implementation, and opus only for a step that is really difficult. Never fable inside a workflow.
+results at once. A workflow mixes the tiers side by side, each step on the
+tier the table above gives its work: haiku by default, sonnet for a review or a step that needs
+thinking, opus for an end-to-end step. Never fable inside a workflow.
 
 Review and fix stages are a quarter of the build stage: one reviewer for four builders, reading
 their results together and judging the integration, the flow, and the end-to-end business
