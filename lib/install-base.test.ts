@@ -17,36 +17,13 @@ import {
 import { join, resolve } from "node:path";
 import { MARKER } from "./completions.ts";
 import { isolatedEnv, runBin } from "./fixtures/cli.ts";
+import { fakeInstall } from "./fixtures/install.ts";
 import { sandboxDir } from "./fixtures/sandbox.ts";
 import { installBase, installScript, linkBin, removeOwnedLinks } from "./install-base.ts";
-import type { InstallContext, InstallResult } from "./install-contract.ts";
+import type { InstallResult } from "./install-contract.ts";
 import { isRecord } from "./outcome.ts";
 
 const FIXTURE = resolve(import.meta.dir, "fixtures/plugin-fixture");
-
-interface Fake {
-  readonly ctx: InstallContext;
-  readonly runs: string[][];
-  readonly home: string;
-}
-
-function fake(
-  opts: { present?: readonly string[]; dryRun?: boolean; runExit?: number } = {},
-): Fake {
-  const home = sandboxDir("qsm-install-");
-  const present = new Set(opts.present ?? ["bun"]);
-  const runs: string[][] = [];
-  const ctx: InstallContext = {
-    dryRun: opts.dryRun ?? false,
-    env: { HOME: home, QSM_BIN_DIR: join(home, "bin"), XDG_CONFIG_HOME: join(home, "config") },
-    probe: (cmd) => present.has(cmd),
-    run: (cmd, args) => {
-      runs.push([cmd, ...args]);
-      return opts.runExit ?? 0;
-    },
-  };
-  return { ctx, runs, home };
-}
 
 /** The steps of an install --json envelope; a stdout of any other shape throws. */
 function stepsOf(stdout: string): { name: string; status: string }[] {
@@ -79,7 +56,7 @@ const install = installBase({
 
 describe("install-base over the fixture plugin", () => {
   test("A plugin with two binaries and no upstream, then nothing changed since the last run", async () => {
-    const f = fake({ present: ["bun", "fakeup"] });
+    const f = fakeInstall({ present: ["bun", "fakeup"] });
     rmSync(join(FIXTURE, "dist"), { recursive: true, force: true });
     const r = await install(f.ctx);
     expect(r.tool).toBe("qsm-fixture");
@@ -109,7 +86,7 @@ describe("install-base over the fixture plugin", () => {
 
 describe("install-base dry run", () => {
   test("dry run: prints the plan, writes nothing, reports skipped", async () => {
-    const d = fake({ dryRun: true, present: ["bun"] });
+    const d = fakeInstall({ dryRun: true, present: ["bun"] });
     const r = await install(d.ctx);
     expect(r.status).toBe("skipped");
     expect(r.detail).toStartWith("[dry-run] would compile scripts/cli.ts");
@@ -122,10 +99,10 @@ describe("install-base dry run", () => {
   });
 
   test("dry run probes the upstream tools the way the real run does", async () => {
-    const present = fake({ dryRun: true, present: ["bun", "fakeup"] });
+    const present = fakeInstall({ dryRun: true, present: ["bun", "fakeup"] });
     const r1 = await install(present.ctx);
     expect(r1.detail).toContain("fakeup on PATH");
-    const runnable = fake({ dryRun: true, present: ["bun"] });
+    const runnable = fakeInstall({ dryRun: true, present: ["bun"] });
     const r2 = await installBase({
       pluginRoot: FIXTURE,
       upstream: [{ cmd: "fakeup", install: ["bun", "add", "-g", "fakeup"], hint: "x" }],
@@ -137,7 +114,7 @@ describe("install-base dry run", () => {
 
 describe("install-base dry run with extra steps", () => {
   test("dry run asks the extra step for its own plan line", async () => {
-    const d = fake({ dryRun: true, present: ["bun"] });
+    const d = fakeInstall({ dryRun: true, present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
       extra: (ctx) => ({
@@ -151,7 +128,7 @@ describe("install-base dry run with extra steps", () => {
   });
 
   test("dry run gives each of several extra steps its own plan line, in order", async () => {
-    const d = fake({ dryRun: true, present: ["bun"] });
+    const d = fakeInstall({ dryRun: true, present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
       extra: () => [
@@ -165,14 +142,14 @@ describe("install-base dry run with extra steps", () => {
   });
 
   test("a plugin with nothing to do says so instead of an empty detail", async () => {
-    const bare = fake({ present: ["bun"] });
+    const bare = fakeInstall({ present: ["bun"] });
     const emptyRoot = sandboxDir("qsm-empty-plugin-");
     const r = await installBase({ pluginRoot: emptyRoot })(bare.ctx);
     expect(r).toMatchObject({ status: "already", detail: "nothing to install", steps: [] });
   });
 
   test("dry run over a plugin with nothing to plan answers the same line", async () => {
-    const bare = fake({ dryRun: true, present: ["bun"] });
+    const bare = fakeInstall({ dryRun: true, present: ["bun"] });
     const r = await installBase({ pluginRoot: sandboxDir("qsm-empty-plugin-") })(bare.ctx);
     expect(r).toMatchObject({ status: "already", detail: "nothing to install", steps: [] });
   });
@@ -203,7 +180,7 @@ describe("install-base plugin dependencies", () => {
   }
 
   test("a stale lockfile is an error step that stops before compiling", async () => {
-    const d = fake();
+    const d = fakeInstall({ present: ["bun"] });
     const r = await installBase({ pluginRoot: depPlugin(true) })(d.ctx);
     expect(r.status).toBe("error");
     expect(r.steps.map((s) => s.name)).toEqual(["dependencies"]);
@@ -212,7 +189,7 @@ describe("install-base plugin dependencies", () => {
 
   test("a current lockfile installs the dependency", async () => {
     const root = depPlugin(false);
-    const d = fake();
+    const d = fakeInstall({ present: ["bun"] });
     const first = await installBase({ pluginRoot: root })(d.ctx);
     expect(existsSync(join(root, "node_modules/dep/package.json"))).toBe(true);
     expect(first.status).not.toBe("error");
@@ -220,7 +197,7 @@ describe("install-base plugin dependencies", () => {
   });
 
   test("dry run names the install and runs nothing", async () => {
-    const d = fake({ dryRun: true });
+    const d = fakeInstall({ dryRun: true, present: ["bun"] });
     const r = await installBase({ pluginRoot: depPlugin(false) })(d.ctx);
     expect(r.detail).toContain("would run bun install --frozen-lockfile");
   });
@@ -257,7 +234,7 @@ describe("install-base run twice, each run its own process", () => {
 
 describe("install-base outcomes", () => {
   test("no bun: missing-prereq, nothing else runs", async () => {
-    const f = fake({ present: [] });
+    const f = fakeInstall({ present: [] });
     const r = await installBase({ pluginRoot: FIXTURE })(f.ctx);
     expect(r.status).toBe("missing-prereq");
     expect(r.detail).toContain("bun");
@@ -265,7 +242,7 @@ describe("install-base outcomes", () => {
   });
 
   test("a required upstream tool with no install command is missing, the hint is the detail", async () => {
-    const f = fake({ present: ["bun"] });
+    const f = fakeInstall({ present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
       upstream: [{ cmd: "fakeup", hint: "brew install fakeup" }],
@@ -278,7 +255,7 @@ describe("install-base outcomes", () => {
   }, 60_000);
 
   test("An upstream tool is missing and slow to install", async () => {
-    const f = fake({ present: ["bun"] });
+    const f = fakeInstall({ present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
       upstream: [{ cmd: "fakeup", hint: "brew install fakeup", optional: true }],
@@ -292,7 +269,7 @@ describe("install-base outcomes", () => {
 
 describe("install-base upstream and extra", () => {
   test("upstream missing with an install command: run it; success installs, failure is an error", async () => {
-    const good = fake({ present: ["bun"] });
+    const good = fakeInstall({ present: ["bun"] });
     const config = {
       pluginRoot: FIXTURE,
       upstream: [
@@ -302,7 +279,7 @@ describe("install-base upstream and extra", () => {
     const r1 = await installBase(config)(good.ctx);
     expect(good.runs).toEqual([["bun", "add", "-g", "fakeup"]]);
     expect(step(r1, "upstream fakeup").status).toBe("installed");
-    const bad = fake({ present: ["bun"], runExit: 1 });
+    const bad = fakeInstall({ present: ["bun"], exit: 1 });
     const r2 = await installBase(config)(bad.ctx);
     expect(step(r2, "upstream fakeup")).toMatchObject({
       status: "error",
@@ -312,7 +289,7 @@ describe("install-base upstream and extra", () => {
   }, 60_000);
 
   test("the extra step runs last and its status folds into the worst", async () => {
-    const f = fake({ present: ["bun"] });
+    const f = fakeInstall({ present: ["bun"] });
     const seen: string[] = [];
     const r = await installBase({
       pluginRoot: FIXTURE,
@@ -327,7 +304,7 @@ describe("install-base upstream and extra", () => {
   }, 60_000);
 
   test("several extra steps all run last, in order, each folding into the worst", async () => {
-    const f = fake({ present: ["bun"] });
+    const f = fakeInstall({ present: ["bun"] });
     const r = await installBase({
       pluginRoot: FIXTURE,
       extra: () => [
@@ -344,7 +321,7 @@ describe("install-base upstream and extra", () => {
   }, 60_000);
 
   test("A user's own completion file for the same name", async () => {
-    const f = fake({ present: ["bun"] });
+    const f = fakeInstall({ present: ["bun"] });
     const dir = join(f.home, "config/fish/completions");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "qsm-fix-a.fish"), "complete -c qsm-fix-a -e\n");
@@ -475,7 +452,7 @@ process.exit(await activationMain(activation));
 describe("installScript", () => {
   test("A script's directory names its plugin root", async () => {
     const meta = { dir: join(FIXTURE, "scripts"), main: false };
-    const dry = fake({ dryRun: true, present: ["bun", "fakeup"] });
+    const dry = fakeInstall({ dryRun: true, present: ["bun", "fakeup"] });
     const viaScript = await installScript(meta, {
       upstream: [{ cmd: "fakeup", hint: "brew install fakeup" }],
     })(dry.ctx);
@@ -496,7 +473,7 @@ describe("an installer refuses what it does not know", () => {
 
 describe("links in the bin directory", () => {
   test("A second run links nothing and removes nothing", () => {
-    const f = fake();
+    const f = fakeInstall({ present: ["bun"] });
     const bin = join(f.home, "bin");
     mkdirSync(bin, { recursive: true });
     symlinkSync("qsm-tool", join(bin, "qsm-old-a"));
@@ -510,7 +487,7 @@ describe("links in the bin directory", () => {
   });
 
   test("A file that is not a link stays, and is an error", () => {
-    const f = fake();
+    const f = fakeInstall({ present: ["bun"] });
     mkdirSync(join(f.home, "bin"), { recursive: true });
     writeFileSync(join(f.home, "bin", "qsm-mine"), "mine");
     expect(linkBin(f.ctx, "qsm-mine", "qsm-tool").status).toBe("error");
@@ -518,9 +495,9 @@ describe("links in the bin directory", () => {
   });
 });
 
-/** An empty legacy bin farm under the default data directory of `home`. */
+/** An empty legacy bin farm under the data directory fakeInstall gives `home`. */
 function farmIn(home: string): string {
-  const farm = join(home, ".local/share/qsm/bin");
+  const farm = join(home, "data/qsm/bin");
   mkdirSync(farm, { recursive: true });
   return farm;
 }
@@ -528,7 +505,7 @@ function farmIn(home: string): string {
 describe("install-base and the legacy bin farm", () => {
   test("a plugin installer removes the farm of symlinks once, names it, and a second run removes nothing", async () => {
     const root = sandboxDir("qsm-install-root-");
-    const live = fake({ present: ["bun"] });
+    const live = fakeInstall({ present: ["bun"] });
     const data = join(live.home, "xdg-data");
     const env = { ...live.ctx.env, XDG_DATA_HOME: data };
     const farm = join(data, "qsm", "bin");
@@ -550,7 +527,7 @@ describe("install-base and the legacy bin farm", () => {
   });
 
   test("a regular file in the farm is an error step, the farm stays, and nothing compiles", async () => {
-    const live = fake({ present: ["bun"] });
+    const live = fakeInstall({ present: ["bun"] });
     const farm = farmIn(live.home);
     writeFileSync(join(farm, "mine"), "");
     const r = await installBase({ pluginRoot: FIXTURE })(live.ctx);
@@ -562,7 +539,7 @@ describe("install-base and the legacy bin farm", () => {
   });
 
   test("a farm entry that cannot be inspected is an error step, the farm stays, and nothing compiles", async () => {
-    const live = fake({ present: ["bun"] });
+    const live = fakeInstall({ present: ["bun"] });
     const farm = farmIn(live.home);
     symlinkSync("/nonexistent", join(farm, "qsm-langdev"));
     chmodSync(farm, 0o600);
