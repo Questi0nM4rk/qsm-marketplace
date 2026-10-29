@@ -63,11 +63,11 @@ test("a tool a system package manager owns is suggested with its command", () =>
 
 test("A suggestion on another system", () => {
   const hurl = row("hurl");
-  const outcome = installOne(hurl, fakeInstall().ctx);
+  const outcome = installOne(hurl, fakeInstall({ present: [] }).ctx);
   expect(outcome.status).toBe("suggested");
   expect(outcome.detail).toContain("pacman is not on PATH");
   expect(outcome.detail).toContain("brew install hurl");
-  expect(installOne(row("usql"), fakeInstall().ctx).detail).toContain(
+  expect(installOne(row("usql"), fakeInstall({ present: [] }).ctx).detail).toContain(
     "go install github.com/xo/usql@latest",
   );
 });
@@ -78,8 +78,7 @@ test("A suggestion on another system", () => {
  * real and the user's is untouched. */
 function goMachine() {
   const gobin = sandboxDir("qsm-toolbox-gobin-");
-  const { ctx } = fakeInstall({ present: ["go"], env: { GOBIN: gobin } });
-  const bin = ctx.env["QSM_BIN_DIR"] ?? "";
+  const { ctx, bin } = fakeInstall({ present: ["go"], env: { GOBIN: gobin } });
   mkdirSync(bin, { recursive: true });
   return { ctx, gobin, bin };
 }

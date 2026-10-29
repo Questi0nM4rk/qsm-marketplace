@@ -10,12 +10,12 @@ import { install, notebook } from "./install.ts";
 
 function sandbox(options: { onPath?: boolean; dryRun?: boolean } = {}) {
   const gobin = sandboxDir("qsm-knowledge-gobin-");
-  const { ctx, home } = fakeInstall({
+  const { ctx, bin } = fakeInstall({
     present: () => options.onPath ?? false,
     dryRun: options.dryRun ?? false,
     env: { GOBIN: gobin },
   });
-  return { ctx, bin: join(home, "bin"), gobin };
+  return { ctx, bin, gobin };
 }
 
 /** What `go install` leaves behind, without a Go toolchain in the test. */

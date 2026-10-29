@@ -25,22 +25,20 @@ function writeSkill(home: string, name: string): void {
  * add` writes the skill directories the real one would, and Context7's skill, which only a person's
  * `ctx7 setup` writes, is already there. */
 function machine() {
-  let home = "";
   const fx = fakeInstall({
     present: () => true,
     env: { QSM_SEARXNG_INSTANCE: "https://search.test" },
     exit: (cmd) => {
       if (cmd === "npx") {
         for (const name of TAVILY_SKILLS) {
-          writeSkill(home, name);
+          writeSkill(fx.home, name);
         }
       }
       return 0;
     },
   });
-  home = fx.home;
-  writeSkill(home, "find-docs");
-  return { ctx: fx.ctx, home, bin: join(home, "bin") };
+  writeSkill(fx.home, "find-docs");
+  return fx;
 }
 
 /** Commands the compiled doctor finds on PATH: the sandbox installed neither. */

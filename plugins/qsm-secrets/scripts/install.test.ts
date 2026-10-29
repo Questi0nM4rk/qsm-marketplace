@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { fakeInstall } from "../../../lib/fixtures/install.ts";
+import { type FakeInstall, fakeInstall } from "../../../lib/fixtures/install.ts";
 import type { Step } from "../../../lib/install-contract.ts";
 import { install } from "./install.ts";
 
@@ -44,15 +44,15 @@ describe("install", () => {
 });
 
 describe("install: the askpass pane and its links", () => {
-  let fx = fakeInstall({ present: ["bun", "rbw"] });
+  let fx: FakeInstall;
   beforeEach(() => {
     fx = fakeInstall({ present: ["bun", "rbw"] });
   });
-  const bins = (): string => join(fx.home, "bin");
-  const pane = (): string => join(fx.home, "data", "qsm", "askpass", "qml", "shell.qml");
+  const bins = (): string => fx.bin;
+  const pane = (): string => join(fx.ctx.env.XDG_DATA_HOME!, "qsm", "askpass", "qml", "shell.qml");
   const links = (): string[] =>
     ["sudo", "ssh", "git", "decide"].map((k) => join(bins(), `qsm-askpass-${k}`));
-  const palette = (): string => join(fx.home, "config", "qsm-marketplace", "colors.json");
+  const palette = (): string => join(fx.ctx.env.XDG_CONFIG_HOME!, "qsm-marketplace", "colors.json");
 
   test("copies the pane and links each consumer, a second run changes nothing, a stale link goes", async () => {
     rmSync(dirname(pane()), { recursive: true, force: true });

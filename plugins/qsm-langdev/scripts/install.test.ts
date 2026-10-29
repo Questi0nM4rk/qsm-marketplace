@@ -4,17 +4,19 @@
 // test depends on this machine's.
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { fakeInstall } from "../../../lib/fixtures/install.ts";
+import { type FakeInstall, fakeInstall } from "../../../lib/fixtures/install.ts";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import type { StructuralCheckerStatus } from "../lib/compare.ts";
 import { extraSteps, semgrepLoginStep, structuralChecker } from "./install.ts";
 
-function ctx(opts: { dryRun?: boolean; cargo?: boolean } = {}): InstallContext {
+function machine(opts: { dryRun?: boolean; cargo?: boolean } = {}): FakeInstall {
   return fakeInstall({
     present: opts.cargo === false ? [] : ["cargo"],
     dryRun: opts.dryRun ?? false,
-  }).ctx;
+  });
 }
+
+const ctx = (opts: { dryRun?: boolean; cargo?: boolean } = {}): InstallContext => machine(opts).ctx;
 
 /** A build that records the cache root it was handed, or throws. */
 function builder(log: string[], failure?: string): (cacheRoot: string) => void {
@@ -48,17 +50,17 @@ describe("qsm-langdev structural checker step", () => {
 
   test("No compatible checker present", async () => {
     const log: string[] = [];
-    const c = ctx();
-    const step = await structuralChecker(c, absent, builder(log));
+    const fx = machine();
+    const step = await structuralChecker(fx.ctx, absent, builder(log));
     expect(step.status).toBe("installed");
-    expect(log).toEqual([join(c.env["HOME"] ?? "", ".cache")]);
+    expect(log).toEqual([join(fx.home, ".cache")]);
   });
 
   test("an unpatched sentrux is rebuilt", async () => {
     const log: string[] = [];
-    const c = ctx();
-    expect((await structuralChecker(c, unpatched, builder(log))).status).toBe("installed");
-    expect(log).toEqual([join(c.env["HOME"] ?? "", ".cache")]);
+    const fx = machine();
+    expect((await structuralChecker(fx.ctx, unpatched, builder(log))).status).toBe("installed");
+    expect(log).toEqual([join(fx.home, ".cache")]);
   });
 
   test("The build fails", async () => {

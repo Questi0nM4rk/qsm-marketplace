@@ -12,11 +12,14 @@ export interface FakeInstall {
   /** every command `run` received, in order */
   readonly runs: string[][];
   readonly home: string;
+  /** the sandbox QSM_BIN_DIR, where an installer links its binaries */
+  readonly bin: string;
 }
 
 export function fakeInstall(
   opts: {
-    /** the commands `probe` finds, or a function that decides; none when absent */
+    /** the commands `probe` finds, or a function that decides; bun is on every machine a qsm
+     * installer runs on, so it is the default, and `[]` means nothing on PATH */
     readonly present?: readonly string[] | ((cmd: string) => boolean);
     readonly dryRun?: boolean;
     readonly force?: boolean;
@@ -27,17 +30,18 @@ export function fakeInstall(
   } = {},
 ): FakeInstall {
   const home = sandboxDir("qsm-install-");
-  const present = opts.present ?? [];
+  const bin = join(home, "bin");
+  const present = opts.present ?? ["bun"];
   const runs: string[][] = [];
   const ctx: InstallContext = {
     dryRun: opts.dryRun ?? false,
     ...(opts.force === undefined ? {} : { force: opts.force }),
-    env: isolatedEnv(home, { QSM_BIN_DIR: join(home, "bin"), ...opts.env }),
+    env: isolatedEnv(home, { QSM_BIN_DIR: bin, ...opts.env }),
     probe: typeof present === "function" ? present : (cmd) => present.includes(cmd),
     run: (cmd, args) => {
       runs.push([cmd, ...args]);
       return typeof opts.exit === "function" ? opts.exit(cmd, args) : (opts.exit ?? 0);
     },
   };
-  return { ctx, runs, home };
+  return { ctx, runs, home, bin };
 }

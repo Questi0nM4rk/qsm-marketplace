@@ -50,7 +50,7 @@ test("the dry run line starts with would", () => {
 
 test("a table the environment skipped entirely did nothing, which is already", () => {
   const env = Object.fromEntries(TOOLS.map((t) => [skipKey(t.bin), "1"]));
-  const step = tableStep(fakeInstall({ env }).ctx);
+  const step = tableStep(fakeInstall({ present: [], env }).ctx);
   expect(step.status).toBe("already");
   expect(step.detail).toContain(`${skipKey(TOOLS[0]?.bin ?? "")}=1`);
 });
