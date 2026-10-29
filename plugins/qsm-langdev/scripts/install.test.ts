@@ -3,18 +3,20 @@
 // probes of the sentrux on PATH and of the semgrep login are handed in, so no
 // test depends on this machine's.
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
+import { type FakeInstall, fakeInstall } from "../../../lib/fixtures/install.ts";
 import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
 import type { StructuralCheckerStatus } from "../lib/compare.ts";
 import { extraSteps, semgrepLoginStep, structuralChecker } from "./install.ts";
 
-function ctx(opts: { dryRun?: boolean; cargo?: boolean } = {}): InstallContext {
-  return {
+function machine(opts: { dryRun?: boolean; cargo?: boolean } = {}): FakeInstall {
+  return fakeInstall({
+    present: opts.cargo === false ? [] : ["cargo"],
     dryRun: opts.dryRun ?? false,
-    env: { HOME: "/home/test" },
-    probe: (cmd) => cmd === "cargo" && (opts.cargo ?? true),
-    run: () => 0,
-  };
+  });
 }
+
+const ctx = (opts: { dryRun?: boolean; cargo?: boolean } = {}): InstallContext => machine(opts).ctx;
 
 /** A build that records the cache root it was handed, or throws. */
 function builder(log: string[], failure?: string): (cacheRoot: string) => void {
@@ -48,15 +50,17 @@ describe("qsm-langdev structural checker step", () => {
 
   test("No compatible checker present", async () => {
     const log: string[] = [];
-    const step = await structuralChecker(ctx(), absent, builder(log));
+    const fx = machine();
+    const step = await structuralChecker(fx.ctx, absent, builder(log));
     expect(step.status).toBe("installed");
-    expect(log).toEqual(["/home/test/.cache"]);
+    expect(log).toEqual([join(fx.home, ".cache")]);
   });
 
   test("an unpatched sentrux is rebuilt", async () => {
     const log: string[] = [];
-    expect((await structuralChecker(ctx(), unpatched, builder(log))).status).toBe("installed");
-    expect(log).toEqual(["/home/test/.cache"]);
+    const fx = machine();
+    expect((await structuralChecker(fx.ctx, unpatched, builder(log))).status).toBe("installed");
+    expect(log).toEqual([join(fx.home, ".cache")]);
   });
 
   test("The build fails", async () => {
@@ -89,10 +93,8 @@ describe("qsm-langdev structural checker step", () => {
 const WARNING = "semgrep is not logged in: run semgrep login to use qsm-langdev at its fullest";
 
 /** cargo, and semgrep when `semgrep` is set, on PATH */
-const withSemgrep = (semgrep: boolean): InstallContext => ({
-  ...ctx(),
-  probe: (cmd) => cmd === "cargo" || (cmd === "semgrep" && semgrep),
-});
+const withSemgrep = (semgrep: boolean): InstallContext =>
+  fakeInstall({ present: semgrep ? ["cargo", "semgrep"] : ["cargo"] }).ctx;
 
 describe("qsm-langdev semgrep login step", () => {
   test("logged out is its own suggested step carrying the warning, never a failure", () => {

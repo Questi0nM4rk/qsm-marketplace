@@ -3,7 +3,7 @@
 // completions and pruning, and doctor's orphans and drift.
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fishCompletion, MARKER } from "../../../lib/completions.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
@@ -293,6 +293,8 @@ describe("doctor over PATH", () => {
       writeFileSync(path, "#!/bin/sh\n");
       chmodSync(path, 0o755);
     }
+    symlinkSync("qsm-x", join(binDir, "qsm-x-alias"));
+    symlinkSync("qsm-old", join(farm, "qsm-old-alias"));
     const recordPath = join(home, "bins.json");
     const hash = createHash("sha256").update("#!/bin/sh\n").digest("hex");
     writeRecord(recordPath, { bins: { "qsm-x": { plugin: "x", sha256: hash } } });
@@ -312,9 +314,11 @@ describe("doctor over PATH", () => {
       status: "FAIL",
       detail: `qsm-x resolves to ${join(farm, "qsm-x")}, not ${join(binDir, "qsm-x")}; remove it or put ${binDir} first on PATH`,
     });
-    expect(byName.get("stray binaries")).toMatchObject({
-      status: "WARN",
-      detail: `no plugin declares ${join(farm, "qsm-old")}`,
-    });
+    const stray = byName.get("stray binaries");
+    expect(stray?.status).toBe("WARN");
+    // a link to a name no plugin declares is still stray; a link to a declared one is not
+    expect(stray?.detail).toContain(join(farm, "qsm-old"));
+    expect(stray?.detail).toContain(join(farm, "qsm-old-alias"));
+    expect(stray?.detail).not.toContain("qsm-x-alias");
   });
 });

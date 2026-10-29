@@ -8,8 +8,8 @@ import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
-import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { type InstallContext, isFailure } from "../../../lib/install-contract.ts";
+import { fakeInstall } from "../../../lib/fixtures/install.ts";
+import { isFailure } from "../../../lib/install-contract.ts";
 import { TAVILY_SKILLS } from "../lib/upstream.ts";
 import { install } from "./install.ts";
 
@@ -24,26 +24,21 @@ function writeSkill(home: string, name: string): void {
  * reports only what it did. The external commands are stubbed at the process boundary: `npx skills
  * add` writes the skill directories the real one would, and Context7's skill, which only a person's
  * `ctx7 setup` writes, is already there. */
-function context(home: string, bin: string): InstallContext {
-  writeSkill(home, "find-docs");
-  return {
-    dryRun: false,
-    env: {
-      HOME: home,
-      XDG_CONFIG_HOME: join(home, "c"),
-      QSM_BIN_DIR: bin,
-      QSM_SEARXNG_INSTANCE: "https://search.test",
-    },
-    probe: () => true,
-    run: (cmd) => {
+function machine() {
+  const fx = fakeInstall({
+    present: () => true,
+    env: { QSM_SEARXNG_INSTANCE: "https://search.test" },
+    exit: (cmd) => {
       if (cmd === "npx") {
         for (const name of TAVILY_SKILLS) {
-          writeSkill(home, name);
+          writeSkill(fx.home, name);
         }
       }
       return 0;
     },
-  };
+  });
+  writeSkill(fx.home, "find-docs");
+  return fx;
 }
 
 /** Commands the compiled doctor finds on PATH: the sandbox installed neither. */
@@ -58,9 +53,7 @@ describe("install", () => {
   test(
     "Fresh install",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      const ctx = context(home, bin);
+      const { ctx, home, bin } = machine();
       const first = await install(ctx);
       expect(first.status).toBe("installed");
       expect(existsSync(join(bin, "qsm-web"))).toBe(true);
@@ -69,7 +62,6 @@ describe("install", () => {
       const env = isolatedEnv(home, {
         QSM_MARKETPLACE: resolve(PLUGIN, "..", ".."),
         PATH: `${bin}:${process.env.PATH ?? ""}`,
-        XDG_CONFIG_HOME: join(home, "c"),
       });
       const doctor = spawnSync(join(bin, "qsm-web"), ["doctor", "--json"], {
         encoding: "utf8",
@@ -91,9 +83,8 @@ describe("install in other states", () => {
   test(
     "a bare home is told the person steps and gets the Tavily skills",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      const ctx = { ...context(home, bin), run: (): number => 0 };
+      const { ctx: base, home } = machine();
+      const ctx = { ...base, run: (): number => 0 };
       rmSync(join(home, ".claude"), { recursive: true });
       const result = await install(ctx);
       const step = (name: string) => (result.steps ?? []).find((s) => s.name === name);
@@ -109,10 +100,9 @@ describe("install in other states", () => {
   test(
     "a second run into the same directory compiles nothing and says so",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      expect((await install(context(home, bin))).status).toBe("installed");
-      const second = await install(context(home, bin));
+      const { ctx } = machine();
+      expect((await install(ctx)).status).toBe("installed");
+      const second = await install(ctx);
       expect(second.status).toBe("already");
       expect(second.detail).toContain("unchanged");
     },
@@ -120,9 +110,8 @@ describe("install in other states", () => {
   );
 
   test("a dry run writes nothing and names what it would do", async () => {
-    const home = sandboxDir("qsm-web-install-");
-    const bin = join(home, "bin");
-    const result = await install({ ...context(home, bin), dryRun: true });
+    const { ctx, bin } = machine();
+    const result = await install({ ...ctx, dryRun: true });
     expect(result.status).toBe("skipped");
     expect(result.detail).toContain("scripts/cli.ts");
     expect(result.detail).toContain("shot-scraper");
@@ -136,9 +125,7 @@ describe("install on a machine missing a tool", () => {
   test(
     "No container runtime",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      const ctx = context(home, bin);
+      const { ctx, bin } = machine();
       const result = await install({
         ...ctx,
         probe: (cmd) => cmd !== "docker" && cmd !== "podman",
@@ -162,9 +149,7 @@ describe("install without uv or a download", () => {
   test(
     "a machine with no uv reports the suggestion, and the install still succeeds",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      const ctx = context(home, bin);
+      const { ctx } = machine();
       const result = await install({
         ...ctx,
         probe: (cmd) => cmd !== "shot-scraper",
@@ -183,9 +168,7 @@ describe("install without uv or a download", () => {
   test(
     "a machine with no search instance is told how to make one",
     async () => {
-      const home = sandboxDir("qsm-web-install-");
-      const bin = join(home, "bin");
-      const ctx = context(home, bin);
+      const { ctx } = machine();
       const result = await install({
         ...ctx,
         dryRun: false,

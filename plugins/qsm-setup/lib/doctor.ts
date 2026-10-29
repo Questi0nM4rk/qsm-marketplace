@@ -8,10 +8,11 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   statSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { readRecord, sha256 } from "../../../lib/install-base.ts";
 import type { PluginNode } from "./discover.ts";
 import { declaredBins } from "./farm.ts";
@@ -175,6 +176,17 @@ function isExecutableFile(path: string): boolean {
   }
 }
 
+/** A link an installer makes to a qsm binary beside it, as `qsm-askpass-sudo` to `qsm-secrets`, is
+ * a second name of that binary, not a stray one. A stale one is the installer's to remove
+ * (removeOwnedLinks in lib/install-base.ts), so doctor does not list it either. */
+function linksToOurs(path: string, everyBin: ReadonlySet<string>): boolean {
+  try {
+    return everyBin.has(basename(readlinkSync(path)));
+  } catch {
+    return false;
+  }
+}
+
 /** Every qsm-* executable in the directories, first hit per name first. */
 export function qsmBinsIn(dirs: readonly string[]): Map<string, string[]> {
   const found = new Map<string, string[]>();
@@ -237,7 +249,10 @@ function pathChecks(
       ? []
       : [`${bin} resolves to ${first}, not ${ours}; remove it or put ${opts.binDir} first on PATH`];
   });
-  const stray = [...pathBins].filter(([name]) => !everyBin.has(name)).flatMap(([, paths]) => paths);
+  const stray = [...pathBins]
+    .filter(([name]) => !everyBin.has(name))
+    .flatMap(([, paths]) => paths)
+    .filter((path) => !linksToOurs(path, everyBin));
   return [
     shadowed.length === 0
       ? {

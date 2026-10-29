@@ -2,20 +2,18 @@
 // upstream row whose name the environment may choose. A dry run reads it without compiling.
 
 import { describe, expect, test } from "bun:test";
-import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import type { InstallContext, Step } from "../../../lib/install-contract.ts";
+import { fakeInstall } from "../../../lib/fixtures/install.ts";
+import type { Step } from "../../../lib/install-contract.ts";
 import { FILTER_BIN_ENV } from "../lib/doctor.ts";
 import { FILTER_INSTALL_COMMAND } from "../lib/filter.ts";
 import { install } from "./install.ts";
 
 async function upstream(present: readonly string[], bin?: string): Promise<Step | undefined> {
-  const home = sandboxDir("qsm-usage-install-");
-  const ctx: InstallContext = {
+  const { ctx } = fakeInstall({
+    present,
     dryRun: true,
-    env: { HOME: home, ...(bin === undefined ? {} : { [FILTER_BIN_ENV]: bin }) },
-    probe: (cmd) => present.includes(cmd),
-    run: () => 0,
-  };
+    env: bin === undefined ? {} : { [FILTER_BIN_ENV]: bin },
+  });
   const result = await install(ctx);
   return result.steps.find((s) => s.name.startsWith("upstream"));
 }

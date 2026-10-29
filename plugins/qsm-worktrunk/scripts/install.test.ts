@@ -10,17 +10,13 @@
 // broken workspace is noticed.
 
 import { describe, expect, test } from "bun:test";
+import { fakeInstall } from "../../../lib/fixtures/install.ts";
 import type { InstallContext, Step } from "../../../lib/install-contract.ts";
 import { INSTALL_HINT } from "../lib/doctor.ts";
 import { install } from "./install.ts";
 
 function context(present: readonly string[], dryRun = false): InstallContext {
-  return {
-    dryRun,
-    env: {},
-    probe: (cmd) => present.includes(cmd),
-    run: () => 0,
-  };
+  return fakeInstall({ present, dryRun }).ctx;
 }
 
 function wtStep(steps: readonly Step[] | undefined): Step | undefined {

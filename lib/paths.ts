@@ -1,12 +1,23 @@
 // Where qsm puts things on a machine. Every path bends to the environment so
 // tests and unusual homes never touch real state.
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { QsmError } from "./qsm-error.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
+/** `HOME`, and no guess when it is unset: a guess is the real home, which a test with an empty
+ * environment would then write into. */
 export function home(env: Env): string {
-  return env.HOME ?? homedir();
+  if (env.HOME === undefined || env.HOME === "") {
+    throw new QsmError(
+      "missing",
+      "HOME is not set, so qsm cannot tell where this machine keeps its files",
+      {
+        next: "set HOME, or pass it in the environment of the call",
+      },
+    );
+  }
+  return env.HOME;
 }
 
 /** A variable's value, with an empty one counted as unset. */
