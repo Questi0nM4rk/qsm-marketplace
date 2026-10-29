@@ -46,3 +46,5 @@ plugins/*/evals/results/
 
 # qsm-builder lens: generated into each marketplace, rewritten on every run
 .qsm/
+# bun build --compile leaves its temp file in the working directory when the build is stopped
+.*.bun-build

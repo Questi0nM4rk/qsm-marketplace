@@ -177,7 +177,8 @@ function isExecutableFile(path: string): boolean {
 }
 
 /** A link an installer makes to a qsm binary beside it, as `qsm-askpass-sudo` to `qsm-secrets`, is
- * a second name of that binary, not one of its own. */
+ * a second name of that binary, not one of its own. A stale one is the installer's to remove
+ * (removeOwnedLinks in lib/install-base.ts), so doctor does not list it either. */
 function isSiblingLink(path: string): boolean {
   try {
     const target = readlinkSync(path);

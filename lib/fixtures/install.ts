@@ -1,6 +1,7 @@
 // The one machine an installer test runs on: a sandbox home, a probe that finds only the commands
 // the test names, and a run that logs each command instead of running it. Every path qsm computes
-// bends to this environment (lib/paths.ts), so an installer under test never reaches the real home.
+// bends to this environment (lib/paths.ts), so an installer under test writes none of qsm's files in
+// the real home; only bun itself, run by a compile or a dependency step, keeps its own package cache.
 import { join } from "node:path";
 import type { InstallContext } from "../install-contract.ts";
 import { isolatedEnv } from "./cli.ts";
