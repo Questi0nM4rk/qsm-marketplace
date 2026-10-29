@@ -1,6 +1,5 @@
 // One outcome system for every qsm binary.
 import { which } from "bun";
-import type { Env } from "./paths.ts";
 
 export const OUTCOME_CODES = [
   "ok",
@@ -169,15 +168,18 @@ export interface DoctorData {
   readonly tools: readonly ToolCheck[];
 }
 
+/** The one variable a PATH lookup reads; any environment record has this shape. */
+type PathEnv = { readonly PATH?: string | undefined };
+
 /** `command -v <cmd>` */
 export type OnPath = (cmd: string) => boolean;
 
 /** Where `cmd` resolves on the PATH of `env` (the process's own when omitted), or null. */
-export function binPath(cmd: string, env?: Env): string | null {
+export function binPath(cmd: string, env?: PathEnv): string | null {
   return env === undefined ? which(cmd) : which(cmd, { PATH: env.PATH ?? "" });
 }
 
-export function onPath(cmd: string, env?: Env): boolean {
+export function onPath(cmd: string, env?: PathEnv): boolean {
   return binPath(cmd, env) !== null;
 }
 
