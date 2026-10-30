@@ -2,16 +2,7 @@
   "name": "qsm-memory",
   "description": "The per-machine archive of Claude Code sessions: a SessionEnd hook saves each main session a person typed in, as text, into one SQLite database, full-text search finds what was said, `show --full` reads the transcript for the rest, a session-start briefing orients the model, and short-term notes carry a handoff to the next session. No agent writes long-term memory.",
   "types": "./types/index.d.ts",
-  "keywords": [
-    "memory",
-    "recall",
-    "sqlite",
-    "fts5",
-    "knowledge",
-    "context",
-    "notes",
-    "facts"
-  ],
+  "keywords": ["memory", "recall", "sqlite", "fts5", "knowledge", "context", "notes", "facts"],
   "author": {
     "name": "qsm"
   },

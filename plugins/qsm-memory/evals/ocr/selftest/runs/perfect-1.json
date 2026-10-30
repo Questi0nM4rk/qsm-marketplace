@@ -1,8 +1,18 @@
 {
   "X": {
     "messages": [
-      { "sender": "Petr Novák", "sender_key": "petr novak", "quote": null, "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234." },
-      { "sender": "ME", "sender_key": "me", "quote": { "author": "Novák Petr", "author_key": "novak petr" }, "text": "ok, beru, MR !88 mergnu" }
+      {
+        "sender": "Petr Novák",
+        "sender_key": "petr novak",
+        "quote": null,
+        "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234."
+      },
+      {
+        "sender": "ME",
+        "sender_key": "me",
+        "quote": { "author": "Novák Petr", "author_key": "novak petr" },
+        "text": "ok, beru, MR !88 mergnu"
+      }
     ],
     "decisions": [{ "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234." }]
   }

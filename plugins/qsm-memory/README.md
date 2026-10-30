@@ -18,14 +18,14 @@ keeps every transcript for good and searches them itself, this plugin has no rea
 
 ## What you get
 
-| Kind | Name | What it does |
-| --- | --- | --- |
-| Skill | `memory` | Search the archive before asking you again, act on the hit, write one note at a handoff. |
-| Agent | `recall` | Answers one question about earlier sessions, every claim cited as `<session-id> #<turn> <date>`. |
-| Hook | `session.start`, `session.end` | Save main sessions the archive lacks, in a background process. |
-| Hook | `prompt.submit` | Give the first prompt of a session, the first after a compaction, and the first after /clear, a briefing of at most 1500 characters. |
-| MCP | `qsm-memory` | `search`, `show`, `list`, `notes` and `note` as tools. |
-| CLI | `qsm-memory` | 9 verbs, see [USAGE.md](USAGE.md). |
+| Kind  | Name                           | What it does                                                                                                                         |
+| ----- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Skill | `memory`                       | Search the archive before asking you again, act on the hit, write one note at a handoff.                                             |
+| Agent | `recall`                       | Answers one question about earlier sessions, every claim cited as `<session-id> #<turn> <date>`.                                     |
+| Hook  | `session.start`, `session.end` | Save main sessions the archive lacks, in a background process.                                                                       |
+| Hook  | `prompt.submit`                | Give the first prompt of a session, the first after a compaction, and the first after /clear, a briefing of at most 1500 characters. |
+| MCP   | `qsm-memory`                   | `search`, `show`, `list`, `notes` and `note` as tools.                                                                               |
+| CLI   | `qsm-memory`                   | 9 verbs, see [USAGE.md](USAGE.md).                                                                                                   |
 
 ## Install
 

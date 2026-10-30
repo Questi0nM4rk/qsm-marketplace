@@ -315,32 +315,48 @@ function scoreWithReport(
   });
 }
 
-/** The side's files in groups by the spec's key, in first-seen order. */
-function groupsOf(spec: CheckSpec, side: KeptSide): string[][] {
+/** How a checker's run is cut: by the spec's key, one file at a time, or the whole side at once. */
+function groupsOf(spec: CheckSpec, side: KeptSide): readonly (readonly string[])[] {
+  if (spec.groupBy === undefined) {
+    return spec.eachFile === true ? side.files.map((file) => [file]) : [side.files];
+  }
   const groups = new Map<string, string[]>();
   for (const file of side.files) {
-    const key = spec.groupBy?.(side.root, file) ?? "";
+    const key = spec.groupBy(side.root, file);
     groups.set(key, [...(groups.get(key) ?? []), file]);
   }
   return [...groups.values()];
 }
 
-/** The scores of a checker's groups as one: the first failure, else the tallies summed. */
-function merged(scores: readonly Score[]): Score {
+/** The scores of a checker's groups as one: the first failure, else the tallies summed. A
+ * per-file run counts under its file and keeps no findings, as its tool names no path. */
+function merged(
+  groups: readonly (readonly string[])[],
+  scores: readonly Score[],
+  perFile: boolean,
+): Score {
   let total = 0;
   const byPath: Record<string, number> = {};
   const findings: Finding[] = [];
   const outputs: string[] = [];
-  for (const one of scores) {
+  for (const [index, one] of scores.entries()) {
     if (!("tally" in one)) {
       return one;
     }
     total += one.tally.total;
-    Object.assign(byPath, one.tally.byPath);
-    findings.push(...(one.tally.findings ?? []));
+    const file = groups[index]?.[0];
+    if (perFile && file !== undefined) {
+      byPath[file] = one.tally.total;
+    } else {
+      Object.assign(byPath, one.tally.byPath);
+      findings.push(...(one.tally.findings ?? []));
+    }
     outputs.push(one.output);
   }
-  return { tally: { total, byPath, findings }, output: outputs.join("\n") };
+  return {
+    tally: perFile ? { total, byPath } : { total, byPath, findings },
+    output: outputs.join("\n"),
+  };
 }
 
 /**
@@ -366,48 +382,20 @@ async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promis
     store.through(keying, contentHash(side.root, files), compute, use);
   const argsFor = (files: readonly string[]) => spec.args(files, side.root, undefined, side.rules);
   const { reportFile } = spec;
+  const perFile = spec.eachFile === true && spec.groupBy === undefined;
   const scoreOf = (files: readonly string[]): Promise<Score> =>
     reportFile === undefined
-      ? readOne({ spec, root: side.root, args: argsFor(files), timeoutMs })
+      ? readOne({
+          spec,
+          root: side.root,
+          args: argsFor(files),
+          timeoutMs,
+          ...(perFile ? { where: `${files[0]}: ` } : {}),
+        })
       : scoreWithReport(spec, reportFile, side, files, timeoutMs);
-  if (spec.groupBy !== undefined) {
-    const groups = groupsOf(spec, side);
-    return merged(await mapLimit(groups, JOBS, (files) => through(files, () => scoreOf(files))));
-  }
-  if (reportFile !== undefined) {
-    return through(side.files, () => scoreOf(side.files));
-  }
-  if (!spec.eachFile) {
-    return through(side.files, () =>
-      readOne({ spec, root: side.root, args: argsFor(side.files), timeoutMs }),
-    );
-  }
-  const ones = await mapLimit(side.files, JOBS, (file) =>
-    through([file], () =>
-      readOne({
-        spec,
-        root: side.root,
-        args: argsFor([file]),
-        timeoutMs,
-        where: `${file}: `,
-      }),
-    ),
-  );
-  let total = 0;
-  const byPath: Record<string, number> = {};
-  const outputs: string[] = [];
-  for (const [index, one] of ones.entries()) {
-    const file = side.files[index];
-    if (!("tally" in one)) {
-      return one;
-    }
-    total += one.tally.total;
-    if (file !== undefined) {
-      byPath[file] = one.tally.total;
-    }
-    outputs.push(one.output);
-  }
-  return { tally: { total, byPath }, output: outputs.join("\n") };
+  const groups = groupsOf(spec, side);
+  const scores = await mapLimit(groups, JOBS, (files) => through(files, () => scoreOf(files)));
+  return merged(groups, scores, perFile);
 }
 
 /** After-path -> before-path, for files git sees moved between two trees. */

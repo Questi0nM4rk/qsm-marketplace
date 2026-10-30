@@ -1,7 +1,12 @@
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/dist/ping\"", "timeout": 5 }] }
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/dist/ping\"", "timeout": 5 }
+        ]
+      }
     ]
   }
 }

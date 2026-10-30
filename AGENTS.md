@@ -78,7 +78,7 @@ Each law is the short form; the skill named after it holds the detail.
 
 ```text
 .claude-plugin/marketplace.json   # one entry per plugin, source ./plugins/<name>
-lib/                              # layer 0: install-contract.ts, install-base.ts, legacy-farm.ts, cli-base.ts, outcome.ts, qsm-error.ts, qsm-manifest.ts, completions.ts, paths.ts, fs.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/ (sandbox, cli-fixture, cli, git, bin, plugin-fixture: tests only), nothing else
+lib/                              # layer 0: install-contract.ts, install-base.ts, legacy-farm.ts, cli-base.ts, outcome.ts, qsm-error.ts, qsm-manifest.ts, completions.ts, paths.ts, fs.ts, generate-noun.ts, mcp-stdio.ts, hooks-kit.ts, secret-shapes.ts, detach.ts, fixtures/ (sandbox, cli-fixture, cli, git, bin, install, plugin-fixture: tests only), templates/ (hooks-host.ts, what generate-noun copies beside a noun), nothing else
 plugins/<name>/                   # layer 1: one plugin
   .claude-plugin/plugin.json      # name = directory name, author {"name": "qsm"}
   qsm.json                        # bin + command descriptions, only when the plugin ships a CLI

@@ -264,12 +264,11 @@ async function syncThenReload(places: Places, env: Env): Promise<Outcome<SyncDat
     return outcome;
   }
   const { changed, ...rest } = outcome.data;
+  if (changed.length === 0) {
+    return outcome;
+  }
   const gateway = gatewayIn(places.ccrDb);
-  if (
-    changed.length === 0 ||
-    gateway === undefined ||
-    (await daemonState(places.ccrHome, gateway.address)) !== "ccr"
-  ) {
+  if (gateway === undefined || (await daemonState(places.ccrHome, gateway.address)) !== "ccr") {
     return outcome;
   }
   const reloaded = await ensureRunning(places, env, true);

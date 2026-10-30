@@ -26,7 +26,8 @@ and took the next screenshot. So:
    above it, possibly in the previous image. A long formatted card (numbered list, bold `Status:`)
    is a continuation too.
 3. **Own message**: a bubble aligned to the RIGHT, with a blue or purple background and no name. It
-   is the person who took the screenshots. The sender is `ME`. Its time stands above it on the right.
+   is the person who took the screenshots. The sender is `ME`. Its time stands above it on the
+   right.
 4. **Quote (reply)**: a bordered box inside a bubble, with its own author and timestamp at the top
    (`Svoboda Karel 10/9/2026 1:00 PM`) and text that often ends with `...`. The quote is what the
    OTHER person said earlier. The text outside the box is the reply by the bubble's sender. Never
@@ -36,7 +37,8 @@ and took the next screenshot. So:
    not who speaks.
 6. **Attachments**: an image thumbnail, a file card or a link card (`Sync architektura |
    Meeting Chat`). Write only the label you can read; a thumbnail too small to read is `unreadable`.
-7. **Header off-screen**: if a bubble's header is in no image of this thread, its sender is `unknown`.
+7. **Header off-screen**: if a bubble's header is in no image of this thread, its sender is
+   `unknown`.
 
 ## What to watch for
 
@@ -45,8 +47,8 @@ and took the next screenshot. So:
   `Kazdopadane` stays `Kazdopadane`, `Mohl bych` stays `Mohl bych`.
 - A cut word stays cut: `contex` stays `contex`.
 - Negations decide meaning: `ne`, `NE`, `nestaví`, `nebude`, `not`. Copy them exactly.
-- Ids and codes are copied character by character: `PRJ-1948`, `!88`, UUIDs, `read_only`, `920`. If one
-  character is unclear, put the id in `unreadable` instead of guessing.
+- Ids and codes are copied character by character: `PRJ-1948`, `!88`, UUIDs, `read_only`, `920`. If
+  one character is unclear, put the id in `unreadable` instead of guessing.
 - Names: copy them from the image, never from this guide.
 - A question is not a decision. "Mohl bys ...?" is a request.
 
@@ -72,8 +74,13 @@ Return one JSON object per thread:
       "sender_key": "novak petr",
       "sender_from": "header",
       "time": "1:19 PM",
-      "quote": { "author": "Dvořák Jan", "author_key": "dvorak jan", "time": "10/9/2026 1:00 PM",
-                 "text": "Kdy to pujde na stage?...", "truncated": true },
+      "quote": {
+        "author": "Dvořák Jan",
+        "author_key": "dvorak jan",
+        "time": "10/9/2026 1:00 PM",
+        "text": "Kdy to pujde na stage?...",
+        "truncated": true
+      },
       "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234.",
       "mentions": [],
       "attachments": []
@@ -91,8 +98,12 @@ Return one JSON object per thread:
     }
   ],
   "decisions": [
-    { "message": 0, "speaker_key": "novak petr", "status": "stated",
-      "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234." }
+    {
+      "message": 0,
+      "speaker_key": "novak petr",
+      "status": "stated",
+      "text": "Ne, na stage to nepujde, dokud nebude hotove PRJ-1234."
+    }
   ],
   "unreadable": []
 }

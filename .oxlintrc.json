@@ -127,6 +127,7 @@
     "**/node_modules/**",
     "**/hooks/noun.generated.ts",
     "**/hooks/host.generated.ts",
+    "lib/templates/**",
     "**/types/index.d.ts"
   ]
 }

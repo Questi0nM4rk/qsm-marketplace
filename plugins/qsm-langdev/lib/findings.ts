@@ -666,8 +666,8 @@ function markdownlintFinding(line: string): Finding | null {
  * summary line means the tool never finished. */
 export function countMarkdownlint(stdout: string, stderr: string, _exitCode: number): Tally | null {
   const output = `${stdout}\n${stderr}`;
-  // v0.23 prints "Summary: N issues in M files"; the v0.21 a repository may pin prints "Summary: N error(s)".
-  const match = output.match(/Summary: (\d+) (?:issue|error)/);
+  // v0.23 prints "Summary: N issues in M files", v0.21 "Summary: N error(s)": the number is enough.
+  const match = output.match(/Summary: (\d+)/);
   if (match?.[1] === undefined) {
     return null;
   }

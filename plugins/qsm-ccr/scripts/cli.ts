@@ -1,7 +1,14 @@
 #!/usr/bin/env bun
 // qsm-ccr: another provider's model as a Claude Code teammate or lead, through a local CCR. One
 // binary, two doors: Claude Code's teammate argv, or a verb from qsm.json.
-import { type Call, type Handler, renderHelp, runCli } from "../../../lib/cli-base.ts";
+import {
+  type Call,
+  flagArg,
+  type Handler,
+  optionalString,
+  renderHelp,
+  runCli,
+} from "../../../lib/cli-base.ts";
 import type { Outcome } from "../../../lib/outcome.ts";
 import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { doctor } from "../lib/doctor.ts";
@@ -23,22 +30,18 @@ const TEAMMATE_HELP =
 async function runSync(call: Call): Promise<Outcome> {
   const { env } = process;
   const places = placesOf(env);
-  if (call.args.ifStale === true && syncIsFresh(places.stateDir, Date.now())) {
+  const ifStale = flagArg(call, "ifStale");
+  if (ifStale && syncIsFresh(places.stateDir, Date.now())) {
     return freshOutcome();
   }
-  if (call.args.detach === true) {
+  if (flagArg(call, "detach")) {
     return startDetachedSync(places, env);
   }
-  return lockedSync(places, env, call.args.ifStale === true);
+  return lockedSync(places, env, ifStale);
 }
 
 const handlers: Record<string, Handler> = {
-  lead: (call) =>
-    runLead(
-      typeof call.args.slug === "string" ? call.args.slug : undefined,
-      call.rest,
-      process.env,
-    ),
+  lead: (call) => runLead(optionalString(call, "slug"), call.rest, process.env),
   sync: runSync,
   doctor: () => doctor(process.env),
 };

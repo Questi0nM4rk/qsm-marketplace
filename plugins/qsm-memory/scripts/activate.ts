@@ -10,7 +10,8 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
-import { KEEP_DAYS, keepsTranscripts, retentionDays, settingsPath } from "../lib/retention.ts";
+import { claudeSettingsPath } from "../../../lib/paths.ts";
+import { KEEP_DAYS, keepsTranscripts, retentionDays } from "../lib/retention.ts";
 
 const NAME = "harness-memory";
 
@@ -51,7 +52,7 @@ const KEYS = `autoMemoryEnabled: false, cleanupPeriodDays: ${KEEP_DAYS}`;
  * an error naming the file: rewriting it would lose what the user has there. */
 export function harnessMemoryStep(ctx: ActivationContext): Step {
   const choice = MEMORY_CHOICES.find((c) => c === ctx.choices.memory);
-  const path = settingsPath(ctx.env);
+  const path = claudeSettingsPath(ctx.env);
   if (choice === undefined) {
     return { name: NAME, status: "error", detail: `unknown memory choice '${ctx.choices.memory}'` };
   }
@@ -78,7 +79,7 @@ export function harnessMemoryStep(ctx: ActivationContext): Step {
 
 export const activation: Activation = {
   status: (env) => {
-    const path = settingsPath(env);
+    const path = claudeSettingsPath(env);
     const existing = existsSync(path) ? readFileSync(path, "utf8") : null;
     return withHarnessMemoryOff(existing) === null ? "activated" : "absent";
   },

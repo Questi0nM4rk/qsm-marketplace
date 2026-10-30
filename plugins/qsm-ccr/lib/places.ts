@@ -3,7 +3,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { RequiredTool } from "../../../lib/outcome.ts";
-import { claudeDir, type Env, home, stateHome } from "../../../lib/paths.ts";
+import { claudeSettingsPath, type Env, home, stateHome } from "../../../lib/paths.ts";
 
 /** The upstream tools qsm-ccr runs, each with its install: install probes them, doctor reports
  * them, and a step that runs one names the same install. */
@@ -46,7 +46,7 @@ export function placesOf(env: Env): Places {
   const ccrHome = env.CCR_INTERNAL_HOME_DIR ?? join(h, ".claude-code-router");
   return {
     home: h,
-    userSettings: join(claudeDir(env), "settings.json"),
+    userSettings: claudeSettingsPath(env),
     ccrHome,
     ccrDb: join(ccrHome, "config.sqlite"),
     codexHome: env.CODEX_HOME ?? join(h, ".codex"),

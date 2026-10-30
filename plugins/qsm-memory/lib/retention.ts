@@ -2,16 +2,11 @@
 // `cleanupPeriodDays` (its default is 30), so the one value qsm ever writes there is "never", and
 // anything lower is reported as a deletion wherever settings are read.
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { fail, isRecord, type Outcome, ok } from "../../../lib/outcome.ts";
-import { claudeDir, type Env } from "../../../lib/paths.ts";
+import { claudeSettingsPath, type Env } from "../../../lib/paths.ts";
 
 /** A hundred years: Claude Code has no "never", and a transcript is the person's. */
 export const KEEP_DAYS = 36500;
-
-export function settingsPath(env: Env): string {
-  return join(claudeDir(env), "settings.json");
-}
 
 /** The settings' `cleanupPeriodDays`: null when the file or the key is absent (Claude Code then
  * deletes after its default of 30 days), the number otherwise, whatever its type is not. */
@@ -32,7 +27,7 @@ export function keepsTranscripts(days: number | null): boolean {
 /** The retention of the Claude home as an outcome: ok when nothing is deleted, failed naming the
  * file, the value and the fix otherwise. A settings file that does not parse is failed too. */
 export function retentionCheck(env: Env): Outcome<{ days: number | null }> {
-  const path = settingsPath(env);
+  const path = claudeSettingsPath(env);
   let days: number | null;
   try {
     days = retentionDays(existsSync(path) ? readFileSync(path, "utf8") : null);

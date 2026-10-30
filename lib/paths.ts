@@ -30,6 +30,11 @@ export function claudeDir(env: Env): string {
   return nonEmpty(env.CLAUDE_CONFIG_DIR) ?? join(home(env), ".claude");
 }
 
+/** The person's Claude Code settings, `settings.json` in the Claude home. */
+export function claudeSettingsPath(env: Env): string {
+  return join(claudeDir(env), "settings.json");
+}
+
 /** Claude Code's global config, read as join(CLAUDE_CONFIG_DIR || homedir(), ".claude.json"):
  * any non-empty `CLAUDE_CONFIG_DIR`, `~/.claude` included, moves it out of the home directory. */
 export function claudeJsonPath(env: Env): string {

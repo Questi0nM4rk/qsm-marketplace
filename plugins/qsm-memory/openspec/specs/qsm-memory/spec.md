@@ -587,16 +587,16 @@ Each checked to work under `bun build --compile` where it is not stdlib. The run
 the implementation rule: built-in before a dependency, a dependency before our own code only when
 it saves more than it costs.
 
-| Need | Pick | Why |
-| ------ | ------ | ----- |
-| SQLite, FTS5, BM25 | `bun:sqlite` | Built in; `porter unicode61 remove_diacritics 2`, `bm25()` and `snippet()` work interpreted and compiled. `better-sqlite3` is a native addon Bun cannot bundle. |
-| CLI verbs, typed flags, help | root `lib/cli-base.ts` | The marketplace's one parser, reading this plugin's `qsm.json`: verbs, flags, help, completions and the generated noun cannot drift from one source. |
-| MCP over stdio | `@modelcontextprotocol/sdk` + `zod` | The compiled binary answers `initialize` and `tools/list`; one zod schema per tool. Cost: the SDK bundles HTTP transports we never use. |
-| Transcript parsing | `JSON.parse` per line | `<projects>/<slug>/<session>.jsonl`, one record per line; a half-written last line is skipped. No JSONL library. |
-| Project key | `git rev-parse --path-format=absolute --git-common-dir` | The main checkout of any worktree, one process call; the working directory outside git. |
-| Tasks for the briefing | the task tool, spawned | No tracker leaves the lines out; a tracker without the tool fails. No tracker library. |
-| Secret shapes | ~10 regexes, ours | Only `note` refuses; the archive holds only the text a person and the model wrote. |
-| Tests | `bun test`, `:memory:` database, `mkdtempSync`, a transcript builder, a stub task tool | Nothing touches the real archive or the real transcript directory. |
+| Need                         | Pick                                                                                   | Why                                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SQLite, FTS5, BM25           | `bun:sqlite`                                                                           | Built in; `porter unicode61 remove_diacritics 2`, `bm25()` and `snippet()` work interpreted and compiled. `better-sqlite3` is a native addon Bun cannot bundle. |
+| CLI verbs, typed flags, help | root `lib/cli-base.ts`                                                                 | The marketplace's one parser, reading this plugin's `qsm.json`: verbs, flags, help, completions and the generated noun cannot drift from one source.            |
+| MCP over stdio               | `@modelcontextprotocol/sdk` + `zod`                                                    | The compiled binary answers `initialize` and `tools/list`; one zod schema per tool. Cost: the SDK bundles HTTP transports we never use.                         |
+| Transcript parsing           | `JSON.parse` per line                                                                  | `<projects>/<slug>/<session>.jsonl`, one record per line; a half-written last line is skipped. No JSONL library.                                                |
+| Project key                  | `git rev-parse --path-format=absolute --git-common-dir`                                | The main checkout of any worktree, one process call; the working directory outside git.                                                                         |
+| Tasks for the briefing       | the task tool, spawned                                                                 | No tracker leaves the lines out; a tracker without the tool fails. No tracker library.                                                                          |
+| Secret shapes                | ~10 regexes, ours                                                                      | Only `note` refuses; the archive holds only the text a person and the model wrote.                                                                              |
+| Tests                        | `bun test`, `:memory:` database, `mkdtempSync`, a transcript builder, a stub task tool | Nothing touches the real archive or the real transcript directory.                                                                                              |
 
 Two dependencies, the MCP SDK with `zod`, in the plugin's own `package.json`. Everything else is
 stdlib or ours. A `bun build --compile` binary is about 90 MB because it embeds the runtime.

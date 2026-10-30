@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { sleep } from "bun";
+import { isAlive } from "../../../lib/detach.ts";
 import { envelopeOf } from "../../../lib/fixtures/cli.ts";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
@@ -557,14 +558,6 @@ const stoppedForDamage = (w: World) => {
   return r;
 };
 
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
 const daemonPid = (w: World) => Number(readFileSync(join(w.out, "ccr.pid"), "utf8"));
 const newCatalog = (w: World) => {
   nextCatalog(w, [{ slug: "gpt-7", visibility: "list" }]);
@@ -618,7 +611,7 @@ describe("the daemon is CCR's and guarded on every path", () => {
     newCatalog(w);
     expect(envelopeOf(runCcr(w, ["sync", "--json"]).stdout).code).toBe("blocked");
     expect(ccrCalls(w).slice(calls)).toEqual([]);
-    expect(alive(daemonPid(w))).toBe(true);
+    expect(isAlive(daemonPid(w))).toBe(true);
   });
 });
 
@@ -629,7 +622,7 @@ describe("a start or a reload proves the daemon down", () => {
     const r = runCcr(w, [...TEAMMATE, "--agent-name", "gpt-reviewer"]);
     expect(r.exit).toBe(1);
     expect(r.stderr).toContain("opened no");
-    expect(alive(daemonPid(w))).toBe(false);
+    expect(isAlive(daemonPid(w))).toBe(false);
   }, 60_000);
 
   test("a start that changed settings is taken down even when ccr stop does nothing", () => {
@@ -639,7 +632,7 @@ describe("a start or a reload proves the daemon down", () => {
     const r = runCcr(w, [...TEAMMATE, "--agent-name", "gpt-reviewer"]);
     expect(r.exit).toBe(1);
     expect(r.stderr).toContain("the daemon is stopped");
-    expect(alive(daemonPid(w))).toBe(false);
+    expect(isAlive(daemonPid(w))).toBe(false);
   }, 60_000);
 
   test("a daemon that outlives ccr stop and SIGTERM is named running, never stopped", () => {

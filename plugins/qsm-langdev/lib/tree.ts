@@ -269,13 +269,6 @@ export function withCommitTree<T>(
   });
 }
 
-/** A scratch directory holding what the working tree would ship: a scratch
- * git index seeded with `git add -A` over the live worktree — tracked,
- * modified, and new non-ignored files; an ignored file never enters it —
- * then that index's tree checked out. This is "the shipped side" for
- * every comparison: the live directory itself is never handed to a
- * checker, so node_modules/ or dist/ never enter a score just because they
- * sit on disk. Removed once `fn` settles. */
 /** The checkout's own index file, which a linked worktree keeps under its own git directory. */
 function liveIndex(root: string): string {
   const r = spawnSync("git", ["-C", root, "rev-parse", "--git-path", "index"], {
@@ -289,6 +282,13 @@ function liveIndex(root: string): string {
   return isAbsolute(path) ? path : join(root, path);
 }
 
+/** A scratch directory holding what the working tree would ship: a copy of
+ * the live index refreshed with `git add -u`, so every tracked file counts
+ * as it is on disk and an untracked or ignored file never enters it, then
+ * that index's tree checked out. This is "the shipped side" for every
+ * comparison: the live directory itself is never handed to a checker, so
+ * node_modules/ or dist/ never enter a score just because they sit on disk.
+ * Removed once `fn` settles. */
 export function withWorktreeTree<T>(root: string, fn: (dir: string) => Promise<T> | T): Promise<T> {
   return withScratchDir(SCRATCH_PREFIX, (dir) => {
     const indexFile = `${dir}.index`;
