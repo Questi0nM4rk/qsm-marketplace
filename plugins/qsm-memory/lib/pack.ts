@@ -200,12 +200,6 @@ function runTool(cmd: string, args: readonly string[], env: Env): string {
   return r.stdout.toString();
 }
 
-/** The entries `tar` lists for an archive, or null when it cannot list it. */
-function listArchive(path: string, env: Env): string[] | null {
-  const r = Bun.spawnSync(["tar", "--zstd", "-tf", path], { env, stdout: "pipe", stderr: "pipe" });
-  return r.success ? r.stdout.toString().split("\n").filter(Boolean) : null;
-}
-
 /** `tar -cf - | zstd -19 -T0` into `part`; throws with the stderr of whichever failed. */
 async function writeArchive(home: string, entries: readonly string[], part: string, env: Env) {
   const tar = Bun.spawn(["tar", "-C", home, "-cf", "-", "--", ...entries], {
@@ -247,11 +241,9 @@ async function archiveSessions(
       env,
     );
     runTool("zstd", ["-t", "-q", part], env);
-    const entries = listArchive(part, env);
-    if (entries === null) {
-      throw new QsmError("failed", `tar cannot list ${part}`);
-    }
-    const listed = new Set(entries);
+    const listed = new Set(
+      runTool("tar", ["--zstd", "-tf", part], env).split("\n").filter(Boolean),
+    );
     const want = new Set(taken.flatMap((t) => t.expected));
     if (listed.size !== want.size || !want.isSubsetOf(listed)) {
       throw new QsmError(
@@ -325,29 +317,15 @@ function removeStaleParts(archiveDir: string): void {
   }
 }
 
-const MAIN_TRANSCRIPT = /^projects\/[^/]+\/[^/]+\.jsonl$/;
-
-/** Deletes an archive no `packed` row names whose every archived main transcript is still in
- * `projects/`: a killed run's copy of files that never left. An archive holding a transcript that
- * is gone, or one that cannot be listed, is kept, whatever the table says. */
-function removeStaleArchives(db: Database, home: string, archiveDir: string, env: Env): void {
-  if (!existsSync(archiveDir)) {
-    return;
+/** `<date>.tar.zst`, or `<date>-<n>.tar.zst` with n the first free number from 2 when that exists:
+ * a run never overwrites or deletes an archive it did not write. */
+function freeArchivePath(archiveDir: string, now: Date): string {
+  const date = localDate(now);
+  let path = join(archiveDir, `${date}.tar.zst`);
+  for (let n = 2; existsSync(path); n += 1) {
+    path = join(archiveDir, `${date}-${n}.tar.zst`);
   }
-  const named = new Set(
-    db
-      .query<{ archive: string }, []>("SELECT DISTINCT archive FROM packed")
-      .all()
-      .map((row) => row.archive),
-  );
-  for (const name of readdirSync(archiveDir).filter((n) => n.endsWith(".tar.zst"))) {
-    const archive = join(archiveDir, name);
-    const entries = named.has(archive) ? null : listArchive(archive, env);
-    const transcripts = entries?.filter((e) => MAIN_TRANSCRIPT.test(e));
-    if (transcripts?.every((entry) => existsSync(join(home, entry))) === true) {
-      rmSync(archive, { force: true });
-    }
-  }
+  return path;
 }
 
 /** One pack: nothing when none is due, else the idle transcripts into `transcripts/<today>.tar.zst`,
@@ -367,18 +345,14 @@ export async function pack(
   const home = claudeDir(env);
   const liveIds = () => liveSessionIds(home, (path) => readSessionFile(path, read));
   const archiveDir = join(dirname(resolveDbPath(env)), "transcripts");
-  const target = join(archiveDir, `${localDate(now)}.tar.zst`);
   try {
     removeStaleParts(archiveDir);
     requireTools(env);
-    removeStaleArchives(db, home, archiveDir, env);
     const taken = idleTranscripts(db, env, now, liveIds).map((jsonl) => takeSession(home, jsonl));
     if (taken.length === 0) {
       return ok({ packed: 0 }, "nothing is idle yet; nothing was moved");
     }
-    if (existsSync(target)) {
-      throw new QsmError("failed", `${target} exists already; nothing was moved`);
-    }
+    const target = freeArchivePath(archiveDir, now);
     mkdirSync(archiveDir, { recursive: true, mode: 0o700 });
     await archiveSessions(home, taken, target, env);
     hooks.afterArchive?.();

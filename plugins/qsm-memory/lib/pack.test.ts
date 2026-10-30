@@ -307,42 +307,60 @@ describe("a transcript that cannot be removed", () => {
   });
 });
 
-describe("an archive no packed row names", () => {
-  test("whose transcripts never left, a killed run's copy, is removed and the run packs again", async () => {
+describe("an archive that is already there", () => {
+  const now = new Date("2026-10-30T12:00:00");
+
+  test("a killed run's copy is kept untouched and the next run writes the next free name", async () => {
     const box = packBox(["idle"]);
-    const now = new Date("2026-10-30T12:00:00");
     // the run is killed after the rename: the archive exists, no row names it, nothing was removed
     await pack(box.db, box.env, now, {
       afterArchive: () => {
         throw new Error("killed");
       },
     }).catch(() => null);
-    expect(box.archives()).toEqual(["2026-10-30.tar.zst"]);
+    const killed = join(box.archiveDir, "2026-10-30.tar.zst");
+    const bytes = readFileSync(killed);
 
     const r = await pack(box.db, box.env, now);
 
     expect(r.code).toBe("ok");
-    expect(box.archives()).toEqual(["2026-10-30.tar.zst"]);
+    expect(box.archives().toSorted()).toEqual(["2026-10-30-2.tar.zst", "2026-10-30.tar.zst"]);
+    expect(readFileSync(killed).equals(bytes)).toBe(true);
     expect(existsSync(box.jsonl("idle"))).toBe(false);
-    expect(box.db.query("SELECT session_id FROM packed").all()).toEqual([{ session_id: "idle" }]);
+    expect(box.db.query("SELECT archive FROM packed").all()).toEqual([
+      { archive: join(box.archiveDir, "2026-10-30-2.tar.zst") },
+    ]);
   });
 
-  test("holding a transcript gone from projects/ is kept, as after a rebuilt database", async () => {
+  test("after a rebuilt database, the only copy of a subagent transcript is not touched", async () => {
     const box = packBox(["idle1"]);
-    const first = await pack(box.db, box.env, new Date("2026-10-30T12:00:00"));
-    expect(first.code).toBe("ok");
-    // the database is rebuilt: the rows are lost, and idle1 now exists only in the archive
+    mkdirSync(join(box.projects, "idle1", "subagents"), { recursive: true });
+    writeFileSync(join(box.projects, "idle1", "subagents", "agent-1.jsonl"), "{}\n");
+    expect((await pack(box.db, box.env, now)).code).toBe("ok");
+    const first = join(box.archiveDir, "2026-10-30.tar.zst");
+    const bytes = readFileSync(first);
+    // the database is rebuilt: the rows are lost; only the main transcript is restored by hand
     box.db.run("DELETE FROM packed");
     setState(box.db, "last_pack_at", null);
-    expect(existsSync(box.jsonl("idle1"))).toBe(false);
+    spawnSync("tar", [
+      "--zstd",
+      "-xmf",
+      first,
+      "-C",
+      box.claude,
+      "projects/-home-work/idle1.jsonl",
+    ]);
+    expect(existsSync(box.jsonl("idle1"))).toBe(true);
+    expect(existsSync(join(box.projects, "idle1", "subagents"))).toBe(false);
     const path = box.jsonl("idle2");
     writeFileSync(path, new TranscriptBuilder({ sessionId: "idle2" }).human("x").text());
     saveTranscript(box.db, path, box.env);
     utimesSync(path, new Date("2026-09-01T12:00:00"), new Date("2026-09-01T12:00:00"));
 
-    const r = await pack(box.db, box.env, new Date("2026-10-31T12:00:00"));
+    const r = await pack(box.db, box.env, now);
 
     expect(r.code).toBe("ok");
-    expect(box.archives().toSorted()).toEqual(["2026-10-30.tar.zst", "2026-10-31.tar.zst"]);
+    expect(readFileSync(first).equals(bytes)).toBe(true);
+    expect(box.archives().toSorted()).toEqual(["2026-10-30-2.tar.zst", "2026-10-30.tar.zst"]);
   });
 });
