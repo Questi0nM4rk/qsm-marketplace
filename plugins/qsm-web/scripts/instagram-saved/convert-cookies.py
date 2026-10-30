@@ -1,11 +1,13 @@
+"""Convert a Firefox cookies.sqlite into a Playwright storage_state.json.
+
+Reads any Firefox-format store (Firefox, Zen, LibreWolf, Floorp, etc.) and
+filters to a single host substring.
 """
-Convert a Firefox-format cookies.sqlite (Firefox, Zen, LibreWolf, Floorp, etc.)
-into a Playwright storage_state.json. Filters to a single host substring.
-"""
+
 import argparse
 import json
-import sqlite3
 import shutil
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -18,6 +20,7 @@ EXPIRY_MS_THRESHOLD = 10**11
 
 
 def normalize_expiry(raw: int | None) -> float:
+    """Return the expiry in seconds, or -1.0 for a session cookie."""
     if not raw:
         return -1.0
     if raw > EXPIRY_MS_THRESHOLD:
@@ -37,7 +40,8 @@ def snapshot(src: Path) -> Path:
     return dst
 
 
-def fetch(db: Path, host_like: str) -> list[dict]:
+def fetch(db: Path, host_like: str) -> list[dict[str, object]]:
+    """Return the cookies of every host matching the substring, as Playwright cookies."""
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -60,10 +64,13 @@ def fetch(db: Path, host_like: str) -> list[dict]:
     ]
 
 
-def main():
+def main() -> None:
+    """Convert the cookies of one host and write the storage state."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True, help="Path to cookies.sqlite")
-    ap.add_argument("--host", required=True, help="Host substring filter (e.g. 'instagram')")
+    ap.add_argument(
+        "--host", required=True, help="Host substring filter (e.g. 'instagram')"
+    )
     ap.add_argument("--output", required=True, help="Output storage_state JSON")
     args = ap.parse_args()
 
