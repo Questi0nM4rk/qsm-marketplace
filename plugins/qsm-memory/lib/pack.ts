@@ -200,6 +200,12 @@ function runTool(cmd: string, args: readonly string[], env: Env): string {
   return r.stdout.toString();
 }
 
+/** The entries `tar` lists for an archive, or null when it cannot list it. */
+function listArchive(path: string, env: Env): string[] | null {
+  const r = Bun.spawnSync(["tar", "--zstd", "-tf", path], { env, stdout: "pipe", stderr: "pipe" });
+  return r.success ? r.stdout.toString().split("\n").filter(Boolean) : null;
+}
+
 /** `tar -cf - | zstd -19 -T0` into `part`; throws with the stderr of whichever failed. */
 async function writeArchive(home: string, entries: readonly string[], part: string, env: Env) {
   const tar = Bun.spawn(["tar", "-C", home, "-cf", "-", "--", ...entries], {
@@ -241,9 +247,11 @@ async function archiveSessions(
       env,
     );
     runTool("zstd", ["-t", "-q", part], env);
-    const listed = new Set(
-      runTool("tar", ["--zstd", "-tf", part], env).split("\n").filter(Boolean),
-    );
+    const entries = listArchive(part, env);
+    if (entries === null) {
+      throw new QsmError("failed", `tar cannot list ${part}`);
+    }
+    const listed = new Set(entries);
     const want = new Set(taken.flatMap((t) => t.expected));
     if (listed.size !== want.size || !want.isSubsetOf(listed)) {
       throw new QsmError(
@@ -323,18 +331,20 @@ const MAIN_TRANSCRIPT = /^projects\/[^/]+\/[^/]+\.jsonl$/;
  * `projects/`: a killed run's copy of files that never left. An archive holding a transcript that
  * is gone, or one that cannot be listed, is kept, whatever the table says. */
 function removeStaleArchives(db: Database, home: string, archiveDir: string, env: Env): void {
-  const named = db.query("SELECT 1 FROM packed WHERE archive = ?");
+  if (!existsSync(archiveDir)) {
+    return;
+  }
+  const named = new Set(
+    db
+      .query<{ archive: string }, []>("SELECT DISTINCT archive FROM packed")
+      .all()
+      .map((row) => row.archive),
+  );
   for (const name of readdirSync(archiveDir).filter((n) => n.endsWith(".tar.zst"))) {
     const archive = join(archiveDir, name);
-    if (named.get(archive) !== null) {
-      continue;
-    }
-    const listing = Bun.spawnSync(["tar", "--zstd", "-tf", archive], { env, stdout: "pipe" });
-    const transcripts = listing.stdout
-      .toString()
-      .split("\n")
-      .filter((e) => MAIN_TRANSCRIPT.test(e));
-    if (listing.success && transcripts.every((entry) => existsSync(join(home, entry)))) {
+    const entries = named.has(archive) ? null : listArchive(archive, env);
+    const transcripts = entries?.filter((e) => MAIN_TRANSCRIPT.test(e));
+    if (transcripts?.every((entry) => existsSync(join(home, entry))) === true) {
       rmSync(archive, { force: true });
     }
   }
@@ -358,13 +368,10 @@ export async function pack(
   const liveIds = () => liveSessionIds(home, (path) => readSessionFile(path, read));
   const archiveDir = join(dirname(resolveDbPath(env)), "transcripts");
   const target = join(archiveDir, `${localDate(now)}.tar.zst`);
-  const moved: Taken[] = [];
   try {
     removeStaleParts(archiveDir);
     requireTools(env);
-    if (existsSync(archiveDir)) {
-      removeStaleArchives(db, home, archiveDir, env);
-    }
+    removeStaleArchives(db, home, archiveDir, env);
     const taken = idleTranscripts(db, env, now, liveIds).map((jsonl) => takeSession(home, jsonl));
     if (taken.length === 0) {
       return ok({ packed: 0 }, "nothing is idle yet; nothing was moved");
@@ -375,11 +382,8 @@ export async function pack(
     mkdirSync(archiveDir, { recursive: true, mode: 0o700 });
     await archiveSessions(home, taken, target, env);
     hooks.afterArchive?.();
-    return removeOriginals(db, home, taken, target, now, liveIds, moved);
+    return removeOriginals(db, home, taken, target, now, liveIds);
   } finally {
-    if (moved.length > 0) {
-      setState(db, "last_pack_at", now.toISOString());
-    }
     setState(db, "pack_claim", null);
   }
 }
@@ -388,18 +392,6 @@ interface PackedRow {
   readonly archive: string;
   readonly packed_at: string;
   readonly entries: string;
-}
-
-/** The session's packed row as it was before this run, or none when there was none, so no row names
- * an archive that does not hold the session. */
-function putBack(db: Database, id: string, earlier: PackedRow | null): void {
-  if (earlier === null) {
-    db.query("DELETE FROM packed WHERE session_id = ?").run(id);
-    return;
-  }
-  db.query(
-    "INSERT OR REPLACE INTO packed (session_id, archive, packed_at, entries) VALUES (?, ?, ?, ?)",
-  ).run(id, earlier.archive, earlier.packed_at, earlier.entries);
 }
 
 interface PackedData {
@@ -421,9 +413,8 @@ function removeOriginals(
   target: string,
   now: Date,
   liveIds: () => Set<string>,
-  /** filled as sessions move, so a caller still knows the count when this throws */
-  moved: Taken[],
 ): Outcome<PackedData> {
+  const moved: Taken[] = [];
   try {
     const live = liveIds();
     const warnings: string[] = [];
@@ -434,6 +425,8 @@ function removeOriginals(
       "INSERT OR REPLACE INTO packed (session_id, archive, packed_at, entries) VALUES (?, ?, ?, ?)",
     );
     for (const t of taken) {
+      // undefined until this session's row is written; null when it had none before
+      let earlier: PackedRow | null | undefined;
       try {
         if (live.has(t.id)) {
           warnings.push(`${t.jsonl} became live while packing; left in place`);
@@ -443,17 +436,20 @@ function removeOriginals(
           warnings.push(`${t.jsonl} changed while packing; left in place`);
           continue;
         }
-        const earlier = earlierRow.get(t.id);
+        earlier = earlierRow.get(t.id);
         record.run(t.id, target, now.toISOString(), JSON.stringify(t.entries));
-        try {
-          rmSync(t.jsonl);
-        } catch (error) {
-          putBack(db, t.id, earlier);
-          throw error;
-        }
+        rmSync(t.jsonl);
         moved.push(t);
         rmSync(join(dirname(t.jsonl), t.id), { recursive: true, force: true });
       } catch (error) {
+        if (earlier !== undefined && existsSync(t.jsonl)) {
+          // the transcript stayed, so no row may name this archive for it: put the row back
+          if (earlier === null) {
+            db.query("DELETE FROM packed WHERE session_id = ?").run(t.id);
+          } else {
+            record.run(t.id, earlier.archive, earlier.packed_at, earlier.entries);
+          }
+        }
         warnings.push(`${t.jsonl} was not fully removed: ${messageOf(error)}`);
       }
     }
@@ -468,6 +464,8 @@ function removeOriginals(
   } finally {
     if (moved.length === 0) {
       rmSync(target, { force: true });
+    } else {
+      setState(db, "last_pack_at", now.toISOString());
     }
   }
 }
