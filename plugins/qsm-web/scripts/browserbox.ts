@@ -23,6 +23,7 @@ import {
   type Instance,
   instanceName,
   listDefinition,
+  liveViewLink,
   liveViewUrl,
   outDir,
   parseInstances,
@@ -31,6 +32,7 @@ import {
   renderCommand,
   runDefinition,
   stopDefinition,
+  tokenDefinition,
 } from "../lib/browserbox.ts";
 import { NO_ROOT, pluginRoot } from "../lib/doctor.ts";
 import { readScript, type Script, ScriptError, secretSteps, withSecrets } from "../lib/steps.ts";
@@ -129,6 +131,19 @@ function redact(job: Record<string, unknown>): Record<string, unknown> {
   return { ...job, steps: shown };
 }
 
+/** The address a person opens to watch and drive one instance, with its live-view password. */
+function liveViewOf(box: Box, name: string, port: number): string {
+  if (box.dryRun) {
+    box.run(tokenDefinition(name));
+    return liveViewLink(port, "<token>");
+  }
+  const { status, stdout } = box.run(tokenDefinition(name));
+  if (status !== 0 || stdout.trim().length === 0) {
+    throw new QsmError("failed", `${name} has no live-view password (exit ${status})`);
+  }
+  return liveViewLink(port, stdout.trim());
+}
+
 function instances(box: Box): Instance[] {
   const { status, stdout } = box.run(listDefinition());
   if (status !== 0) {
@@ -213,7 +228,7 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
       `${name} started but its browser never answered; its container was removed`,
     );
   }
-  return { name, port, liveView, out: where };
+  return { name, port, liveView: liveViewOf(box, name, port), out: where };
 }
 
 function start(call: Call, box: Box): Outcome {
@@ -222,7 +237,7 @@ function start(call: Call, box: Box): Outcome {
 }
 
 function ls(_call: Call, box: Box): Outcome {
-  const live = instances(box);
+  const live = instances(box).map((i) => ({ ...i, liveView: liveViewOf(box, i.name, i.port) }));
   return ok(live, JSON.stringify(live));
 }
 
@@ -366,7 +381,7 @@ function takeover(call: Call, box: Box): Outcome {
   const name = requiredString(call, "name");
   const tab = requiredNumber(call, "tab");
   const timeoutMs = optionalNumber(call, "timeout") ?? DEFAULT_WAIT_MS;
-  const view = liveViewUrl(Number(name.replace(/^bbox-/, "")));
+  const view = liveViewOf(box, name, Number(name.replace(/^bbox-/, "")));
   const armed = box.send(name, {
     cmd: "wait_for_human",
     tab,

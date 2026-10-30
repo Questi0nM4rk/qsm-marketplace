@@ -46,6 +46,23 @@ export function liveViewUrl(port: number): string {
   return `http://127.0.0.1:${port}/`;
 }
 
+/** Where an instance keeps the password its live view asks for, readable only inside it. */
+const TOKEN_FILE = "/run/bbox.token";
+
+/** The command that prints an instance's live-view password. */
+export function tokenDefinition(name: string): string[] {
+  return ["exec", name, "cat", TOKEN_FILE];
+}
+
+/**
+ * The address a person opens: the live view's own address plus the password its server asks for.
+ * Any page in the person's browser can reach a loopback port, so the password is what keeps it
+ * from typing into this browser.
+ */
+export function liveViewLink(port: number, token: string): string {
+  return `${liveViewUrl(port)}?password=${token}`;
+}
+
 /** The lowest free port in the block, or null when every one is taken. */
 export function pickPort(used: readonly number[]): number | null {
   const taken = new Set(used);
