@@ -417,27 +417,39 @@ export async function readStdin(): Promise<string> {
   return Bun.stdin.text();
 }
 
-interface CliIo {
-  readonly stdout: (text: string) => void;
-  readonly stderr: (text: string) => void;
+export interface CliIo {
+  readonly stdout: (text: string) => Promise<void>;
+  readonly stderr: (text: string) => Promise<void>;
 }
 
-const processIo: CliIo = {
-  stdout: (t) => {
-    process.stdout.write(t);
-  },
-  stderr: (t) => {
-    process.stderr.write(t);
-  },
+// Awaited, so process.exit cannot drop what a pipe reader has not taken yet (past 64 KiB).
+// Empty text is skipped: an empty Bun.write truncates a file-backed stream.
+// EPIPE means the reader left (`| head -1`), so it ends the write quietly.
+async function writeAll(stream: typeof Bun.stdout, text: string): Promise<void> {
+  if (text === "") {
+    return;
+  }
+  try {
+    await Bun.write(stream, text);
+  } catch (cause) {
+    if (!(cause instanceof Error && "code" in cause && cause.code === "EPIPE")) {
+      throw cause;
+    }
+  }
+}
+
+export const processIo: CliIo = {
+  stdout: (t) => writeAll(Bun.stdout, t),
+  stderr: (t) => writeAll(Bun.stderr, t),
 };
 
-function emit(outcome: Outcome, json: boolean, io: CliIo): number {
+async function emit(outcome: Outcome, json: boolean, io: CliIo): Promise<number> {
   if (json) {
-    io.stdout(renderJson(outcome));
+    await io.stdout(renderJson(outcome));
   } else {
     const r = renderText(outcome);
-    io.stdout(r.stdout);
-    io.stderr(r.stderr);
+    await io.stdout(r.stdout);
+    await io.stderr(r.stderr);
   }
   return exitOfOutcome(outcome);
 }
@@ -465,8 +477,13 @@ function checkHandlers(
 
 /** A usage message on stderr with the relevant help; under --json the
  * envelope on stdout too. Exit 2 either way. */
-function respondUsage(message: string, help: string, json: boolean, io: CliIo): number {
-  io.stderr(`usage: ${message}\n\n${help}`);
+async function respondUsage(
+  message: string,
+  help: string,
+  json: boolean,
+  io: CliIo,
+): Promise<number> {
+  await io.stderr(`usage: ${message}\n\n${help}`);
   return json ? emit(fail("usage", message), true, io) : exitOf("usage");
 }
 
@@ -503,7 +520,7 @@ export async function runCli(
   checkHandlers(manifest, bin, handlers);
   const parsed = parseCall(manifest, bin, argv);
   if (!parsed.ok && "help" in parsed) {
-    io.stdout(
+    await io.stdout(
       parsed.help === "bin"
         ? renderHelp(manifest, bin)
         : renderVerbHelp(manifest, bin, parsed.help),

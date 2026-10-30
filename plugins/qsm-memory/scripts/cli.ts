@@ -9,8 +9,10 @@ import {
   type Handler,
   optionalNumber,
   optionalString,
+  processIo,
   requiredString,
   runCli,
+  type CliIo,
 } from "../../../lib/cli-base.ts";
 import { serveStdio } from "../../../lib/mcp-stdio.ts";
 import { fail, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
@@ -192,10 +194,10 @@ const stamp = (text: string) =>
 
 /** stdout and stderr with an ISO timestamp before every line, so save.log can be read against
  * the commit that fixed a failure in it. */
-function stamped() {
+function stamped(): CliIo {
   return {
-    stdout: (text: string) => process.stdout.write(stamp(text)),
-    stderr: (text: string) => process.stderr.write(stamp(text)),
+    stdout: (text) => processIo.stdout(stamp(text)),
+    stderr: (text) => processIo.stderr(stamp(text)),
   };
 }
 

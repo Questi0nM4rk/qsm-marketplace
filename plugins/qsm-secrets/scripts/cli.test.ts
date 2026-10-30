@@ -658,6 +658,15 @@ for (const flavor of FLAVORS) {
         ]);
       });
 
+      test("--all answers a subagent prompt over 64 KiB whole through the pipe", () => {
+        const prompt = `${"x".repeat(300_000)} tok=${CAPTURED_VALUE}`;
+        const run = cli(["mask", "--all", "--json"], { input: JSON.stringify([prompt]) });
+        expect(run.code).toBe(0);
+        expect(envelope(run).data.texts).toEqual([
+          `${"x".repeat(300_000)} tok=${placeholderOf("cap_x")}`,
+        ]);
+      });
+
       test("--all refuses what is not a JSON array of strings", () => {
         expect(cli(["mask", "--all"], { input: '{"a":1}' }).code).toBe(2);
       });

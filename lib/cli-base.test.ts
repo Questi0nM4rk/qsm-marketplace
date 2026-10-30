@@ -263,7 +263,11 @@ describe("typed arg accessors and the manifest parser", () => {
       qsm: { bin: { "qsm-x": "x.ts" }, commands: { "qsm-x go": { description: "go" } } },
     });
     const out: string[] = [];
-    const io = { stdout: (t: string) => void out.push(t), stderr: (t: string) => void out.push(t) };
+    const push = (t: string): Promise<void> => {
+      out.push(t);
+      return Promise.resolve();
+    };
+    const io = { stdout: push, stderr: push };
     const code = await runCli(
       one,
       "qsm-x",
@@ -362,7 +366,7 @@ describe("an outcome's exit override", () => {
       { pass: () => outcome },
       {
         argv: ["pass"],
-        io: { stdout: () => {}, stderr: () => {} },
+        io: { stdout: () => Promise.resolve(), stderr: () => Promise.resolve() },
       },
     );
 
