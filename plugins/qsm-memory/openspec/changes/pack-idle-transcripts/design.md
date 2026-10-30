@@ -51,12 +51,13 @@ are the person's decisions, not measurements.
    `tar -cf - … | zstd -19 -T0`, tested with `zstd -t`, listed with `tar -tf` and compared to the
    file list, renamed, and only then are the originals removed. `zstd` over `xz`: 8% larger here,
    but it decompresses several times faster, and a restore is the moment the person waits.
-6. **State lives in `memory.db`**, a `state` table (`retention`, `activated_at`, `last_pack_at`)
-   and a `packed` table (`session_id`, `archive`, `packed_at`). The archive is the one per-machine
-   store qsm-memory already owns; a second file would be a second owner. `last_pack_at` is claimed
-   in one transaction before the run, so two session starts at once run one pack, and set back to
-   its earlier value when the pack fails, so a failure is retried at the next start, not in 30
-   days.
+6. **State lives in `memory.db`**, a `state` table (`retention`, `activated_at`, `last_pack_at`) and
+   a `packed` table (`session_id`, `archive`, `packed_at`, and `entries`, the paths archived for the
+   session, so the restore command names only what the archive holds). The archive is the one
+   per-machine store qsm-memory already owns; a second file would be a second owner. `last_pack_at`
+   is claimed in one transaction before the run, so two session starts at once run one pack, and set
+   back to its earlier value when the pack fails, so a failure is retried at the next start, not in
+   30 days.
 7. **Activation records the choice.** `--memory qsm` writes the settings as today and records
    `retention=qsm` and `activated_at` (kept when already set, so activating again does not restart
    the grace); `--memory claude` writes no setting and records `retention=claude`. The old `skip`
