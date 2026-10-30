@@ -214,7 +214,7 @@ describe("a pack killed mid-run", () => {
 });
 
 describe("a sessions file Claude Code is rewriting", () => {
-  const readTornOnce = (box: ReturnType<typeof packBox>) => {
+  const readTornOnce = () => {
     const seen = new Set<string>();
     return (path: string) => {
       if (!seen.has(path)) {
@@ -229,7 +229,7 @@ describe("a sessions file Claude Code is rewriting", () => {
     const box = packBox(["idle", "wakes"]);
     box.live("wakes");
 
-    const r = await pack(box.db, box.env, new Date(), { readFile: readTornOnce(box) });
+    const r = await pack(box.db, box.env, new Date(), { readFile: readTornOnce() });
 
     expect(r.code).toBe("ok");
     expect(existsSync(box.jsonl("wakes"))).toBe(true);
