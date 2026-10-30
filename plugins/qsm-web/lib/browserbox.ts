@@ -116,7 +116,6 @@ export function runDefinition(spec: StartSpec): string[] {
     "host",
     // Firefox needs far more than the default 64 MB of shared memory.
     "--shm-size=2g",
-    "--init",
     "--user",
     spec.user,
     "--env",

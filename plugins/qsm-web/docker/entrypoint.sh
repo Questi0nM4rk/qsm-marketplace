@@ -13,14 +13,23 @@ fi
 port="${QSM_BROWSERBOX_PORT:?browserbox: QSM_BROWSERBOX_PORT is not set}"
 display=":$((port - 10000))"
 
+# Xvnc names an abstract socket after its own process id, KasmVNCSock<pid>, and abstract sockets
+# live in the network namespace this instance shares with the host and every other instance. Each
+# container starts the same processes, so Xvnc would get the same pid in each and the second
+# instance fails to bind. Spending as many process ids as the port's offset first gives each
+# instance its own.
+for ((spent = 0; spent < port % 1000; spent++)); do /bin/true; done
+
 # Xvnc is the display and the streaming server in one. It listens on the host's loopback
-# address only, on the instance's port, which is the only way in.
+# address only, on the instance's port, which is the only way in. A public IP is given, so it
+# never asks a server on the internet for one.
 Xvnc "$display" \
   -geometry 1280x1024 -depth 24 \
   -interface 127.0.0.1 -websocketPort "$port" \
   -httpd /usr/share/kasmvnc/www \
   -sslOnly 0 -SecurityTypes None -disableBasicAuth \
   -FreeKeyMappings \
+  -publicIP 127.0.0.1 \
   -Log '*:stdout:30' >/tmp/kasmvnc.log 2>&1 &
 
 export DISPLAY="$display"
