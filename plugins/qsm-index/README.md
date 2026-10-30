@@ -21,9 +21,9 @@ this plugin has no reason to exist.
 | --- | --- | --- |
 | Skill | `code-index` | Fires when you need to find something in a tree the agent has not read, or see what depends on what. |
 | Hook | `session.start`, `prompt.submit` | Decide whether to build an index, and ask you once through the first prompt. |
-| Hook | `tool.call` | Refresh an indexed repository after a Bash `git commit` and after 20 distinct files edited. |
+| Hook | `tool.call` | Refresh an indexed repository after a Bash `git commit` and after 20 distinct files edited, and tell you and the agent when a build ends. |
 | MCP | `qsm-index` | Six tools that never block: `search`, `structure`, `impact`, `context`, `reindex`, `status`. |
-| CLI | `qsm-index` | 11 verbs, see [USAGE.md](USAGE.md). |
+| CLI | `qsm-index` | 12 verbs, see [USAGE.md](USAGE.md). |
 
 ## Install
 

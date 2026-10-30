@@ -5,6 +5,7 @@ qsm-index build <path>
 qsm-index reindex <path> [--if-indexed]
 qsm-index edited <file> [--cwd <dir>]
 qsm-index status <path>
+qsm-index wait <path> --since <iso-time>
 qsm-index auto <path> [--consent yes|no]
 qsm-index search <path> <query> [--top_k <n>]
 qsm-index structure <repo> explain|path <node> [--to <node>]
@@ -22,10 +23,15 @@ qsm-index mcp serve
   `semble` makes it partial, a warning. A build already running is left running and named.
 - `reindex` starts `qsm-index build <top>` detached, with its output in `build.log`, and returns
   at once. While a build holds the lock it starts nothing and says since when one runs.
-- `status` reports whether the index is present, the commit it was built at against HEAD, how
-  many files changed since the build (a file already dirty when the build ran counts only when it
-  changed again), whether a build runs and in which phase, and the last result and duration. It
-  never starts a build.
+- `status` reports whether the index is present, the commit it was built at against HEAD, how many
+  files changed since the build (a file already dirty when the build ran counts only when it changed
+  again), whether a build runs, in which phase, for how many minutes and under which pid, and the
+  last result and duration. It never starts a build.
+- `wait` blocks until the build of the repository ends, the one running now or one that starts or
+  ends within 60 s of `--since`, and prints `qsm-index: <repo> indexed at <commit> in <n> s`, or
+  the failure with its cause (exit 1); no such build is `failed` naming `build.log`. It writes
+  `waiting for <repo>` to stderr first, then every ten minutes how long the build has run and its
+  pid. It has no time limit, and neither has the build: a hung one is killed by its pid.
 - `auto` is the session-start decision: no index, or stale above 5000 files, asks, and its data
   carries `askText`, the instruction for the agent; `--consent yes` builds, `--consent no` is
   remembered in the cache directory as `declined`. A build it cannot start is `failed`.
@@ -37,7 +43,11 @@ qsm-index mcp serve
   the session's directory and the first prompt carries its `askText` as hidden context;
   `tool.call` runs `reindex <cwd> --if-indexed` after a successful Bash `git commit` and
   `edited <file> --cwd <cwd>` after Write, Edit and NotebookEdit, and returns the tool's result
-  unchanged. A verb that fails is a toast and a log line.
+  unchanged. A verb that fails is a toast and a log line. When `auto`, the refresh or an MCP tool
+  answered that a build started or runs, the hooks run `wait` beside the session, one per
+  repository; each running line is a toast, and the final line a toast and hidden context on the
+  next prompt. A session working directory
+  that no longer exists (a removed worktree) refreshes nothing and shows nothing.
 - Each repository's cache directory is `<cache>/<pathHash>/` with `build.lock`, `status.json` and
   `build.log`; `<cache>` is `QSM_INDEX_CACHE_DIR` or `~/.cache/qsm-index`. The graph is there
   too, in `graphify-out/`, which `<repo>/graphify-out` links to; `graphify-out` is appended once
@@ -52,9 +62,9 @@ qsm-index mcp serve
 - `search`, `structure`, `impact`, `context`, `reindex` and `status` are also the MCP tools of the
   same name, with the same arguments and the same answer. Every verb takes a path inside a git
   repository and works on that repository's top level. `search` needs `semble`; `structure`,
-  `impact` and `context` need `graphify`; either one running past 25 s is stopped and answers an
-  error naming the limit. Over MCP a failure comes back as an error result and the server keeps
-  serving.
+  `impact` and `context` need `graphify`; either one running past five minutes is stopped and
+  answers an error naming the limit. A build has no limit. Over MCP a failure comes back as an error
+  result and the server keeps serving.
 - A stale graph answer opens with `index is stale; <action>`: `reindex started`, `reindex running`,
   or `run reindex` when declined, above 5000 files, or never indexed (a read never starts a first
   build).

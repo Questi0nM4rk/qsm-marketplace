@@ -57,10 +57,7 @@
             "type": "string",
             "positional": true,
             "required": true,
-            "choices": [
-              "explain",
-              "path"
-            ],
+            "choices": ["explain", "path"],
             "description": "graph operation"
           },
           {
@@ -154,6 +151,25 @@
           }
         ]
       },
+      "qsm-index wait": {
+        "description": "Block until the build of the git repository holding a path ends, the one running now or one that starts or ends within 60 s of --since, and print how it ended: indexed at a commit in seconds, or failed with the cause; no such build is failed, naming the build log. Stderr names the repository first, then every ten minutes how long the build has run and its pid. The hooks run it beside the session so the person and the agent hear when an index is ready",
+        "noNoun": true,
+        "args": [
+          {
+            "name": "path",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "absolute path inside the repository"
+          },
+          {
+            "name": "since",
+            "type": "string",
+            "required": true,
+            "description": "the ISO time the build was started or asked for"
+          }
+        ]
+      },
       "qsm-index status": {
         "description": "Report whether the repository's index is present, how far it is behind HEAD, how many files changed since the build, whether a build is running, and how the last one ended",
         "args": [
@@ -179,10 +195,7 @@
           {
             "name": "consent",
             "type": "string",
-            "choices": [
-              "yes",
-              "no"
-            ],
+            "choices": ["yes", "no"],
             "description": "the person's answer to ask: yes builds, no is remembered for this repository"
           }
         ]
@@ -191,7 +204,7 @@
         "description": "Report healthy only when the qsm-index binary is on PATH and answers --help; graphify must be 0.8.34 or newer; semble is reported beside the verdict"
       },
       "qsm-index mcp serve": {
-        "description": "Serve search, structure, reindex and status over MCP on stdio until the client disconnects; no call blocks past the 30 s MCP limit",
+        "description": "Serve search, structure, reindex and status over MCP on stdio until the client disconnects; a call that needs more than five minutes is stopped",
         "noNoun": true
       }
     }

@@ -15,8 +15,8 @@ import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { askText, auto } from "../lib/auto.ts";
 import { buildIndex } from "../lib/build.ts";
 import { doctor, formatReport } from "../lib/doctor.ts";
-import { spawnRunner } from "../lib/run.ts";
-import { edited, TOOLS, type ToolOutcome } from "../lib/tools.ts";
+import { buildRunner, spawnRunner } from "../lib/run.ts";
+import { edited, TOOLS, type ToolOutcome, waitBuild } from "../lib/tools.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import { handlers as mcpHandlers } from "./mcp.ts";
 
@@ -24,7 +24,7 @@ const manifest = parseManifest(manifestJson, "qsm-index/qsm.json");
 
 function build(call: Call): Outcome {
   const path = requiredString(call, "path");
-  const report = buildIndex(path, { cwd: process.cwd(), run: spawnRunner, env: process.env });
+  const report = buildIndex(path, { cwd: process.cwd(), run: buildRunner, env: process.env });
   if (report.kind === "running") {
     return ok(report, `a build of ${report.repo} is already running since ${report.started_at}`);
   }
@@ -60,6 +60,18 @@ function runEdited(call: Call): Outcome {
   return printed(edited({ path, cwd }, spawnRunner, process.env));
 }
 
+/** One line of `wait`'s running report, beside the answer stdout carries. */
+function sayOnStderr(line: string): void {
+  process.stderr.write(`${line}\n`);
+}
+
+/** Blocks until the build that runs or starts soon ends; the hook that ran it tells the session. */
+async function runWait(call: Call): Promise<Outcome> {
+  const path = requiredString(call, "path");
+  const since = requiredString(call, "since");
+  return printed(await waitBuild({ path, since }, spawnRunner, process.env, sayOnStderr));
+}
+
 /** Unhealthy is a prerequisite that is not there: a binary is off PATH or
  * does not answer. The two external tools never decide the verdict. */
 function runDoctor(): Outcome {
@@ -86,6 +98,7 @@ if (import.meta.main) {
       build,
       auto: runAuto,
       edited: runEdited,
+      wait: runWait,
       doctor: runDoctor,
       ...toolHandlers,
       ...mcpHandlers,
