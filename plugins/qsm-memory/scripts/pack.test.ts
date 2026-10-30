@@ -46,7 +46,7 @@ type Box = ReturnType<typeof sandbox>;
 
 function cli(box: Box, argv: readonly string[], env: Record<string, string> = box.env) {
   const r = runBin(CLI, [...argv, "--json"], { cwd: box.home, env });
-  return { exit: r.exit, ...envelopeOf(r.stdout) };
+  return envelopeOf(r.stdout);
 }
 
 /** A transcript of one typed prompt, and a session directory beside it when `withDir`. */
