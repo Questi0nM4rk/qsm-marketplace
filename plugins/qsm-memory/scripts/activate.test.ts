@@ -2,10 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { getState, openDb } from "../lib/store.ts";
 import { activation, harnessMemoryStep, withHarnessMemoryOff } from "./activate.ts";
 
+/** The archive lives beside the Claude home, so a test reads the choice the activation recorded. */
+const archiveOf = (claudeHome: string) => join(claudeHome, "memory.db");
+
 function context(claudeHome: string, memory = "qsm", dryRun = false) {
-  return { dryRun, env: { CLAUDE_CONFIG_DIR: claudeHome }, choices: { memory } };
+  return {
+    dryRun,
+    env: { CLAUDE_CONFIG_DIR: claudeHome, QSM_MEMORY_DB: archiveOf(claudeHome) },
+    choices: { memory },
+  };
 }
 /** The activation answers synchronously; the contract allows a promise, so await it. */
 const activate = (ctx: ReturnType<typeof context>) => activation.activate(ctx);
@@ -61,6 +69,8 @@ describe("the harness memory choice", () => {
   test("running it again with nothing changed is already", async () => {
     const { claudeHome } = sandbox('{ "autoMemoryEnabled": false, "cleanupPeriodDays": 36500 }');
 
+    // the keys alone are not enough: the choice must be recorded too
+    expect((await activate(context(claudeHome))).status).toBe("installed");
     expect((await activate(context(claudeHome))).status).toBe("already");
   });
 
@@ -76,10 +86,39 @@ describe("the harness memory choice", () => {
     expect(readFileSync(settings, "utf8")).toBe('{ "outputStyle": "qsm" }');
   });
 
-  test("skip writes nothing", async () => {
+  test("qsm records the choice and the day, and a second run keeps the day", async () => {
+    const { claudeHome } = sandbox();
+
+    await activate(context(claudeHome));
+    const db = openDb(archiveOf(claudeHome));
+    const first = getState(db, "activated_at");
+    db.query(
+      "UPDATE state SET value = '2026-09-01T00:00:00.000Z' WHERE key = 'activated_at'",
+    ).run();
+    const again = await activate(context(claudeHome));
+
+    expect(getState(db, "retention")).toBe("qsm");
+    expect(first).not.toBeNull();
+    expect(again.status).toBe("already");
+    expect(getState(db, "activated_at")).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  test("claude records the choice and leaves settings.json byte for byte", async () => {
+    const text = '{ "cleanupPeriodDays": 30 }';
+    const { claudeHome, settings } = sandbox(text);
+
+    const result = await activate(context(claudeHome, "claude"));
+
+    expect(result.status).toBe("installed");
+    expect(readFileSync(settings, "utf8")).toBe(text);
+    expect(getState(openDb(archiveOf(claudeHome)), "retention")).toBe("claude");
+    expect((await activate(context(claudeHome, "claude"))).status).toBe("already");
+  });
+
+  test("skip is no longer a choice", async () => {
     const { claudeHome, settings } = sandbox();
 
-    expect((await activate(context(claudeHome, "skip"))).status).toBe("skipped");
+    expect((await activate(context(claudeHome, "skip"))).status).toBe("error");
     expect(existsSync(settings)).toBe(false);
   });
 });
@@ -119,9 +158,9 @@ describe("the settings file itself", () => {
     });
   });
 
-  test("memory takes qsm or skip", () => {
+  test("memory takes qsm or claude", () => {
     expect(activation.options).toEqual([
-      expect.objectContaining({ name: "memory", values: ["qsm", "skip"] }),
+      expect.objectContaining({ name: "memory", values: ["qsm", "claude"] }),
     ]);
   });
 });
