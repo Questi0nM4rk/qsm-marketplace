@@ -207,8 +207,25 @@
           }
         ]
       },
+      "qsm-web browserbox view": {
+        "description": "Open one instance's live view, with its password, in the desktop browser",
+        "args": [
+          {
+            "name": "name",
+            "type": "string",
+            "positional": true,
+            "required": true,
+            "description": "the instance to look into"
+          },
+          {
+            "name": "dryRun",
+            "type": "boolean",
+            "description": "report the commands instead of running them"
+          }
+        ]
+      },
       "qsm-web browserbox takeover": {
-        "description": "Hand one tab to a human and wait until the wall is cleared or the timeout passes",
+        "description": "Open the live view for a human and wait until the tab's wall is cleared or the timeout passes",
         "args": [
           {
             "name": "name",
@@ -233,11 +250,6 @@
             "name": "timeout",
             "type": "number",
             "description": "milliseconds to wait for the wall to be cleared"
-          },
-          {
-            "name": "open",
-            "type": "boolean",
-            "description": "open the live view in the desktop browser"
           },
           {
             "name": "dryRun",

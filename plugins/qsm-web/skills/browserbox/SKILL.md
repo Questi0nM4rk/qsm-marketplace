@@ -26,7 +26,7 @@ cheaper steps could not read, and it is never a session to act through.
    move and click there (`{"action": "mouse", "x": 412, "y": 288, "click": true}`), then a
    `screenshot` to check. One attempt, because a second against the same wall gets the address
    blocked.
-2. When it is still there, hand it to the person: `qsm-web browserbox takeover <name> <tab> --open
+2. When it is still there, hand it to the person: `qsm-web browserbox takeover <name> <tab>
    --reason "<what to clear>"` opens the live view on the desktop, and `notify-send "qsm-web" "<what
    to clear>"` tells the person, when `notify-send` is on PATH. The wait reports `resumed`; the tab
    and cookies are the ones you were using. The default wait is five minutes.
