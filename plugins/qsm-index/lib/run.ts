@@ -12,9 +12,9 @@ export interface RunResult {
 
 export type Runner = (command: string, args: readonly string[]) => RunResult;
 
-/** A little under the 30 s an MCP client waits for one tool call, so a slow command answers an
- * error result before the client gives up on the call. */
-const CALL_LIMIT_MS = 25_000;
+/** How long a caller waits for an answer it needs now (search, structure, status): Claude Code
+ * itself sets no limit on a stdio MCP call, so this is the one that stops a stuck command. */
+const CALL_LIMIT_MS = 300_000;
 const MAX_OUTPUT_CHARS = 40_000;
 
 /** Long output is a tool call's own problem, never the reader's. */
@@ -28,8 +28,9 @@ function timedOut(error: Error | undefined): boolean {
 }
 
 /** A runner that runs a command with `env` and never throws: a missing binary, a non-zero exit
- * and a run past `timeoutMs` all come back as `ok: false` with the cause in `detail`. */
-export function timedRunner(timeoutMs: number, env: Env): Runner {
+ * and a run past `timeoutMs` all come back as `ok: false` with the cause in `detail`. With no
+ * `timeoutMs` the command runs until it ends. */
+export function timedRunner(timeoutMs: number | undefined, env: Env): Runner {
   return (command, args) => {
     const result = spawnSync(command, [...args], { encoding: "utf8", timeout: timeoutMs, env });
     const stdout = cap(result.stdout ?? "");
@@ -58,6 +59,10 @@ export function timedRunner(timeoutMs: number, env: Env): Runner {
   };
 }
 
-/** The runner every interface uses: the process's own environment, stopped under the MCP
- * per-call limit. */
+/** The runner of every call that answers now: the process's own environment, stopped at the call
+ * limit. */
 export const spawnRunner: Runner = timedRunner(CALL_LIMIT_MS, process.env);
+
+/** The runner of the detached build: nobody waits on it, so it runs until graphify and semble end;
+ * graphify takes 16 s on this marketplace and 173 s on a repository of 111 MB of generated C#. */
+export const buildRunner: Runner = timedRunner(undefined, process.env);

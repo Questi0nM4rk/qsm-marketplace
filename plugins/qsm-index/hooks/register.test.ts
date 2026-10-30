@@ -1,7 +1,7 @@
 // `claude plugin test plugins/qsm-index` drives register.tsx against the engine itself: which
 // native event reaches which verb of $.index, with which argv, and what the session is told. What
 // each verb does is proved by `bun test` in scripts/session-start.test.ts and
-// scripts/refresh.test.ts; nothing here re-tests it. `process.run`, `session.cwd`, `ui.log` and
+// scripts/refresh.test.ts; nothing here re-tests it. `process.run`, `session.cwd`, `fs.exists`, `ui.log` and
 // `ui.toast` are host operations, so the test supplies them with `on(<name>, ...)` returning
 // `{ value }`, and the test's own `on('session.start')`, `on('prompt.submit')` and `on('tool.call')` are the bottoms of
 // their chains.
@@ -24,10 +24,14 @@ const answered = (answer: Answer) =>
     ? printed("failed", 1, answer.failed)
     : printed("ok", 0, "", answer.data ?? null);
 
-/** The host under register.tsx: the chain bottoms, `ui.*`, the session's cwd, and, unless
- * `answer` is null, a `process.run` that answers it. A tool that fails answers `isError`. Records
- * each argv run, each toast and each tool call that reached the bottom. */
-function host(on: On, answer: Answer | null = {}, toolFails = false) {
+/** The host under register.tsx: the chain bottoms, `ui.*`, the session's cwd, whether it still
+ * exists, and, unless `answer` is null, a `process.run` that answers it. A tool that fails answers
+ * `isError`; `toolText` is what every tool answers. Records each argv run, each toast and each tool call that reached the bottom. */
+function host(
+  on: On,
+  answer: Answer | null = {},
+  { toolFails = false, cwdExists = true, toolText = "tool output" } = {},
+) {
   const seen = Object.assign(
     recordingHost(on, answer === null ? undefined : () => answered(answer)),
     { tools: 0 },
@@ -36,9 +40,10 @@ function host(on: On, answer: Answer | null = {}, toolFails = false) {
   on("prompt.submit", (_$, e) => ({ text: e.text, context: e.context }));
   on("tool.call", (_$, _e) => {
     seen.tools += 1;
-    return { result: "tool output", text: "tool output", ...(toolFails ? { isError: true } : {}) };
+    return { result: toolText, text: toolText, ...(toolFails ? { isError: true } : {}) };
   });
   on("session.cwd", () => ({ value: "/repo" }));
+  on("fs.exists", () => ({ value: cwdExists }));
   return seen;
 }
 
@@ -112,7 +117,7 @@ test("a Bash call that does not commit starts nothing", async ($, on) => {
 });
 
 test("a commit that failed starts no refresh", async ($, on) => {
-  const seen = host(on, {}, true);
+  const seen = host(on, {}, { toolFails: true });
 
   await bash($, "git commit -m x");
 
@@ -178,15 +183,104 @@ test("a refresh log names the cwd it ran in and the spawn's cause", async ($, on
   expect(seen.logs[0]).toContain("process.run");
 });
 
-test("a refresh in a deleted session cwd names the directory, not a missing binary", async ($, on) => {
-  const seen = host(on, null);
-  on("process.run", () => {
-    throw new Error("ENOENT: no such file or directory, posix_spawn 'qsm-index'");
+test("a commit in a session cwd that was removed runs no verb and shows nothing", async ($, on) => {
+  const seen = host(on, {}, { cwdExists: false });
+
+  const r = await bash($, "git commit -m x");
+
+  expect(r.text).toBe("tool output");
+  expect(seen.runs).toEqual([]);
+  expect(seen.toasts).toEqual([]);
+  expect(seen.logs).toEqual([]);
+});
+
+/** Answers each `qsm-index wait` as the verb does: `waiting for <repo>` on stderr, then, once
+ * `together` waits were spawned, its --json answer. Records each argv it was spawned with. */
+function waiter(on: On, repo: string, answer: Answer, together = 1): string[] {
+  const spawns: string[] = [];
+  let release = () => {};
+  const all = new Promise<void>((done) => {
+    release = done;
   });
-  on("fs.exists", () => ({ value: false }));
+  on("process.spawn", async function* (_$, e) {
+    spawns.push(e.argv.join(" "));
+    if (spawns.length >= together) release();
+    yield { stream: "stderr" as const, text: `waiting for ${repo}\n` };
+    await all;
+    yield { stream: "stdout" as const, text: answered(answer).stdout };
+    return { value: { code: 0, signal: null } };
+  });
+  return spawns;
+}
+
+/** Lets the waiters the hook started beside the session finish: each dispatch yields to them, and
+ * a Bash call that does not commit runs no verb. */
+async function settled($: Engine, toasts: readonly string[]): Promise<void> {
+  for (let i = 0; i < 100 && toasts.length === 0; i++) {
+    await bash($, "true");
+  }
+  for (let i = 0; i < 5; i++) {
+    await bash($, "true");
+  }
+}
+
+const INDEXED = "qsm-index: /repo indexed at 1a2b3c4d5e6f in 173 s";
+const FAILED = "qsm-index: build of /work/big failed: graphify exited 1";
+
+test("a commit that started a build tells the person and the next prompt when it ends", async ($, on) => {
+  const seen = host(on, { data: "started a build of /repo" });
+  const spawns = waiter(on, "/repo", { data: INDEXED });
 
   await bash($, "git commit -m x");
+  await settled($, seen.toasts);
+  const r = await prompt($);
 
-  expect(seen.toasts).toHaveLength(1);
-  expect(seen.logs[0]).toContain("the session's working directory /repo no longer exists");
+  expect(spawns).toHaveLength(1);
+  expect(spawns[0]).toMatch(/^qsm-index wait \/repo --since \d{4}-\d\d-\d\dT\S+ --json$/);
+  expect(seen.toasts).toEqual([INDEXED]);
+  expect(r.context).toEqual([INDEXED]);
+});
+
+test("an MCP reindex whose build failed is told with the cause", async ($, on) => {
+  const seen = host(on, {}, { toolText: "started a build of /work/big" });
+  const spawns = waiter(on, "/work/big", { failed: FAILED });
+
+  await $.tool.call({ tool: "mcp__plugin_qsm-index_qsm-index__reindex", path: "/work/big" });
+  await settled($, seen.toasts);
+
+  expect(spawns.map((argv) => argv.split(" --since")[0])).toEqual(["qsm-index wait /work/big"]);
+  expect(seen.toasts).toEqual([FAILED]);
+});
+
+test("one build asked for from two paths of its repository is told once", async ($, on) => {
+  const seen = host(
+    on,
+    { data: "started a build of /repo" },
+    {
+      toolText: "a build of /repo is already running since 2026-10-30T12:00:00.000Z",
+    },
+  );
+  const spawns = waiter(on, "/repo", { data: INDEXED }, 2);
+
+  await bash($, "git commit -m x");
+  await $.tool.call({ tool: "mcp__plugin_qsm-index_qsm-index__reindex", path: "/repo/src" });
+  await settled($, seen.toasts);
+  const r = await prompt($);
+
+  expect(spawns).toHaveLength(2);
+  expect(seen.toasts).toEqual([INDEXED]);
+  expect(r.context).toEqual([INDEXED]);
+});
+
+test("a graph answer that only quotes a build in its body starts no wait", async ($, on) => {
+  const seen = host(
+    on,
+    {},
+    { toolText: "node a.ts\nrunning: a build of /repo is already running" },
+  );
+
+  await $.tool.call({ tool: "mcp__plugin_qsm-index_qsm-index__structure", repo: "/repo" });
+  await settled($, seen.toasts);
+
+  expect(seen.toasts).toEqual([]);
 });

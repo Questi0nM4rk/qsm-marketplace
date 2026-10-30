@@ -15,13 +15,19 @@ refresh the structural dependency graph over the repository's top level (`graphi
 `--obsidian` flag) into the cache location, and run one semantic search over it (`semble`). The
 `build` verb SHALL do this in the foreground and print what it built and the commit it built at;
 `reindex` and `auto` SHALL run the same build detached. A build SHALL record its result in the
-repository's status file whether it succeeds, degrades, or fails.
+repository's status file whether it succeeds, degrades, or fails. No caller waits on a build, so
+a build SHALL have no time limit: graphify and semble run until they end.
 
 #### Scenario: Normal indexing pass
 
 - **WHEN** the caller runs `qsm-index build` against a path inside a git repository
 - **THEN** qsm-index SHALL build the structural graph into the cache, run the semantic pass, and
   print the graph path and the commit it built at
+
+#### Scenario: a long build completes
+
+- **WHEN** graphify needs minutes on a large repository
+- **THEN** the build waits for it and records `ok`
 
 #### Scenario: Path is not an indexable directory
 
@@ -86,11 +92,11 @@ moving the verdict.
 qsm-index SHALL serve the MCP server under its own `mcp serve` verb, which the registration names,
 and SHALL write nothing of its own to stdout, which is the protocol's channel. The verb is marked
 `noNoun` in qsm.json. The server SHALL expose exactly six tools: `search`, `structure`, `impact`,
-`context`, `reindex`, `status`. No tool call SHALL run longer than the 30 second MCP limit; work
-that can take longer SHALL be started detached and polled with `status`. When a call's underlying
-local command fails, exits non-zero, times out, or is not on PATH, the tool SHALL return an error
-result carrying the cause instead of throwing, and SHALL leave the server running for the next
-call.
+`context`, `reindex`, `status`. A tool call answers now, so its backing command SHALL be stopped
+after five minutes; a build SHALL be started detached and never runs inside a call. When a call's
+underlying local command fails, exits non-zero, times out, or is not on PATH, the tool SHALL return
+an error result carrying the cause instead of throwing, and SHALL leave the server running for the
+next call.
 
 #### Scenario: the server lists exactly the six tools
 
@@ -376,13 +382,20 @@ the repository's cache directory, and starts a detached refresh of that reposito
 reaches 20; a build starting empties the count. Both verbs SHALL refresh only a repository that
 already has an index the person did not decline, SHALL ignore a file outside any repository, and
 SHALL answer ok unless the refresh cannot start, which is `failed` with the reason; the hook then
-fails open with a toast and a log line, and the tool's result goes back unchanged.
+fails open with a toast and a log line, and the tool's result goes back unchanged. When the
+session's working directory no longer exists, as after its worktree was removed, the hooks SHALL
+run no verb and show nothing, because a removed directory has no index to refresh.
 
 #### Scenario: a git commit through Bash starts a refresh
 
 - **WHEN** the commit hook receives a Bash call whose command runs `git commit`
 - **THEN** it runs `qsm-index reindex <cwd> --if-indexed`, which starts the detached refresh of an
   indexed repository and answers ok
+
+#### Scenario: a commit after the session's worktree was removed shows nothing
+
+- **WHEN** the commit hook runs and the session's working directory no longer exists
+- **THEN** it runs no verb, shows no toast, and the tool's result goes back unchanged
 
 #### Scenario: a Bash call that does not commit starts nothing
 
@@ -408,7 +421,8 @@ status file beside the lock. A `reindex` while a build of the same repository ru
 nothing and SHALL say that a build is already running. A lock whose recorded process is no longer
 alive SHALL be treated as stale and taken over. `status` SHALL report whether an index is present,
 the commit it was built at against HEAD, how many files changed since the build, whether a build
-is running and in which phase, and the last build's result and duration.
+is running, in which phase, for how many minutes and under which process id, and the last build's
+result and duration.
 
 #### Scenario: reindex returns before the build finishes
 
@@ -435,6 +449,41 @@ is running and in which phase, and the last build's result and duration.
 
 - **WHEN** `status` is called for a repository that has no index
 - **THEN** it reports the index absent and does not start a build
+
+### Requirement: A finished build is told to the person and the agent
+
+`wait <path> --since <time>` SHALL block until the build of the repository holding the path ends,
+the one running now or one that starts or ends within 60 seconds of `--since`, with no time limit
+on the build, and SHALL print `qsm-index: <repo> indexed at <commit> in <n> s` for an ok or partial
+build and `failed` with the cause for a failed one. When no such build came, it SHALL answer
+`failed` naming the build log, because its caller was told a build runs. It SHALL write
+`waiting for <repo>` to stderr first, and every ten minutes while the build runs, how long it has
+run and its process id, so a hung build is seen; nothing stops it. When `auto` at session start,
+a refresh hook, or an MCP tool call answered that a build started or runs, the hooks SHALL run
+`wait` beside the session, one per repository at a time, SHALL show each running line as a toast,
+and SHALL show the final line as a toast at once and add it as hidden context to the next prompt.
+
+#### Scenario: a commit that started a build is told when the build ends
+
+- **WHEN** the commit hook's refresh answers that it started a build, and the build ends ok
+- **THEN** the person sees a toast `qsm-index: <repo> indexed at <commit> in <n> s` and the next
+  prompt carries the same line
+
+#### Scenario: a failed build is told with its cause
+
+- **WHEN** an MCP `reindex` started a build and graphify fails
+- **THEN** the toast and the next prompt carry `qsm-index: build of <repo> failed: <cause>`
+
+#### Scenario: one build asked for from two paths is told once
+
+- **WHEN** a commit in the repository and an MCP call on a subdirectory both answer that its build
+  runs
+- **THEN** one toast and one context line tell its end
+
+#### Scenario: a build that never came is a failure
+
+- **WHEN** `wait` runs and no build holds the lock, starts or ends within 60 seconds of `--since`
+- **THEN** it answers `failed` naming the repository's build log
 
 ### Requirement: The index answers multi-hop questions better and in fewer steps
 

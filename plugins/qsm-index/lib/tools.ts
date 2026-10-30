@@ -7,7 +7,7 @@ import { GRAPH_DIR, GRAPH_FILE } from "./build.ts";
 import { type CacheFiles, cacheFiles, type Env } from "./paths.ts";
 import { changedSet, commitsSince, head, topLevel } from "./repo.ts";
 import type { Runner } from "./run.ts";
-import { type BuildStatus, changedSince, liveHolder, readStatus } from "./state.ts";
+import { type BuildStatus, changedSince, type Lock, liveHolder, readStatus } from "./state.ts";
 import { enclosing, readGraph, symbolsOf } from "./symbols.ts";
 
 export interface ToolOutcome {
@@ -400,11 +400,90 @@ export function status(args: RepoArgs, run: Runner, env: Env): ToolOutcome {
         ...(last === null ? [] : freshness(repo, last, run)),
         holder === null
           ? "build: not running"
-          : `build: running, phase ${last?.phase ?? "graph"}, since ${holder.started_at}`,
+          : `build: running, phase ${last?.phase ?? "graph"}, ${runningFor(holder, Date.now())}`,
         ...lastBuild(last, holder !== null),
       ].join("\n"),
     );
   });
+}
+
+/** How long `wait` looks for a build to appear after `since`: a detached build takes its lock a
+ * moment after it was started. It bounds the search for a build, never the build itself. */
+const APPEAR_MS = 60_000;
+
+export interface WaitArgs extends RepoArgs {
+  /** When the caller started or asked for the build, as an ISO time. */
+  readonly since: string;
+}
+
+/** How a finished build ended, in the line the person and the agent are told. */
+function ended(repo: string, last: BuildStatus): ToolOutcome {
+  if (last.result === "failed" || last.state === "running") {
+    return failed(`qsm-index: build of ${repo} failed: ${last.cause ?? "it did not finish"}`);
+  }
+  const at = (last.built_at_commit ?? "no commit").slice(0, 12);
+  const took = Math.round((last.duration_ms ?? 0) / 1000);
+  const partial = last.result === "partial" ? `; semantic pass failed: ${last.cause}` : "";
+  return ok(`qsm-index: ${repo} indexed at ${at} in ${took} s${partial}`);
+}
+
+/** How often `wait` says a build still runs, so a hung one is seen; a report, never a limit. */
+const RUNNING_REPORT_MS = 600_000;
+
+/** A running build as the person reads it: how long it has run and the process to kill. */
+function runningFor(holder: Lock, now: number): string {
+  const minutes = Math.floor((now - Date.parse(holder.started_at)) / 60_000);
+  return `for ${minutes} min (pid ${holder.pid})`;
+}
+
+/** One look at the cache: the answer once the awaited build ended, else the build still running
+ * (`holder`). A build is the awaited one when it was seen running or started or ended after
+ * `since`; none within APPEAR_MS of `since` is a failure, because the caller was told one runs. */
+function waitLook(repo: string, files: CacheFiles, args: WaitArgs, since: number, seen: boolean) {
+  const holder = liveHolder(files.lock);
+  if (holder !== null) {
+    return { seen: true, holder, answer: null };
+  }
+  const last = readStatus(files.status);
+  const after = (time: string | null) => time !== null && Date.parse(time) >= since;
+  if (last !== null && (seen || after(last.started_at) || after(last.finished_at))) {
+    return { seen, holder, answer: ended(repo, last) };
+  }
+  const none = failed(`qsm-index: no build of ${repo} ran after ${args.since}; see ${files.log}`);
+  return { seen, holder, answer: !seen && Date.now() - since > APPEAR_MS ? none : null };
+}
+
+/** Waits for the build of the repository holding a path that runs now, starts or ends within
+ * APPEAR_MS of `since`, and says how it ended. `say` hears the repository first, then every
+ * RUNNING_REPORT_MS how long the build has run. No limit: the build takes what it takes. */
+export async function waitBuild(
+  args: WaitArgs,
+  run: Runner,
+  env: Env,
+  say: (line: string) => void,
+  pollMs = 1000,
+): Promise<ToolOutcome> {
+  const repo = repository(args.path, "path", run);
+  if (isOutcome(repo)) {
+    return repo;
+  }
+  const since = Date.parse(args.since);
+  if (Number.isNaN(since)) {
+    return failed(`since: ${args.since} is not an ISO time`);
+  }
+  say(`waiting for ${repo}`);
+  const files = cacheFiles(repo, env);
+  let reported = Date.now();
+  let look = waitLook(repo, files, args, since, false);
+  while (look.answer === null) {
+    if (look.holder !== null && Date.now() - reported >= RUNNING_REPORT_MS) {
+      reported = Date.now();
+      say(`qsm-index: build of ${repo} running ${runningFor(look.holder, reported)}`);
+    }
+    await Bun.sleep(pollMs);
+    look = waitLook(repo, files, args, since, look.seen);
+  }
+  return look.answer;
 }
 
 type ToolArgs = Readonly<Record<string, unknown>>;
