@@ -132,7 +132,7 @@ describe("the harness memory choice", () => {
     expect(activation.status(context(keysOnly.claudeHome).env)).toBe("absent");
   });
 
-  test("skip is no longer a choice", async () => {
+  test("an unknown memory value is an error and writes nothing", async () => {
     const { claudeHome, settings } = sandbox();
 
     expect((await activate(context(claudeHome, "skip"))).status).toBe("error");

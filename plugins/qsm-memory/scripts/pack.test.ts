@@ -125,27 +125,25 @@ describe.skipIf(!hasZstd)("pack", () => {
         `${base}/idle2.jsonl`,
       ].toSorted(),
     );
-    const shown = cli(box, ["show", "idle1", "--full"]);
-    expect(shown.code).toBe("missing");
-    expect(shown.message).toContain(`tar --zstd -xmf '${path}' -C '${box.claude}'`);
+    const restoreOf = (id: string) => {
+      const shown = cli(box, ["show", id, "--full"]);
+      expect(shown.code).toBe("missing");
+      return shown.message.slice(
+        shown.message.indexOf("restore it with ") + "restore it with ".length,
+      );
+    };
+    // idle1 has a session directory: its printed command names both entries
+    const withDir = restoreOf("idle1");
+    expect(withDir).toContain(`tar --zstd -xmf '${path}' -C '${box.claude}'`);
     expect(cli(box, ["pack"]).message).toContain("no pack is due: the last pack was on");
 
-    // idle2 has no session directory: its printed command names the transcript alone, and runs
-    const bare = cli(box, ["show", "idle2", "--full"]).message;
-    const command = bare.slice(bare.indexOf("restore it with ") + "restore it with ".length);
+    // idle2 has none: its printed command names the transcript alone, and runs
+    const command = restoreOf("idle2");
     expect(command.match(/idle2/g)).toHaveLength(1);
     expect(spawnSync("sh", ["-c", command]).status).toBe(0);
     expect(existsSync(join(box.projects, "idle2.jsonl"))).toBe(true);
 
-    spawnSync("tar", [
-      "--zstd",
-      "-xmf",
-      path,
-      "-C",
-      box.claude,
-      `${base}/idle1.jsonl`,
-      `${base}/idle1`,
-    ]);
+    expect(spawnSync("sh", ["-c", withDir]).status).toBe(0);
     expect(cli(box, ["show", "idle1", "--full"]).code).toBe("ok");
     expect(existsSync(join(box.projects, "idle1", "subagents", "agent-1.jsonl"))).toBe(true);
   });

@@ -84,6 +84,13 @@ function choiceIsNew(db: Database | null, choice: MemoryChoice): boolean {
   );
 }
 
+/** Why nothing is written: under claude the settings are not ours, so no key is claimed. */
+function alreadyDetail(choice: MemoryChoice, path: string): string {
+  return choice === "claude"
+    ? `retention claude already recorded; ${path} left alone`
+    : `${KEYS} already set in ${path}`;
+}
+
 /** What a step writes, in words. */
 function describeWrite(choice: MemoryChoice, path: string, settings: boolean, record: boolean) {
   return [
@@ -111,7 +118,7 @@ export function harnessMemoryStep(ctx: ActivationContext): Step {
   const db = ctx.dryRun ? existingArchive(ctx.env) : openArchive(ctx.env);
   const record = choiceIsNew(db, choice);
   if (next === null && !record) {
-    return { name: NAME, status: "already", detail: `${KEYS} already set in ${path}` };
+    return { name: NAME, status: "already", detail: alreadyDetail(choice, path) };
   }
   const what = describeWrite(choice, path, next !== null, record);
   if (ctx.dryRun || db === null) {

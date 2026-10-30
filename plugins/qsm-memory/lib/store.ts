@@ -4,6 +4,7 @@ import { Database } from "bun:sqlite";
 import { chmodSync, existsSync, linkSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { dataDir } from "../../../lib/paths.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { typedText } from "./transcript.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
@@ -211,7 +212,9 @@ export function packedEntry(
   }
   const entries: unknown = JSON.parse(row.entries);
   if (!Array.isArray(entries) || !entries.every((e) => typeof e === "string")) {
-    throw new Error(`the packed entries of ${sessionId} are not a list of paths`);
+    throw new QsmError("failed", `the packed entries of ${sessionId} are not a list of paths`, {
+      next: "the archive was written by something else; look at the packed table",
+    });
   }
   return { archive: row.archive, entries };
 }

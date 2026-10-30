@@ -118,9 +118,41 @@ function takeSession(home: string, jsonl: string): Taken {
   };
 }
 
+/** What a pack may inject to prove its safety rules: a step between the archive and the removals,
+ * and the reader of `sessions/<pid>.json`. */
+export interface PackHooks {
+  readonly afterArchive?: () => void;
+  readonly readFile?: (path: string) => string;
+}
+
+const isGone = (error: unknown) =>
+  error instanceof Error && "code" in error && error.code === "ENOENT";
+
+/** A `sessions/<pid>.json` as JSON, or null when it vanished (that session ended). Claude Code
+ * rewrites the file in place while a session runs, so one that does not parse is read once more;
+ * a second failure fails the run. */
+function readSessionFile(path: string, read: (path: string) => string): unknown {
+  for (const attempt of [1, 2]) {
+    try {
+      return JSON.parse(read(path));
+    } catch (error) {
+      if (isGone(error)) {
+        return null;
+      }
+      if (attempt === 2) {
+        throw new QsmError("failed", `${path} cannot be read: ${messageOf(error)}`, {
+          next: "nothing was moved; fix or remove that file",
+        });
+      }
+    }
+  }
+  return null;
+}
+
 /** The ids of the sessions running now: those a `sessions/<pid>.json` names whose pid is alive.
- * An unreadable file fails the run, because moving a live transcript is the one unsafe outcome. */
-function liveSessionIds(home: string): Set<string> {
+ * A file that stays unreadable fails the run, because moving a live transcript is the one unsafe
+ * outcome. */
+function liveSessionIds(home: string, read: (path: string) => string): Set<string> {
   const dir = join(home, "sessions");
   const live = new Set<string>();
   if (!existsSync(dir)) {
@@ -128,13 +160,9 @@ function liveSessionIds(home: string): Set<string> {
   }
   for (const name of readdirSync(dir).filter((n) => /^\d+\.json$/.test(n))) {
     const path = join(dir, name);
-    let record: unknown;
-    try {
-      record = JSON.parse(readFileSync(path, "utf8"));
-    } catch (error) {
-      throw new QsmError("failed", `${path} cannot be read: ${messageOf(error)}`, {
-        next: "nothing was moved; fix or remove that file",
-      });
+    const record = readSessionFile(path, read);
+    if (record === null) {
+      continue;
     }
     if (
       !isRecord(record) ||
@@ -228,10 +256,15 @@ async function archiveSessions(
 }
 
 /** The idle, saved, not-running transcripts under the Claude home. */
-function idleTranscripts(db: Database, env: Env, now: Date): string[] {
+function idleTranscripts(
+  db: Database,
+  env: Env,
+  now: Date,
+  read: (path: string) => string,
+): string[] {
   const projects = projectsDir(env);
   const unsaved = new Set(unsavedTranscripts(db, projects));
-  const live = liveSessionIds(claudeDir(env));
+  const live = liveSessionIds(claudeDir(env), read);
   const days = daysOfUse(
     db
       .query<{ started_at: string }, []>("SELECT started_at FROM sessions")
@@ -250,41 +283,66 @@ function idleTranscripts(db: Database, env: Env, now: Date): string[] {
 
 const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
 
+/** Takes the run's claim, holding its pid, unless a pack is not due or another run holds one: a
+ * claim whose pid is not running is void. Returns why no run may start, or null with the claim
+ * taken. One transaction, so two runs started together move files once. */
+function takeClaim(db: Database, now: Date): string | null {
+  return db
+    .transaction(() => {
+      const reason = notDueBecause(
+        {
+          retention: getState(db, "retention"),
+          activatedAt: getState(db, "activated_at"),
+          lastPackAt: getState(db, "last_pack_at"),
+        },
+        now,
+      );
+      if (reason !== null) {
+        return reason;
+      }
+      const holder = Number(getState(db, "pack_claim"));
+      if (holder > 0 && isAlive(holder)) {
+        return `another pack is running (pid ${holder})`;
+      }
+      setState(db, "pack_claim", String(process.pid));
+      return null;
+    })
+    .immediate();
+}
+
+/** Deletes the `.part` files a killed run left in the archive directory. */
+function removeStaleParts(archiveDir: string): void {
+  if (!existsSync(archiveDir)) {
+    return;
+  }
+  for (const name of readdirSync(archiveDir).filter((n) => n.endsWith(".part"))) {
+    rmSync(join(archiveDir, name), { force: true });
+  }
+}
+
 /** One pack: nothing when none is due, else the idle transcripts into `transcripts/<today>.tar.zst`,
- * their originals removed once the archive is tested and listed. */
+ * their originals removed once the archive is tested and listed. `last_pack_at` is written only
+ * when a session moved; an archive that ends up holding nothing that moved is deleted. */
 export async function pack(
   db: Database,
   env: Env,
   now: Date = new Date(),
-  /** a test's seam: runs after the archive is renamed, before any original is removed */
-  afterArchive: () => void = () => {},
+  hooks: PackHooks = {},
 ): Promise<Outcome> {
-  const claimed = db
-    .transaction(() => {
-      const state: PackState = {
-        retention: getState(db, "retention"),
-        activatedAt: getState(db, "activated_at"),
-        lastPackAt: getState(db, "last_pack_at"),
-      };
-      const reason = notDueBecause(state, now);
-      if (reason === null) {
-        setState(db, "last_pack_at", now.toISOString());
-      }
-      return { reason, previous: state.lastPackAt };
-    })
-    .immediate();
-  if (claimed.reason !== null) {
-    return ok({ packed: 0 }, `no pack is due: ${claimed.reason}`);
+  const reason = takeClaim(db, now);
+  if (reason !== null) {
+    return ok({ packed: 0 }, `no pack is due: ${reason}`);
   }
+  const read = hooks.readFile ?? ((path: string) => readFileSync(path, "utf8"));
   const home = claudeDir(env);
   const archiveDir = join(dirname(resolveDbPath(env)), "transcripts");
   const target = join(archiveDir, `${localDate(now)}.tar.zst`);
-  let taken: Taken[];
+  let moved = 0;
   try {
+    removeStaleParts(archiveDir);
     requireTools(env);
-    taken = idleTranscripts(db, env, now).map((jsonl) => takeSession(home, jsonl));
+    const taken = idleTranscripts(db, env, now, read).map((jsonl) => takeSession(home, jsonl));
     if (taken.length === 0) {
-      setState(db, "last_pack_at", claimed.previous);
       return ok({ packed: 0 }, "nothing is idle yet; nothing was moved");
     }
     if (existsSync(target)) {
@@ -292,33 +350,45 @@ export async function pack(
     }
     mkdirSync(archiveDir, { recursive: true, mode: 0o700 });
     await archiveSessions(home, taken, target, env);
-  } catch (error) {
-    setState(db, "last_pack_at", claimed.previous);
-    throw error;
+    try {
+      hooks.afterArchive?.();
+      const outcome = removeOriginals(db, home, taken, target, now, read);
+      moved = outcome.data?.packed ?? 0;
+      return outcome;
+    } finally {
+      if (moved === 0) {
+        rmSync(target, { force: true });
+      }
+    }
+  } finally {
+    if (moved > 0) {
+      setState(db, "last_pack_at", now.toISOString());
+    }
+    setState(db, "pack_claim", null);
   }
-  afterArchive();
-  return removeOriginals(db, home, taken, target, now);
+}
+
+interface PackedData {
+  readonly packed: number;
+  readonly before: number;
+  readonly after: number;
+  readonly archive: string;
 }
 
 /** After the archive is renamed: remove each session's originals unless a file changed since it was
- * listed or the session became live, and record it as packed the moment its transcript is gone, so
- * a later failure still lets `show --full` name the archive. A session left in place is named. */
+ * listed or the session became live. The packed row is written before the transcript goes, so a
+ * removed transcript is always named. A session left in place is named. Throws `failed`, with every
+ * original in place, when `sessions/` cannot be read. */
 function removeOriginals(
   db: Database,
   home: string,
   taken: readonly Taken[],
   target: string,
   now: Date,
-): Outcome {
+  read: (path: string) => string,
+): Outcome<PackedData> {
+  const live = liveSessionIds(home, read);
   const warnings: string[] = [];
-  // The archive is renamed already: sessions/ that cannot be read keeps every original.
-  let live: Set<string>;
-  try {
-    live = liveSessionIds(home);
-  } catch (error) {
-    warnings.push(`${messageOf(error)}; every original left in place`);
-    live = new Set(taken.map((t) => t.id));
-  }
   const record = db.query(
     "INSERT OR REPLACE INTO packed (session_id, archive, packed_at, entries) VALUES (?, ?, ?, ?)",
   );
@@ -333,8 +403,8 @@ function removeOriginals(
         warnings.push(`${t.jsonl} changed while packing; left in place`);
         continue;
       }
-      rmSync(t.jsonl);
       record.run(t.id, target, now.toISOString(), JSON.stringify(t.entries));
+      rmSync(t.jsonl);
       moved.push(t);
       rmSync(join(dirname(t.jsonl), t.id), { recursive: true, force: true });
     } catch (error) {
@@ -344,6 +414,9 @@ function removeOriginals(
   const before = moved.reduce((sum, t) => sum + t.bytes, 0);
   const after = statSync(target).size;
   const data = { packed: moved.length, before, after, archive: target };
-  const message = `packed ${moved.length} sessions, ${mb(before)} into ${mb(after)}: ${target}`;
+  const message =
+    moved.length === 0
+      ? "moved nothing; the archive was removed"
+      : `packed ${moved.length} sessions, ${mb(before)} into ${mb(after)}: ${target}`;
   return warnings.length === 0 ? ok(data, message) : { code: "partial", message, data, warnings };
 }

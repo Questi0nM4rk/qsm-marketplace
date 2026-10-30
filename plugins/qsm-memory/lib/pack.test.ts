@@ -1,7 +1,16 @@
 // The date rule of `pack`, with the person's own cases as data. Dates are local noon, so the rule
 // reads the local calendar date whatever the time zone of the machine.
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { TranscriptBuilder } from "./fixtures/transcript.ts";
@@ -83,51 +92,181 @@ describe("whether a pack is due", () => {
   });
 });
 
-describe("a session that becomes live while the archive is written", () => {
-  test("stays in place and is named, and its neighbour is packed", async () => {
-    const home = sandboxDir("qsm-memory-live-");
-    const claude = join(home, "c");
-    const projects = join(claude, "projects", "-home-work");
-    mkdirSync(projects, { recursive: true });
-    mkdirSync(join(claude, "sessions"));
-    const env = {
-      PATH: process.env.PATH,
-      CLAUDE_CONFIG_DIR: claude,
-      QSM_MEMORY_DB: join(home, "data", "memory.db"),
-    };
-    const db = openDb(env.QSM_MEMORY_DB);
-    for (const id of ["idle", "wakes"]) {
-      const path = join(projects, `${id}.jsonl`);
-      writeFileSync(path, new TranscriptBuilder({ sessionId: id }).human(`prompt ${id}`).text());
-      saveTranscript(db, path, env);
-      utimesSync(path, new Date("2026-09-01T12:00:00"), new Date("2026-09-01T12:00:00"));
-    }
-    for (const day of [2, 3, 4, 5, 6, 7, 8]) {
-      db.query("INSERT INTO sessions VALUES (?, '/w', '/w', 't', ?, ?, '/none', ?, 1)").run(
-        `day${day}`,
-        `2026-09-0${day}T12:00:00.000Z`,
-        `2026-09-0${day}T13:00:00.000Z`,
-        "2026-09-09T00:00:00.000Z",
-      );
-    }
-    setState(db, "retention", "qsm");
-    setState(db, "activated_at", "2026-01-01T00:00:00.000Z");
-
-    const r = await pack(db, env, new Date(), () => {
-      // Claude Code resumes "wakes" while zstd runs: its sessions file now names a running pid
+/** A Claude home and an archive in a sandbox, with the named sessions saved, idle and 7 days of use
+ * after them, a pack due. */
+function packBox(ids: readonly string[]) {
+  const home = sandboxDir("qsm-memory-safety-");
+  const claude = join(home, "c");
+  const projects = join(claude, "projects", "-home-work");
+  mkdirSync(projects, { recursive: true });
+  mkdirSync(join(claude, "sessions"));
+  const env = {
+    PATH: process.env.PATH,
+    CLAUDE_CONFIG_DIR: claude,
+    QSM_MEMORY_DB: join(home, "data", "memory.db"),
+  };
+  const db = openDb(env.QSM_MEMORY_DB);
+  for (const id of ids) {
+    const path = join(projects, `${id}.jsonl`);
+    writeFileSync(path, new TranscriptBuilder({ sessionId: id }).human(`prompt ${id}`).text());
+    saveTranscript(db, path, env);
+    utimesSync(path, new Date("2026-09-01T12:00:00"), new Date("2026-09-01T12:00:00"));
+  }
+  for (const day of [2, 3, 4, 5, 6, 7, 8]) {
+    db.query("INSERT INTO sessions VALUES (?, '/w', '/w', 't', ?, ?, '/none', ?, 1)").run(
+      `day${day}`,
+      `2026-09-0${day}T12:00:00.000Z`,
+      `2026-09-0${day}T13:00:00.000Z`,
+      "2026-09-09T00:00:00.000Z",
+    );
+  }
+  setState(db, "retention", "qsm");
+  setState(db, "activated_at", "2026-01-01T00:00:00.000Z");
+  const archiveDir = join(home, "data", "transcripts");
+  return {
+    claude,
+    projects,
+    env,
+    db,
+    archiveDir,
+    jsonl: (id: string) => join(projects, `${id}.jsonl`),
+    /** Claude Code's sessions file for a running pid (the test's own) naming `id` */
+    live: (id: string) => {
       writeFileSync(
         join(claude, "sessions", `${process.pid}.json`),
-        JSON.stringify({ pid: process.pid, sessionId: "wakes" }),
+        JSON.stringify({ pid: process.pid, sessionId: id }),
       );
+    },
+    archives: () => (existsSync(archiveDir) ? readdirSync(archiveDir) : []),
+  };
+}
+
+const TORN = '{"pid":';
+
+describe("a session that becomes live while the archive is written", () => {
+  test("stays in place and is named, and its neighbour is packed", async () => {
+    const box = packBox(["idle", "wakes"]);
+
+    const r = await pack(box.db, box.env, new Date(), {
+      // Claude Code resumes "wakes" while zstd runs: its sessions file now names a running pid
+      afterArchive: () => {
+        box.live("wakes");
+      },
     });
 
     expect(r.code).toBe("partial");
-    expect(r.warnings).toEqual([
-      `${join(projects, "wakes.jsonl")} became live while packing; left in place`,
-    ]);
-    expect(existsSync(join(projects, "wakes.jsonl"))).toBe(true);
-    expect(existsSync(join(projects, "idle.jsonl"))).toBe(false);
-    expect(db.query("SELECT session_id FROM packed").all()).toEqual([{ session_id: "idle" }]);
-    expect(getState(db, "last_pack_at")).not.toBeNull();
+    expect(r.warnings).toEqual([`${box.jsonl("wakes")} became live while packing; left in place`]);
+    expect(existsSync(box.jsonl("wakes"))).toBe(true);
+    expect(existsSync(box.jsonl("idle"))).toBe(false);
+    expect(box.db.query("SELECT session_id FROM packed").all()).toEqual([{ session_id: "idle" }]);
+    expect(getState(box.db, "last_pack_at")).not.toBeNull();
+    expect(getState(box.db, "pack_claim")).toBeNull();
+  });
+});
+
+describe("a pack that moves nothing", () => {
+  test("a file that changes during the pack stays, no archive is left, last_pack_at is as it was", async () => {
+    const box = packBox(["busy"]);
+
+    const r = await pack(box.db, box.env, new Date(), {
+      afterArchive: () => {
+        appendFileSync(box.jsonl("busy"), "{}\n");
+      },
+    });
+
+    expect(r.code).toBe("partial");
+    expect(r.warnings).toEqual([`${box.jsonl("busy")} changed while packing; left in place`]);
+    expect(existsSync(box.jsonl("busy"))).toBe(true);
+    expect(box.archives()).toEqual([]);
+    expect(getState(box.db, "last_pack_at")).toBeNull();
+  });
+});
+
+describe("two packs started together", () => {
+  test("move files once: the second answers that a pack is running", async () => {
+    const box = packBox(["idle1", "idle2"]);
+    const other = openDb(box.env.QSM_MEMORY_DB);
+
+    const [first, second] = await Promise.all([pack(box.db, box.env), pack(other, box.env)]);
+
+    expect(first.code).toBe("ok");
+    expect(second.message).toContain("no pack is due: another pack is running");
+    expect(box.archives()).toHaveLength(1);
+    expect(box.db.query("SELECT COUNT(*) AS n FROM packed").get()).toEqual({ n: 2 });
+  });
+});
+
+describe("a pack killed mid-run", () => {
+  test("leaves a dead claim and a .part that do not block the next run", async () => {
+    const box = packBox(["idle"]);
+    const dead = spawnSync("true").pid;
+    setState(box.db, "pack_claim", String(dead));
+    mkdirSync(box.archiveDir, { recursive: true });
+    writeFileSync(join(box.archiveDir, "2026-09-30.tar.zst.part"), "half");
+
+    const r = await pack(box.db, box.env);
+
+    expect(r.code).toBe("ok");
+    expect(box.archives()).toHaveLength(1);
+    expect(box.archives()[0]).toMatch(/\.tar\.zst$/);
+    expect(getState(box.db, "pack_claim")).toBeNull();
+  });
+});
+
+describe("a sessions file Claude Code is rewriting", () => {
+  const readTornOnce = (box: ReturnType<typeof packBox>) => {
+    const seen = new Set<string>();
+    return (path: string) => {
+      if (!seen.has(path)) {
+        seen.add(path);
+        return TORN;
+      }
+      return readFileSync(path, "utf8");
+    };
+  };
+
+  test("is read again: it parses the second time, so its session is live and stays", async () => {
+    const box = packBox(["idle", "wakes"]);
+    box.live("wakes");
+
+    const r = await pack(box.db, box.env, new Date(), { readFile: readTornOnce(box) });
+
+    expect(r.code).toBe("ok");
+    expect(existsSync(box.jsonl("wakes"))).toBe(true);
+    expect(existsSync(box.jsonl("idle"))).toBe(false);
+  });
+
+  test("that never parses fails before anything is moved", async () => {
+    const box = packBox(["idle"]);
+    box.live("idle");
+
+    const run = pack(box.db, box.env, new Date(), { readFile: () => TORN });
+
+    expect(run).rejects.toMatchObject({ code: "failed" });
+    await run.catch(() => {});
+    expect(existsSync(box.jsonl("idle"))).toBe(true);
+    expect(box.archives()).toEqual([]);
+    expect(getState(box.db, "last_pack_at")).toBeNull();
+    expect(getState(box.db, "pack_claim")).toBeNull();
+  });
+
+  test("that never parses at the removal check leaves every original and no archive", async () => {
+    const box = packBox(["idle1", "idle2"]);
+    box.live("none");
+    let broken = false;
+
+    const run = pack(box.db, box.env, new Date(), {
+      afterArchive: () => {
+        broken = true;
+      },
+      readFile: (path) => (broken ? TORN : readFileSync(path, "utf8")),
+    });
+
+    expect(run).rejects.toMatchObject({ code: "failed" });
+    await run.catch(() => {});
+    expect(existsSync(box.jsonl("idle1"))).toBe(true);
+    expect(existsSync(box.jsonl("idle2"))).toBe(true);
+    expect(box.archives()).toEqual([]);
+    expect(getState(box.db, "last_pack_at")).toBeNull();
   });
 });
