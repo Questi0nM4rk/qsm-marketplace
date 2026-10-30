@@ -44,7 +44,7 @@ def _text(step: Step, key: str) -> str:
 
 def _out_path(name: str) -> str:
     """Artifacts stay inside the mounted directory: only a basename is used."""
-    return str(Path(OUT_DIR) / (Path(name).name or "shot.png"))
+    return str(Path(OUT_DIR) / (name.rsplit("/", 1)[-1] or "shot.png"))
 
 
 def _navigate(page: Page, step: Step) -> Outcome:

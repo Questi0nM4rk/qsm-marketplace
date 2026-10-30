@@ -6,28 +6,28 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
-const SCRIPTS_DIR = resolve(import.meta.dir, "instagram-saved");
+const SCRIPTS_DIR = resolve(import.meta.dir, "instagram_saved");
 
 const ALL_SCRIPTS = [
   "_browser.py",
-  "convert-cookies.py",
-  "harvest-shortcodes.py",
-  "scrape-reels.py",
+  "convert_cookies.py",
+  "harvest_shortcodes.py",
+  "scrape_reels.py",
 ];
 
 /** Script name to the one flag its USAGE recipe passes, which the --help
  * output must still name. */
 const MAIN_FLAG: Record<string, string> = {
-  "convert-cookies.py": "--source",
-  "harvest-shortcodes.py": "--url",
-  "scrape-reels.py": "--shortcodes",
+  "convert_cookies.py": "--source",
+  "harvest_shortcodes.py": "--url",
+  "scrape_reels.py": "--shortcodes",
 };
 
 function commandExists(cmd: string): boolean {
   return spawnSync("command", ["-v", cmd], { shell: true, stdio: "ignore" }).status === 0;
 }
 
-/** `harvest-shortcodes.py` and `scrape-reels.py` import `playwright.sync_api`
+/** `harvest_shortcodes.py` and `scrape_reels.py` import `playwright.sync_api`
  * through `_browser.py`, which no project venv on this machine owns. Try
  * each candidate that could supply it, in order, and keep the first that
  * answers; none answering means the runner-dependent tests skip and say why. */
@@ -54,18 +54,18 @@ function findRunner(): readonly [string, ...string[]] | null {
 
 const PYTHON3 = commandExists("python3");
 if (!PYTHON3) {
-  console.warn("instagram-saved.test.ts: python3 not on PATH, skipping py_compile checks");
+  console.warn("instagram_saved.test.ts: python3 not on PATH, skipping py_compile checks");
 }
 
 const RUNNER = findRunner();
 if (RUNNER === null) {
   console.warn(
-    "instagram-saved.test.ts: no runner supplies playwright.sync_api (tried uv tool run --from " +
+    "instagram_saved.test.ts: no runner supplies playwright.sync_api (tried uv tool run --from " +
       "shot-scraper, uvx --from shot-scraper, uv run --with playwright), skipping --help checks",
   );
 }
 
-describe.skipIf(!PYTHON3)("instagram-saved scripts byte-compile", () => {
+describe.skipIf(!PYTHON3)("instagram_saved scripts byte-compile", () => {
   for (const script of ALL_SCRIPTS) {
     test(`${script} compiles`, () => {
       const r = spawnSync("python3", ["-m", "py_compile", script], {
@@ -80,7 +80,7 @@ describe.skipIf(!PYTHON3)("instagram-saved scripts byte-compile", () => {
 
 if (RUNNER !== null) {
   const [cmd, ...rest] = RUNNER;
-  describe("instagram-saved scripts answer --help", () => {
+  describe("instagram_saved scripts answer --help", () => {
     for (const [script, flag] of Object.entries(MAIN_FLAG)) {
       test(`${script} names ${flag}`, () => {
         const r = spawnSync(cmd, [...rest, script, "--help"], {

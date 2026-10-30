@@ -52,5 +52,16 @@ ignore = [
   "TD003",   # TODO link — same
 ]
 
+# Rules that are right in general and wrong for one set of files here, each with the reason.
+[lint.per-file-ignores]
+# The driver's tests run under unittest, where self.assertEqual is the idiom, not pytest's
+# bare assert; a docstring on a test method only repeats its name.
+"plugins/qsm-web/docker/driver/test_*.py" = ["PT009", "D102"]
+# print is these programs' output: the daemon's ready line, ctl's answer, the scripts' report.
+"plugins/qsm-web/docker/driver/{ctl,daemon}.py" = ["T201"]
+"plugins/qsm-web/scripts/instagram_saved/*.py" = ["T201"]
+# One failed reel is recorded with its traceback and the run goes on to the next.
+"plugins/qsm-web/scripts/instagram_saved/scrape_reels.py" = ["BLE001"]
+
 [format]
 docstring-code-format = true
