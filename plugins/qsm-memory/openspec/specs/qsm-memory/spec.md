@@ -630,13 +630,13 @@ claim in the archive's `state` table in one transaction, holding its pid, so two
 together move files once; a claim whose pid is not a running process is void, so a run killed by a
 shutdown never blocks the next. `last_pack_at` SHALL be written only when a run moved at least one
 session, so a failed run, or one that moved nothing, leaves the cadence as it was. A run SHALL first
-delete any `<name>.part` a killed run left in the archive directory, and any archive that no
-`packed` row names and whose every archived transcript is still in `projects/`, because such an
-archive is a killed run's copy of files that never left; an archive holding a transcript that is
-no longer in `projects/` SHALL never be deleted, whatever the table says, so a lost or rebuilt
-database never costs an archive; a run that renamed an archive and then moved nothing SHALL delete
-that archive. When removing a transcript fails after its row was written, the row SHALL be put back
-as it was, so no row ever names an archive that does not hold the session or does not exist.
+delete any `<name>.part` a killed run left in the archive directory, and it SHALL never delete an
+archive it did not write in the same run, whatever the `packed` table says, so a lost or rebuilt
+database, or a partial restore, never costs an archive. When `<YYYY-MM-DD>.tar.zst` already exists
+(a killed run's copy of files that never left), the run SHALL write `<YYYY-MM-DD>-<n>.tar.zst`, `n`
+the first free number from 2; a run that renamed an archive and then moved nothing SHALL delete that
+archive. When removing a transcript fails after its row was written, the row SHALL be put back as it
+was, so no row ever names an archive that does not hold the session or does not exist.
 
 A run SHALL take every idle main transcript (`projects/<dir>/<id>.jsonl` under the Claude home)
 together with its session directory (`projects/<dir>/<id>/`), except one the archive has not saved
