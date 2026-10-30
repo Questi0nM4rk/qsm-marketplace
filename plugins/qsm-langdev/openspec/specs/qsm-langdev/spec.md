@@ -299,15 +299,13 @@ agent.
 
 ### Requirement: A missing binary or a missing config fails, never a skip
 
-`check` SHALL fail, naming the checker and its install command, when a
-selected checker's binary is not resolvable. `check` SHALL also fail, naming
-the missing file and that it must be created or the checker removed from
-selection, when a selected language has no scaffolded config in the
-repository, since scoring both sides at a tool's defaults would let nothing
-ever regress. A binary whose `--version` presence probe does not answer in
-time (10 s) is not missing: `check` SHALL report that checker as not measured,
-naming the probe and its limit and asking for a retry, and SHALL NOT tell the
-person to install it.
+`check` SHALL fail, naming the checker and its install command, when a selected checker's binary is
+not resolvable. `check` SHALL also fail, naming the missing file and that it must be created or the
+checker removed from selection, when a selected language has no scaffolded config in the repository,
+since scoring both sides at a tool's defaults would let nothing ever regress. A binary whose
+`--version` presence probe does not answer in time (five minutes, the limit for any process the gate
+starts) is not missing: `check` SHALL report that checker as not measured, naming the probe and its
+limit and asking for a retry, and SHALL NOT tell the person to install it.
 
 #### Scenario: A checker's binary is absent
 
