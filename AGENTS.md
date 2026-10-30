@@ -157,5 +157,7 @@ mise exec -- bun run test:hooks
   merges and deletes it, because the stop gate scores a whole tree.
 - The langdev guard blocks `--no-verify` and any `QSM_LANGDEV_ALLOW` an agent sets. A blocked commit
   or push means fix the cause now: an agent never offers the allow in place of a fix, nor a fix
-  "later" in a task (the person: "FIX EVERYTHING NOW"). Only a regression the person decides to
-  keep passes, by typing `! QSM_LANGDEV_ALLOW="<why>" <command>` in the prompt.
+  "later" in a task (the person: "FIX EVERYTHING NOW"). When the finding is right for most code and
+  wrong for this code, the rule is what is wrong: propose the change to the rule's config, with its
+  reason, and make it after the person's yes. The allow is the last line of defense, for a
+  regression nothing can fix; the person types it: `! QSM_LANGDEV_ALLOW="<why>" <command>`.

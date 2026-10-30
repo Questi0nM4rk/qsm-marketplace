@@ -422,7 +422,7 @@ function reportGateOutcomes(name: HookName, outcomes: readonly GateOutcome[]): v
   if (outcomes.some((outcome) => outcome.status === "failed" && outcome.regression === true)) {
     const verb = name === "pre-push" ? "push" : "commit";
     err(
-      `  To let this regression pass once, the person types: ! QSM_LANGDEV_ALLOW="<why>" git ${verb} ...`,
+      `  Fix the cause and ${verb} again; a rule wrong for this code is changed in its config after the person's yes. Last line of defense, for what nothing can fix, typed by the person: ! QSM_LANGDEV_ALLOW="<why>" git ${verb} ...`,
     );
   }
 }
