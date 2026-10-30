@@ -4,15 +4,8 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { spawnDetached } from "../../../lib/detach.ts";
-import {
-  fail,
-  fromThrown,
-  OUTCOME_CODES,
-  type Outcome,
-  type OutcomeCode,
-  ok,
-  type Thrown,
-} from "../../../lib/outcome.ts";
+import { fail, OUTCOME_CODES, type Outcome, type OutcomeCode, ok } from "../../../lib/outcome.ts";
+import { fromThrown, type Thrown } from "../../../lib/qsm-error.ts";
 import type { Env } from "../../../lib/paths.ts";
 import {
   type Catalog,

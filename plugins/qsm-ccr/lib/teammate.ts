@@ -1,14 +1,7 @@
 // Teammate mode: Claude Code runs `$CLAUDE_CODE_TEAMMATE_COMMAND --agent-id ... --agent-name ...`.
 // The name picks the route; the launch carries exactly that route's environment.
-import {
-  binPath,
-  exitOf,
-  fail,
-  fromThrown,
-  type Outcome,
-  ok,
-  renderText,
-} from "../../../lib/outcome.ts";
+import { binPath, exitOf, fail, type Outcome, ok, renderText } from "../../../lib/outcome.ts";
+import { fromThrown } from "../../../lib/qsm-error.ts";
 import type { Env } from "../../../lib/paths.ts";
 import { appendLaunchLog, loadModels, prepareRouted, runClaude } from "./launch.ts";
 import { placesOf } from "./places.ts";

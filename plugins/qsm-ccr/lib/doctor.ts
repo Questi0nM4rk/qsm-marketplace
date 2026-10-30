@@ -247,7 +247,7 @@ function settingsChecks(
 /** The guard of `name` the machine breaks, as its row. */
 type Broken = (name: string) => Row | undefined;
 
-export function verdict(checks: readonly Check[]): Outcome<{ readonly checks: readonly Check[] }> {
+function verdict(checks: readonly Check[]): Outcome<{ readonly checks: readonly Check[] }> {
   const code = SEVERITY.find((s) => checks.some((c) => c.code === s)) ?? "ok";
   const rows = checks.map((c) => `  ${c.code.padEnd(7)}  ${c.name}: ${c.detail}`).join("\n");
   const data = { checks };

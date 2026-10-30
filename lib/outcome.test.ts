@@ -6,7 +6,6 @@ import {
   exitOf,
   exitOfOutcome,
   fail,
-  fromThrown,
   OUTCOME_CODES,
   OUTCOMES,
   ok,
@@ -14,6 +13,7 @@ import {
   renderText,
   toEnvelope,
 } from "./outcome.ts";
+import { fromThrown } from "./qsm-error.ts";
 
 describe("the outcome table", () => {
   test("seven codes, exits 0 to 6, each with a reason and a cause", () => {

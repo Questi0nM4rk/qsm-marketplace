@@ -197,7 +197,7 @@ export const PROFILE_DATA: Readonly<
       {
         file: ".jscpd.json",
         content:
-          '{\n  "minTokens": 50,\n  "minLines": 5,\n  "mode": "mild",\n  "format": ["typescript", "tsx", "javascript", "jsx"],\n  "ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "**/*.min.js", "**/profiles/**"]\n}\n',
+          '{\n  "minTokens": 50,\n  "minLines": 5,\n  "mode": "mild",\n  "format": ["typescript", "tsx", "javascript", "jsx"],\n  "ignore": [\n    "node_modules/**",\n    "dist/**",\n    "build/**",\n    "coverage/**",\n    "**/*.min.js",\n    "**/profiles/**"\n  ]\n}\n',
       },
       {
         file: ".oxlintrc.json",

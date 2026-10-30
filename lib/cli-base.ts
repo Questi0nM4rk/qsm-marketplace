@@ -3,12 +3,12 @@ import {
   exitOf,
   exitOfOutcome,
   fail,
-  fromThrown,
   type Outcome,
   renderJson,
   renderText,
   UsageError,
 } from "./outcome.ts";
+import { fromThrown } from "./qsm-error.ts";
 import {
   type CommandArg,
   type CommandDecl,

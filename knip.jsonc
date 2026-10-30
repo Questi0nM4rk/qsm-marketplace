@@ -19,12 +19,19 @@
         "lib/generate-noun.ts",
         "**/*.test.ts",
         "lib/fixtures/**/*.ts",
+        // read by lib/generate-noun.ts as text and copied beside each noun
+        "lib/templates/*.ts",
+        // the fake binaries a plugin's tests put on PATH and spawn with bun, which knip cannot follow
+        "plugins/*/lib/fixtures/*.ts",
       ],
       "project": ["lib/**/*.ts", "plugins/**/*.ts", ".gates/**/*.ts"],
     },
     // An eval's run.ts is a script a person runs with bun, so it is an entry.
     "plugins/*": {
       "entry": ["scripts/*.ts", "hooks/*.ts", "hooks/*.tsx", "**/*.test.ts", "evals/*/run.ts"],
+      // a plugin's lib/fixtures holds the fake binaries its tests put on PATH and spawn with bun,
+      // which knip cannot follow; ignored, because an entry pattern hints in every plugin without one
+      "ignore": ["lib/fixtures/*.ts"],
       "project": ["**/*.ts"],
     },
   },

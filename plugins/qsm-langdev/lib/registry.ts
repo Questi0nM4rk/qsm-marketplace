@@ -246,7 +246,7 @@ const TS_PROJECT = ["tsconfig*.json", "package.json"];
 /** The .csproj that owns a .cs file: the nearest one up its directories, else the root, where
  * `dotnet format` then takes the solution. One project is one load of its analyzers, measured at
  * 24 s whatever the file count, against 109 s for the solution at the root. */
-export function nearestProject(root: string, file: string): string {
+function nearestProject(root: string, file: string): string {
   let dir = dirname(join(root, file));
   while (dir.startsWith(root)) {
     const project = readdirSync(dir).find((name) => name.endsWith(".csproj"));

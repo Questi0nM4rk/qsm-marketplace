@@ -158,7 +158,7 @@ export function generatedPaths(root: string, paths: readonly string[]): Set<stri
  * Every tracked path plus untracked-and-not-ignored, minus anything the repository does not have
  * (generated or vendored trees .gitignore hides never turn a language on).
  */
-export function repoFiles(root: string): string[] | null {
+function repoFiles(root: string): string[] | null {
   const tracked = trackedFiles(root);
   const untracked = gitPaths(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
   if (tracked === null || untracked === null) {

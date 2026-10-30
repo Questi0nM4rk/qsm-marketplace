@@ -166,7 +166,7 @@ const SEVERITY: readonly InstallStatus[] = [
 ];
 
 /** The worst status among `steps`; none at all is already. */
-export function worst(steps: readonly Step[]): InstallStatus {
+function worst(steps: readonly Step[]): InstallStatus {
   return SEVERITY.find((s) => steps.some((st) => st.status === s)) ?? "already";
 }
 

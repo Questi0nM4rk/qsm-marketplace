@@ -1,5 +1,4 @@
 // One outcome system for every qsm binary.
-import { QsmError } from "./qsm-error.ts";
 import { which } from "bun";
 
 export const OUTCOME_CODES = [
@@ -127,18 +126,6 @@ export function ok<T>(data?: T, message?: string): Outcome<T> {
 /** Every non-ok outcome names why, so a reader never meets a bare code. */
 export function fail<T>(code: Exclude<OutcomeCode, "ok">, message: string, data?: T): Outcome<T> {
   return { code, message, ...(data === undefined ? {} : { data }) };
-}
-
-/** The data of a thrown failure: the next step a QsmError named, or nothing. */
-export type Thrown = { readonly next: string } | undefined;
-
-/** A throw as an outcome: a QsmError keeps its code and its next step, a UsageError is usage, any
- * other throw is failed. */
-export function fromThrown(e: unknown): Outcome<Thrown> {
-  if (e instanceof QsmError) {
-    return fail(e.code, e.message, e.next === undefined ? undefined : { next: e.next });
-  }
-  return fail(e instanceof UsageError ? "usage" : "failed", messageOf(e));
 }
 
 export function toEnvelope<T>(outcome: Outcome<T>): Envelope<T> {
