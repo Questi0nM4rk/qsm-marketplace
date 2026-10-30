@@ -46,7 +46,6 @@ import {
   type ResolvedPack,
   resolvePacks,
 } from "./rule-packs.ts";
-import { type ProEngine, type SemgrepLogin, semgrepEngine, semgrepLogin } from "./semgrep-login.ts";
 import { withCommitTree, withScratchDir, withWorktreeTree } from "./tree.ts";
 
 const REPORT_SCRATCH_PREFIX = "qsm-langdev-report-";
@@ -770,10 +769,6 @@ export interface CompareOptions {
   allFindings?: boolean;
   /** Test seam; production fetches from semgrep's registry. */
   fetchPack?: FetchPack;
-  /** Test seam; production asks `semgrep show identity`. */
-  semgrepLogin?: () => SemgrepLogin;
-  /** Test seam; production asks `semgrep --dump-engine-path --pro`. */
-  semgrepProEngine?: () => ProEngine;
 }
 
 type Applicable = { spec: CheckSpec } | { spec: CheckSpec; skip: string };
@@ -961,36 +956,10 @@ function resolveGiven(
   return only === undefined ? given : given.filter((path) => only.includes(path));
 }
 
-const proForm = (spec: CheckSpec): boolean => spec.prePush?.pro !== undefined;
-
-/** The selected checkers as they run at the run's enforcement point under
- * its semgrep engine, the warning a login that did not get the Pro engine
- * gives, and, by name, the community form of each checker that runs under
- * the Pro engine, for when its Pro run fails. The engine is chosen once per
- * run, and only at pre-push when a selected checker declares a Pro form: any
- * other run asks semgrep nothing. */
-function engage(
-  selected: readonly CheckSpec[],
-  options: CompareOptions,
-): { engaged: CheckSpec[]; warnings: string[]; community: Map<string, CheckSpec> } {
+/** The selected checkers as they run at the run's enforcement point. */
+function engage(selected: readonly CheckSpec[], options: CompareOptions): CheckSpec[] {
   const point = options.at ?? "pre-commit";
-  const community = new Map<string, CheckSpec>();
-  if (point === "pre-commit" || !selected.some(proForm)) {
-    const engaged = selected.map((spec) => asRunAt(spec, point, "community"));
-    return { engaged, warnings: [], community };
-  }
-  const login = (options.semgrepLogin ?? semgrepLogin)();
-  const { engine, warning } = semgrepEngine(login, options.semgrepProEngine);
-  if (engine === "pro") {
-    for (const spec of selected.filter(proForm)) {
-      community.set(spec.name, asRunAt(spec, point, "community"));
-    }
-  }
-  return {
-    engaged: selected.map((spec) => asRunAt(spec, point, engine)),
-    warnings: warning === undefined ? [] : [warning],
-    community,
-  };
+  return selected.map((spec) => asRunAt(spec, point));
 }
 
 /** Every set a selected checker declares, by name, each computed once:
@@ -1044,8 +1013,6 @@ interface RunContext {
   jobs: number;
   /** Every rule pack a selected checker names, fetched once this run. */
   packs: ReadonlyMap<string, ResolvedPack>;
-  /** The community form of each checker running under the Pro engine. */
-  community: ReadonlyMap<string, CheckSpec>;
   /** What the run says once about how it ran, added to as checkers run. */
   warnings: string[];
 }
@@ -1215,15 +1182,7 @@ async function verdictOnEngine(
       ? set
       : new Set([...set].filter((f) => !context.generated.has(f)));
   };
-  const first = await verdictFor(spec, sides, setOf(spec), context);
-  const community = context.community.get(spec.name);
-  if (first.failedRun === undefined || community === undefined) {
-    return first.verdict;
-  }
-  context.warnings.push(
-    `${spec.name}: semgrep Pro run failed: ${first.failedRun}; the community engine ran`,
-  );
-  return (await verdictFor(community, sides, setOf(community), context)).verdict;
+  return (await verdictFor(spec, sides, setOf(spec), context)).verdict;
 }
 
 /**
@@ -1270,7 +1229,8 @@ export async function compareTrees(
     const verdicts = [...skipVerdicts, ...missingVerdicts];
     return { changed, sets, verdicts, store: unused, warnings: [] };
   }
-  const { engaged: selected, warnings, community } = engage(runnable, options);
+  const selected = engage(runnable, options);
+  const warnings: string[] = [];
 
   const base = {
     root,
@@ -1292,12 +1252,11 @@ export async function compareTrees(
       uses: new Map(),
       jobs: options.jobs ?? JOBS,
       packs,
-      community,
       warnings,
     };
     const found = await withBeforeAndAfter(root, beforeRef, after, async (before, afterSide) => {
       const trees = before === null ? [afterSide] : [before, afterSide];
-      const bySet = await setsFor(base, [...selected, ...community.values()], trees, sets);
+      const bySet = await setsFor(base, selected, trees, sets);
       return runSelected(selected, { before, after: afterSide }, bySet, run);
     });
     return { context: run, verdicts: found };

@@ -1,8 +1,6 @@
 // Whether the semgrep CLI is logged in.
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import type { SemgrepEngine } from "./registry.ts";
 
 export type SemgrepLogin = "logged-in" | "logged-out" | "rejected" | "unknown";
 
@@ -35,53 +33,6 @@ export function semgrepLogin(
     return "unknown";
   }
   return /\b401\b/.test(output) ? "rejected" : "logged-out";
-}
-
-/** Whether the Pro engine binary is on this machine: `semgrep install-semgrep-pro`
- * puts it beside semgrep-core, and `semgrep --dump-engine-path --pro` names
- * that path whether or not a file is there (checked on 1.153.1, logged out). */
-export type ProEngine = "installed" | "missing" | "unknown";
-
-/** Runs a command, returns its exit code (null when it gave none) and stdout. */
-export type RunOutput = (
-  cmd: string,
-  args: readonly string[],
-) => { status: number | null; stdout: string };
-
-const runOutput: RunOutput = (cmd, args) => {
-  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: PROBE_TIMEOUT_MS });
-  return { status: r.status, stdout: r.stdout ?? "" };
-};
-
-export function semgrepProEngine(run: RunOutput = runOutput): ProEngine {
-  const { status, stdout } = run("semgrep", ["--dump-engine-path", "--pro"]);
-  const path = stdout.trim().split("\n").at(-1) ?? "";
-  if (status !== 0 || path === "") {
-    return "unknown";
-  }
-  return existsSync(path) ? "installed" : "missing";
-}
-
-/**
- * The engine a run's semgrep checkers use, and the one warning the run prints when a login did not
- * get the Pro engine.
- */
-export function semgrepEngine(
-  login: SemgrepLogin,
-  proEngine: () => ProEngine = semgrepProEngine,
-): { engine: SemgrepEngine; warning?: string } {
-  if (login !== "logged-in") {
-    return { engine: "community" };
-  }
-  const state = proEngine();
-  if (state === "installed") {
-    return { engine: "pro" };
-  }
-  const warning =
-    state === "missing"
-      ? "semgrep Pro engine is not installed: run semgrep install-semgrep-pro"
-      : "semgrep Pro engine state is unknown: semgrep --dump-engine-path --pro named no path; the community engine ran";
-  return { engine: "community", warning };
 }
 
 /** The warning doctor and install report, or null when there is none. */

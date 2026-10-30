@@ -1,12 +1,7 @@
 // Whether the semgrep CLI is logged in, asked through its exit code only.
 // The spawn is handed in, so no test needs semgrep or a login.
 import { describe, expect, test } from "bun:test";
-import {
-  semgrepEngine,
-  semgrepLogin,
-  semgrepLoginWarning,
-  semgrepProEngine,
-} from "./semgrep-login.ts";
+import { semgrepLogin, semgrepLoginWarning } from "./semgrep-login.ts";
 
 function exits(code: number | null, calls: string[][] = [], output = "") {
   return (cmd: string, args: readonly string[]) => {
@@ -62,61 +57,5 @@ describe("semgrep login probe", () => {
 
   test("logged in warns nothing", () => {
     expect(semgrepLoginWarning("logged-in")).toBeNull();
-  });
-});
-
-describe("semgrep Pro engine probe", () => {
-  const says =
-    (status: number | null, stdout: string, calls: string[][] = []) =>
-    (cmd: string, args: readonly string[]) => {
-      calls.push([cmd, ...args]);
-      return { status, stdout };
-    };
-  const here = import.meta.path;
-
-  test("the path semgrep names for its Pro engine, present, is installed", () => {
-    const calls: string[][] = [];
-    expect(semgrepProEngine(says(0, `${here}\n`, calls))).toBe("installed");
-    expect(calls).toEqual([["semgrep", "--dump-engine-path", "--pro"]]);
-  });
-
-  test("a named path with no file there is missing", () => {
-    expect(semgrepProEngine(says(0, "/nowhere/semgrep-core-proprietary\n"))).toBe("missing");
-  });
-
-  test("no path, or a failed probe, is unknown", () => {
-    expect(semgrepProEngine(says(0, ""))).toBe("unknown");
-    expect(semgrepProEngine(says(2, `${here}\n`))).toBe("unknown");
-    expect(semgrepProEngine(says(null, ""))).toBe("unknown");
-  });
-});
-
-describe("the semgrep engine a run uses", () => {
-  const never = (): never => {
-    throw new Error("the Pro engine is probed only when logged in");
-  };
-
-  test("logged in with the Pro engine installed runs pro, warning nothing", () => {
-    expect(semgrepEngine("logged-in", () => "installed")).toEqual({ engine: "pro" });
-  });
-
-  test("logged in without the Pro engine runs community and says how to install it", () => {
-    expect(semgrepEngine("logged-in", () => "missing")).toEqual({
-      engine: "community",
-      warning: "semgrep Pro engine is not installed: run semgrep install-semgrep-pro",
-    });
-  });
-
-  test("logged in with the Pro engine unknown runs community and says so", () => {
-    expect(semgrepEngine("logged-in", () => "unknown")).toEqual({
-      engine: "community",
-      warning:
-        "semgrep Pro engine state is unknown: semgrep --dump-engine-path --pro named no path; the community engine ran",
-    });
-  });
-
-  test("logged out or unknown runs community, warning nothing here, and probes nothing", () => {
-    expect(semgrepEngine("logged-out", never)).toEqual({ engine: "community" });
-    expect(semgrepEngine("unknown", never)).toEqual({ engine: "community" });
   });
 });

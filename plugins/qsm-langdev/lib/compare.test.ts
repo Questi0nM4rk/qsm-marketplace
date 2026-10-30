@@ -758,10 +758,10 @@ const PUSH: CompareOptions = { at: "pre-push" };
 test("A commit between two pushes", async () => {
   const { root, head } = changedRepo({ "a.ts": "1\n", "b.ts": "1\n" });
   const { spec, handed } = twoPointRecorder();
-  await runWith(root, head, spec, PUSH);
+  await runWith(root, head, spec, { ...RULES, ...PUSH });
   await runWith(root, head, spec);
 
-  const { store } = await runWith(root, head, spec, PUSH);
+  const { store } = await runWith(root, head, spec, { ...RULES, ...PUSH });
 
   expect(handed).toHaveLength(4);
   expect(describeStore(store)[0]).toBe("store: recorder: reference hit, shipped hit");
@@ -770,7 +770,7 @@ test("A commit between two pushes", async () => {
 test("store: a commit prunes its own unused entries and leaves the push's alone", async () => {
   const { root, head } = changedRepo({ "a.ts": "1\n", "b.ts": "1\n" });
   const { spec } = twoPointRecorder();
-  await runWith(root, head, spec, PUSH);
+  await runWith(root, head, spec, { ...RULES, ...PUSH });
   const pushed = entries(root, "recorder", "pre-push");
   await runWith(root, head, spec);
   const committed = entries(root);
@@ -1132,194 +1132,24 @@ const scored = (calls: string[][]): string[][] =>
     .map((call) => call.filter((arg) => /^[a-z]\.(ts|py|cs|sh)$/.test(arg)))
     .toSorted((x, y) => x.join().localeCompare(y.join()));
 
-/** What a call scanned: every argument after semgrep's `-j <n>`. */
-const targets = (call: string[]): string[] => call.slice(call.indexOf("-j") + 2);
+test.each(["pre-commit", "pre-push"] as const)(
+  "semgrep scans the changed files with the community engine at %s, whatever the login",
+  async (at) => {
+    const { root, head } = importChain();
+    const semgrep = fakeSemgrep();
 
-const PRO: CompareOptions = {
-  ...RULES,
-  at: "pre-push",
-  semgrepLogin: () => "logged-in",
-  semgrepProEngine: () => "installed",
-};
+    const { warnings } = await runWith(root, head, semgrepSpec("semgrep-ts", semgrep.binary), {
+      ...RULES,
+      at,
+    });
 
-const never = (what: string) => () => {
-  throw new Error(`${what} asked at pre-commit`);
-};
-
-// Each engine test is its own behaviour, at the top level.
-
-test("A commit", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep();
-
-  const { warnings } = await runWith(root, head, semgrepSpec("semgrep-ts", semgrep.binary), {
-    ...RULES,
-    semgrepLogin: never("the login"),
-    semgrepProEngine: never("the Pro engine"),
-  });
-
-  expect(semgrep.calls().some((call) => call.includes("--pro"))).toBe(false);
-  expect(scored(semgrep.calls())).toEqual([["a.ts"], ["a.ts"]]);
-  expect(warnings).toEqual([]);
-});
-
-test("A push, logged in with the Pro engine", async () => {
-  const { root, head } = importChain();
-  write(root, { "a.py": "x = 2\n", "a.cs": "class A {}\n" });
-  stage(root);
-  const semgrep = fakeSemgrep();
-  let asked = 0;
-  const loggedIn = () => {
-    asked += 1;
-    return "logged-in" as const;
-  };
-  const names = ["semgrep-ts", "semgrep-py", "semgrep-dotnet"];
-
-  const { warnings } = await runWith(root, head, semgrepSpec("semgrep-ts", semgrep.binary), {
-    ...PRO,
-    registry: names.map((name) => semgrepSpec(name, semgrep.binary)),
-    semgrepLogin: loggedIn,
-  });
-
-  const calls = semgrep.calls();
-  // Three checkers; the reference side of py and cs holds no file of theirs.
-  expect(calls).toHaveLength(4);
-  expect(calls.every((call) => call[0] === "--pro")).toBe(true);
-  expect(calls.map((call) => targets(call).length)).toEqual([1, 1, 1, 1]);
-  // Each target is the side's scratch tree, one directory, never a file of it.
-  const tree = /\/qsm-langdev-tree-[^/]+$/;
-  expect(calls.every((call) => tree.test(targets(call)[0] ?? ""))).toBe(true);
-  expect(scored(calls)).toEqual([[], [], [], []]);
-  expect(asked).toBe(1);
-  expect(warnings).toEqual([]);
-});
-
-test("A push, logged out", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep();
-
-  const { warnings } = await runWith(root, head, semgrepSpec("semgrep-ts", semgrep.binary), {
-    ...PRO,
-    semgrepLogin: () => "logged-out",
-    semgrepProEngine: () => {
-      throw new Error("probed while logged out");
-    },
-  });
-
-  expect(semgrep.calls().some((call) => call.includes("--pro"))).toBe(false);
-  expect(scored(semgrep.calls())).toEqual([
-    ["a.ts", "b.ts", "c.ts", "d.ts"],
-    ["a.ts", "b.ts", "c.ts", "d.ts"],
-  ]);
-  expect(warnings).toEqual([]);
-});
-
-test("semgrep engine: pre-push logged in without the Pro engine: community over the tree, one warning, a pass", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep();
-
-  const { verdicts, warnings } = await runWith(
-    root,
-    head,
-    semgrepSpec("semgrep-ts", semgrep.binary),
-    { ...PRO, semgrepProEngine: () => "missing" },
-  );
-
-  expect(semgrep.calls().some((call) => call.includes("--pro"))).toBe(false);
-  expect(scored(semgrep.calls())[0]).toEqual(["a.ts", "b.ts", "c.ts", "d.ts"]);
-  expect(warnings).toEqual([
-    "semgrep Pro engine is not installed: run semgrep install-semgrep-pro",
-  ]);
-  expect(verdicts.every((v) => v.pass)).toBe(true);
-});
-
-test("semgrep engine: timeout mode and engine are in the store key, and a second Pro push is a store hit", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep();
-  const spec = semgrepSpec("semgrep-ts", semgrep.binary);
-  const community = { ...PRO, semgrepLogin: () => "logged-out" as const };
-
-  const nativeDefault: CheckSpec = {
-    ...spec,
-    args: (...params) => {
-      const argv = spec.args(...params);
-      return argv.filter((arg, i) => arg !== "--timeout" && argv[i - 1] !== "--timeout");
-    },
-  };
-  await runWith(root, head, nativeDefault, community);
-  const firstCommunity = await runWith(root, head, spec, community);
-  const firstPro = await runWith(root, head, spec, PRO);
-  const again = await runWith(root, head, spec, PRO);
-
-  expect(describeStore(firstCommunity.store)[0]).not.toContain("hit");
-  expect(describeStore(firstPro.store)[0]).not.toContain("hit");
-  expect(describeStore(again.store)[0]).toBe("store: semgrep-ts: reference hit, shipped hit");
-});
-
-test("semgrep engine: rust, bash and Dockerfiles never run --pro, at pre-push over the whole tree", async () => {
-  const { root, head } = repoWith({
-    "a.sh": "echo 1\n",
-    "b.sh": "echo 2\n",
-    "a.rs": "fn main() {}\n",
-    "api.Dockerfile": "FROM scratch\n",
-  });
-  write(root, { "a.sh": "echo 3\n", "a.rs": "fn main() { }\n", "api.Dockerfile": "FROM alpine\n" });
-  stage(root);
-  const semgrep = fakeSemgrep();
-  const names = ["semgrep-bash", "semgrep-rust", "semgrep-dockerfile"];
-
-  await runWith(root, head, semgrepSpec("semgrep-bash", semgrep.binary), {
-    ...PRO,
-    registry: names.map((name) => semgrepSpec(name, semgrep.binary)),
-  });
-
-  expect(semgrep.calls()).toHaveLength(6);
-  expect(semgrep.calls().some((call) => call.includes("--pro"))).toBe(false);
-  expect(semgrep.calls().some((call) => call.includes("b.sh"))).toBe(true);
-});
+    expect(semgrep.calls().some((call) => call.includes("--pro"))).toBe(false);
+    expect(scored(semgrep.calls())).toEqual([["a.ts"], ["a.ts"]]);
+    expect(warnings).toEqual([]);
+  },
+);
 
 // --- a checker run that failed ------------------------------------------------
-
-test("A rejected token under the Pro engine", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep({ pro: "fail" });
-
-  const { verdicts, warnings } = await runWith(
-    root,
-    head,
-    semgrepSpec("semgrep-ts", semgrep.binary),
-    PRO,
-  );
-
-  expect(verdicts.map((v) => [v.pass, v.notMeasured === true, v.summary])).toEqual([
-    [true, false, "semgrep-ts: 0 -> 0"],
-  ]);
-  expect(warnings).toEqual([
-    `semgrep-ts: semgrep Pro run failed: ${REJECTED}; the community engine ran`,
-  ]);
-  const community = semgrep.calls().filter((call) => call[0] !== "--pro");
-  expect(scored(community)).toEqual([
-    ["a.ts", "b.ts", "c.ts", "d.ts"],
-    ["a.ts", "b.ts", "c.ts", "d.ts"],
-  ]);
-});
-
-test("Both engines fail", async () => {
-  const { root, head } = importChain();
-  const semgrep = fakeSemgrep({ pro: "fail", community: "fail" });
-  const spec = semgrepSpec("semgrep-ts", semgrep.binary);
-
-  const { verdicts } = await runWith(root, head, spec, PRO);
-  const again = await runWith(root, head, spec, PRO);
-
-  expect(verdicts.map((v) => [v.notMeasured === true, v.summary])).toEqual([
-    [true, `semgrep-ts: not measured: ${REJECTED}; retry`],
-  ]);
-  expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
-  expect(runOutcome(verdicts, true).code).toBe("blocked");
-  expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
-  expect(entries(root, "semgrep-ts", "pre-push")).toEqual([]);
-});
 
 test("failed run: a checker whose output cannot be read is not measured, its stderr the cause", async () => {
   const { root, head } = repoWith({ "a.txt": "alpha\n" });
@@ -1387,9 +1217,9 @@ test.each(["ok", "timeout"] as const)("Semgrep findings at a non-zero exit: %s",
   const { root, head } = importChain();
   write(root, { "a.ts": `export const a = 2; // ${MARKER}\n` });
   stage(root);
-  const semgrep = fakeSemgrep({ pro: mode, community: mode });
+  const semgrep = fakeSemgrep({ community: mode });
   const spec = semgrepSpec("semgrep-ts", semgrep.binary);
-  const { verdicts, warnings } = await runWith(root, head, spec, PRO);
+  const { verdicts, warnings } = await runWith(root, head, spec, { ...RULES, ...PUSH });
 
   if (mode === "ok") {
     expect(verdicts.map((v) => [v.pass, v.notMeasured === true, v.summary])).toEqual([
@@ -1400,7 +1230,7 @@ test.each(["ok", "timeout"] as const)("Semgrep findings at a non-zero exit: %s",
     return;
   }
 
-  const again = await runWith(root, head, spec, PRO);
+  const again = await runWith(root, head, spec, { ...RULES, ...PUSH });
 
   expect(verdicts.map((v) => [v.pass, v.notMeasured === true, v.summary])).toEqual([
     [false, true, "semgrep-ts: not measured: semgrep timed out; retry"],

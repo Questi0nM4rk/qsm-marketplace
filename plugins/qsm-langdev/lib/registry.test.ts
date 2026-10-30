@@ -9,7 +9,6 @@ import { OWN_RULES } from "./rules-data.ts";
 const semgrep = REGISTRY.filter((spec) => spec.binary === "semgrep");
 
 /** The limit a full semgrep run at pre-push gets: about twice the slowest measured. */
-const PUSH_LIMIT_S = 600;
 
 describe("semgrep checkers", () => {
   test("each runs the packs and rules decided for it", () => {
@@ -63,80 +62,19 @@ describe("semgrep checkers", () => {
   });
 });
 
-describe("semgrep engines", () => {
-  // Pre-commit is fast: the community engine over the changed files, on
-  // every machine. Pre-push is the full run: the whole tree, and where the
-  // login unlocks it the Pro engine, which follows a flow across files for
-  // TypeScript, JavaScript, Python and C# and for nothing else.
-  test("each declares its set at each enforcement point, and which runs Pro at pre-push", () => {
-    // [pre-commit set, pre-push set, Pro at pre-push, pre-push limit in s]
-    const table = Object.fromEntries(
-      semgrep.map((spec) => [
-        spec.name,
-        [
-          spec.fileSet,
-          spec.prePush?.fileSet,
-          spec.prePush?.pro !== undefined,
-          (spec.prePush?.timeoutMs ?? 0) / 1000,
-        ],
-      ]),
-    );
-
-    expect(table).toEqual({
-      "semgrep-ts": ["changed", "given", true, PUSH_LIMIT_S],
-      "semgrep-py": ["changed", "given", true, PUSH_LIMIT_S],
-      "semgrep-bash": ["changed", "given", false, PUSH_LIMIT_S],
-      "semgrep-rust": ["changed", "given", false, PUSH_LIMIT_S],
-      "semgrep-dotnet": ["changed", "given", true, PUSH_LIMIT_S],
-      "semgrep-dockerfile": ["changed", "given", false, PUSH_LIMIT_S],
-    });
-  });
-
-  test("the Pro argv is the community one with --pro first and the root as its one target", () => {
-    const ts = semgrep.find((spec) => spec.name === "semgrep-ts");
-    const rules = new Map([["p/typescript", "/scratch/0.yaml"]]);
-
-    const community = ts?.args(["a.ts", "b.ts"], "/repo", undefined, rules) ?? [];
-    const pro = ts?.prePush?.pro?.(["a.ts", "b.ts"], "/repo", undefined, rules) ?? [];
-
-    expect(pro).toEqual(["--pro", ...community.slice(0, -2), "/repo"]);
-    expect(community.slice(-2)).toEqual(["a.ts", "b.ts"]);
-    expect(community).not.toContain("--pro");
-    for (const spec of semgrep) {
-      for (const point of ["pre-commit", "pre-push"] as const) {
-        for (const engine of ["community", "pro"] as const) {
-          const args = asRunAt(spec, point, engine).args(["a.ts"], "/repo");
-          expect(args.slice(args.indexOf("--timeout"), args.indexOf("--timeout") + 2)).toEqual([
-            "--timeout",
-            "0",
-          ]);
-        }
-      }
-    }
-  });
-});
-
 describe("semgrep at each enforcement point", () => {
-  test("a checker runs as declared for the point, and its Pro argv only at pre-push under Pro", () => {
-    const ts = semgrep.find((spec) => spec.name === "semgrep-ts");
-    const bash = semgrep.find((spec) => spec.name === "semgrep-bash");
-    if (ts === undefined || bash === undefined) {
-      throw new Error("semgrep-ts and semgrep-bash are registered");
+  test("every semgrep checker scans the changed files at a commit and at a push alike", () => {
+    for (const spec of semgrep) {
+      expect(spec.fileSet).toBe("changed");
+      expect(spec.prePush).toBeUndefined();
+      expect(asRunAt(spec, "pre-push")).toBe(spec);
+      const args = asRunAt(spec, "pre-push").args(["a.ts"], "/repo");
+      expect(args).not.toContain("--pro");
+      expect(args.slice(args.indexOf("--timeout"), args.indexOf("--timeout") + 2)).toEqual([
+        "--timeout",
+        "0",
+      ]);
     }
-
-    expect(asRunAt(ts, "pre-commit", "pro")).toBe(ts);
-    const push = asRunAt(ts, "pre-push", "community");
-    expect([push.fileSet, push.args(["a.ts"], "/repo").includes("--pro")]).toEqual([
-      "given",
-      false,
-    ]);
-    const pro = asRunAt(ts, "pre-push", "pro");
-    expect([pro.fileSet, pro.args(["a.ts"], "/repo")[0], pro.timeoutMs]).toEqual([
-      "given",
-      "--pro",
-      PUSH_LIMIT_S * 1000,
-    ]);
-    expect(asRunAt(bash, "pre-push", "pro").args(["a.sh"], "/repo")).not.toContain("--pro");
   });
 });
 

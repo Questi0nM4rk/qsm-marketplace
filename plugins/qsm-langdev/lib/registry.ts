@@ -280,15 +280,6 @@ const DOTNET_PROJECT = [
  * (measured 2026-09-26), so the files that changed are all it needs. */
 const SEMGREP_ENGINE_SET = "changed";
 
-/**
- * Pre-push is semgrep's full run: the whole tree, where a flow the Pro engine follows across files
- * has every file it passes through. Its limit is the ten minutes a person waits for a push at most,
- * a last line of defence: both sides at once took 128 s quiet, 373 s with every core busy
- * (measured 2026-10-22, 12 cores), and past 420 s at a load of 15. Changed files alone
- * cannot take Pro: its inter-file analysis accepts a single target only.
- */
-const SEMGREP_PUSH: PrePush = { fileSet: "given", timeoutMs: 600_000 };
-
 /** A checker that writes a report is always built with the directory the run made for it. */
 function reportDirOf(reportDir: string | undefined): string {
   if (reportDir === undefined) {
@@ -387,37 +378,22 @@ export type CheckSpec = {
 } & Scoring;
 
 /**
- * A checker's pre-push run: the set it scores, a longer limit when that run is known to need one,
- * and, for semgrep, the args that turn the Pro engine on where the login unlocks it.
+ * A checker's pre-push run: the set it scores, and a longer limit when that run is known to need one.
  */
 interface PrePush {
   fileSet: FileSet;
   timeoutMs?: number;
-  pro?: Scoring["args"];
 }
 
-/** The semgrep engine a run uses: `pro` when the login unlocks it and its
- * binary is installed, else `community`. */
-export type SemgrepEngine = "pro" | "community";
-
-/**
- * `spec` as it runs at `point` under `engine`: at pre-commit itself; at pre-push its `prePush`
- * declaration, with the Pro args only under the Pro engine.
- */
-export function asRunAt(
-  spec: CheckSpec,
-  point: EnforcementPoint,
-  engine: SemgrepEngine,
-): CheckSpec {
+/** `spec` as it runs at `point`: at pre-commit itself; at pre-push its `prePush` declaration. */
+export function asRunAt(spec: CheckSpec, point: EnforcementPoint): CheckSpec {
   const push = spec.prePush;
   if (point === "pre-commit" || push === undefined) {
     return spec;
   }
-  const pro = engine === "pro" ? push.pro : undefined;
   return {
     ...spec,
     fileSet: push.fileSet,
-    ...(pro === undefined ? {} : { args: pro }),
     ...(push.timeoutMs === undefined ? {} : { timeoutMs: push.timeoutMs }),
   };
 }
@@ -626,8 +602,7 @@ const SPECS: readonly CheckSpec[] = [
   {
     name: "semgrep-ts",
     measures: {
-      counts:
-        "rule matches from p/typescript and p/nodejsscan; the Pro engine at pre-push where the login unlocks it",
+      counts: "rule matches from p/typescript and p/nodejsscan",
     },
     language: "ts",
     runsAt: "pre-commit",
@@ -638,7 +613,7 @@ const SPECS: readonly CheckSpec[] = [
     // p/typescript is semgrep's pack for the language (the same 74 rules as p/javascript);
     // p/nodejsscan adds 114 Node.js rules, none of them in it. Measured on one changed .ts file:
     // 3.3s alone, 5.3s with p/nodejsscan.
-    ...semgrepRules(["p/typescript", "p/nodejsscan"], { pro: true }),
+    ...semgrepRules(["p/typescript", "p/nodejsscan"]),
     count: countSemgrep,
   },
   {
@@ -704,7 +679,7 @@ const SPECS: readonly CheckSpec[] = [
   {
     name: "semgrep-py",
     measures: {
-      counts: "rule matches from p/python; the Pro engine at pre-push where the login unlocks it",
+      counts: "rule matches from p/python",
     },
     language: "py",
     runsAt: "pre-commit",
@@ -712,7 +687,7 @@ const SPECS: readonly CheckSpec[] = [
     binary: "semgrep",
     install: uvTool("semgrep"),
     fileSet: SEMGREP_ENGINE_SET,
-    ...semgrepRules(["p/python"], { pro: true }),
+    ...semgrepRules(["p/python"]),
     count: countSemgrep,
   },
   {
@@ -780,15 +755,12 @@ const SPECS: readonly CheckSpec[] = [
     fileSet: SEMGREP_ENGINE_SET,
     // semgrep publishes no bash pack (p/bash is a 404) and its broad packs are not one:
     // p/security-audit holds 225 rules, none of them bash.
-    ...semgrepRules(
-      [
-        "r/bash.curl.security.curl-eval",
-        "r/bash.curl.security.curl-pipe-bash",
-        "r/bash.lang.security.ifs-tampering",
-        "qsm/bash",
-      ],
-      { pro: false },
-    ),
+    ...semgrepRules([
+      "r/bash.curl.security.curl-eval",
+      "r/bash.curl.security.curl-pipe-bash",
+      "r/bash.lang.security.ifs-tampering",
+      "qsm/bash",
+    ]),
     count: countSemgrep,
   },
   {
@@ -818,7 +790,7 @@ const SPECS: readonly CheckSpec[] = [
     binary: "semgrep",
     install: uvTool("semgrep"),
     fileSet: SEMGREP_ENGINE_SET,
-    ...semgrepRules(["p/dockerfile"], { pro: false }),
+    ...semgrepRules(["p/dockerfile"]),
     count: countSemgrep,
   },
   {
@@ -959,7 +931,7 @@ const SPECS: readonly CheckSpec[] = [
     binary: "semgrep",
     install: uvTool("semgrep"),
     fileSet: SEMGREP_ENGINE_SET,
-    ...semgrepRules(["p/rust"], { pro: false }),
+    ...semgrepRules(["p/rust"]),
     count: countSemgrep,
   },
   {
@@ -1071,7 +1043,7 @@ const SPECS: readonly CheckSpec[] = [
   {
     name: "semgrep-dotnet",
     measures: {
-      counts: "rule matches from p/csharp; the Pro engine at pre-push where the login unlocks it",
+      counts: "rule matches from p/csharp",
     },
     language: "dotnet",
     runsAt: "pre-commit",
@@ -1079,7 +1051,7 @@ const SPECS: readonly CheckSpec[] = [
     binary: "semgrep",
     install: uvTool("semgrep"),
     fileSet: SEMGREP_ENGINE_SET,
-    ...semgrepRules(["p/csharp"], { pro: true }),
+    ...semgrepRules(["p/csharp"]),
     count: countSemgrep,
   },
 ];
@@ -1105,11 +1077,13 @@ function semgrepScope(files: readonly string[]): string[] {
   return files.some(namedUnknown) ? [...jobs, "--scan-unknown-extensions"] : jobs;
 }
 
-/** The packs are the decision. */
+/** The packs are the decision. A semgrep checker runs the same way at a commit and at a push:
+ * the changed files, the community engine. The Pro engine's cross-file run over the whole tree
+ * is a CI job's, not a gate on a person's machine: measured here, 128 s quiet and past 600 s at
+ * a load of 15, and a run cut short blocks the push for nothing it proved. */
 function semgrepRules(
   configs: readonly string[],
-  engines: { pro: boolean },
-): Pick<CheckSpec, "packs" | "args" | "prePush" | "failure" | "guardsSafety"> {
+): Pick<CheckSpec, "packs" | "args" | "failure" | "guardsSafety"> {
   const flags = (rules?: LocalRules) => [
     ...configs.flatMap((config) => ["--config", rules?.get(config) ?? config]),
     "--json",
@@ -1124,18 +1098,7 @@ function semgrepRules(
     ...semgrepScope(files),
     ...files,
   ];
-  const prePush: PrePush = engines.pro
-    ? {
-        ...SEMGREP_PUSH,
-        pro: (_files, root, _reportDir, rules) => [
-          "--pro",
-          ...flags(rules),
-          ...semgrepScope([]),
-          root,
-        ],
-      }
-    : SEMGREP_PUSH;
-  return { packs: configs, args, prePush, failure: semgrepFailure, guardsSafety: true };
+  return { packs: configs, args, failure: semgrepFailure, guardsSafety: true };
 }
 
 export const REGISTRY: readonly CheckSpec[] = SPECS;
