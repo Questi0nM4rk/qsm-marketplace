@@ -26,11 +26,11 @@ import { sessionIdOf } from "./transcript.ts";
 /** Days of use a transcript may be unused before it is idle. */
 export const IDLE_DAYS = 7;
 /** Days after activation, and after the last pack, before a pack runs. */
-export const GRACE_DAYS = 30;
+const GRACE_DAYS = 30;
 const DAY_MS = 86_400_000;
 
 /** The local calendar date, `YYYY-MM-DD`, of a moment. */
-export function localDate(at: Date | number | string): string {
+function localDate(at: Date | number | string): string {
   const d = new Date(at);
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
