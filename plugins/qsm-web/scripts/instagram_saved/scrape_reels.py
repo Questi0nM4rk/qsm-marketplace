@@ -1,10 +1,12 @@
-"""
-For each shortcode in a JSON file, open the Instagram post page in a Playwright
-Firefox context with pre-loaded cookies, extract the caption and rendered
-top-level comments, and append one JSON record per reel to corpus.jsonl.
+"""Scrape the caption and comments of every shortcode in a JSON file.
+
+Opens each Instagram post page in a Playwright Firefox context with
+pre-loaded cookies, extracts the caption and rendered top-level comments, and
+appends one JSON record per reel to corpus.jsonl.
 
 Resume support: shortcodes already in corpus.jsonl are skipped on re-run.
 """
+
 import argparse
 import json
 import random
@@ -12,9 +14,12 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from playwright.sync_api import sync_playwright, Error as PlaywrightError, TimeoutError as PWTimeout
+from typing import TextIO, cast
 
-from _browser import open_ig_context, add_playwright_args
+from _browser import add_playwright_args, open_ig_context
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import TimeoutError as PWTimeout
 
 TIME_SELECTOR = "time"
 HYDRATION_TIMEOUT_MS = 10000
@@ -93,9 +98,10 @@ EXTRACT_JS = r"""
 
 
 def already_done(corpus: Path) -> set[str]:
+    """Return the shortcodes the corpus already holds."""
     if not corpus.exists():
         return set()
-    seen = set()
+    seen: set[str] = set()
     for n, line in enumerate(corpus.read_text().splitlines(), 1):
         try:
             sc = json.loads(line).get("shortcode")
@@ -106,26 +112,39 @@ def already_done(corpus: Path) -> set[str]:
     return seen
 
 
-def scrape_one(page, sc: str) -> dict:
+def scrape_one(page: Page, sc: str) -> dict[str, object]:
+    """Return the record of one post, or a record that names why it failed."""
     url = f"https://www.instagram.com/p/{sc}/"
     page.goto(url, wait_until="domcontentloaded", timeout=30000)
     try:
         page.wait_for_selector(TIME_SELECTOR, timeout=HYDRATION_TIMEOUT_MS)
     except PWTimeout:
-        return {"shortcode": sc, "url": url, "error": "hydration timeout: no <time> appeared"}
-    rec = page.evaluate(EXTRACT_JS)
-    if isinstance(rec, dict) and rec.get("error"):
+        return {
+            "shortcode": sc,
+            "url": url,
+            "error": "hydration timeout: no <time> appeared",
+        }
+    rec: dict[str, object] = page.evaluate(EXTRACT_JS)
+    if rec.get("error"):
         return {"shortcode": sc, "url": url, "error": rec["error"]}
     return rec
 
 
-def _scrape_and_record(page, sc: str, i: int, total: int, out, sleep_min: float, sleep_max: float) -> None:
-    """One pending shortcode: scrape, append its record, print progress, pace the next request."""
+def _object(value: object) -> dict[str, object]:
+    return cast("dict[str, object]", value) if isinstance(value, dict) else {}
+
+
+def _scrape_and_record(page: Page, sc: str, i: int, total: int, out: TextIO) -> None:
+    """One pending shortcode: scrape, append its record, print progress."""
     t0 = time.time()
     try:
-        rec = scrape_one(page, sc)
+        rec: dict[str, object] = scrape_one(page, sc)
     except (PlaywrightError, PWTimeout) as e:
-        rec = {"shortcode": sc, "url": f"https://www.instagram.com/p/{sc}/", "error": f"{type(e).__name__}: {e}"}
+        rec = {
+            "shortcode": sc,
+            "url": f"https://www.instagram.com/p/{sc}/",
+            "error": f"{type(e).__name__}: {e}",
+        }
     except Exception:
         rec = {
             "shortcode": sc,
@@ -137,29 +156,38 @@ def _scrape_and_record(page, sc: str, i: int, total: int, out, sleep_min: float,
     out.write(json.dumps(rec, ensure_ascii=False) + "\n")
     out.flush()
 
-    cap = rec.get("caption") or {}
-    preview = (cap.get("body") or rec.get("error") or "")[:60].replace("\n", " ")
-    print(f"  [{i}/{total}] {sc} | {time.time()-t0:.1f}s | @{cap.get('user', '?')} | {rec.get('comment_count_visible', 0)}c | {preview}", flush=True)
+    cap = _object(rec.get("caption"))
+    preview = str(cap.get("body") or rec.get("error") or "")[:60].replace("\n", " ")
+    print(
+        f"  [{i}/{total}] {sc} | {time.time() - t0:.1f}s | @{cap.get('user', '?')}"
+        f" | {rec.get('comment_count_visible', 0)}c | {preview}",
+        flush=True,
+    )
 
-    if i < total:
-        time.sleep(sleep_min + random.random() * (sleep_max - sleep_min))
 
-
-def main():
+def main() -> None:
+    """Scrape every pending shortcode into the corpus, resuming where a run stopped."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--shortcodes", required=True, help="JSON file with .shortcodes[]")
     ap.add_argument("--corpus", required=True, help="Output JSONL (append + resume)")
-    ap.add_argument("--sleep", default="8,15", help="Min,max seconds to sleep between reels")
+    ap.add_argument(
+        "--sleep", default="8,15", help="Min,max seconds to sleep between reels"
+    )
     add_playwright_args(ap)
     args = ap.parse_args()
 
     sleep_min, sleep_max = (float(x) for x in args.sleep.split(","))
-    shortcodes = list(dict.fromkeys(json.loads(Path(args.shortcodes).read_text())["shortcodes"]))
+    shortcodes = list(
+        dict.fromkeys(json.loads(Path(args.shortcodes).read_text())["shortcodes"])
+    )
     corpus = Path(args.corpus)
     corpus.parent.mkdir(parents=True, exist_ok=True)
     done = already_done(corpus)
     pending = [s for s in shortcodes if s not in done]
-    print(f"[{len(done)}/{len(shortcodes)}] already done, {len(pending)} remaining", flush=True)
+    print(
+        f"[{len(done)}/{len(shortcodes)}] already done, {len(pending)} remaining",
+        flush=True,
+    )
     if not pending:
         return
 
@@ -167,7 +195,9 @@ def main():
         browser, ctx = open_ig_context(pw, args.state, args.user_agent)
         page = ctx.new_page()
         for i, sc in enumerate(pending, 1):
-            _scrape_and_record(page, sc, i, len(pending), out, sleep_min, sleep_max)
+            _scrape_and_record(page, sc, i, len(pending), out)
+            if i < len(pending):
+                time.sleep(random.SystemRandom().uniform(sleep_min, sleep_max))
         browser.close()
     print(f"Done. Output: {corpus}", flush=True)
 

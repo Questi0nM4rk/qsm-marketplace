@@ -21,32 +21,86 @@ works in the live view.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import os
 import signal
 import socket
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from blockdetect import detect_block
 from camoufox.sync_api import Camoufox
+from playwright.sync_api import Browser, BrowserContext, Page, Response
 from result import make_result
 from steps import run_script
 from waitstate import NO_WAIT_STATUS, WaitState, advance_waits
+
+logger = logging.getLogger(__name__)
 
 SOCK = "/run/bbox.sock"
 ACCEPT_TICK_S = 1.0
 OUT_DIR = "/out"
 
+Job = dict[str, object]
+Answer = Mapping[str, object]
 
-def _nav(page: Any, job: dict) -> Any:
+
+class Tab(TypedDict):
+    """One browser tab: its context, its page and its wait."""
+
+    id: int
+    ctx: BrowserContext
+    page: Page
+    wait: WaitState | None
+
+
+Tabs = dict[int, Tab]
+State = dict[str, int]
+
+
+def _int(job: Job, key: str, default: int) -> int:
+    value = job.get(key, default)
+    if not isinstance(value, (int, float, str)):
+        message = f"{key} must be a number"
+        raise TypeError(message)
+    return int(value)
+
+
+def _text(job: Job, key: str) -> str:
+    value = job[key]
+    if not isinstance(value, str):
+        message = f"{key} must be text"
+        raise TypeError(message)
+    return value
+
+
+def _tab_of(job: Job, tabs: Tabs) -> Tab | None:
+    tab_id = job.get("tab")
+    return tabs.get(tab_id) if isinstance(tab_id, int) else None
+
+
+def _no_such_tab(job: Job) -> Answer:
+    return {
+        "ok": False,
+        "error": {"kind": "tab", "message": f"no such tab: {job.get('tab')}"},
+    }
+
+
+def _nav(page: Page, job: Job) -> Response | None:
     return page.goto(
-        job["url"], wait_until="domcontentloaded", timeout=int(job.get("timeout", 30000))
+        _text(job, "url"),
+        wait_until="domcontentloaded",
+        timeout=_int(job, "timeout", 30000),
     )
 
 
-def _capture(page: Any, ctx: Any, job: dict, status: int, started: float) -> dict:
+def _capture(
+    page: Page, ctx: BrowserContext, job: Job, status: int, started: float
+) -> Answer:
     html = page.content()
     title = page.title()
     detected = detect_block(html, title, status)
@@ -73,19 +127,19 @@ def _capture(page: Any, ctx: Any, job: dict, status: int, started: float) -> dic
         http_status=status,
         title=title,
         artifacts=artifacts,
-        elapsedMs=int((time.monotonic() - started) * 1000),
+        elapsed_ms=int((time.monotonic() - started) * 1000),
     )
 
 
-def _new_tab(browser: Any, tabs: dict, state: dict) -> dict:
+def _new_tab(browser: Browser, tabs: Tabs, state: State) -> Tab:
     ctx = browser.new_context()
-    tab = {"id": state["next"], "ctx": ctx, "page": ctx.new_page(), "wait": None}
+    tab: Tab = {"id": state["next"], "ctx": ctx, "page": ctx.new_page(), "wait": None}
     tabs[state["next"]] = tab
     state["next"] += 1
     return tab
 
 
-def _fetch(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
+def _fetch(job: Job, browser: Browser, tabs: Tabs, state: State) -> Answer:
     started = time.monotonic()
     tab = _new_tab(browser, tabs, state)
     keep = bool(job.get("keep"))
@@ -93,73 +147,85 @@ def _fetch(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
         try:
             resp = _nav(tab["page"], job)
             status = resp.status if resp else 0
-        except Exception as e:  # noqa: BLE001 - classify, never crash the daemon
+        except Exception as e:
+            logger.debug("navigation failed", exc_info=True)
             kind = "timeout" if "Timeout" in type(e).__name__ else "nav"
             return make_result(
                 ok=False,
                 error={"kind": kind, "message": str(e)},
-                elapsedMs=int((time.monotonic() - started) * 1000),
+                elapsed_ms=int((time.monotonic() - started) * 1000),
             )
-        if int(job.get("settle", 0)):
-            tab["page"].wait_for_timeout(int(job["settle"]))
+        if _int(job, "settle", 0):
+            tab["page"].wait_for_timeout(_int(job, "settle", 0))
         result = _capture(tab["page"], tab["ctx"], job, status, started)
-        result["tab"] = tab["id"]
-        return result
+        return {**result, "tab": tab["id"]}
     finally:
         if not keep:
             tabs.pop(tab["id"], None)
             tab["ctx"].close()
 
 
-def _script(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
-    tab = tabs.get(job.get("tab")) if job.get("tab") is not None else _new_tab(browser, tabs, state)
+def _script(job: Job, browser: Browser, tabs: Tabs, state: State) -> Answer:
+    tab = (
+        _tab_of(job, tabs)
+        if job.get("tab") is not None
+        else _new_tab(browser, tabs, state)
+    )
     if tab is None:
-        return {"ok": False, "error": {"kind": "tab", "message": f"no such tab: {job.get('tab')}"}}
-    result = run_script(tab["page"], job.get("steps") or [])
+        return _no_such_tab(job)
+    steps = job.get("steps")
+    result = run_script(
+        tab["page"], cast("list[Mapping[str, object]]", steps) if steps else []
+    )
     result["tab"] = tab["id"]
     return result
 
 
-def _still_blocked(tab: dict) -> bool:
+def _still_blocked(tab: Tab) -> bool:
     page = tab["page"]
     return bool(detect_block(page.content(), page.title(), 200)["blocked"])
 
 
-def _poll_waiting(tabs: dict) -> None:
-    """Advance every armed wait by one classification. Runs on the loop's own
-    thread, because the browser API is not thread safe."""
+def _poll_waiting(tabs: Tabs) -> None:
+    """Advance every armed wait by one classification.
+
+    Runs on the loop's own thread, because the browser API is not thread safe.
+    """
     advance_waits(tabs, time.monotonic(), _still_blocked)
 
 
-def _cmd_ping(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
+def _cmd_ping(_job: Job, _browser: Browser, tabs: Tabs, _state: State) -> Answer:
     return {"ok": True, "tabs": len(tabs)}
 
 
-def _cmd_tabs(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
-    items = []
+def _cmd_tabs(_job: Job, _browser: Browser, tabs: Tabs, _state: State) -> Answer:
+    items: list[dict[str, object]] = []
     for tid, tab in tabs.items():
         try:
-            items.append({"tab": tid, "url": tab["page"].url, "title": tab["page"].title()})
-        except Exception as e:  # noqa: BLE001 - one dead tab must not hide the rest
+            items.append(
+                {"tab": tid, "url": tab["page"].url, "title": tab["page"].title()}
+            )
+        except Exception as e:
+            logger.debug("a tab did not answer", exc_info=True)
             items.append({"tab": tid, "url": None, "title": None, "error": str(e)})
     return {"ok": True, "tabs": items}
 
 
-def _cmd_open_tab(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
+def _cmd_open_tab(job: Job, browser: Browser, tabs: Tabs, state: State) -> Answer:
     tab = _new_tab(browser, tabs, state)
     if job.get("url"):
         _nav(tab["page"], job)
     return {"ok": True, "tab": tab["id"], "url": tab["page"].url}
 
 
-def _tab_close(job: dict, tab: dict, tabs: dict) -> dict:
+def _tab_close(_job: Job, tab: Tab, tabs: Tabs) -> Answer:
     tabs.pop(tab["id"], None)
     tab["ctx"].close()
     return {"ok": True, "tab": tab["id"]}
 
 
-def _tab_wait_for_human(job: dict, tab: dict, tabs: dict) -> dict:
-    timeout_s = float(job.get("timeout", 300000)) / 1000.0
+def _tab_wait_for_human(job: Job, tab: Tab, _tabs: Tabs) -> Answer:
+    timeout_s = float(_int(job, "timeout", 300000)) / 1000.0
     tab["wait"] = WaitState.armed(time.monotonic(), timeout_s)
     return {
         "ok": True,
@@ -170,35 +236,41 @@ def _tab_wait_for_human(job: dict, tab: dict, tabs: dict) -> dict:
     }
 
 
-def _tab_wait_status(job: dict, tab: dict, tabs: dict) -> dict:
-    wait = tab.get("wait")
+def _tab_wait_status(_job: Job, tab: Tab, _tabs: Tabs) -> Answer:
+    wait = tab["wait"]
     return NO_WAIT_STATUS if wait is None else wait.as_status()
 
 
 # Commands that need no tab, then commands that act on the tab the job names.
-_GLOBAL_CMDS = {
+_GLOBAL_CMDS: dict[str, Callable[[Job, Browser, Tabs, State], Answer]] = {
     "ping": _cmd_ping,
     "tabs": _cmd_tabs,
     "open_tab": _cmd_open_tab,
     "fetch": _fetch,
     "script": _script,
 }
-_TAB_CMDS = {
+_TAB_CMDS: dict[str, Callable[[Job, Tab, Tabs], Answer]] = {
     "close_tab": _tab_close,
     "wait_for_human": _tab_wait_for_human,
     "wait_status": _tab_wait_status,
 }
 
 
-def handle(job: dict, browser: Any, tabs: dict, state: dict) -> dict:
+def handle(job: Job, browser: Browser, tabs: Tabs, state: State) -> Answer:
+    """Answer one job."""
     cmd = job.get("cmd") or ""
+    if not isinstance(cmd, str):
+        cmd = ""
     if cmd in _GLOBAL_CMDS:
         return _GLOBAL_CMDS[cmd](job, browser, tabs, state)
     if cmd not in _TAB_CMDS:
-        return {"ok": False, "error": {"kind": "cmd", "message": f"unknown command: {cmd}"}}
-    tab = tabs.get(job.get("tab"))
+        return {
+            "ok": False,
+            "error": {"kind": "cmd", "message": f"unknown command: {cmd}"},
+        }
+    tab = _tab_of(job, tabs)
     if tab is None:
-        return {"ok": False, "error": {"kind": "tab", "message": f"no such tab: {job.get('tab')}"}}
+        return _no_such_tab(job)
     return _TAB_CMDS[cmd](job, tab, tabs)
 
 
@@ -212,18 +284,26 @@ def _recv_line(conn: socket.socket) -> bytes:
     return buf
 
 
+def _parse_job(line: bytes) -> Job:
+    job: object = json.loads(line.decode().strip() or "{}")
+    if not isinstance(job, dict):
+        message = "a job is a JSON object"
+        raise TypeError(message)
+    return cast("Job", job)
+
+
 def main() -> None:
-    if os.path.exists(SOCK):
-        os.unlink(SOCK)
+    """Serve jobs on the unix socket until a signal stops the loop."""
+    Path(SOCK).unlink(missing_ok=True)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     srv.bind(SOCK)
     srv.listen(8)
     srv.settimeout(ACCEPT_TICK_S)
-    tabs: dict = {}
-    state = {"next": 1}
+    tabs: Tabs = {}
+    state: State = {"next": 1}
     stopped = {"v": False}
 
-    def _stop(*_: Any) -> None:
+    def _stop(*_: object) -> None:
         stopped["v"] = True
         srv.close()
 
@@ -240,12 +320,16 @@ def main() -> None:
         firefox_user_prefs={"browser.sessionhistory.max_entries": 50},
         config={"window.history.length": 2},
         i_know_what_im_doing=True,
-    ) as browser:
+    ) as launched:
+        if not isinstance(launched, Browser):
+            message = "Camoufox gave a persistent context, not a browser"
+            raise TypeError(message)
+        browser = launched
         print("browserbox: ready on", SOCK, flush=True)
         while not stopped["v"]:
             try:
                 conn, _ = srv.accept()
-            except socket.timeout:
+            except TimeoutError:
                 _poll_waiting(tabs)
                 continue
             except OSError:
@@ -253,14 +337,15 @@ def main() -> None:
             with conn:
                 conn.settimeout(300)
                 try:
-                    job = json.loads(_recv_line(conn).decode().strip() or "{}")
-                    answer = handle(job, browser, tabs, state)
-                except Exception as e:  # noqa: BLE001 - one bad job must not end the daemon
-                    answer = {"ok": False, "error": {"kind": type(e).__name__, "message": str(e)}}
-                try:
+                    answer = handle(_parse_job(_recv_line(conn)), browser, tabs, state)
+                except Exception as e:
+                    logger.exception("a job failed")
+                    answer = {
+                        "ok": False,
+                        "error": {"kind": type(e).__name__, "message": str(e)},
+                    }
+                with contextlib.suppress(OSError):
                     conn.sendall((json.dumps(answer) + "\n").encode())
-                except OSError:
-                    pass
             _poll_waiting(tabs)
 
 

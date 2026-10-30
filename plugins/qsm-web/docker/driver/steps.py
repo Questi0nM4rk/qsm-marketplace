@@ -10,65 +10,94 @@ password reaches a page without reaching a transcript.
 
 from __future__ import annotations
 
-import os
+import logging
 import time
-from typing import Any
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_MS = 30000
 OUT_DIR = "/out"
 
+Step = Mapping[str, object]
+Outcome = dict[str, object]
 
-def _timeout(step: dict) -> int:
+
+def _timeout(step: Step) -> int:
     value = step.get("timeoutMs")
     return int(value) if isinstance(value, (int, float)) else DEFAULT_TIMEOUT_MS
 
 
+def _text(step: Step, key: str) -> str:
+    """Return a step's required text field; a missing or non-text one fails the step."""
+    value = step[key]
+    if not isinstance(value, str):
+        message = f"{key} must be text"
+        raise TypeError(message)
+    return value
+
+
 def _out_path(name: str) -> str:
     """Artifacts stay inside the mounted directory: only a basename is used."""
-    return os.path.join(OUT_DIR, os.path.basename(name) or "shot.png")
+    return str(Path(OUT_DIR) / (name.rsplit("/", 1)[-1] or "shot.png"))
 
 
-def _navigate(page: Any, step: dict) -> dict:
-    resp = page.goto(step["url"], wait_until="domcontentloaded", timeout=_timeout(step))
+def _navigate(page: Page, step: Step) -> Outcome:
+    resp = page.goto(
+        _text(step, "url"), wait_until="domcontentloaded", timeout=_timeout(step)
+    )
     return {"url": page.url, "status": resp.status if resp else None}
 
 
-def _fill(page: Any, step: dict) -> dict:
-    page.fill(step["selector"], step["value"], timeout=_timeout(step))
-    shown = "[redacted]" if step.get("redact") else step["value"]
-    return {"selector": step["selector"], "value": shown}
+def _fill(page: Page, step: Step) -> Outcome:
+    selector = _text(step, "selector")
+    value = _text(step, "value")
+    page.fill(selector, value, timeout=_timeout(step))
+    shown = "[redacted]" if step.get("redact") else value
+    return {"selector": selector, "value": shown}
 
 
-def _click(page: Any, step: dict) -> dict:
-    page.click(step["selector"], timeout=_timeout(step))
-    return {"selector": step["selector"], "url": page.url}
+def _click(page: Page, step: Step) -> Outcome:
+    selector = _text(step, "selector")
+    page.click(selector, timeout=_timeout(step))
+    return {"selector": selector, "url": page.url}
 
 
-def _wait(page: Any, step: dict) -> dict:
-    if step.get("selector"):
-        page.wait_for_selector(step["selector"], timeout=_timeout(step))
-        return {"selector": step["selector"]}
-    if step.get("text"):
-        page.wait_for_selector(f"text={step['text']}", timeout=_timeout(step))
-        return {"text": step["text"]}
+def _wait(page: Page, step: Step) -> Outcome:
+    selector = step.get("selector")
+    if selector and isinstance(selector, str):
+        page.wait_for_selector(selector, timeout=_timeout(step))
+        return {"selector": selector}
+    text = step.get("text")
+    if text and isinstance(text, str):
+        page.wait_for_selector(f"text={text}", timeout=_timeout(step))
+        return {"text": text}
     page.wait_for_timeout(_timeout(step))
     return {"waitedMs": _timeout(step)}
 
 
-def _extract(page: Any, step: dict) -> dict:
-    selector = step.get("selector") or "body"
-    limit = int(step.get("limit") or 20)
-    nodes = page.query_selector_all(selector)[:limit]
+def _extract(page: Page, step: Step) -> Outcome:
+    raw = step.get("selector")
+    selector = raw if isinstance(raw, str) and raw else "body"
+    limit = step.get("limit")
+    count = int(limit) if isinstance(limit, (int, float)) and limit else 20
+    nodes = page.query_selector_all(selector)[:count]
     return {"selector": selector, "text": [n.inner_text() for n in nodes]}
 
 
-def _screenshot(page: Any, step: dict) -> dict:
-    path = _out_path(step.get("path") or "shot.png")
+def _screenshot(page: Page, step: Step) -> Outcome:
+    raw = step.get("path")
+    path = _out_path(raw if isinstance(raw, str) and raw else "shot.png")
     page.screenshot(path=path, full_page=True)
     return {"path": path}
 
 
-_ACTIONS = {
+_ACTIONS: dict[str, Callable[[Page, Step], Outcome]] = {
     "navigate": _navigate,
     "fill": _fill,
     "click": _click,
@@ -78,22 +107,27 @@ _ACTIONS = {
 }
 
 
-def run_step(page: Any, step: dict) -> dict:
+def run_step(page: Page, step: Step) -> Outcome:
+    """Run one step and return its outcome; an unknown action raises."""
     action = step.get("action")
-    if action not in _ACTIONS:
-        raise ValueError(f"unknown action: {action}")
+    if not isinstance(action, str) or action not in _ACTIONS:
+        message = f"unknown action: {action}"
+        raise ValueError(message)
     return _ACTIONS[action](page, step)
 
 
-def run_script(page: Any, steps: list[dict]) -> dict:
-    """Every step's outcome, then the page's final state. A failure stops
-    the run and is reported in place of the steps that never ran."""
+def run_script(page: Page, steps: Sequence[Step]) -> Outcome:
+    """Run every step, then report the page's final state.
+
+    A failure stops the run and is reported in place of the steps that never ran.
+    """
     started = time.monotonic()
-    outcomes: list[dict] = []
+    outcomes: list[Outcome] = []
     for index, step in enumerate(steps):
         try:
             detail = run_step(page, step)
-        except Exception as e:  # noqa: BLE001 - a bad step is an answer, not a crash
+        except Exception as e:
+            logger.debug("step %d failed", index, exc_info=True)
             outcomes.append(
                 {
                     "index": index,
@@ -109,7 +143,9 @@ def run_script(page: Any, steps: list[dict]) -> dict:
                 "url": page.url,
                 "elapsedMs": int((time.monotonic() - started) * 1000),
             }
-        outcomes.append({"index": index, "action": step.get("action"), "ok": True, **detail})
+        outcomes.append(
+            {"index": index, "action": step.get("action"), "ok": True, **detail}
+        )
     return {
         "ok": True,
         "steps": outcomes,

@@ -7,11 +7,45 @@ hcaptcha, recaptcha, or null. error is null, or an object with a kind
 
 from __future__ import annotations
 
-from typing import Any
+from typing import NotRequired, TypedDict, Unpack
 
 
-def make_result(**p: Any) -> dict[str, Any]:
-    artifacts = {"html": None, "screenshot": None, "cookies": None}
+class ResultFields(TypedDict, total=False):
+    """The fields a caller may set; the rest take their defaults."""
+
+    ok: bool
+    blocked: bool
+    block_signal: str | None
+    final_url: str | None
+    http_status: int | None
+    title: str | None
+    artifacts: dict[str, str]
+    elapsed_ms: int
+    error: dict[str, str] | None
+
+
+class FetchResult(TypedDict):
+    """One fetch answer, every field present."""
+
+    ok: bool
+    blocked: bool
+    block_signal: str | None
+    final_url: str | None
+    http_status: int | None
+    title: str | None
+    artifacts: dict[str, str | None]
+    elapsedMs: int
+    error: dict[str, str] | None
+    tab: NotRequired[int]
+
+
+def make_result(**p: Unpack[ResultFields]) -> FetchResult:
+    """Return a fetch answer with every field present and the defaults filled in."""
+    artifacts: dict[str, str | None] = {
+        "html": None,
+        "screenshot": None,
+        "cookies": None,
+    }
     artifacts.update(p.get("artifacts") or {})
     return {
         "ok": p.get("ok", True),
@@ -21,6 +55,6 @@ def make_result(**p: Any) -> dict[str, Any]:
         "http_status": p.get("http_status"),
         "title": p.get("title"),
         "artifacts": artifacts,
-        "elapsedMs": p.get("elapsedMs", 0),
+        "elapsedMs": p.get("elapsed_ms", 0),
         "error": p.get("error"),
     }

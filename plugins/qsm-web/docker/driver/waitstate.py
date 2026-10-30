@@ -8,31 +8,44 @@ as a parameter, so the transitions are testable without sleeping.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 WaitStatus = Literal["waiting", "cleared", "timeout"]
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_S = 300.0
 DEFAULT_POLL_INTERVAL_S = 3.0
 
-NO_WAIT_STATUS: dict = {"ok": True, "state": "none"}
+NO_WAIT_STATUS: dict[str, object] = {"ok": True, "state": "none"}
 
 
 @dataclass(frozen=True)
 class WaitState:
+    """Where one tab's wait stands, and when it next needs a look."""
+
     status: WaitStatus
     deadline: float
     last_poll: float
 
     @staticmethod
-    def armed(now: float, timeout_s: float = DEFAULT_TIMEOUT_S) -> "WaitState":
+    def armed(now: float, timeout_s: float = DEFAULT_TIMEOUT_S) -> WaitState:
+        """Return a wait that starts now and ends at the deadline."""
         return WaitState(status="waiting", deadline=now + timeout_s, last_poll=now)
 
-    def due_for_poll(self, now: float, interval_s: float = DEFAULT_POLL_INTERVAL_S) -> bool:
+    def due_for_poll(
+        self, now: float, interval_s: float = DEFAULT_POLL_INTERVAL_S
+    ) -> bool:
+        """Whether a waiting tab's page should be classified again."""
         return self.status == "waiting" and (now - self.last_poll) >= interval_s
 
-    def polled(self, now: float, blocked: bool) -> "WaitState":
+    def polled(self, now: float, *, blocked: bool) -> WaitState:
+        """Return the state after one classification of the page."""
         if self.status != "waiting":
             return self
         if now >= self.deadline:
@@ -41,11 +54,23 @@ class WaitState:
             return WaitState(status="cleared", deadline=self.deadline, last_poll=now)
         return WaitState(status="waiting", deadline=self.deadline, last_poll=now)
 
-    def as_status(self) -> dict:
+    def as_status(self) -> dict[str, object]:
+        """Return the wait as the answer to a wait_status job."""
         return {"ok": True, "state": self.status, "deadline_s": self.deadline}
 
 
-def advance_waits(tabs: dict, now: float, classify: Callable[[Any], bool]) -> None:
+class WaitTab(TypedDict):
+    """The part of a tab the wait lifecycle reads and replaces."""
+
+    wait: WaitState | None
+
+
+Tab = TypeVar("Tab", bound=WaitTab)
+
+
+def advance_waits(
+    tabs: dict[int, Tab], now: float, classify: Callable[[Tab], bool]
+) -> None:
     """Advance every armed wait by one classification.
 
     A tab that is not waiting, or not yet due, is left exactly as it was:
@@ -54,11 +79,12 @@ def advance_waits(tabs: dict, now: float, classify: Callable[[Any], bool]) -> No
     closed page ends its wait instead of holding the loop.
     """
     for tab in tabs.values():
-        wait = tab.get("wait")
+        wait = tab["wait"]
         if wait is None or not wait.due_for_poll(now):
             continue
         try:
             blocked = bool(classify(tab))
-        except Exception:  # noqa: BLE001 - a dead page must not stop the tick
+        except Exception:
+            logger.debug("a page did not classify", exc_info=True)
             blocked = False
-        tab["wait"] = wait.polled(now, blocked)
+        tab["wait"] = wait.polled(now, blocked=blocked)

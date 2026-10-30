@@ -134,7 +134,7 @@ shot-scraper javascript <url> <expr> --auth state.json
 ```
 
 Docs: <https://shot-scraper.datasette.io/>. The Instagram saved-collection recipe lives in
-`plugins/qsm-web/scripts/instagram-saved/`.
+`plugins/qsm-web/scripts/instagram_saved/`.
 
 ## From a hooks module
 

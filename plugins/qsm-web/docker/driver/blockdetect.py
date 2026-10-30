@@ -15,7 +15,18 @@ captcha widget":
 from __future__ import annotations
 
 import re
-from typing import Callable
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+class BlockVerdict(TypedDict):
+    """Whether the page is a wall, and which marker said so."""
+
+    blocked: bool
+    block_signal: str | None
+
 
 _SPARSE_VISIBLE_TEXT = 300
 _BLOCK_STATUS = {401, 403, 429, 503}
@@ -42,19 +53,25 @@ _STRONG: list[tuple[str, Callable[[str], bool]]] = [
 ]
 
 _WEAK: list[tuple[str, Callable[[str], bool]]] = [
-    ("turnstile", lambda h: "cf-turnstile" in h or "challenges.cloudflare.com/turnstile" in h),
+    (
+        "turnstile",
+        lambda h: "cf-turnstile" in h or "challenges.cloudflare.com/turnstile" in h,
+    ),
     ("hcaptcha", lambda h: "hcaptcha.com" in h or "h-captcha" in h),
     ("recaptcha", lambda h: "g-recaptcha" in h or "recaptcha" in h),
 ]
 
 
 def _visible_text_len(html: str) -> int:
-    h = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    h = re.sub(
+        r"<(script|style)\b[^>]*>.*?</\1>", " ", html, flags=re.DOTALL | re.IGNORECASE
+    )
     t = re.sub(r"<[^>]+>", " ", h)
     return len(re.sub(r"\s+", " ", t).strip())
 
 
-def detect_block(html: str, title: str, status: int) -> dict:
+def detect_block(html: str, title: str, status: int) -> BlockVerdict:
+    """Classify one response as a wall or an ordinary page."""
     h = html.lower()
     t = title.lower()
     for sig, pred in _STRONG:
@@ -62,7 +79,9 @@ def detect_block(html: str, title: str, status: int) -> dict:
             return {"blocked": True, "block_signal": sig}
     if any(p in t for p in _CHALLENGE_TITLES):
         return {"blocked": True, "block_signal": "challenge_platform"}
-    looks_like_wall = status in _BLOCK_STATUS or _visible_text_len(html) < _SPARSE_VISIBLE_TEXT
+    looks_like_wall = (
+        status in _BLOCK_STATUS or _visible_text_len(html) < _SPARSE_VISIBLE_TEXT
+    )
     for sig, pred in _WEAK:
         if pred(h):
             return {
