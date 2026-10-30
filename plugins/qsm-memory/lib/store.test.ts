@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
-import { openDb, resolveDbPath } from "./store.ts";
+import { Database } from "bun:sqlite";
+import { getState, openDb, resolveDbPath, setState } from "./store.ts";
 
 describe("the archive database", () => {
   test("the first save creates the database with owner-only permissions", () => {
@@ -106,5 +107,25 @@ describe("harness text already stored as user turns", () => {
     expect(
       again.query("SELECT COUNT(*) AS n FROM turns_fts WHERE turns_fts MATCH 'continued'").get(),
     ).toEqual({ n: 0 });
+  });
+});
+
+describe("an archive written before the pack", () => {
+  test("opens, gains the state and packed tables, and keeps its sessions", () => {
+    const path = join(sandboxDir("qsm-memory-old-"), "memory.db");
+    const old = new Database(path, { create: true });
+    old.run(
+      "CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, project TEXT NOT NULL, title TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT NOT NULL, transcript_path TEXT NOT NULL, saved_at TEXT NOT NULL, turn_count INTEGER NOT NULL)",
+    );
+    old.run("INSERT INTO sessions VALUES ('s1', '/w', '/w', 't', 'a', 'b', '/p', 'c', 1)");
+    old.close();
+
+    const db = openDb(path);
+    setState(db, "retention", "qsm");
+
+    expect(getState(db, "retention")).toBe("qsm");
+    expect(getState(db, "last_pack_at")).toBeNull();
+    expect(db.query("SELECT COUNT(*) AS n FROM packed").get()).toEqual({ n: 0 });
+    expect(db.query("SELECT id FROM sessions").all()).toEqual([{ id: "s1" }]);
   });
 });

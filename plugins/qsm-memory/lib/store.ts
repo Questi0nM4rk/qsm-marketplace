@@ -82,6 +82,19 @@ CREATE TABLE IF NOT EXISTS notes (
   created_at TEXT NOT NULL,
   expires_at TEXT
 );
+
+-- retention, activated_at and last_pack_at: what the person chose and when the pack last ran.
+CREATE TABLE IF NOT EXISTS state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- A session whose transcript moved into an archive under transcripts/.
+CREATE TABLE IF NOT EXISTS packed (
+  session_id TEXT PRIMARY KEY,
+  archive TEXT NOT NULL,
+  packed_at TEXT NOT NULL
+);
 `;
 
 /** User turns that are no person's words (slash-command wrappers, task notifications, compaction
@@ -161,6 +174,23 @@ function createDb(path: string): void {
       rmSync(file, { force: true });
     }
   }
+}
+
+/** One recorded value (`retention`, `activated_at`, `last_pack_at`), or null when never set. */
+export function getState(db: Database, key: string): string | null {
+  return (
+    db.query<{ value: string }, [string]>("SELECT value FROM state WHERE key = ?").get(key)
+      ?.value ?? null
+  );
+}
+
+/** Records `value` under `key`; null forgets the key. */
+export function setState(db: Database, key: string, value: string | null): void {
+  if (value === null) {
+    db.query("DELETE FROM state WHERE key = ?").run(key);
+    return;
+  }
+  db.query("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)").run(key, value);
 }
 
 /** The archive for this environment. */
