@@ -206,41 +206,41 @@ found even when both files are scanned together. So at pre-commit (the commit ho
 the stop gate, and `check`, whose default is pre-commit) every semgrep checker SHALL scan the
 `changed` set with the community engine, whatever the login, and SHALL NOT ask for the login. At
 pre-push (the push hook and `check --at pre-push`) every semgrep checker SHALL scan the `given` set,
-the whole tree by default, with a limit of 420 s, above the full run measured on this repository
-with every core busy (both sides at once under the Pro engine, 523 TypeScript files: 128 s quiet,
-373 s under load). The Pro engine follows a flow across files for TypeScript, JavaScript, Python and
-C#, and at pre-push a checker for one of those (`semgrep-ts`, `semgrep-py`, `semgrep-dotnet`) SHALL
-run `semgrep --pro` under the Pro engine with the side's root directory as its one target and no
-file list: semgrep's inter-file analysis refuses a list of files ("Inter-file analysis can only take
-a single target"). `semgrep-rust`, `semgrep-bash` and `semgrep-dockerfile` SHALL declare no Pro form
-and run the community engine on every machine. A pre-push run SHALL choose its engine once, and only
-when a checker with a Pro form is selected: logged in and the Pro engine binary installed (the path
-`semgrep --dump-engine-path --pro` names holds a file) is the Pro engine; anything else is the
-community engine over the file list. Logged in without the Pro binary SHALL run the community engine
-and warn once per run, `semgrep Pro engine is not installed: run semgrep install-semgrep-pro`, never
-failing the gate for it. A checker whose Pro run fails (its output cannot be read: a rejected
-`SEMGREP_APP_TOKEN`, an engine error) SHALL run once more on the community engine, with the
-community argv, set and store key, and the run SHALL warn
-`<checker>: semgrep Pro run failed: <cause>; the community engine ran`; only when that run fails too
-is the checker not measured. The engine is part of a stored result's key, through the argv, so a
-second push of the same reference is a store hit on that side under the same engine only. The Pro
-engine SHALL run through `semgrep --pro` only, never `semgrep ci`, which uploads. `doctor` and
-`install` SHALL report, as a warning and never a failure, when the semgrep CLI is not logged in:
-`semgrep is not logged in: run semgrep login to use qsm-langdev at its fullest`, asking the CLI,
-never reading its token file: `semgrep show identity` exiting 0, or a `SEMGREP_APP_TOKEN` in the
-environment, is logged in; exiting 2 is logged out; any other answer SHALL be warned as unknown,
-never taken for logged out. An absent semgrep is its missing binary, never a login warning. A free
-login adds the Pro engine (cross-file analysis for TypeScript, JavaScript, Python and C#), the Pro
-rules, and supply-chain scanning. A checker that runs past its time limit SHALL be reported as not
-measured, naming the limit and the retry, and SHALL NOT be reported as worse. So SHALL a checker
-whose run ended with output its parser cannot read, a tool error rather than findings:
-`<checker>: not measured: <cause>; retry`, the cause the tool's own words (semgrep's JSON `errors`,
-else the first line of stderr that says something, or the last when a Python traceback opens it,
-else the exit code), and it SHALL NOT be stored. Output the parser reads is measured whatever the
-exit code: semgrep exiting 1 with results is findings. A run with a checker not measured and none
-worse answers `blocked`, never `ok`: nothing proved the tree no worse. A worse checker in the same
-run answers `worse`. The stop gate logs a checker not measured as a warning and does not hold the
-agent.
+the whole tree by default, with a limit of 600 s, the ten minutes a person waits for a push at most,
+above the full run measured here with every core busy (both sides at once under the Pro engine, 523
+TypeScript files: 128 s quiet, 373 s under load). The Pro engine follows a flow across files for
+TypeScript, JavaScript, Python and C#, and at pre-push a checker for one of those (`semgrep-ts`,
+`semgrep-py`, `semgrep-dotnet`) SHALL run `semgrep --pro` under the Pro engine with the side's root
+directory as its one target and no file list: semgrep's inter-file analysis refuses a list of files
+("Inter-file analysis can only take a single target"). `semgrep-rust`, `semgrep-bash` and
+`semgrep-dockerfile` SHALL declare no Pro form and run the community engine on every machine. A
+pre-push run SHALL choose its engine once, and only when a checker with a Pro form is selected:
+logged in and the Pro engine binary installed (the path `semgrep --dump-engine-path --pro` names
+holds a file) is the Pro engine; anything else is the community engine over the file list. Logged in
+without the Pro binary SHALL run the community engine and warn once per run,
+`semgrep Pro engine is not installed: run semgrep install-semgrep-pro`, never failing the gate for
+it. A checker whose Pro run fails (its output cannot be read: a rejected `SEMGREP_APP_TOKEN`, an
+engine error) SHALL run once more on the community engine, with the community argv, set and store
+key, and the run SHALL warn `<checker>: semgrep Pro run failed: <cause>; the community engine ran`;
+only when that run fails too is the checker not measured. The engine is part of a stored result's
+key, through the argv, so a second push of the same reference is a store hit on that side under the
+same engine only. The Pro engine SHALL run through `semgrep --pro` only, never `semgrep ci`, which
+uploads. `doctor` and `install` SHALL report, as a warning and never a failure, when the semgrep CLI
+is not logged in: `semgrep is not logged in: run semgrep login to use qsm-langdev at its fullest`,
+asking the CLI, never reading its token file: `semgrep show identity` exiting 0, or a
+`SEMGREP_APP_TOKEN` in the environment, is logged in; exiting 2 is logged out; any other answer
+SHALL be warned as unknown, never taken for logged out. An absent semgrep is its missing binary,
+never a login warning. A free login adds the Pro engine (cross-file analysis for TypeScript,
+JavaScript, Python and C#), the Pro rules, and supply-chain scanning. A checker that runs past its
+time limit SHALL be reported as not measured, naming the limit and the retry, and SHALL NOT be
+reported as worse. So SHALL a checker whose run ended with output its parser cannot read, a tool
+error rather than findings: `<checker>: not measured: <cause>; retry`, the cause the tool's own
+words (semgrep's JSON `errors`, else the first line of stderr that says something, or the last when
+a Python traceback opens it, else the exit code), and it SHALL NOT be stored. Output the parser
+reads is measured whatever the exit code: semgrep exiting 1 with results is findings. A run with a
+checker not measured and none worse answers `blocked`, never `ok`: nothing proved the tree no worse.
+A worse checker in the same run answers `worse`. The stop gate logs a checker not measured as a
+warning and does not hold the agent.
 
 #### Scenario: A bash script piping a download into bash
 
@@ -961,7 +961,7 @@ measured result.
 
 The common Semgrep argument builder SHALL explicitly use `--timeout 0` to avoid a separate native
 per-rule cutoff within the already bounded checker execution. The existing outer deadlines,
-including 420 seconds at pre-push, SHALL remain unchanged and enforced. Reaching that deadline
+including 600 seconds at pre-push, SHALL remain unchanged and enforced. Reaching that deadline
 SHALL report not measured and SHALL NOT store a score. The changed argv SHALL participate in the
 existing store key so entries collected under the native default are not reused in this mode.
 No rule, quality threshold, reference commit or engine-selection policy SHALL change.
