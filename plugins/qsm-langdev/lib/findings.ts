@@ -258,19 +258,6 @@ export function countRuffFormat(stdout: string, stderr: string, exitCode: number
   return tallyOf(findings);
 }
 
-/** csharpier check: `Error <path> - Was not formatted.` per drifted file. */
-export function countCsharpier(stdout: string, stderr: string, exitCode: number): Tally | null {
-  const findings = `${stdout}\n${stderr}`
-    .split("\n")
-    .map((line) => line.match(/^\s*Error (.+?) - Was not formatted/i)?.[1])
-    .filter((path): path is string => path !== undefined)
-    .map((path) => at(UNFORMATTED, path));
-  if (findings.length === 0 && exitCode !== 0) {
-    return null;
-  }
-  return tallyOf(findings);
-}
-
 /** dotnet format --report: a JSON array of files, each with `FileChanges`. An
  * entry with none is one drifted file. */
 export function countDotnetFormatReport(
@@ -679,7 +666,8 @@ function markdownlintFinding(line: string): Finding | null {
  * summary line means the tool never finished. */
 export function countMarkdownlint(stdout: string, stderr: string, _exitCode: number): Tally | null {
   const output = `${stdout}\n${stderr}`;
-  const match = output.match(/Summary: (\d+) issue/);
+  // v0.23 prints "Summary: N issues in M files"; the v0.21 a repository may pin prints "Summary: N error(s)".
+  const match = output.match(/Summary: (\d+) (?:issue|error)/);
   if (match?.[1] === undefined) {
     return null;
   }

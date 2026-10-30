@@ -1,8 +1,9 @@
 // Materializes a tree as an on-disk directory for a checker to score: a
 // commit checked out through a scratch index, or the working tree via a
-// scratch git index (`git add -A` into it, `git write-tree`, then that tree
-// checked out) so an ignored path — node_modules, dist — never enters a
-// score just because it sits on disk; the ignored inputs the repository's
+// scratch git index (the live index copied, its tracked files refreshed with
+// `git add -u`, `git write-tree`, then that tree checked out) so an ignored
+// or untracked path — node_modules, dist, a file nobody added — never enters
+// a score just because it sits on disk; the ignored inputs the repository's
 // own commands read are linked back in (linkInputs). Both sides of every comparison go through one of these,
 // so the only difference a checker ever sees is the change itself. The
 // materialized directory is then given its own throwaway git index (`git
@@ -13,6 +14,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -274,14 +276,31 @@ export function withCommitTree<T>(
  * every comparison: the live directory itself is never handed to a
  * checker, so node_modules/ or dist/ never enter a score just because they
  * sit on disk. Removed once `fn` settles. */
+/** The checkout's own index file, which a linked worktree keeps under its own git directory. */
+function liveIndex(root: string): string {
+  const r = spawnSync("git", ["-C", root, "rev-parse", "--git-path", "index"], {
+    env: gitEnv(),
+    encoding: "utf8",
+  });
+  if (r.status !== 0) {
+    fail("git rev-parse --git-path index", r);
+  }
+  const path = r.stdout.trim();
+  return isAbsolute(path) ? path : join(root, path);
+}
+
 export function withWorktreeTree<T>(root: string, fn: (dir: string) => Promise<T> | T): Promise<T> {
   return withScratchDir(SCRATCH_PREFIX, (dir) => {
     const indexFile = `${dir}.index`;
     try {
+      const live = liveIndex(root);
+      if (existsSync(live)) {
+        copyFileSync(live, indexFile);
+      }
       const env = gitEnv({ GIT_INDEX_FILE: indexFile });
-      const add = spawnSync("git", ["-C", root, "add", "-A"], { env });
+      const add = spawnSync("git", ["-C", root, "add", "-u"], { env });
       if (add.status !== 0) {
-        fail("git add -A (scratch index)", add);
+        fail("git add -u (scratch index)", add);
       }
       const writeTree = spawnSync("git", ["-C", root, "write-tree"], { env, encoding: "utf8" });
       if (writeTree.status !== 0) {

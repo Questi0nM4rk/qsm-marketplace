@@ -51,10 +51,10 @@ import { withCommitTree, withScratchDir, withWorktreeTree } from "./tree.ts";
 
 const REPORT_SCRATCH_PREFIX = "qsm-langdev-report-";
 
-/** Every file the working tree holds: tracked plus untracked-and-not-ignored,
- * minus anything deleted on disk. Empty when git could not answer. */
+/** Every tracked file the working tree holds, minus anything deleted on disk. An untracked
+ * file is not on its way into a commit, so it is not measured. Empty when git could not answer. */
 function worktreePaths(root: string): string[] {
-  const paths = gitPaths(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+  const paths = gitPaths(root, ["ls-files", "-z", "--cached"]);
   if (paths === null) {
     return [];
   }
@@ -299,6 +299,7 @@ function scoreWithReport(
   spec: CheckSpec,
   reportFile: string,
   side: KeptSide,
+  files: readonly string[],
   timeoutMs: number,
 ): Promise<Score> {
   return withScratchDir(REPORT_SCRATCH_PREFIX, (reportDir) => {
@@ -309,9 +310,37 @@ function scoreWithReport(
         return "";
       }
     };
-    const args = spec.args(side.files, side.root, reportDir, side.rules);
+    const args = spec.args(files, side.root, reportDir, side.rules);
     return readOne({ spec, root: side.root, args, timeoutMs, readReport });
   });
+}
+
+/** The side's files in groups by the spec's key, in first-seen order. */
+function groupsOf(spec: CheckSpec, side: KeptSide): string[][] {
+  const groups = new Map<string, string[]>();
+  for (const file of side.files) {
+    const key = spec.groupBy?.(side.root, file) ?? "";
+    groups.set(key, [...(groups.get(key) ?? []), file]);
+  }
+  return [...groups.values()];
+}
+
+/** The scores of a checker's groups as one: the first failure, else the tallies summed. */
+function merged(scores: readonly Score[]): Score {
+  let total = 0;
+  const byPath: Record<string, number> = {};
+  const findings: Finding[] = [];
+  const outputs: string[] = [];
+  for (const one of scores) {
+    if (!("tally" in one)) {
+      return one;
+    }
+    total += one.tally.total;
+    Object.assign(byPath, one.tally.byPath);
+    findings.push(...(one.tally.findings ?? []));
+    outputs.push(one.output);
+  }
+  return { tally: { total, byPath, findings }, output: outputs.join("\n") };
 }
 
 /**
@@ -337,8 +366,16 @@ async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promis
     store.through(keying, contentHash(side.root, files), compute, use);
   const argsFor = (files: readonly string[]) => spec.args(files, side.root, undefined, side.rules);
   const { reportFile } = spec;
+  const scoreOf = (files: readonly string[]): Promise<Score> =>
+    reportFile === undefined
+      ? readOne({ spec, root: side.root, args: argsFor(files), timeoutMs })
+      : scoreWithReport(spec, reportFile, side, files, timeoutMs);
+  if (spec.groupBy !== undefined) {
+    const groups = groupsOf(spec, side);
+    return merged(await mapLimit(groups, JOBS, (files) => through(files, () => scoreOf(files))));
+  }
   if (reportFile !== undefined) {
-    return through(side.files, () => scoreWithReport(spec, reportFile, side, timeoutMs));
+    return through(side.files, () => scoreOf(side.files));
   }
   if (!spec.eachFile) {
     return through(side.files, () =>
@@ -691,16 +728,13 @@ function scoredPaths(root: string, paths: readonly string[]): string[] {
 function changedBetween(root: string, beforeRef: string, after: string): string[] | null {
   const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
   // --no-renames: a moved file is in the set under both names.
+  // Against the working tree, git diff lists every tracked file that differs from the commit,
+  // a file added to the index included; an untracked file is not measured.
   const changed = gitPaths(root, ["diff", "--name-only", "-z", "--no-renames", ...range]);
-  // git diff never lists an untracked file; the shipped working tree holds it.
-  const untracked =
-    after === "worktree"
-      ? gitPaths(root, ["ls-files", "-z", "--others", "--exclude-standard"])
-      : [];
-  if (changed === null || untracked === null) {
+  if (changed === null) {
     return null;
   }
-  return scoredPaths(root, [...new Set([...changed, ...untracked])].toSorted());
+  return scoredPaths(root, [...new Set(changed)].toSorted());
 }
 
 function renamedBetween(root: string, beforeRef: string, after: string): Renames {
@@ -1240,11 +1274,15 @@ export async function compareTrees(
 
   const probes = await probeAll(applicable, root, options.probeTimeoutMs ?? STUCK_MS);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
-  if (missingVerdicts.length > 0) {
+  // A binary that is missing or slow to answer takes its own checkers out of the run, never the
+  // run: the others still measure, and its verdict stands beside theirs. A language without its
+  // config has nothing to measure with.
+  const runnable = applicable.filter((spec) => probes.get(spec.binary)?.present === true);
+  if (missingVerdicts.some((verdict) => verdict.missingConfig === true) || runnable.length === 0) {
     const verdicts = [...skipVerdicts, ...missingVerdicts];
     return { changed, sets, verdicts, store: unused, warnings: [] };
   }
-  const { engaged: selected, warnings, community } = engage(applicable, options);
+  const { engaged: selected, warnings, community } = engage(runnable, options);
 
   const base = {
     root,
@@ -1277,7 +1315,13 @@ export async function compareTrees(
     return { context: run, verdicts: found };
   });
   const store = prunedStore(selected, context);
-  return { changed, sets, verdicts: [...skipVerdicts, ...verdicts], store, warnings };
+  return {
+    changed,
+    sets,
+    verdicts: [...skipVerdicts, ...missingVerdicts, ...verdicts],
+    store,
+    warnings,
+  };
 }
 
 /** The run's store pruned to what it used, and each checker's use of it. */

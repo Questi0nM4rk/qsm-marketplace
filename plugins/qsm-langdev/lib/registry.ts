@@ -1,12 +1,11 @@
 // The check registry: one data table, language -> binary -> invocation -> parser -> install hint.
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import {
   countBanditJson,
   countClippy,
-  countCsharpier,
   countDepcruise,
   countDevskim,
   countDiagnosticLines,
@@ -244,6 +243,24 @@ const RUFF = {
 /** What a TypeScript project's whole-program tools resolve through. */
 const TS_PROJECT = ["tsconfig*.json", "package.json"];
 
+/** The .csproj that owns a .cs file: the nearest one up its directories, else the root, where
+ * `dotnet format` then takes the solution. One project is one load of its analyzers, measured at
+ * 24 s whatever the file count, against 109 s for the solution at the root. */
+export function nearestProject(root: string, file: string): string {
+  let dir = dirname(join(root, file));
+  while (dir.startsWith(root)) {
+    const project = readdirSync(dir).find((name) => name.endsWith(".csproj"));
+    if (project !== undefined) {
+      return relative(root, join(dir, project));
+    }
+    if (dir === root) {
+      break;
+    }
+    dir = dirname(dir);
+  }
+  return ".";
+}
+
 /** What a dotnet build reads besides the .cs files. */
 const DOTNET_PROJECT = [
   "**/*.csproj",
@@ -301,6 +318,9 @@ interface Scoring {
   failure?: (stdout: string) => string | undefined;
   /** One spawn per file, counts summed. */
   eachFile?: true;
+  /** One spawn per group of files, counts summed: the key is what the tool takes as its one
+   * target, such as the .csproj that owns a .cs file, and `args` gets one group at a time. */
+  groupBy?: (root: string, file: string) => string;
   /** Only writes a report file: its content, read from the temp report dir,
    * replaces stdout for `count`. */
   reportFile?: string;
@@ -477,7 +497,8 @@ const SPECS: readonly CheckSpec[] = [
   {
     name: "markdownlint-cli2",
     measures: {
-      counts: "markdown rule violations, the number in markdownlint's own `Summary: N issues` line",
+      counts:
+        "markdown rule violations, the number in markdownlint's own `Summary: N issues` (or `N error(s)`) line",
     },
     language: "docs",
     runsAt: "pre-commit",
@@ -964,7 +985,6 @@ const SPECS: readonly CheckSpec[] = [
     measures: {
       counts:
         "whitespace and style drift, one per reported FileChange, or one per drifted file that reports none",
-      overlaps: ["csharpier"],
     },
     language: "dotnet",
     runsAt: "pre-commit",
@@ -974,31 +994,24 @@ const SPECS: readonly CheckSpec[] = [
     fileSet: "changed",
     configFiles: DOTNET_PROJECT,
     reportFile: "format-report.json",
-    args: (files, _root, reportDir) => [
+    // One run per owning project: dotnet format loads a project and its analyzers once per run, so
+    // the solution at the root costs four times a project and a file list costs nothing more. The
+    // restore is the build's; a format that restored would write obj/ on both sides.
+    groupBy: nearestProject,
+    // One project load is 24 s quiet and 56 s at a load of 6, and the two sides load at once; the
+    // limit is a last line of defence, never the budget.
+    timeoutMs: 300_000,
+    args: (files, root, reportDir) => [
       "format",
+      nearestProject(root, files[0] ?? ""),
       "--verify-no-changes",
+      "--no-restore",
       "--include",
       ...files,
       "--report",
       reportDirOf(reportDir),
     ],
     count: countDotnetFormatReport,
-  },
-  {
-    name: "csharpier",
-    measures: {
-      counts: "files csharpier would reformat, one per file",
-      overlaps: ["dotnet-format"],
-    },
-    language: "dotnet",
-    runsAt: "pre-commit",
-    extensions: [".cs"],
-    binary: "csharpier",
-    install: dotnetTool("csharpier"),
-    fileSet: "changed",
-    configFiles: [".csharpierrc", ".csharpierrc.*", ".csharpierignore", "**/.editorconfig"],
-    args: (files) => ["check", ...files],
-    count: countCsharpier,
   },
   {
     name: "dotnet-vulnerable",

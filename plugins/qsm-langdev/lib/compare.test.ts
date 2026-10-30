@@ -396,21 +396,34 @@ describe("file sets: whole project and changes", () => {
       "a.ts": "1\n",
       "src/b.ts": "2\n",
     });
+    // ignored.ts and new.ts are untracked, so neither side is handed them
     write(root, { "a.ts": "1 more\n", "ignored.ts": "x\n", "new.ts": "n\n" });
     const { spec, handed } = recorder("given");
 
     const { sets } = await runWith(root, head, spec);
 
     expect(handed.toSorted(byJoined)).toEqual([
-      ["a.ts", "new.ts", "src/b.ts"],
+      ["a.ts", "src/b.ts"],
       ["a.ts", "src/b.ts"],
     ]);
-    expect(describeSets(sets)).toContain("given: 4 files");
+    expect(describeSets(sets)).toContain("given: 3 files");
   });
 
-  test("an untracked file is in changed", async () => {
+  test("an untracked file is not measured: not in changed, not handed to a checker", async () => {
     const { root, head } = repoWith({ "a.ts": "1\n" });
     write(root, { "fresh.ts": "new\n" });
+    const { spec, handed } = recorder("changed");
+
+    const { changed } = await runWith(root, head, spec);
+
+    expect(changed).toEqual([]);
+    expect(handed).toEqual([]);
+  });
+
+  test("a file added to the index is in changed", async () => {
+    const { root, head } = repoWith({ "a.ts": "1\n" });
+    write(root, { "fresh.ts": "new\n" });
+    stage(root);
     const { spec, handed } = recorder("changed");
 
     const { changed } = await runWith(root, head, spec);

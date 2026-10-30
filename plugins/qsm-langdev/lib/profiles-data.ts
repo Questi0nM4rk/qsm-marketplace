@@ -34,7 +34,7 @@ export const PROFILE_DATA: Readonly<
       {
         file: ".editorconfig",
         content:
-          "# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns this\n# file. One source of formatting for .cs, read by both csharpier and\n# `dotnet format`, so the two cannot disagree. The style-severity line is the\n# no-warnings floor: without it `dotnet format` does not report IDE style\n# rules at all. Only [*.cs] is touched; repo-wide editor settings stay the\n# project's. A rule worth suppressing at a call site was the wrong rule to\n# enable: turn it off here with the reason, never with a pragma in the code.\nroot = false\n\n[*.cs]\nindent_style = space\nindent_size = 4\nend_of_line = lf\ncharset = utf-8\ninsert_final_newline = true\nmax_line_length = 100\ndotnet_analyzer_diagnostic.category-Style.severity = error\n",
+          "# qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns this\n# file. One source of formatting and style for .cs, read by\n# `dotnet format`. The style-severity line is the\n# no-warnings floor: without it `dotnet format` does not report IDE style\n# rules at all. Only [*.cs] is touched; repo-wide editor settings stay the\n# project's. A rule worth suppressing at a call site was the wrong rule to\n# enable: turn it off here with the reason, never with a pragma in the code.\nroot = false\n\n[*.cs]\nindent_style = space\nindent_size = 4\nend_of_line = lf\ncharset = utf-8\ninsert_final_newline = true\nmax_line_length = 100\ndotnet_analyzer_diagnostic.category-Style.severity = error\n",
       },
     ],
     py: [
@@ -149,7 +149,7 @@ export const PROFILE_DATA: Readonly<
       {
         file: ".editorconfig",
         content:
-          "# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this\n# file. One source of formatting for .cs, read by both csharpier and\n# `dotnet format`, so the two cannot disagree. The style-severity line is the\n# no-warnings floor: without it `dotnet format` does not report IDE style\n# rules at all. Only [*.cs] is touched; repo-wide editor settings stay the\n# project's. A rule worth suppressing at a call site was the wrong rule to\n# enable: turn it off here with the reason, never with a pragma in the code.\nroot = false\n\n[*.cs]\nindent_style = space\nindent_size = 4\nend_of_line = lf\ncharset = utf-8\ninsert_final_newline = true\nmax_line_length = 100\ndotnet_analyzer_diagnostic.category-Style.severity = error\n",
+          "# qsm-langdev profile: strict. Seeded by `qsm-langdev init`; the repo owns this\n# file. One source of formatting and style for .cs, read by\n# `dotnet format`. The style-severity line is the\n# no-warnings floor: without it `dotnet format` does not report IDE style\n# rules at all. Only [*.cs] is touched; repo-wide editor settings stay the\n# project's. A rule worth suppressing at a call site was the wrong rule to\n# enable: turn it off here with the reason, never with a pragma in the code.\nroot = false\n\n[*.cs]\nindent_style = space\nindent_size = 4\nend_of_line = lf\ncharset = utf-8\ninsert_final_newline = true\nmax_line_length = 100\ndotnet_analyzer_diagnostic.category-Style.severity = error\n",
       },
     ],
     py: [
@@ -197,7 +197,7 @@ export const PROFILE_DATA: Readonly<
       {
         file: ".jscpd.json",
         content:
-          '{\n  "minTokens": 30,\n  "minLines": 4,\n  "mode": "mild",\n  "format": ["typescript", "tsx", "javascript", "jsx"],\n  "ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "**/*.min.js", "**/profiles/**"]\n}\n',
+          '{\n  "minTokens": 50,\n  "minLines": 5,\n  "mode": "mild",\n  "format": ["typescript", "tsx", "javascript", "jsx"],\n  "ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "**/*.min.js", "**/profiles/**"]\n}\n',
       },
       {
         file: ".oxlintrc.json",

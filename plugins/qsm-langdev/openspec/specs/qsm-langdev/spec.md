@@ -10,9 +10,11 @@ structural checker, behind a single CLI.
 ### Requirement: A check compares a reference tree against the shipped tree
 
 `check` SHALL score every selected checker against two sides: the reference,
-which is the last commit (`HEAD`), and the shipped side, which is the working
-tree with everything not yet committed (staged, unstaged, and untracked files
-git does not ignore). Each side SHALL be scored in a scratch tree that holds
+which is the last commit (`HEAD`), and the shipped side, which is every tracked
+file as the working tree holds it (a staged change, an unstaged change, and a
+file added to the index). An untracked file is not measured: a file git does
+not track is not on its way into a commit, so a finding in it decides nothing
+about the commit under the gate. Each side SHALL be scored in a scratch tree that holds
 the inputs the repository's own commands read, so a checker measures there
 what it measures in the live checkout: every dependency directory the live
 checkout installed (`node_modules`, `.venv`) at any depth, and every ignored
@@ -40,6 +42,13 @@ content, against a stored result").
   reference tree
 - **THEN** `check` SHALL fail, name the checker, both totals, and the new
   finding's location
+
+#### Scenario: An untracked file is not measured
+
+- **WHEN** the working tree holds a file git does not track, with a finding the
+  reference tree does not have
+- **THEN** `check` SHALL pass, hand the file to no checker, and list it in no
+  file set; once the file is added to the index it is measured like any change
 
 #### Scenario: A side reads the same inputs as the live checkout
 
@@ -801,9 +810,11 @@ Before the comparison the hook, and the pre-commit gate over staged files with n
 SHALL run each static fixer that covers the file and re-stage what the gate fixed. The fixers are
 the safe fix modes of the checkers langdev runs (`rumdl` and `markdownlint-cli2 --fix`,
 `oxlint --fix` and `oxfmt`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
-`rustfmt`, `csharpier format`, `dotnet format`), never an unsafe or code-deleting fix; a fixer whose
-binary is missing is skipped. When the pre-commit gate blocks, it names each staged file it skipped
-for unstaged changes.
+`rustfmt`), never an unsafe or code-deleting fix; a fixer whose binary is missing is skipped.
+`dotnet format` is no fixer: it loads a project and its analyzers on every run, 24 s measured, which
+no edit can carry, so `dotnet-format` only reports, once per owning project (`groupBy`), scoped to
+the changed files and with `--no-restore`, and the person runs the fix. When the pre-commit gate
+blocks, it names each staged file it skipped for unstaged changes.
 
 #### Scenario: A written file gained a finding
 

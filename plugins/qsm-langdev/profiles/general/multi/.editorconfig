@@ -1,6 +1,6 @@
 # qsm-langdev profile: general. Seeded by `qsm-langdev init`; the repo owns this
-# file. One source of formatting for .cs, read by both csharpier and
-# `dotnet format`, so the two cannot disagree. The style-severity line is the
+# file. One source of formatting and style for .cs, read by
+# `dotnet format`. The style-severity line is the
 # no-warnings floor: without it `dotnet format` does not report IDE style
 # rules at all. Only [*.cs] is touched; repo-wide editor settings stay the
 # project's. A rule worth suppressing at a call site was the wrong rule to

@@ -40,8 +40,6 @@ const FIXERS: readonly Fixer[] = [
   tool("zsh", /\.zsh$/, ["shfmt", "-ln=zsh", ...SHFMT_STYLE, "-w"]),
   tool("fish", /\.fish$/, ["fish_indent", "-w"]),
   tool("rust", /\.rs$/, ["rustfmt", "--edition", String(RUSTFMT.edition)]),
-  tool("dotnet", /\.cs$/, ["csharpier", "format"]),
-  tool("dotnet", /\.cs$/, ["dotnet", "format", "--include"]),
 ];
 
 /** Runs every fixer over the files it covers, for the languages the repository gates; returns the

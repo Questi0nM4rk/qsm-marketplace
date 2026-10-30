@@ -1,7 +1,14 @@
 {
-  "minTokens": 30,
-  "minLines": 4,
+  "minTokens": 50,
+  "minLines": 5,
   "mode": "mild",
   "format": ["typescript", "tsx", "javascript", "jsx"],
-  "ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "**/*.min.js", "**/profiles/**"]
+  "ignore": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "**/*.min.js",
+    "**/profiles/**"
+  ]
 }
