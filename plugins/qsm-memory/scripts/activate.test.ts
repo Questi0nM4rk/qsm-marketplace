@@ -115,6 +115,23 @@ describe("the harness memory choice", () => {
     expect((await activate(context(claudeHome, "claude"))).status).toBe("already");
   });
 
+  test("status: activated under claude, or under qsm with both keys; absent otherwise", async () => {
+    const claude = sandbox('{ "cleanupPeriodDays": 30 }');
+    expect(activation.status(context(claude.claudeHome).env)).toBe("absent");
+    await activate(context(claude.claudeHome, "claude"));
+    expect(activation.status(context(claude.claudeHome).env)).toBe("activated");
+
+    const qsm = sandbox();
+    await activate(context(qsm.claudeHome));
+    expect(activation.status(context(qsm.claudeHome).env)).toBe("activated");
+    writeFileSync(qsm.settings, '{ "autoMemoryEnabled": false, "cleanupPeriodDays": 30 }');
+    expect(activation.status(context(qsm.claudeHome).env)).toBe("absent");
+
+    // the keys alone, with no recorded choice, are not an activation
+    const keysOnly = sandbox('{ "autoMemoryEnabled": false, "cleanupPeriodDays": 36500 }');
+    expect(activation.status(context(keysOnly.claudeHome).env)).toBe("absent");
+  });
+
   test("skip is no longer a choice", async () => {
     const { claudeHome, settings } = sandbox();
 

@@ -129,9 +129,13 @@ export function harnessMemoryStep(ctx: ActivationContext): Step {
 
 export const activation: Activation = {
   status: (env) => {
+    const { retention } = recorded(env);
+    if (retention === "claude") {
+      return "activated";
+    }
     const path = claudeSettingsPath(env);
     const existing = existsSync(path) ? readFileSync(path, "utf8") : null;
-    return withHarnessMemoryOff(existing) === null ? "activated" : "absent";
+    return retention === "qsm" && withHarnessMemoryOff(existing) === null ? "activated" : "absent";
   },
   options: [
     {
