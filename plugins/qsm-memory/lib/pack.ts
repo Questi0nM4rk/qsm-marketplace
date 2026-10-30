@@ -15,10 +15,11 @@ import {
   statSync,
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { isAlive } from "../../../lib/detach.ts";
 import { isRecord, messageOf, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
-import { listTranscripts, projectsDir, unsavedTranscripts } from "./save.ts";
+import { listTranscripts, mtimeOf, projectsDir, unsavedTranscripts } from "./save.ts";
 import { type Env, getState, resolveDbPath, setState } from "./store.ts";
 import { sessionIdOf } from "./transcript.ts";
 
@@ -76,19 +77,6 @@ export function notDueBecause(state: PackState, now: Date): string | null {
   return state.lastPackAt === null ? null : waits(state.lastPackAt, `the last pack was on`);
 }
 
-const quoted = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
-
-/** The restore command of a packed session: exactly the `entries` archived for it, quoted for a
- * shell. The Claude home is where the transcript lived: three levels above it. */
-export function restoreCommand(
-  archive: string,
-  transcriptPath: string,
-  entries: readonly string[],
-): string {
-  const home = dirname(dirname(dirname(transcriptPath)));
-  return `tar --zstd -xmf ${quoted(archive)} -C ${quoted(home)} ${entries.map(quoted).join(" ")}`;
-}
-
 interface Taken {
   readonly id: string;
   readonly jsonl: string;
@@ -130,15 +118,6 @@ function takeSession(home: string, jsonl: string): Taken {
   };
 }
 
-function isRunning(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
-  }
-}
-
 /** The ids of the sessions running now: those a `sessions/<pid>.json` names whose pid is alive.
  * An unreadable file fails the run, because moving a live transcript is the one unsafe outcome. */
 function liveSessionIds(home: string): Set<string> {
@@ -166,7 +145,7 @@ function liveSessionIds(home: string): Set<string> {
         next: "nothing was moved; the shape of Claude Code's sessions/ files changed",
       });
     }
-    if (isRunning(record.pid)) {
+    if (isAlive(record.pid)) {
       live.add(record.sessionId);
     }
   }
@@ -262,7 +241,10 @@ function idleTranscripts(db: Database, env: Env, now: Date): string[] {
   );
   return listTranscripts(projects)
     .filter((path) => !unsaved.has(path) && !live.has(sessionIdOf(path)))
-    .filter((path) => ageOf(statSync(path).mtimeMs, days) >= IDLE_DAYS)
+    .filter((path) => {
+      const mtime = mtimeOf(path);
+      return mtime !== null && ageOf(mtime, days) >= IDLE_DAYS;
+    })
     .toSorted();
 }
 
@@ -318,17 +300,6 @@ export async function pack(
   return removeOriginals(db, home, taken, target, now);
 }
 
-/** The sessions running now; when the sessions/ files cannot be read every taken session counts as
- * running, because the archive is renamed already and a live transcript must not be removed. */
-function liveNow(home: string, taken: readonly Taken[], warnings: string[]): Set<string> {
-  try {
-    return liveSessionIds(home);
-  } catch (error) {
-    warnings.push(`${messageOf(error)}; every original left in place`);
-    return new Set(taken.map((t) => t.id));
-  }
-}
-
 /** After the archive is renamed: remove each session's originals unless a file changed since it was
  * listed or the session became live, and record it as packed the moment its transcript is gone, so
  * a later failure still lets `show --full` name the archive. A session left in place is named. */
@@ -340,7 +311,14 @@ function removeOriginals(
   now: Date,
 ): Outcome {
   const warnings: string[] = [];
-  const live = liveNow(home, taken, warnings);
+  // The archive is renamed already: sessions/ that cannot be read keeps every original.
+  let live: Set<string>;
+  try {
+    live = liveSessionIds(home);
+  } catch (error) {
+    warnings.push(`${messageOf(error)}; every original left in place`);
+    live = new Set(taken.map((t) => t.id));
+  }
   const record = db.query(
     "INSERT OR REPLACE INTO packed (session_id, archive, packed_at, entries) VALUES (?, ?, ?, ?)",
   );

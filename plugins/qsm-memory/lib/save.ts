@@ -163,7 +163,7 @@ export function listTranscripts(projects: string): string[] {
 
 /** A transcript's mtime, or null when the file is gone: Claude Code deletes old transcripts at
  * its own start, the moment catch-up runs. */
-function mtimeOf(path: string): number | null {
+export function mtimeOf(path: string): number | null {
   try {
     return statSync(path).mtimeMs;
   } catch (error) {

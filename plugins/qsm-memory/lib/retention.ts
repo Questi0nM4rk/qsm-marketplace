@@ -1,9 +1,20 @@
 // What the person typed is never deleted by a tool: Claude Code removes a transcript after
 // `cleanupPeriodDays` (its default is 30), so the one value qsm ever writes there is "never", and
 // anything lower is reported as a deletion wherever settings are read.
+import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { fail, isRecord, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
 import { claudeSettingsPath, type Env } from "../../../lib/paths.ts";
+import { getState } from "./store.ts";
+
+export const MEMORY_CHOICES = ["qsm", "claude"] as const;
+export type MemoryChoice = (typeof MEMORY_CHOICES)[number];
+
+/** The choice recorded in the archive, or null when none is (or the value is not a choice). */
+export function recordedChoice(db: Database): MemoryChoice | null {
+  const value = getState(db, "retention");
+  return MEMORY_CHOICES.find((c) => c === value) ?? null;
+}
 
 /** A hundred years: Claude Code has no "never", and a transcript is the person's. */
 export const KEEP_DAYS = 36500;
@@ -33,7 +44,10 @@ export function keepsTranscripts(days: number | null): boolean {
 /** The retention of the Claude home as an outcome, given the recorded choice: ok when nothing is
  * deleted, failed naming the file, the value and the fix otherwise. Under the choice `claude` a
  * deletion is the person's and ok. A settings file that does not parse is failed under any choice. */
-export function retentionCheck(env: Env, choice: string | null): Outcome<{ days: number | null }> {
+export function retentionCheck(
+  env: Env,
+  choice: MemoryChoice | null,
+): Outcome<{ days: number | null }> {
   const path = claudeSettingsPath(env);
   let days: number | null;
   try {

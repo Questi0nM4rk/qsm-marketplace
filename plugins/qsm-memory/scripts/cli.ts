@@ -24,8 +24,8 @@ import { pack } from "../lib/pack.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
 import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
-import { retentionCheck } from "../lib/retention.ts";
-import { getState, openArchive, resolveDbPath } from "../lib/store.ts";
+import { recordedChoice, retentionCheck } from "../lib/retention.ts";
+import { openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
@@ -169,7 +169,7 @@ const runDoctor: Handler = () => {
   const path = resolveDbPath(env());
   try {
     const db = openArchive(env());
-    const retention = retentionCheck(env(), getState(db, "retention"));
+    const retention = retentionCheck(env(), recordedChoice(db));
     const r = {
       path,
       sessions: count(db, "sessions"),

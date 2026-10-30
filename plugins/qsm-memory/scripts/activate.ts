@@ -11,13 +11,18 @@ import {
   type Step,
 } from "../../../lib/install-contract.ts";
 import { claudeSettingsPath } from "../../../lib/paths.ts";
+import type { Database } from "bun:sqlite";
 import { getState, openArchive, resolveDbPath, setState } from "../lib/store.ts";
-import { KEEP_DAYS, keepsTranscripts, retentionDays } from "../lib/retention.ts";
+import {
+  KEEP_DAYS,
+  keepsTranscripts,
+  MEMORY_CHOICES,
+  type MemoryChoice,
+  recordedChoice,
+  retentionDays,
+} from "../lib/retention.ts";
 
 const NAME = "harness-memory";
-
-const MEMORY_CHOICES = ["qsm", "claude"] as const;
-export type MemoryChoice = (typeof MEMORY_CHOICES)[number];
 
 /** The settings object in `text`; JSON that is not an object is as unusable as JSON that does not
  * parse. */
@@ -49,16 +54,13 @@ export function withHarnessMemoryOff(existing: string | null): string | null {
 
 const KEYS = `autoMemoryEnabled: false, cleanupPeriodDays: ${KEEP_DAYS}`;
 
-/** The recorded choice and activation date; nothing is recorded while no archive exists. */
-function recorded(env: ActivationContext["env"]) {
-  if (!existsSync(resolveDbPath(env))) {
-    return { retention: null, activatedAt: null };
-  }
-  const db = openArchive(env);
-  return { retention: getState(db, "retention"), activatedAt: getState(db, "activated_at") };
+/** The archive when it exists, else null: reading the choice must not create it. */
+function existingArchive(env: ActivationContext["env"]): Database | null {
+  return existsSync(resolveDbPath(env)) ? openArchive(env) : null;
 }
 
-/** The settings.json text qsm writes, or null when it needs no write or the choice is claude. */
+/** The settings.json text qsm writes, or null when it needs no write or the choice is claude.
+ * Throws when settings.json does not parse. */
 function settingsToWrite(choice: MemoryChoice, path: string): string | null {
   return choice === "qsm"
     ? withHarnessMemoryOff(existsSync(path) ? readFileSync(path, "utf8") : null)
@@ -66,34 +68,29 @@ function settingsToWrite(choice: MemoryChoice, path: string): string | null {
 }
 
 /** Records the choice, and under qsm the day of activation unless one is recorded. */
-function recordChoice(env: ActivationContext["env"], choice: MemoryChoice): void {
-  const db = openArchive(env);
+function recordChoice(db: Database, choice: MemoryChoice): void {
   setState(db, "retention", choice);
   if (choice === "qsm" && getState(db, "activated_at") === null) {
     setState(db, "activated_at", new Date().toISOString());
   }
 }
 
-interface Plan {
-  /** the settings.json text to write, or null for none */
-  readonly next: string | null;
-  /** whether the choice is yet to be recorded */
-  readonly record: boolean;
-  /** what the step writes, in words */
-  readonly what: string;
+/** Whether the choice, or under qsm the day of activation, is yet to be recorded. */
+function choiceIsNew(db: Database | null, choice: MemoryChoice): boolean {
+  return (
+    db === null ||
+    recordedChoice(db) !== choice ||
+    (choice === "qsm" && getState(db, "activated_at") === null)
+  );
 }
 
-/** What the choice would write: throws when settings.json does not parse. */
-function planWrite(ctx: ActivationContext, choice: MemoryChoice, path: string): Plan {
-  const next = settingsToWrite(choice, path);
-  const before = recorded(ctx.env);
-  const record = before.retention !== choice || (choice === "qsm" && before.activatedAt === null);
-  const what = [
-    ...(next === null ? [] : [`${KEYS} into ${path}`]),
+/** What a step writes, in words. */
+function describeWrite(choice: MemoryChoice, path: string, settings: boolean, record: boolean) {
+  return [
+    ...(settings ? [`${KEYS} into ${path}`] : []),
     ...(record ? [`retention ${choice} into the archive`] : []),
     ...(choice === "claude" ? [`${path} left alone`] : []),
   ].join("; ");
-  return { next, record, what };
 }
 
 /** The one write, taken or not taken: the choice into the archive, and under qsm the settings.
@@ -105,31 +102,35 @@ export function harnessMemoryStep(ctx: ActivationContext): Step {
   if (choice === undefined) {
     return { name: NAME, status: "error", detail: `unknown memory choice '${ctx.choices.memory}'` };
   }
-  let plan: Plan;
+  let next: string | null;
   try {
-    plan = planWrite(ctx, choice, path);
+    next = settingsToWrite(choice, path);
   } catch {
     return { name: NAME, status: "error", detail: `${path} does not parse as JSON; fix it first` };
   }
-  if (plan.next === null && !plan.record) {
+  const db = ctx.dryRun ? existingArchive(ctx.env) : openArchive(ctx.env);
+  const record = choiceIsNew(db, choice);
+  if (next === null && !record) {
     return { name: NAME, status: "already", detail: `${KEYS} already set in ${path}` };
   }
-  if (ctx.dryRun) {
-    return { name: NAME, status: "skipped", detail: `would write ${plan.what}` };
+  const what = describeWrite(choice, path, next !== null, record);
+  if (ctx.dryRun || db === null) {
+    return { name: NAME, status: "skipped", detail: `would write ${what}` };
   }
-  if (plan.next !== null) {
+  if (next !== null) {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, plan.next);
+    writeFileSync(path, next);
   }
-  if (plan.record) {
-    recordChoice(ctx.env, choice);
+  if (record) {
+    recordChoice(db, choice);
   }
-  return { name: NAME, status: "installed", detail: `wrote ${plan.what}` };
+  return { name: NAME, status: "installed", detail: `wrote ${what}` };
 }
 
 export const activation: Activation = {
   status: (env) => {
-    const { retention } = recorded(env);
+    const db = existingArchive(env);
+    const retention = db === null ? null : recordedChoice(db);
     if (retention === "claude") {
       return "activated";
     }

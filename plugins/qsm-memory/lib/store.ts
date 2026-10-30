@@ -195,6 +195,27 @@ export function setState(db: Database, key: string, value: string | null): void 
   db.query("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)").run(key, value);
 }
 
+/** The archive a session was packed into and the entries archived for it, or null when it was not
+ * packed. */
+export function packedEntry(
+  db: Database,
+  sessionId: string,
+): { archive: string; entries: string[] } | null {
+  const row = db
+    .query<{ archive: string; entries: string }, [string]>(
+      "SELECT archive, entries FROM packed WHERE session_id = ?",
+    )
+    .get(sessionId);
+  if (row === null) {
+    return null;
+  }
+  const entries: unknown = JSON.parse(row.entries);
+  if (!Array.isArray(entries) || !entries.every((e) => typeof e === "string")) {
+    throw new Error(`the packed entries of ${sessionId} are not a list of paths`);
+  }
+  return { archive: row.archive, entries };
+}
+
 /** The archive for this environment. */
 export function openArchive(env: Env): Database {
   return openDb(resolveDbPath(env));
