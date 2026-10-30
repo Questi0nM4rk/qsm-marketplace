@@ -47,9 +47,9 @@
 
 ## 4. Proof
 
-- [ ] 4.1 The gates: `bun run validate`, `lint`, `typecheck`, `bun test ./ ./.gates`,
+- [x] 4.1 The gates: `bun run validate`, `lint`, `typecheck`, `bun test ./ ./.gates`,
   `test:hooks`. Blocks: 1 to 3.
-- [ ] 4.2 Test it (task qsm-a0zj.1): the restore end to end on the 2.2 sandbox, `tar --zstd -xmf`
+- [x] 4.2 Test it (task qsm-a0zj.1): the restore end to end on the 2.2 sandbox, `tar --zstd -xmf`
       into the Claude home and `claude --resume <id>` opening the packed session; then, after the
       person's yes, `qsm-setup activate qsm-memory -- --memory qsm` on this machine records the
       choice and `qsm-memory pack` answers `ok` naming the grace. Blocks: 4.1.

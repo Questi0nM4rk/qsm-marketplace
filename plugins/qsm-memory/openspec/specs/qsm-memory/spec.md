@@ -625,25 +625,32 @@ transcript, and a day with one session on a break adds one.
 
 `pack` SHALL run only when all of these hold, and otherwise answer `ok` naming the first that does
 not, moving nothing: the recorded retention choice is `qsm`; 30 days have passed since
-`activated_at`; and 30 days have passed since `last_pack_at` when there is one. `last_pack_at` SHALL
-be claimed in one transaction before the run, so two runs started together move files once, and
-SHALL be set back to its earlier value when the run fails or moves nothing, so a due pack with
-nothing idle runs again at the next session start instead of waiting 30 days.
+`activated_at`; and 30 days have passed since `last_pack_at` when there is one. A run SHALL take a
+claim in the archive's `state` table in one transaction, holding its pid, so two runs started
+together move files once; a claim whose pid is not a running process is void, so a run killed by a
+shutdown never blocks the next. `last_pack_at` SHALL be written only when a run moved at least one
+session, so a failed run, or one that moved nothing, leaves the cadence as it was. A run SHALL first
+delete any `<name>.part` a killed run left in the archive directory, and a run that renamed an
+archive and then moved nothing SHALL delete that archive.
 
 A run SHALL take every idle main transcript (`projects/<dir>/<id>.jsonl` under the Claude home)
 together with its session directory (`projects/<dir>/<id>/`), except one the archive has not saved
-since its last change (the set `list --unsaved` names) and one whose session is live, that is,
-named by a `sessions/<pid>.json` under the Claude home whose pid is a running process. It SHALL
-write them to `<data dir>/transcripts/<YYYY-MM-DD>.tar.zst` (today's date, entries relative to the
-Claude home, `zstd -19`), owner-only, first as `<name>.part`; test it with `zstd -t`; list it and
-compare the entries to the files taken; rename it; and only then remove the originals and record
-each session in the archive's `packed` table with the archive path. A file whose size or mtime
-changed after it was listed SHALL stay in place and be named (`partial`). A missing `tar` or `zstd`
-SHALL fail `missing` naming the tool, and an unreadable `sessions/` entry SHALL fail `failed`
-naming the file, both before anything is moved. The outcome SHALL name how many sessions moved,
-the bytes before and after, and the archive path, and restore is
-`tar --zstd -xmf <archive> -C <claude home> <entries>`, which gives the restored files today's
-mtime so the next run does not take them again.
+since its last change (the set `list --unsaved` names) and one whose session is live, that is, named
+by a `sessions/<pid>.json` under the Claude home whose pid is a running process. It SHALL write them
+to `<data dir>/transcripts/<YYYY-MM-DD>.tar.zst` (today's date, entries relative to the Claude home,
+`zstd -19`), owner-only, first as `<name>.part`; test it with `zstd -t`; list it and compare the
+entries to the files taken; rename it; and only then remove the originals and record each session in
+the archive's `packed` table with the archive path. A file whose size or mtime changed after it was
+listed SHALL stay in place and be named (`partial`). A missing `tar` or `zstd` SHALL fail `missing`
+naming the tool before anything is moved. A `sessions/<pid>.json` that does not parse SHALL be read
+once more, because Claude Code rewrites it in place while the session runs; one that vanished is a
+session that ended; one that still does not parse SHALL fail `failed` naming the file, before
+anything is moved when it is the first read and leaving every original in place when it is the read
+just before removal. Each session's `packed` row SHALL be written before its transcript is removed,
+so a removed transcript is always named. The outcome SHALL name how many sessions moved, the bytes
+before and after, and the archive path, and restore is
+`tar --zstd -xmf <archive> -C <claude home> <entries>`, which gives the restored files today's mtime
+so the next run does not take them again.
 
 #### Scenario: a transcript idle for 7 days of use is packed and restores
 
@@ -688,7 +695,18 @@ mtime so the next run does not take them again.
 
 - **WHEN** `zstd` is not on `PATH` and a pack is due
 - **THEN** `pack` fails `missing` naming `zstd`, `projects/` is unchanged, and `last_pack_at` is
-  back to its earlier value
+  as it was
+
+#### Scenario: a pack killed mid-run does not block the next
+
+- **WHEN** a run was killed while writing its archive, leaving a claim with a dead pid and a
+  `<name>.part`
+- **THEN** the next due run deletes the `.part`, takes the claim, and packs
+
+#### Scenario: a sessions file caught mid-write is read again
+
+- **WHEN** a `sessions/<pid>.json` does not parse on the first read and parses on the second
+- **THEN** the run goes on and that session counts as live
 
 ## Libraries
 
