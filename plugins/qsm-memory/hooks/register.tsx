@@ -62,7 +62,7 @@ export function register(on: On): void {
     briefingOwed = true;
     // doctor fails when Claude Code is set to delete transcripts, and the catch below toasts it
     // every session until it is fixed: a deleted transcript never comes back.
-    await Promise.all([saveCatchUp($), $.memory.doctor()]);
+    await Promise.all([saveCatchUp($), $.memory.pack({ detach: true }), $.memory.doctor()]);
     return next(e);
   }).catch(($, e, next) => {
     failed($, "session.start", next.error);
