@@ -630,8 +630,11 @@ claim in the archive's `state` table in one transaction, holding its pid, so two
 together move files once; a claim whose pid is not a running process is void, so a run killed by a
 shutdown never blocks the next. `last_pack_at` SHALL be written only when a run moved at least one
 session, so a failed run, or one that moved nothing, leaves the cadence as it was. A run SHALL first
-delete any `<name>.part` a killed run left in the archive directory, and a run that renamed an
-archive and then moved nothing SHALL delete that archive.
+delete any `<name>.part` a killed run left in the archive directory, and any archive no `packed`
+row names, because a row is written before its transcript is removed, so no transcript left
+`projects/` for such an archive; a run that renamed an archive and then moved nothing SHALL delete
+that archive. When removing a transcript fails after its row was written, the row SHALL be put back
+as it was, so no row ever names an archive that does not hold the session or does not exist.
 
 A run SHALL take every idle main transcript (`projects/<dir>/<id>.jsonl` under the Claude home)
 together with its session directory (`projects/<dir>/<id>/`), except one the archive has not saved
