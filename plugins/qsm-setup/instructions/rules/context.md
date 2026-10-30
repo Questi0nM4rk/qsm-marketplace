@@ -103,9 +103,13 @@ writes its whole context into the cache at full price, while an agent that is co
 cache back cheaply. So give one agent the related work together, and continue an agent that already
 holds the context instead of starting another: a teammate in its own tmux pane that stays idle
 between tasks keeps its context, takes the next task by message, and reads its cache back instead of
-writing a new one, as long as it is warm. Measured: a subagent continued 23 minutes after its last
-turn wrote its whole 92k-token context again and read none, so continue one within minutes; how long
-a teammate's cache lasts is not measured yet. The person said: "prefer less agents, that have more
+writing a new one, as long as it is warm. A subagent's and a teammate's cache lives five minutes,
+even on a subscription (Claude Code docs, prompt caching), and every use renews it: one continued
+after 23 idle minutes wrote its whole 92k-token context again. Past five minutes an idle agent still
+keeps its context, so it reads no file twice, but pays the write again. The one-hour cache
+(`subagentPromptCacheTtl`) is not worth it here: a one-hour write costs 2x the input price against
+1.25x, and only 3% of this marketplace's subagent cache writes, measured, followed a gap over five
+minutes. The person said: "prefer less agents, that have more
 work, so that we dont burn the cache".
 
 The main agent makes a subagent's worktree before dispatch, reviews the branch there (the
