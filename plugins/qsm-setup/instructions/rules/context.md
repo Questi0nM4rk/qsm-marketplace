@@ -121,11 +121,15 @@ working tree does not have; the session-end hook names every branch still ahead.
 
 ## Workflows
 
-More than three subagents for one piece of work is a Workflow, not a chain of dispatches. Find the
-work list yourself, then hand it to the workflow, and use `parallel()` only when a stage needs all
-results at once. A workflow mixes the tiers side by side, each step on the
-tier the table above gives its work: haiku by default, sonnet for a review or a step that needs
-thinking, opus for an end-to-end step. Never fable inside a workflow.
+The shape of the work decides, not the count of agents. A chain whose stages feed each other (check,
+implement, review) is a Workflow. Independent work, such as four unrelated tasks or the parallel
+agents a skill asks for, goes out as plain subagents in one message, as many as the work has. The
+person in their words: "workflow je based on the agent, if its 4 unrelated things, or if its a
+dirrect skill, than run it normally as subagents. If its a check - implement - review, than its a
+workflow." For a Workflow, find the work list yourself, then hand it to the workflow, and use
+`parallel()` only when a stage needs all results at once. A workflow mixes the tiers side by side,
+each step on the tier the table above gives its work: haiku by default, sonnet for a review or a
+step that needs thinking, opus for an end-to-end step. Never fable inside a workflow.
 
 Review and fix stages are a quarter of the build stage: one reviewer for four builders, reading
 their results together and judging the integration, the flow, and the end-to-end business
