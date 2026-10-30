@@ -14,6 +14,8 @@ cheaper steps could not read, and it is never a session to act through.
 - `qsm-web browserbox start` prints a name and a live-view address. Reuse it with `--in <name>` and
   stop it when done (`qsm-web browserbox stop <name>`), because an instance nobody stops keeps a
   browser resident. `qsm-web browserbox ls` lists what is running.
+- `qsm-web browserbox view <name>` or `takeover` opens the live view in the person's own browser,
+  password included; you never read `/run/bbox.token` or build a `?password=` address yourself.
 - `qsm-web browserbox fetch <url> [--in <name>] [--html] [--screenshot] [--settle <ms>]` opens one
   address and reports the page.
 - `qsm-web browserbox script <name> --file <steps.json>` runs steps in order and stops at the first

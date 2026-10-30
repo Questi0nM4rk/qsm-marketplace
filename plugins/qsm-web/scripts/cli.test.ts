@@ -130,7 +130,7 @@ describe("qsm-web browserbox", () => {
   test("--help lists every verb of the group", () => {
     const r = run(["browserbox", "--help"]);
     expect(r.exit).toBe(0);
-    for (const verb of ["start", "ls", "stop", "fetch", "script", "takeover"]) {
+    for (const verb of ["start", "ls", "stop", "fetch", "script", "takeover", "view"]) {
       expect(r.stdout).toContain(`  ${verb}`);
     }
   });

@@ -1,6 +1,7 @@
 // qsm-web browserbox: the last rung.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
+import { spawnDetached } from "../../../lib/detach.ts";
 import { home } from "../../../lib/paths.ts";
 import { join } from "node:path";
 import {
@@ -156,12 +157,18 @@ function openLiveView(box: Box, name: string): string {
   if (status !== 0 || token.length === 0) {
     throw new QsmError("failed", `${name} has no live-view password (exit ${status})`);
   }
-  const opened = spawnSync("xdg-open", [liveViewLink(port, token)], { stdio: "ignore" });
-  if (opened.error !== undefined || opened.status !== 0) {
+  // Detached, because a cold browser keeps xdg-open in the foreground until it exits.
+  const opened = spawnDetached(
+    "xdg-open",
+    [liveViewLink(port, token)],
+    { file: "/dev/null", append: true },
+    process.env,
+  );
+  if (!opened.ok) {
     throw new QsmError(
       "failed",
-      `could not open a browser for ${address}; the live view asks for a password, which ` +
-        `\`docker exec ${name} cat /run/bbox.token\` prints; open ${address}?password=<that> by hand`,
+      `could not open a browser for ${address} (${opened.reason}); the person can read the ` +
+        `password with: docker exec ${name} cat /run/bbox.token, and add it as ?password=`,
     );
   }
   return address;
