@@ -155,5 +155,7 @@ mise exec -- bun run test:hooks
   result is a signal to read, not a verdict.
 - One agent, one tree: an implementer works in its own worktree, and the orchestrator reviews,
   merges and deletes it, because the stop gate scores a whole tree.
-- The langdev guard blocks `--no-verify` and any `QSM_LANGDEV_ALLOW` an agent sets; the person lets
-  a measured regression pass once by typing `! QSM_LANGDEV_ALLOW="<why>" <command>` in the prompt.
+- The langdev guard blocks `--no-verify` and any `QSM_LANGDEV_ALLOW` an agent sets. A blocked commit
+  or push means fix the cause now: an agent never offers the allow in place of a fix, nor a fix
+  "later" in a task (the person: "FIX EVERYTHING NOW"). Only a regression the person decides to
+  keep passes, by typing `! QSM_LANGDEV_ALLOW="<why>" <command>` in the prompt.
