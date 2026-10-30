@@ -924,11 +924,12 @@ measured result.
 ### Requirement: Semgrep rule execution stays inside the checker deadline
 
 The common Semgrep argument builder SHALL explicitly use `--timeout 0` to avoid a separate native
-per-rule cutoff within the already bounded checker execution. The existing outer deadlines, 600
-seconds at a commit and a push alike, SHALL remain unchanged and enforced. Reaching that deadline
-SHALL report not measured and SHALL NOT store a score. The changed argv SHALL participate in the
-existing store key so entries collected under the native default are not reused in this mode. No
-rule, quality threshold, reference commit or engine-selection policy SHALL change.
+per-rule cutoff within the already bounded checker execution. The existing outer deadline, five
+minutes for any process the gate starts, at a commit and a push alike, SHALL remain unchanged and
+enforced. Reaching that deadline SHALL report not measured and SHALL NOT store a score. The changed
+argv SHALL participate in the existing store key so entries collected under the native default are
+not reused in this mode. No rule, quality threshold, reference commit or engine-selection policy
+SHALL change.
 
 #### Scenario: The rule needs more than the native default allows
 
