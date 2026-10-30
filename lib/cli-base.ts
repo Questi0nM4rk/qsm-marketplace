@@ -1,14 +1,14 @@
 // The one argument parser for every qsm binary.
 import {
   exitOf,
+  exitOfOutcome,
   fail,
-  messageOf,
+  fromThrown,
   type Outcome,
   renderJson,
   renderText,
   UsageError,
 } from "./outcome.ts";
-import { QsmError } from "./qsm-error.ts";
 import {
   type CommandArg,
   type CommandDecl,
@@ -439,7 +439,7 @@ function emit(outcome: Outcome, json: boolean, io: CliIo): number {
     io.stdout(r.stdout);
     io.stderr(r.stderr);
   }
-  return exitOf(outcome.code);
+  return exitOfOutcome(outcome);
 }
 
 export interface RunOptions {
@@ -487,10 +487,7 @@ async function callHandler(handler: Handler, call: Call): Promise<Outcome> {
   try {
     return await handler(call);
   } catch (e) {
-    if (e instanceof QsmError) {
-      return fail(e.code, e.message, e.next === undefined ? undefined : { next: e.next });
-    }
-    return fail(e instanceof UsageError ? "usage" : "failed", messageOf(e));
+    return fromThrown(e);
   }
 }
 

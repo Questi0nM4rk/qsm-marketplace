@@ -1,4 +1,5 @@
 // One outcome system for every qsm binary.
+import { QsmError } from "./qsm-error.ts";
 import { which } from "bun";
 
 export const OUTCOME_CODES = [
@@ -63,6 +64,9 @@ export interface Outcome<T = unknown> {
   readonly code: OutcomeCode;
   /** specific to this call; the table's reason is the generic line */
   readonly message?: string;
+  /** the exit of a child the verb ran: honoured only on a non-ok outcome and only when it is a
+   * signal's (128 to 255), see exitOfOutcome */
+  readonly exit?: number;
   /** never changes the exit code */
   readonly warnings?: readonly string[];
   readonly data?: T;
@@ -95,6 +99,23 @@ export function exitOf(code: OutcomeCode): number {
   return OUTCOMES[code].exit;
 }
 
+/** A signal's exit (Ctrl-C is 130): the one exit of a child that a verb ends with. The table
+ * gives 1 to 5 meanings of its own, so no other exit of a child may borrow them. */
+const SIGNAL_EXITS = { from: 128, to: 255 } as const;
+
+/** The process exit of an outcome: its own `exit` only when it is a failure and a signal's, so a
+ * failed outcome never exits 0, an ok one never exits non-zero, and no child's code reads as one
+ * of the table's; else the code's. */
+export function exitOfOutcome(outcome: Outcome): number {
+  const own = outcome.exit;
+  return outcome.code !== "ok" &&
+    own !== undefined &&
+    own >= SIGNAL_EXITS.from &&
+    own <= SIGNAL_EXITS.to
+    ? own
+    : exitOf(outcome.code);
+}
+
 export function ok<T>(data?: T, message?: string): Outcome<T> {
   return {
     code: "ok",
@@ -108,10 +129,22 @@ export function fail<T>(code: Exclude<OutcomeCode, "ok">, message: string, data?
   return { code, message, ...(data === undefined ? {} : { data }) };
 }
 
+/** The data of a thrown failure: the next step a QsmError named, or nothing. */
+export type Thrown = { readonly next: string } | undefined;
+
+/** A throw as an outcome: a QsmError keeps its code and its next step, a UsageError is usage, any
+ * other throw is failed. */
+export function fromThrown(e: unknown): Outcome<Thrown> {
+  if (e instanceof QsmError) {
+    return fail(e.code, e.message, e.next === undefined ? undefined : { next: e.next });
+  }
+  return fail(e instanceof UsageError ? "usage" : "failed", messageOf(e));
+}
+
 export function toEnvelope<T>(outcome: Outcome<T>): Envelope<T> {
   return {
     code: outcome.code,
-    exit: exitOf(outcome.code),
+    exit: exitOfOutcome(outcome),
     reason: OUTCOMES[outcome.code].reason,
     message: outcome.message ?? "",
     warnings: outcome.warnings ?? [],

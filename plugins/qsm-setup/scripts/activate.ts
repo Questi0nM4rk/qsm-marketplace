@@ -13,6 +13,7 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
+import { resultOf } from "../../../lib/install-base.ts";
 import { isRecord, messageOf } from "../../../lib/outcome.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 
@@ -433,13 +434,11 @@ export const activation: Activation = {
         ? gitAfterStep(ctx, home, written)
         : gitAfterStep(ctx, home, ctx.dryRun ? written : []);
     const steps = [before, step, after];
-    const status = steps.find((s) => s.status === "error")?.status ?? step.status;
-    return {
-      tool: "qsm-setup",
-      status,
-      detail: steps.map((s) => `${s.name}: ${s.detail}`).join("; "),
+    return resultOf(
+      "qsm-setup",
       steps,
-    };
+      steps.find((s) => s.status === "error")?.status ?? step.status,
+    );
   },
 };
 

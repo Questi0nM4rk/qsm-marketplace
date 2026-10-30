@@ -3,6 +3,7 @@
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isAlive } from "../../../lib/detach.ts";
 import { writeAtomic } from "../../../lib/fs.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 
@@ -27,16 +28,6 @@ function readJson(file: string): unknown {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
     return null;
-  }
-}
-
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (cause) {
-    // EPERM: the process is there, it is only not ours.
-    return errnoCode(cause) === "EPERM";
   }
 }
 

@@ -1,0 +1,39 @@
+{
+  "qsm": {
+    "bin": { "qsm-ccr": "scripts/cli.ts" },
+    "noun": "ccr",
+    "commands": {
+      "qsm-ccr lead": {
+        "description": "Start an interactive Claude Code on a routed model (the provider's default, or <slug> from its allowlist) whose teammates route by name; ensures the router first",
+        "args": [
+          {
+            "name": "slug",
+            "type": "string",
+            "positional": true,
+            "description": "an allowlist model slug; default: the catalog's default model"
+          }
+        ],
+        "passthrough": true,
+        "noNoun": true
+      },
+      "qsm-ccr sync": {
+        "description": "Make CCR's copy of codex's tokens and model list match codex's: refresh codex's catalog, copy the tokens, set the allowlist, reload the router only when a field changed",
+        "args": [
+          {
+            "name": "ifStale",
+            "type": "boolean",
+            "description": "do nothing when the last successful sync is under 24 hours old"
+          },
+          {
+            "name": "detach",
+            "type": "boolean",
+            "description": "run the sync in a detached qsm-ccr process and return at once; its outcome is appended to sync.log in the state directory"
+          }
+        ]
+      },
+      "qsm-ccr doctor": {
+        "description": "Report every seam (tools, CCR profiles and providers, user settings, teammate command, codex config, tokens, allowlist drift, last sync, daemon) without starting or writing anything"
+      }
+    }
+  }
+}

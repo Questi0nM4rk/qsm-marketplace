@@ -1,0 +1,7 @@
+{
+  "name": "qsm-ccr",
+  "description": "Another provider's model (OpenAI Codex through the ChatGPT login today) as a tmux teammate or a lead inside Claude Code, through a local claude-code-router, chosen by the teammate's name, while every Claude session stays on the subscription and no Claude traffic passes through the router.",
+  "types": "./types/index.d.ts",
+  "keywords": ["router", "ccr", "codex", "teammate", "provider", "openai"],
+  "author": { "name": "qsm" }
+}

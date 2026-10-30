@@ -207,15 +207,15 @@ const scrub: Handler = async (call) => {
   }
   const log = join(stateDir(process.env), "secrets-scrub.log");
   mkdirSync(dirname(log), { recursive: true, mode: 0o700 });
-  const failure = spawnDetached(
+  const started = spawnDetached(
     "qsm-secrets",
     ["scrub", target],
     { file: log, append: true },
     process.env,
   );
-  return failure === null
+  return started.ok
     ? ok({ started: true, log }, `started the scrub in the background; its outcome goes to ${log}`)
-    : fail("missing", failure);
+    : fail("missing", started.reason);
 };
 
 /** The Bash command on stdin, refused with its code and the verb to use instead, or allowed. */

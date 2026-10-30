@@ -68,10 +68,27 @@ export function dataDir(env: Env): string {
   return env.XDG_DATA_HOME ?? join(home(env), ".local", "share");
 }
 
+/** The XDG state home: `XDG_STATE_HOME`, else `~/.local/state`. */
+export function stateHome(env: Env): string {
+  return env.XDG_STATE_HOME ?? join(home(env), ".local", "state");
+}
+
 /** Where qsm keeps machine state; `QSM_SETUP_STATE_DIR` overrides. */
 export function stateDir(env: Env): string {
-  const base = env.XDG_STATE_HOME ?? join(home(env), ".local", "state");
-  return env.QSM_SETUP_STATE_DIR ?? join(base, "qsm");
+  return env.QSM_SETUP_STATE_DIR ?? join(stateHome(env), "qsm");
+}
+
+/** `env` with HOME at `dir` and `CLAUDE_CONFIG_DIR` dropped, so every path derived from them
+ * lands under `dir`: a process that must not touch the person's homes starts from this. */
+export function withHomeAt(env: Env, dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined && key !== "CLAUDE_CONFIG_DIR") {
+      out[key] = value;
+    }
+  }
+  out.HOME = dir;
+  return out;
 }
 
 /** What the bin farm last compiled: each binary's plugin and hash. */

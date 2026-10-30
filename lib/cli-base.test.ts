@@ -15,8 +15,8 @@ import {
 } from "./cli-base.ts";
 import { grouped, manifest } from "./fixtures/cli-fixture.ts";
 import { runBin } from "./fixtures/cli.ts";
-import { isRecord, ok } from "./outcome.ts";
-import { parseManifest } from "./qsm-manifest.ts";
+import { fail, isRecord, ok } from "./outcome.ts";
+import { parseManifest, type QsmManifest } from "./qsm-manifest.ts";
 
 const FIXTURE = resolve(import.meta.dir, "fixtures/cli-fixture.ts");
 
@@ -344,5 +344,40 @@ describe("multi-word verbs", () => {
     expect(help).toContain("decode  decode TOON");
     expect(help).not.toContain("count");
     expect(renderHelp(grouped, "qsm-g")).toContain("gh pr submit-review");
+  });
+});
+
+describe("an outcome's exit override", () => {
+  const passthrough: QsmManifest = {
+    qsm: {
+      bin: { "qsm-x": "x.ts" },
+      noun: "x",
+      commands: { "qsm-x pass": { description: "end like the child did" } },
+    },
+  };
+  const exitOf = (outcome: ReturnType<typeof ok>) =>
+    runCli(
+      passthrough,
+      "qsm-x",
+      { pass: () => outcome },
+      {
+        argv: ["pass"],
+        io: { stdout: () => {}, stderr: () => {} },
+      },
+    );
+
+  test("the process exits with the outcome's own exit, not its code's", async () => {
+    expect(await exitOf({ ...fail("failed", "claude exited 130"), exit: 130 })).toBe(130);
+  });
+
+  test("an outcome without one exits as its code says", async () => {
+    expect(await exitOf(fail("failed", "x"))).toBe(1);
+    expect(await exitOf(ok())).toBe(0);
+  });
+
+  test("an own exit never turns a failure into exit 0 or a success into a failure", async () => {
+    expect(await exitOf({ ...fail("failed", "x"), exit: 0 })).toBe(1);
+    expect(await exitOf({ ...fail("failed", "x"), exit: 4 })).toBe(1);
+    expect(await exitOf({ ...ok(), exit: 1 })).toBe(0);
   });
 });

@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { QsmError } from "./qsm-error.ts";
 import {
   checkTools,
   doctorVerdict,
   exitOf,
+  exitOfOutcome,
   fail,
+  fromThrown,
   OUTCOME_CODES,
   OUTCOMES,
   ok,
@@ -35,6 +38,39 @@ describe("the outcome table", () => {
     expect(exitOf("ok")).toBe(0);
     expect(exitOf("worse")).toBe(3);
     expect(exitOf("partial")).toBe(0);
+  });
+});
+
+describe("an outcome's own exit", () => {
+  test("a failed outcome may end the process as its child did", () => {
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 130 })).toBe(130);
+    expect(toEnvelope({ ...fail("failed", "x"), exit: 130 }).exit).toBe(130);
+  });
+
+  test("only a signal's exit is honoured: a child's 1 to 127 never borrows the table's codes", () => {
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 4 })).toBe(exitOf("failed"));
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 127 })).toBe(exitOf("failed"));
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 128 })).toBe(128);
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 255 })).toBe(255);
+    expect(exitOfOutcome({ ...fail("failed", "x"), exit: 256 })).toBe(exitOf("failed"));
+  });
+
+  test("it can never make a failure exit 0 or a success exit non-zero", () => {
+    expect(exitOfOutcome({ ...fail("missing", "x"), exit: 0 })).toBe(exitOf("missing"));
+    expect(toEnvelope({ ...fail("missing", "x"), exit: 0 }).exit).toBe(exitOf("missing"));
+    expect(exitOfOutcome({ ...ok(), exit: 1 })).toBe(0);
+    expect(toEnvelope({ ...ok(), exit: 1 }).exit).toBe(0);
+  });
+});
+
+describe("a throw as an outcome", () => {
+  test("a QsmError keeps its code, message and next step; any other throw is failed", () => {
+    expect(fromThrown(new QsmError("blocked", "lock held"))).toEqual(fail("blocked", "lock held"));
+    expect(fromThrown(new QsmError("missing", "no ccr", { next: "install ccr" }))).toEqual(
+      fail("missing", "no ccr", { next: "install ccr" }),
+    );
+    expect(fromThrown(new Error("no such file"))).toEqual(fail("failed", "no such file"));
+    expect(fromThrown("text")).toEqual(fail("failed", "text"));
   });
 });
 
@@ -74,6 +110,13 @@ describe("the envelope", () => {
       message: "score 71 < 80",
       warnings: [],
       data: null,
+    });
+  });
+
+  test("an outcome's own exit is the envelope's exit; the code stays", () => {
+    expect(toEnvelope({ ...fail("failed", "claude exited 130"), exit: 130 })).toMatchObject({
+      code: "failed",
+      exit: 130,
     });
   });
 

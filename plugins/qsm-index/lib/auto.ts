@@ -73,7 +73,13 @@ function isDeclined(files: CacheFiles, consent: AutoArgs["consent"]): boolean {
  * started, else why not. */
 export function spawnBuild(repo: string, files: CacheFiles, env: Env): string | null {
   mkdirSync(files.dir, { recursive: true });
-  return spawnDetached("qsm-index", ["build", repo], { file: files.log, append: false }, env);
+  const started = spawnDetached(
+    "qsm-index",
+    ["build", repo],
+    { file: files.log, append: false },
+    env,
+  );
+  return started.ok ? null : started.reason;
 }
 
 /** In this order: not a git repository, declined, running, fresh. Otherwise a repository with no

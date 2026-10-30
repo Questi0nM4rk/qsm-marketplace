@@ -22,6 +22,7 @@ import { fishCompletion, writeCompletion } from "./completions.ts";
 import {
   cliMain,
   type InstallContext,
+  type InstallResult,
   type InstallFn,
   type InstallStatus,
   type Step,
@@ -164,8 +165,19 @@ const SEVERITY: readonly InstallStatus[] = [
   "skipped",
 ];
 
-function worst(steps: readonly Step[]): InstallStatus {
+/** The worst status among `steps`; none at all is already. */
+export function worst(steps: readonly Step[]): InstallStatus {
   return SEVERITY.find((s) => steps.some((st) => st.status === s)) ?? "already";
+}
+
+/** What an installer or an activation answers: its steps, the worst of them unless the caller
+ * decided the status, and one line that names each step with its detail. */
+export function resultOf(
+  tool: string,
+  steps: readonly Step[],
+  status: InstallStatus = worst(steps),
+): InstallResult {
+  return { tool, status, detail: steps.map((s) => `${s.name}: ${s.detail}`).join("; "), steps };
 }
 
 export function sha256(path: string): string {

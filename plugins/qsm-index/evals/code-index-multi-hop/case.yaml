@@ -29,14 +29,16 @@ graders:
     criteria: |
       PASS only if both hold:
 
-      1. Question 1 names exactly these three direct callers, each with its plugin and file:
-         `spawnBuild` in qsm-index (lib/auto.ts), `startDetached` in qsm-memory (lib/detach.ts),
-         and the `scrub` handler in qsm-secrets (scripts/cli.ts).
+      1. Question 1 names at least these three direct callers, each with its plugin and file:
+         `spawnBuild` in qsm-index (lib/auto.ts), `startDetached` in qsm-memory (lib/detach.ts)
+         and the `scrub` handler in qsm-secrets (scripts/cli.ts). Other plugins call it too
+         (qsm-ccr does); naming them as well is right, and their number is not graded.
       2. Question 2 names `stalenessLine` as the writer of the line and the chain
          `stalenessLine`, `refresh` (lib/tools.ts), `auto` and `spawnBuild` (lib/auto.ts), down to
          `spawnDetached`.
 
-      FAIL if a caller is missing or invented, or a link of the chain is missing.
+      FAIL if one of the three callers is missing, a function named as a caller does not call
+      `spawnDetached`, or a link of the chain is missing.
   - type: llm
     name: flow-hops-q3-q4
     criteria: |

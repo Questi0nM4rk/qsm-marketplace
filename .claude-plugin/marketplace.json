@@ -37,6 +37,10 @@
       "source": "./plugins/qsm-compuse"
     },
     {
+      "name": "qsm-ccr",
+      "source": "./plugins/qsm-ccr"
+    },
+    {
       "name": "qsm-cockpit",
       "source": "./plugins/qsm-cockpit"
     },
