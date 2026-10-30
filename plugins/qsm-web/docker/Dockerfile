@@ -6,10 +6,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     VENV=/opt/venv \
     PATH=/opt/venv/bin:$PATH
 
-# The streaming layer is KasmVNC: its Xvnc is the virtual display, the VNC
-# server and the web client in one process, so the container needs no
-# separate frame relay to put the browser in a person's browser.
-ARG KASMVNC_VERSION=1.5.0
+# The streaming layer is Xpra in desktop mode: its server is the virtual display, the web server
+# and the resize-to-viewer logic in one process, so the container needs no separate frame relay to
+# put the browser in a person's browser. Xpra's own apt repository carries the pinned build.
+ARG XPRA_VERSION=6.5.5-r0-1
+ARG XPRA_HTML5_VERSION=21-r1-1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgtk-3-0 libdbus-glib-1-2 libxt6 libasound2 libx11-xcb1 libxtst6 \
@@ -17,10 +18,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-liberation fonts-noto-core \
       x11-utils xauth procps \
       python3 python3-venv python3-pip tini curl ca-certificates \
- && curl -fsSL -o /tmp/kasmvnc.deb \
-      "https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_bookworm_${KASMVNC_VERSION}_amd64.deb" \
- && apt-get install -y --no-install-recommends /tmp/kasmvnc.deb \
- && rm -f /tmp/kasmvnc.deb \
+      openbox wmctrl x11-xserver-utils \
+ && curl -fsSL -o /usr/share/keyrings/xpra.asc https://xpra.org/xpra.asc \
+ && printf 'Types: deb\nURIs: https://xpra.org\nSuites: bookworm\nComponents: main\nSigned-By: /usr/share/keyrings/xpra.asc\n' \
+      > /etc/apt/sources.list.d/xpra.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      "xpra=${XPRA_VERSION}" "xpra-x11=${XPRA_VERSION}" "xpra-html5=${XPRA_HTML5_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt
