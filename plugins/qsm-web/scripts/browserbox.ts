@@ -69,7 +69,8 @@ class Box {
     return this.chosen;
   }
 
-  /** Run one runtime command. Under --dry-run it is collected, not run. */
+  /** Run one runtime command. Under --dry-run it is collected, not run. Uncaptured output, such as
+   * a build's, goes to stderr, so stdout carries only the verb's answer. */
   run(args: readonly string[], capture = true): { status: number; stdout: string } {
     if (this.dryRun) {
       this.commands.push(renderCommand(this.runtime(), args));
@@ -77,7 +78,7 @@ class Box {
     }
     const { status, stdout } = spawnSync(this.runtime(), args, {
       encoding: "utf8",
-      stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
+      stdio: ["ignore", capture ? "pipe" : process.stderr, "inherit"],
     });
     return { status: status ?? 1, stdout: stdout ?? "" };
   }
