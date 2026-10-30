@@ -48,3 +48,5 @@ plugins/*/evals/results/
 .qsm/
 # bun build --compile leaves its temp file in the working directory when the build is stopped
 .*.bun-build
+# the Python packages pyright resolves, made by .gates/plugin-deps.ts
+/.venv/
