@@ -47,7 +47,8 @@ Run the verb the user named, read the per-plugin lines, report them.
      memory is then turned off (`autoMemoryEnabled: false`) and its transcripts are kept for good
      (`cleanupPeriodDays: 36500`; the default deletes them after 30 days); the MCP is already
      connected by the plugin." Yes: `qsm-setup activate qsm-memory -- --memory qsm`. No:
-     `--memory skip`.
+     `--memory skip`, and say what it costs: qsm-memory's doctor then fails and every session
+     start toasts the deleting retention until it is set.
 4. Run doctor and report PASS / FAIL / SKIP per plugin, the `claude ...` lines and the summary
    line. A FAIL is a finding for the user, not something to retry.
 5. End with the usage review offer, the one walkthrough setup hands off to.

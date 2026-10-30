@@ -529,7 +529,10 @@ registers `qsm-memory mcp` when the plugin is enabled.
 deletes after 30 days) or below 36500, naming the file, the value in force, and the activation that
 fixes it; `ok` otherwise, naming the value. The `session.start` hook SHALL call `doctor` after its
 catch-up save, so a deleting retention is toasted at every session start until it is fixed. A
-`settings.json` that does not parse is `failed` too: an unknown retention is not a kept one.
+`settings.json` that does not parse, or whose `cleanupPeriodDays` is not a number, is `failed` too,
+naming the value: an unknown retention is not a kept one. The `failed` outcome carries the days in
+force as its data, and the retention sentence comes first in the doctor's message, so a toast that
+cuts the message short still shows the fix.
 
 #### Scenario: a deleting retention fails the doctor and the session start
 

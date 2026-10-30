@@ -2,7 +2,7 @@
 // `cleanupPeriodDays` (its default is 30), so the one value qsm ever writes there is "never", and
 // anything lower is reported as a deletion wherever settings are read.
 import { existsSync, readFileSync } from "node:fs";
-import { fail, isRecord, type Outcome, ok } from "../../../lib/outcome.ts";
+import { fail, isRecord, messageOf, type Outcome, ok } from "../../../lib/outcome.ts";
 import { claudeSettingsPath, type Env } from "../../../lib/paths.ts";
 
 /** A hundred years: Claude Code has no "never", and a transcript is the person's. */
@@ -16,7 +16,13 @@ export function retentionDays(settingsText: string | null): number | null {
   }
   const parsed: unknown = JSON.parse(settingsText);
   const days = isRecord(parsed) ? parsed.cleanupPeriodDays : undefined;
-  return typeof days === "number" ? days : null;
+  if (days === undefined) {
+    return null;
+  }
+  if (typeof days !== "number") {
+    throw new TypeError(`cleanupPeriodDays is ${JSON.stringify(days)}, not a number`);
+  }
+  return days;
 }
 
 /** Whether a retention keeps every transcript: the key present and at least KEEP_DAYS. */
@@ -31,15 +37,20 @@ export function retentionCheck(env: Env): Outcome<{ days: number | null }> {
   let days: number | null;
   try {
     days = retentionDays(existsSync(path) ? readFileSync(path, "utf8") : null);
-  } catch {
-    return fail("failed", `${path} does not parse, so its transcript retention is unknown`);
+  } catch (error) {
+    const why = error instanceof SyntaxError ? "does not parse" : messageOf(error);
+    return fail("failed", `${path}: ${why}, so its transcript retention is unknown; ${FIX}`, {
+      days: null,
+    });
   }
   if (keepsTranscripts(days)) {
     return ok({ days }, `transcripts are kept (cleanupPeriodDays ${days})`);
   }
-  const said = days === null ? "unset, Claude Code's default of 30" : String(days);
-  return fail(
-    "failed",
-    `Claude Code deletes transcripts after ${said} days (${path}); run qsm-setup activate qsm-memory -- --memory qsm, which sets cleanupPeriodDays to ${KEEP_DAYS}`,
-  );
+  const said =
+    days === null ? "30 days (cleanupPeriodDays is unset, Claude Code's default)" : `${days} days`;
+  return fail("failed", `Claude Code deletes transcripts after ${said} (${path}); ${FIX}`, {
+    days,
+  });
 }
+
+const FIX = `run qsm-setup activate qsm-memory -- --memory qsm, which sets cleanupPeriodDays to ${KEEP_DAYS}`;

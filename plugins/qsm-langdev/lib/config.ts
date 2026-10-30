@@ -159,12 +159,17 @@ export function generatedPaths(root: string, paths: readonly string[]): Set<stri
  * (generated or vendored trees .gitignore hides never turn a language on).
  */
 export function repoFiles(root: string): string[] | null {
-  const tracked = gitPaths(root, ["ls-files", "-z"]);
+  const tracked = trackedFiles(root);
   const untracked = gitPaths(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
   if (tracked === null || untracked === null) {
     return null;
   }
   return [...tracked, ...untracked];
+}
+
+/** Every tracked path, or null when git could not answer. */
+export function trackedFiles(root: string): string[] | null {
+  return gitPaths(root, ["ls-files", "-z"]);
 }
 
 /** Languages that never toggle (`alwaysOn` in LANGUAGE_TABLE): docs, multi. */

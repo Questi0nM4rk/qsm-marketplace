@@ -11,7 +11,7 @@ import {
   languageEnabled,
   matchingFiles,
   pathsWithAttr,
-  repoFiles,
+  trackedFiles,
 } from "./config.ts";
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
@@ -859,7 +859,7 @@ function resolveChanged(
     return [...options.only];
   }
   if (beforeRef === null) {
-    return repoFiles(root) ?? [];
+    return trackedFiles(root) ?? [];
   }
   return changedBetween(root, beforeRef, after) ?? [];
 }

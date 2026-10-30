@@ -169,9 +169,10 @@ const runDoctor: Handler = () => {
         ? "nothing unsaved"
         : `${r.unsaved} unsaved, the next session start saves them`;
     const archive = `archive ${path}: ${r.sessions} sessions, ${r.notes} notes; ${tail}`;
-    return retention.data === undefined
-      ? fail("failed", `${archive}; ${retention.message}`, r)
-      : ok(r, `${archive}; ${retention.message}`);
+    // the retention first: a toast cuts the message short, and the fix must survive the cut
+    return retention.code === "ok"
+      ? ok(r, `${archive}; ${retention.message}`)
+      : fail("failed", `${retention.message}; ${archive}`, r);
   } catch (error) {
     return fail("failed", `archive ${path} does not open: ${messageOf(error)}`);
   }

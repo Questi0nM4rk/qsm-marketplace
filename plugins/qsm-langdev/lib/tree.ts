@@ -103,7 +103,8 @@ function gitLines(root: string, args: readonly string[], input?: string): string
   return result.stdout.split("\0").filter((path) => path.length > 0);
 }
 
-const DEPENDENCY_DIRS = new Set(["node_modules", ".venv"]);
+// obj/ holds dotnet's restore (project.assets.json), which `dotnet format --no-restore` reads.
+const DEPENDENCY_DIRS = new Set(["node_modules", ".venv", "obj"]);
 const TSCONFIG = /^tsconfig(?:\.[^/]*)?\.json$/;
 const GLOB = /[*?[{]/;
 

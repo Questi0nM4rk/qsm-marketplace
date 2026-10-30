@@ -235,7 +235,9 @@ describe("qsm-memory cli, notes and errors", () => {
     expect(envelopeOf(r.stdout).message).toContain("deletes transcripts after 30 days");
     expect(envelopeOf(r.stdout).message).toContain("--memory qsm");
     rmSync(join(box.home, "c", "settings.json"));
-    expect(envelopeOf(run(box, ["doctor", "--json"]).stdout).message).toContain("default of 30");
+    expect(envelopeOf(run(box, ["doctor", "--json"]).stdout).message).toContain(
+      "cleanupPeriodDays is unset, Claude Code's default",
+    );
   });
 
   test("no verb removes a saved session", () => {
