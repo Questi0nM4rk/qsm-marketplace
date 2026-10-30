@@ -81,13 +81,21 @@ function savedTurns(db: Database, session: SessionRow): [number, Turn][] {
 /** The turns of the transcript file, numbered by position; loud when the file is gone. */
 function transcriptTurns(db: Database, session: SessionRow): [number, Turn][] {
   if (!existsSync(session.transcript_path)) {
-    const archive = db
-      .query<{ archive: string }, [string]>("SELECT archive FROM packed WHERE session_id = ?")
-      .get(session.id)?.archive;
-    if (archive !== undefined) {
+    const packed = db
+      .query<{ archive: string; entries: string }, [string]>(
+        "SELECT archive, entries FROM packed WHERE session_id = ?",
+      )
+      .get(session.id);
+    if (packed !== null) {
+      const { archive } = packed;
+      const entries: unknown = JSON.parse(packed.entries);
+      if (!Array.isArray(entries) || !entries.every((e) => typeof e === "string")) {
+        throw new QsmError("failed", `the packed entries of ${session.id} are not a list of paths`);
+      }
+      const restore = restoreCommand(archive, session.transcript_path, entries);
       throw new QsmError(
         "missing",
-        `the transcript ${session.transcript_path} was packed into ${archive}; restore it with ${restoreCommand(archive, session.transcript_path)}`,
+        `the transcript ${session.transcript_path} was packed into ${archive}; restore it with ${restore}`,
         { next: `run qsm-memory show ${session.id} without --full to read the saved text` },
       );
     }

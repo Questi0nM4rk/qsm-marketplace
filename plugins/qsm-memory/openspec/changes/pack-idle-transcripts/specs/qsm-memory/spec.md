@@ -13,7 +13,8 @@ transcript, and a day with one session on a break adds one.
 not, moving nothing: the recorded retention choice is `qsm`; 30 days have passed since
 `activated_at`; and 30 days have passed since `last_pack_at` when there is one. `last_pack_at` SHALL
 be claimed in one transaction before the run, so two runs started together move files once, and
-SHALL be set back to its earlier value when the run fails.
+SHALL be set back to its earlier value when the run fails or moves nothing, so a due pack with
+nothing idle runs again at the next session start instead of waiting 30 days.
 
 A run SHALL take every idle main transcript (`projects/<dir>/<id>.jsonl` under the Claude home)
 together with its session directory (`projects/<dir>/<id>/`), except one the archive has not saved

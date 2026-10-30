@@ -14,7 +14,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { isRecord, messageOf, type Outcome, ok, onPath } from "../../../lib/outcome.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
@@ -76,12 +76,17 @@ export function notDueBecause(state: PackState, now: Date): string | null {
   return state.lastPackAt === null ? null : waits(state.lastPackAt, `the last pack was on`);
 }
 
-/** The restore command of a packed session, and what it restores. */
-export function restoreCommand(archive: string, transcriptPath: string): string {
-  const dir = dirname(transcriptPath);
-  const home = dirname(dirname(dir));
-  const entry = `projects/${basename(dir)}/${sessionIdOf(transcriptPath)}`;
-  return `tar --zstd -xmf ${archive} -C ${home} ${entry}.jsonl ${entry}`;
+const quoted = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+
+/** The restore command of a packed session: exactly the `entries` archived for it, quoted for a
+ * shell. The Claude home is where the transcript lived: three levels above it. */
+export function restoreCommand(
+  archive: string,
+  transcriptPath: string,
+  entries: readonly string[],
+): string {
+  const home = dirname(dirname(dirname(transcriptPath)));
+  return `tar --zstd -xmf ${quoted(archive)} -C ${quoted(home)} ${entries.map(quoted).join(" ")}`;
 }
 
 interface Taken {
@@ -227,12 +232,14 @@ async function archiveSessions(
       env,
     );
     runTool("zstd", ["-t", "-q", part], env);
-    const listed = runTool("tar", ["--zstd", "-tf", part], env).split("\n").filter(Boolean);
-    const want = taken.flatMap((t) => t.expected);
-    if (listed.length !== want.length || !want.every((entry) => listed.includes(entry))) {
+    const listed = new Set(
+      runTool("tar", ["--zstd", "-tf", part], env).split("\n").filter(Boolean),
+    );
+    const want = new Set(taken.flatMap((t) => t.expected));
+    if (listed.size !== want.size || !want.isSubsetOf(listed)) {
       throw new QsmError(
         "failed",
-        `${part} does not list the files taken (${listed.length} of ${want.length})`,
+        `${part} does not list the files taken (${listed.size} of ${want.size})`,
       );
     }
     renameSync(part, target);
@@ -263,7 +270,13 @@ const mb = (bytes: number) => `${(bytes / 1_048_576).toFixed(1)} MB`;
 
 /** One pack: nothing when none is due, else the idle transcripts into `transcripts/<today>.tar.zst`,
  * their originals removed once the archive is tested and listed. */
-export async function pack(db: Database, env: Env, now: Date = new Date()): Promise<Outcome> {
+export async function pack(
+  db: Database,
+  env: Env,
+  now: Date = new Date(),
+  /** a test's seam: runs after the archive is renamed, before any original is removed */
+  afterArchive: () => void = () => {},
+): Promise<Outcome> {
   const claimed = db
     .transaction(() => {
       const state: PackState = {
@@ -289,6 +302,7 @@ export async function pack(db: Database, env: Env, now: Date = new Date()): Prom
     requireTools(env);
     taken = idleTranscripts(db, env, now).map((jsonl) => takeSession(home, jsonl));
     if (taken.length === 0) {
+      setState(db, "last_pack_at", claimed.previous);
       return ok({ packed: 0 }, "nothing is idle yet; nothing was moved");
     }
     if (existsSync(target)) {
@@ -300,11 +314,24 @@ export async function pack(db: Database, env: Env, now: Date = new Date()): Prom
     setState(db, "last_pack_at", claimed.previous);
     throw error;
   }
+  afterArchive();
   return removeOriginals(db, home, taken, target, now);
 }
 
+/** The sessions running now; when the sessions/ files cannot be read every taken session counts as
+ * running, because the archive is renamed already and a live transcript must not be removed. */
+function liveNow(home: string, taken: readonly Taken[], warnings: string[]): Set<string> {
+  try {
+    return liveSessionIds(home);
+  } catch (error) {
+    warnings.push(`${messageOf(error)}; every original left in place`);
+    return new Set(taken.map((t) => t.id));
+  }
+}
+
 /** After the archive is renamed: remove each session's originals unless a file changed since it was
- * listed, and record it as packed. A session left in place is named. */
+ * listed or the session became live, and record it as packed the moment its transcript is gone, so
+ * a later failure still lets `show --full` name the archive. A session left in place is named. */
 function removeOriginals(
   db: Database,
   home: string,
@@ -313,28 +340,29 @@ function removeOriginals(
   now: Date,
 ): Outcome {
   const warnings: string[] = [];
+  const live = liveNow(home, taken, warnings);
+  const record = db.query(
+    "INSERT OR REPLACE INTO packed (session_id, archive, packed_at, entries) VALUES (?, ?, ?, ?)",
+  );
   const moved: Taken[] = [];
   for (const t of taken) {
     try {
+      if (live.has(t.id)) {
+        warnings.push(`${t.jsonl} became live while packing; left in place`);
+        continue;
+      }
       if (takeSession(home, t.jsonl).signature !== t.signature) {
         warnings.push(`${t.jsonl} changed while packing; left in place`);
         continue;
       }
       rmSync(t.jsonl);
-      rmSync(join(dirname(t.jsonl), t.id), { recursive: true, force: true });
+      record.run(t.id, target, now.toISOString(), JSON.stringify(t.entries));
       moved.push(t);
+      rmSync(join(dirname(t.jsonl), t.id), { recursive: true, force: true });
     } catch (error) {
-      warnings.push(`${t.jsonl} was not removed: ${messageOf(error)}`);
+      warnings.push(`${t.jsonl} was not fully removed: ${messageOf(error)}`);
     }
   }
-  const record = db.query(
-    "INSERT OR REPLACE INTO packed (session_id, archive, packed_at) VALUES (?, ?, ?)",
-  );
-  db.transaction(() => {
-    for (const t of moved) {
-      record.run(t.id, target, now.toISOString());
-    }
-  })();
   const before = moved.reduce((sum, t) => sum + t.bytes, 0);
   const after = statSync(target).size;
   const data = { packed: moved.length, before, after, archive: target };

@@ -1,7 +1,13 @@
 // The date rule of `pack`, with the person's own cases as data. Dates are local noon, so the rule
 // reads the local calendar date whatever the time zone of the machine.
 import { describe, expect, test } from "bun:test";
-import { ageOf, daysOfUse, IDLE_DAYS, notDueBecause, type PackState } from "./pack.ts";
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
+import { TranscriptBuilder } from "./fixtures/transcript.ts";
+import { ageOf, daysOfUse, IDLE_DAYS, notDueBecause, pack, type PackState } from "./pack.ts";
+import { saveTranscript } from "./save.ts";
+import { getState, openDb, setState } from "./store.ts";
 
 const noon = (date: string) => new Date(`${date}T12:00:00`);
 const iso = (date: string) => noon(date).toISOString();
@@ -74,5 +80,54 @@ describe("whether a pack is due", () => {
   test("the choice claude, or none, is never due", () => {
     expect(notDueBecause(state({ retention: "claude" }), now)).toContain("claude");
     expect(notDueBecause(state({ retention: null }), now)).toContain("no retention choice");
+  });
+});
+
+describe("a session that becomes live while the archive is written", () => {
+  test("stays in place and is named, and its neighbour is packed", async () => {
+    const home = sandboxDir("qsm-memory-live-");
+    const claude = join(home, "c");
+    const projects = join(claude, "projects", "-home-work");
+    mkdirSync(projects, { recursive: true });
+    mkdirSync(join(claude, "sessions"));
+    const env = {
+      PATH: process.env.PATH,
+      CLAUDE_CONFIG_DIR: claude,
+      QSM_MEMORY_DB: join(home, "data", "memory.db"),
+    };
+    const db = openDb(env.QSM_MEMORY_DB);
+    for (const id of ["idle", "wakes"]) {
+      const path = join(projects, `${id}.jsonl`);
+      writeFileSync(path, new TranscriptBuilder({ sessionId: id }).human(`prompt ${id}`).text());
+      saveTranscript(db, path, env);
+      utimesSync(path, new Date("2026-09-01T12:00:00"), new Date("2026-09-01T12:00:00"));
+    }
+    for (const day of [2, 3, 4, 5, 6, 7, 8]) {
+      db.query("INSERT INTO sessions VALUES (?, '/w', '/w', 't', ?, ?, '/none', ?, 1)").run(
+        `day${day}`,
+        `2026-09-0${day}T12:00:00.000Z`,
+        `2026-09-0${day}T13:00:00.000Z`,
+        "2026-09-09T00:00:00.000Z",
+      );
+    }
+    setState(db, "retention", "qsm");
+    setState(db, "activated_at", "2026-01-01T00:00:00.000Z");
+
+    const r = await pack(db, env, new Date(), () => {
+      // Claude Code resumes "wakes" while zstd runs: its sessions file now names a running pid
+      writeFileSync(
+        join(claude, "sessions", `${process.pid}.json`),
+        JSON.stringify({ pid: process.pid, sessionId: "wakes" }),
+      );
+    });
+
+    expect(r.code).toBe("partial");
+    expect(r.warnings).toEqual([
+      `${join(projects, "wakes.jsonl")} became live while packing; left in place`,
+    ]);
+    expect(existsSync(join(projects, "wakes.jsonl"))).toBe(true);
+    expect(existsSync(join(projects, "idle.jsonl"))).toBe(false);
+    expect(db.query("SELECT session_id FROM packed").all()).toEqual([{ session_id: "idle" }]);
+    expect(getState(db, "last_pack_at")).not.toBeNull();
   });
 });

@@ -127,8 +127,15 @@ describe.skipIf(!hasZstd)("pack", () => {
     );
     const shown = cli(box, ["show", "idle1", "--full"]);
     expect(shown.code).toBe("missing");
-    expect(shown.message).toContain(`tar --zstd -xmf ${path} -C ${box.claude}`);
+    expect(shown.message).toContain(`tar --zstd -xmf '${path}' -C '${box.claude}'`);
     expect(cli(box, ["pack"]).message).toContain("no pack is due: the last pack was on");
+
+    // idle2 has no session directory: its printed command names the transcript alone, and runs
+    const bare = cli(box, ["show", "idle2", "--full"]).message;
+    const command = bare.slice(bare.indexOf("restore it with ") + "restore it with ".length);
+    expect(command.match(/idle2/g)).toHaveLength(1);
+    expect(spawnSync("sh", ["-c", command]).status).toBe(0);
+    expect(existsSync(join(box.projects, "idle2.jsonl"))).toBe(true);
 
     spawnSync("tar", [
       "--zstd",
@@ -157,6 +164,19 @@ describe.skipIf(!hasZstd)("pack", () => {
     expect(r.code).toBe("missing");
     expect(r.message).toContain("zstd");
     expect(readdirSync(box.projects)).toEqual(["idle1.jsonl"]);
+    expect(getState(openDb(box.db), "last_pack_at")).toBeNull();
+  });
+
+  test("a due pack with nothing idle leaves last_pack_at as it was", () => {
+    const box = sandbox();
+    transcript(box, "recent", new Date());
+    cli(box, ["save", "--catch-up"]);
+    activated(box);
+
+    const r = cli(box, ["pack"]);
+
+    expect(r.code).toBe("ok");
+    expect(r.message).toContain("nothing is idle");
     expect(getState(openDb(box.db), "last_pack_at")).toBeNull();
   });
 

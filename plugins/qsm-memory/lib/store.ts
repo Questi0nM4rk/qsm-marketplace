@@ -93,7 +93,9 @@ CREATE TABLE IF NOT EXISTS state (
 CREATE TABLE IF NOT EXISTS packed (
   session_id TEXT PRIMARY KEY,
   archive TEXT NOT NULL,
-  packed_at TEXT NOT NULL
+  packed_at TEXT NOT NULL,
+  -- the top-level entries archived for the session, as a JSON array of paths in the Claude home
+  entries TEXT NOT NULL
 );
 `;
 
