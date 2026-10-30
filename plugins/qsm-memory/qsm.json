@@ -189,7 +189,7 @@
         "description": "The health probe: the archive opens, how many sessions and notes it holds, and how many main transcripts on disk it still lacks"
       },
       "qsm-memory pack": {
-        "description": "Move the transcripts nobody has used for 7 days of use into transcripts/<date>.tar.zst beside the archive, each original removed only after the archive is tested and listed; runs only under --memory qsm, 30 days after activation and 30 days after the last pack, else says why and moves nothing; --detach does it in a background process and returns at once",
+        "description": "Move the transcripts nobody has used for 7 days of use into transcripts/<date>.tar.zst (<date>-<n>.tar.zst when that exists) beside the archive, each original removed only after the archive is tested and listed; runs only under --memory qsm, 30 days after activation and 30 days after the last pack, else says why and moves nothing; --detach does it in a background process and returns at once",
         "args": [
           {
             "name": "detach",

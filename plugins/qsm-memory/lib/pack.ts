@@ -432,12 +432,15 @@ function removeOriginals(
     const data = { packed: moved.length, before, after, archive: target };
     const message =
       moved.length === 0
-        ? "moved nothing; the archive was removed"
+        ? "moved nothing"
         : `packed ${moved.length} sessions, ${mb(before)} into ${mb(after)}: ${target}`;
     return warnings.length === 0 ? ok(data, message) : { code: "partial", message, data, warnings };
   } finally {
     if (moved.length === 0) {
-      rmSync(target, { force: true });
+      // a row that could not be put back still names this archive: keep it rather than lie
+      if (db.query("SELECT 1 FROM packed WHERE archive = ?").get(target) === null) {
+        rmSync(target, { force: true });
+      }
     } else {
       setState(db, "last_pack_at", now.toISOString());
     }

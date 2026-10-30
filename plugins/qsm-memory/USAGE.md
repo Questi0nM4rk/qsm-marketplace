@@ -19,13 +19,14 @@ qsm-memory note "text" --expires 14
   (`save --log`). A transcript catch-up cannot save is named, the rest still save: the outcome
   is `partial` and lists it.
 - `pack` moves the transcripts nobody has used for 7 days of use (a local date on which a session
-  started, plus today; a break adds nothing) into `transcripts/<YYYY-MM-DD>.tar.zst` beside the
-  archive, each original removed only after `zstd -t` and a listing of the archive agree. It runs
-  only under `--memory qsm`, 30 days after activation and 30 days after the last pack; otherwise
-  it answers `ok` naming the first unmet condition and moves nothing. An unsaved or a live
-  transcript stays. `pack` fails `missing` without `tar` or `zstd`, and `partial` names a file
-  that changed while packing. `--detach` and `--log` work as for `save`. Restore:
-  `tar --zstd -xmf <archive> -C <claude home> <entries>`, as `show --full` prints it.
+  started, plus today; a break adds nothing) into `transcripts/<YYYY-MM-DD>.tar.zst`
+  (`<YYYY-MM-DD>-<n>.tar.zst` when that exists) beside the archive, each original removed only after
+  `zstd -t` and a listing of the archive agree. It runs only under `--memory qsm`, 30 days after
+  activation and 30 days after the last pack; otherwise it answers `ok` naming the first unmet
+  condition and moves nothing. An unsaved or a live transcript stays. `pack` fails `missing` without
+  `tar` or `zstd`, and `partial` names a file that changed while packing. `--detach` and `--log`
+  work as for `save`. Restore: `tar --zstd -xmf <archive> -C <claude home> <entries>`, as
+  `show --full` prints it.
 - `--memory <qsm|claude>` of the activation records the choice; under `claude` `doctor` reports a
   deleting `cleanupPeriodDays` as the person's, ok, and nothing is packed.
 - `list` prints at most `--limit` lines (default 20) and ends with `N more: --limit <M>` when
