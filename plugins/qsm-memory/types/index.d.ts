@@ -46,6 +46,10 @@ export type Memory = {
     cwd?: string;
   }): Promise<unknown>;
   doctor(): Promise<unknown>;
+  pack(options: {
+    detach?: boolean;
+    log?: boolean;
+  }): Promise<unknown>;
 };
 
 declare module 'claude-code' {

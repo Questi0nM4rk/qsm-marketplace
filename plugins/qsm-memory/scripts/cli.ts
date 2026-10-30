@@ -20,11 +20,12 @@ import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { blobPath, putBlob } from "../lib/blobs.ts";
 import { startDetached } from "../lib/detach.ts";
 import { buildServer, parseLines } from "../lib/mcp.ts";
+import { pack } from "../lib/pack.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
 import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
 import { retentionCheck } from "../lib/retention.ts";
-import { openArchive, resolveDbPath } from "../lib/store.ts";
+import { getState, openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
 import manifestJson from "../qsm.json" with { type: "json" };
@@ -82,6 +83,16 @@ const runSave: Handler = (call) => {
   return r.status === "saved"
     ? ok(r, `saved ${r.id}: ${r.turns} turns, ${r.added} new`)
     : ok(r, `skipped: ${r.reason} in ${r.path}`);
+};
+
+const runPack: Handler = (call) => {
+  if (flagArg(call, "detach")) {
+    const started = startDetached(["pack", "--log"], env());
+    return started.started
+      ? ok(started, `started the pack in the background; its outcome goes to ${started.log}`)
+      : fail("missing", started.reason);
+  }
+  return pack(openArchive(env()), env());
 };
 
 const runSearch: Handler = (call) => {
@@ -156,9 +167,9 @@ const count = (db: Database, table: string) =>
  * a warning: what it deletes is the person's and never comes back. */
 const runDoctor: Handler = () => {
   const path = resolveDbPath(env());
-  const retention = retentionCheck(env());
   try {
     const db = openArchive(env());
+    const retention = retentionCheck(env(), getState(db, "retention"));
     const r = {
       path,
       sessions: count(db, "sessions"),
@@ -215,9 +226,12 @@ if (import.meta.main) {
         "blob path": runBlobPath,
         ...noteHandlers,
         doctor: runDoctor,
+        pack: runPack,
         mcp: runMcp,
       },
-      process.argv[2] === "save" && process.argv.includes("--log") ? { io: stamped() } : {},
+      ["save", "pack"].includes(process.argv[2] ?? "") && process.argv.includes("--log")
+        ? { io: stamped() }
+        : {},
     ),
   );
 }

@@ -10,6 +10,7 @@ import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import { z } from "zod";
 import { initialize, spawnServer } from "../../../lib/mcp-stdio.ts";
 import { TranscriptBuilder } from "../lib/fixtures/transcript.ts";
+import { openDb, setState } from "../lib/store.ts";
 
 const CLI = resolve(import.meta.dir, "cli.ts");
 
@@ -237,6 +238,22 @@ describe("qsm-memory cli, notes and errors", () => {
     rmSync(join(box.home, "c", "settings.json"));
     expect(envelopeOf(run(box, ["doctor", "--json"]).stdout).message).toContain(
       "cleanupPeriodDays is unset, Claude Code's default",
+    );
+  });
+
+  test("doctor reads the recorded choice: a deletion fails under none and qsm, is ok under claude", () => {
+    const box = sandbox();
+    writeFileSync(join(box.home, "c", "settings.json"), '{ "cleanupPeriodDays": 30 }\n');
+    const code = () => envelopeOf(run(box, ["doctor", "--json"]).stdout);
+
+    expect(code().code).toBe("failed");
+    const db = openDb(join(box.home, "d", "qsm-memory", "memory.db"));
+    setState(db, "retention", "qsm");
+    expect(code().code).toBe("failed");
+    setState(db, "retention", "claude");
+    expect(code()).toMatchObject({ code: "ok" });
+    expect(code().message).toContain(
+      "Claude Code deletes transcripts after 30 days, by the person's choice",
     );
   });
 

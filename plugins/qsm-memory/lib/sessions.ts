@@ -5,6 +5,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { QsmError } from "../../../lib/qsm-error.ts";
+import { restoreCommand } from "./pack.ts";
 import { projectOf } from "./project.ts";
 import { sinceCutoff } from "./search.ts";
 import { fullTurns, type Turn } from "./transcript.ts";
@@ -78,8 +79,18 @@ function savedTurns(db: Database, session: SessionRow): [number, Turn][] {
 }
 
 /** The turns of the transcript file, numbered by position; loud when the file is gone. */
-function transcriptTurns(session: SessionRow): [number, Turn][] {
+function transcriptTurns(db: Database, session: SessionRow): [number, Turn][] {
   if (!existsSync(session.transcript_path)) {
+    const archive = db
+      .query<{ archive: string }, [string]>("SELECT archive FROM packed WHERE session_id = ?")
+      .get(session.id)?.archive;
+    if (archive !== undefined) {
+      throw new QsmError(
+        "missing",
+        `the transcript ${session.transcript_path} was packed into ${archive}; restore it with ${restoreCommand(archive, session.transcript_path)}`,
+        { next: `run qsm-memory show ${session.id} without --full to read the saved text` },
+      );
+    }
     throw new QsmError(
       "missing",
       `the transcript ${session.transcript_path} is gone; only the saved text is left`,
@@ -92,7 +103,7 @@ function transcriptTurns(session: SessionRow): [number, Turn][] {
 export function show(db: Database, prefix: string, options: ShowOptions = {}): string {
   const session = resolveSession(db, prefix);
   const [from, to] = options.lines ?? [1, Number.MAX_SAFE_INTEGER];
-  const all = options.full === true ? transcriptTurns(session) : savedTurns(db, session);
+  const all = options.full === true ? transcriptTurns(db, session) : savedTurns(db, session);
   const rows = all.filter(([seq]) => seq >= from && seq <= to);
   if (rows.length === 0) {
     return `${header(session)}\nno turns in ${from}-${to === Number.MAX_SAFE_INTEGER ? "end" : to}; the last turn is #${all.at(-1)?.[0] ?? 0}`;

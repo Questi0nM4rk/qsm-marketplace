@@ -28,6 +28,7 @@ export const verbs: Readonly<Record<string, VerbRow>> = {
   notes: { words: ["qsm-memory","notes"], args: [{ name: "all", flag: "--all", boolean: true }] },
   orient: { words: ["qsm-memory","orient"], args: [{ name: "cwd", flag: "--cwd" }] },
   doctor: { words: ["qsm-memory","doctor"], args: [] },
+  pack: { words: ["qsm-memory","pack"], args: [{ name: "detach", flag: "--detach", boolean: true }, { name: "log", flag: "--log", boolean: true }] },
 };
 
 /** One verb's argv: its words, each option in declaration order, the

@@ -30,9 +30,10 @@ export function keepsTranscripts(days: number | null): boolean {
   return days !== null && days >= KEEP_DAYS;
 }
 
-/** The retention of the Claude home as an outcome: ok when nothing is deleted, failed naming the
- * file, the value and the fix otherwise. A settings file that does not parse is failed too. */
-export function retentionCheck(env: Env): Outcome<{ days: number | null }> {
+/** The retention of the Claude home as an outcome, given the recorded choice: ok when nothing is
+ * deleted, failed naming the file, the value and the fix otherwise. Under the choice `claude` a
+ * deletion is the person's and ok. A settings file that does not parse is failed under any choice. */
+export function retentionCheck(env: Env, choice: string | null): Outcome<{ days: number | null }> {
   const path = claudeSettingsPath(env);
   let days: number | null;
   try {
@@ -48,6 +49,12 @@ export function retentionCheck(env: Env): Outcome<{ days: number | null }> {
   }
   const said =
     days === null ? "30 days (cleanupPeriodDays is unset, Claude Code's default)" : `${days} days`;
+  if (choice === "claude") {
+    return ok(
+      { days },
+      `Claude Code deletes transcripts after ${said}, by the person's choice (--memory claude)`,
+    );
+  }
   return fail("failed", `Claude Code deletes transcripts after ${said} (${path}); ${FIX}`, {
     days,
   });

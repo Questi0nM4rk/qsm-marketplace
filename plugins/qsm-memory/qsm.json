@@ -188,6 +188,21 @@
       "qsm-memory doctor": {
         "description": "The health probe: the archive opens, how many sessions and notes it holds, and how many main transcripts on disk it still lacks"
       },
+      "qsm-memory pack": {
+        "description": "Move the transcripts nobody has used for 7 days of use into transcripts/<date>.tar.zst beside the archive, each original removed only after the archive is tested and listed; runs only under --memory qsm, 30 days after activation and 30 days after the last pack, else says why and moves nothing; --detach does it in a background process and returns at once",
+        "args": [
+          {
+            "name": "detach",
+            "type": "boolean",
+            "description": "run the pack in a detached qsm-memory process and return at once; its outcome is appended to save.log beside the archive"
+          },
+          {
+            "name": "log",
+            "type": "boolean",
+            "description": "print every output line with an ISO timestamp before it; the detached pack sets it for save.log"
+          }
+        ]
+      },
       "qsm-memory mcp": {
         "description": "Serve search, show, list, notes and note as MCP tools over stdio",
         "noNoun": true
