@@ -10,8 +10,9 @@ call it from there. The plugin registers the hooks module and the MCP server. `-
 the plan.
 
 Optional, changes a file you own: `qsm-setup activate qsm-memory -- --memory qsm` sets
-`autoMemoryEnabled: false` and `cleanupPeriodDays: 7` in `~/.claude/settings.json`. `--memory skip`
-writes nothing.
+`autoMemoryEnabled: false` and `cleanupPeriodDays: 36500` in `~/.claude/settings.json`, so Claude
+Code never deletes a transcript (its default deletes after 30 days; a lower value is raised).
+`--memory skip` writes nothing.
 
 Without the plugin loaded, register the server by hand:
 

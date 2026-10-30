@@ -31,24 +31,35 @@ describe("the harness memory choice", () => {
       outputStyle: "qsm",
       model: "opus",
       autoMemoryEnabled: false,
-      cleanupPeriodDays: 7,
+      cleanupPeriodDays: 36500,
     });
     expect(result.detail).toContain(settings);
   });
 
-  test("qsm leaves a lower cleanupPeriodDays alone", async () => {
+  test("qsm raises a deleting cleanupPeriodDays, because a transcript is the person's", async () => {
     const { claudeHome, settings } = sandbox('{ "cleanupPeriodDays": 3 }');
 
     await activate(context(claudeHome));
 
     expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({
-      cleanupPeriodDays: 3,
+      cleanupPeriodDays: 36500,
+      autoMemoryEnabled: false,
+    });
+  });
+
+  test("qsm leaves a longer retention alone", async () => {
+    const { claudeHome, settings } = sandbox('{ "cleanupPeriodDays": 99999 }');
+
+    await activate(context(claudeHome));
+
+    expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({
+      cleanupPeriodDays: 99999,
       autoMemoryEnabled: false,
     });
   });
 
   test("running it again with nothing changed is already", async () => {
-    const { claudeHome } = sandbox('{ "autoMemoryEnabled": false, "cleanupPeriodDays": 7 }');
+    const { claudeHome } = sandbox('{ "autoMemoryEnabled": false, "cleanupPeriodDays": 36500 }');
 
     expect((await activate(context(claudeHome))).status).toBe("already");
   });
@@ -60,7 +71,7 @@ describe("the harness memory choice", () => {
 
     expect(result.status).toBe("skipped");
     expect(result.detail).toContain(
-      `would write autoMemoryEnabled: false, cleanupPeriodDays: 7 into ${settings}`,
+      `would write autoMemoryEnabled: false, cleanupPeriodDays: 36500 into ${settings}`,
     );
     expect(readFileSync(settings, "utf8")).toBe('{ "outputStyle": "qsm" }');
   });
@@ -80,7 +91,7 @@ describe("the settings file itself", () => {
     expect((await activate(context(claudeHome))).status).toBe("installed");
     expect(JSON.parse(readFileSync(settings, "utf8"))).toEqual({
       autoMemoryEnabled: false,
-      cleanupPeriodDays: 7,
+      cleanupPeriodDays: 36500,
     });
   });
 
@@ -95,13 +106,15 @@ describe("the settings file itself", () => {
   });
 
   test("the rewrite touches two keys and keeps the rest", () => {
-    expect(withHarnessMemoryOff('{"autoMemoryEnabled":false,"cleanupPeriodDays":5}')).toBeNull();
+    expect(
+      withHarnessMemoryOff('{"autoMemoryEnabled":false,"cleanupPeriodDays":36500}'),
+    ).toBeNull();
     expect(withHarnessMemoryOff('{"autoMemoryEnabled":false,"cleanupPeriodDays":30}')).toContain(
-      '"cleanupPeriodDays": 7',
+      '"cleanupPeriodDays": 36500',
     );
     expect(JSON.parse(withHarnessMemoryOff('{"autoMemoryEnabled":true,"a":[1]}') ?? "")).toEqual({
       autoMemoryEnabled: false,
-      cleanupPeriodDays: 7,
+      cleanupPeriodDays: 36500,
       a: [1],
     });
   });

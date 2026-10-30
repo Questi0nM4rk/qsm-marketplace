@@ -38,15 +38,16 @@ Run the verb the user named, read the per-plugin lines, report them.
    `missing-prereq` names a tool to install by hand.
 3. Then the activations, one question each, `--dry-run` first, then the user's choice, because an
    activation writes into the Claude home. Doctor shows which plugins are activated.
-   - qsm-setup: `qsm-setup activate qsm-setup -- --instructions <replace|overwrite|skip>`.
-     Replace is the default: the plugin is the source of the instructions, and the activation
-     rewrites only its own marked area in every file it writes (CLAUDE.md, the rules, the output
-     style), keeping everything outside the markers, where text specific to this device lives. Overwrite rewrites the whole file and runs only when the person
-     asks for it.
+   - qsm-setup: `qsm-setup activate qsm-setup -- --instructions <replace|overwrite|skip>`. Replace
+     is the default: the plugin is the source of the instructions, and the activation rewrites only
+     its own marked area in every file it writes (CLAUDE.md, the rules, the output style), keeping
+     everything outside the markers, where text specific to this device lives. Overwrite rewrites
+     the whole file and runs only when the person asks for it.
    - qsm-memory, when installed: "Use the qsm session archive as the one memory? Claude Code's own
-     memory is then turned off (`autoMemoryEnabled: false`) and its transcripts are deleted a week
-     after the archive has them (`cleanupPeriodDays: 7`); the MCP is already connected by the
-     plugin." Yes: `qsm-setup activate qsm-memory -- --memory qsm`. No: `--memory skip`.
+     memory is then turned off (`autoMemoryEnabled: false`) and its transcripts are kept for good
+     (`cleanupPeriodDays: 36500`; the default deletes them after 30 days); the MCP is already
+     connected by the plugin." Yes: `qsm-setup activate qsm-memory -- --memory qsm`. No:
+     `--memory skip`.
 4. Run doctor and report PASS / FAIL / SKIP per plugin, the `claude ...` lines and the summary
    line. A FAIL is a finding for the user, not something to retry.
 5. End with the usage review offer, the one walkthrough setup hands off to.

@@ -57,10 +57,11 @@ Every verb takes `--json`. A note expires in 14 days unless you pass `--keep`.
 
 - The archive is `~/.local/share/qsm-memory/memory.db` (override with `QSM_MEMORY_DB`), owner-only.
   It holds what you typed: never sync it.
-- Optional: `qsm-setup activate qsm-memory -- --memory qsm` sets `autoMemoryEnabled: false` and
-  `cleanupPeriodDays: 7` in `~/.claude/settings.json`. With 7 days, `--resume` stops working for
-  older sessions, and `show --full` fails as `missing` once Claude Code deletes the transcript.
-  `show` still prints the saved text.
+- Claude Code deletes its transcripts after `cleanupPeriodDays`, 30 by default, and a deleted
+  transcript never comes back: `show --full` (tool calls and results) and `--resume` need it.
+  `qsm-setup activate qsm-memory -- --memory qsm` sets `autoMemoryEnabled: false` and
+  `cleanupPeriodDays: 36500` in `~/.claude/settings.json`, raising any lower value; `doctor` and
+  every session start report a deleting value as failed until it is fixed.
 - The hooks save in a background process. What it did, or why it failed, is appended to `save.log`
   beside the archive, each line with its date and time.
 - A subagent transcript, and a session in which nobody typed a prompt, is not saved. The first

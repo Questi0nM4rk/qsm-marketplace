@@ -2,7 +2,7 @@
 // The installer places the binary and the two hooks and applies nothing.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import {
   type Activation,
   type ActivationContext,
@@ -10,17 +10,12 @@ import {
   type InstallResult,
   type Step,
 } from "../../../lib/install-contract.ts";
-import { claudeDir } from "../../../lib/paths.ts";
+import { KEEP_DAYS, keepsTranscripts, retentionDays, settingsPath } from "../lib/retention.ts";
 
 const NAME = "harness-memory";
-const CLEANUP_DAYS = 7;
 
 const MEMORY_CHOICES = ["qsm", "skip"] as const;
 export type MemoryChoice = (typeof MEMORY_CHOICES)[number];
-
-function settingsPath(env: ActivationContext["env"]): string {
-  return join(claudeDir(env), "settings.json");
-}
 
 /** The settings object in `text`; JSON that is not an object is as unusable as JSON that does not
  * parse. */
@@ -33,24 +28,24 @@ function parseSettings(text: string): Record<string, unknown> {
 }
 
 /**
- * settings.json with autoMemoryEnabled false and cleanupPeriodDays at most 7, everything else
- * untouched, or null when it already says so.
+ * settings.json with autoMemoryEnabled false and cleanupPeriodDays at least KEEP_DAYS, everything
+ * else untouched, or null when it already says so. A value below KEEP_DAYS is raised, never the
+ * other way: a transcript is the person's, and a tool never sets it up for deletion.
  */
 export function withHarnessMemoryOff(existing: string | null): string | null {
   const settings = existing === null || existing === "" ? {} : parseSettings(existing);
-  const days = settings.cleanupPeriodDays;
-  const daysFine = typeof days === "number" && days <= CLEANUP_DAYS;
-  if (settings.autoMemoryEnabled === false && daysFine) {
+  const keeps = keepsTranscripts(retentionDays(existing));
+  if (settings.autoMemoryEnabled === false && keeps) {
     return null;
   }
   settings.autoMemoryEnabled = false;
-  if (!daysFine) {
-    settings.cleanupPeriodDays = CLEANUP_DAYS;
+  if (!keeps) {
+    settings.cleanupPeriodDays = KEEP_DAYS;
   }
   return `${JSON.stringify(settings, null, 2)}\n`;
 }
 
-const KEYS = `autoMemoryEnabled: false, cleanupPeriodDays: ${CLEANUP_DAYS}`;
+const KEYS = `autoMemoryEnabled: false, cleanupPeriodDays: ${KEEP_DAYS}`;
 
 /** The one write, taken or not taken. A settings.json that does not parse is
  * an error naming the file: rewriting it would lose what the user has there. */
@@ -92,7 +87,7 @@ export const activation: Activation = {
       name: "memory",
       values: [...MEMORY_CHOICES],
       description:
-        "qsm turns Claude Code's own memory off (autoMemoryEnabled: false) and has it delete transcripts after 7 days (cleanupPeriodDays) so this archive is the one memory; skip leaves settings.json alone",
+        "qsm turns Claude Code's own memory off (autoMemoryEnabled: false) and stops it deleting transcripts (cleanupPeriodDays 36500, its default deletes after 30 days) so this archive and the transcripts are the one memory; skip leaves settings.json alone",
     },
   ],
   activate: (ctx): InstallResult => {

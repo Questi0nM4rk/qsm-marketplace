@@ -16,6 +16,6 @@ export type Detached =
 export function startDetached(args: readonly string[], env: Env): Detached {
   const log = join(dirname(resolveDbPath(env)), "save.log");
   mkdirSync(dirname(log), { recursive: true, mode: 0o700 });
-  const failure = spawnDetached("qsm-memory", args, { file: log, append: true }, env);
-  return failure === null ? { started: true, log } : { started: false, reason: failure };
+  const started = spawnDetached("qsm-memory", args, { file: log, append: true }, env);
+  return started.ok ? { started: true, log } : { started: false, reason: started.reason };
 }

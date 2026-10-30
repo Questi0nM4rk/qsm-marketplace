@@ -21,6 +21,7 @@ import { buildServer, parseLines } from "../lib/mcp.ts";
 import { catchUp, projectsDir, saveTranscript, unsavedTranscripts } from "../lib/save.ts";
 import { formatHits, search } from "../lib/search.ts";
 import { bounded, formatList, LIST_LIMIT, listSessions, page, show } from "../lib/sessions.ts";
+import { retentionCheck } from "../lib/retention.ts";
 import { openArchive, resolveDbPath } from "../lib/store.ts";
 // A static import: bun's compiler inlines JSON imports into the binary, so
 // `--help` works with no checkout in the room (AGENTS.md law 9).
@@ -148,9 +149,12 @@ const runBlobPath: Handler = (call) => {
 const count = (db: Database, table: string) =>
   db.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n ?? 0;
 
-/** The health probe qsm-setup runs: the archive opens, or the reason it does not. */
+/** The health probe qsm-setup runs and the session start repeats: the archive opens and Claude
+ * Code keeps its transcripts, or the reason it does not. A retention that deletes is failed, never
+ * a warning: what it deletes is the person's and never comes back. */
 const runDoctor: Handler = () => {
   const path = resolveDbPath(env());
+  const retention = retentionCheck(env());
   try {
     const db = openArchive(env());
     const r = {
@@ -158,12 +162,16 @@ const runDoctor: Handler = () => {
       sessions: count(db, "sessions"),
       notes: count(db, "notes"),
       unsaved: unsavedTranscripts(db, projectsDir(env())).length,
+      retentionDays: retention.data?.days ?? null,
     };
     const tail =
       r.unsaved === 0
         ? "nothing unsaved"
         : `${r.unsaved} unsaved, the next session start saves them`;
-    return ok(r, `archive ${path}: ${r.sessions} sessions, ${r.notes} notes; ${tail}`);
+    const archive = `archive ${path}: ${r.sessions} sessions, ${r.notes} notes; ${tail}`;
+    return retention.data === undefined
+      ? fail("failed", `${archive}; ${retention.message}`, r)
+      : ok(r, `${archive}; ${retention.message}`);
   } catch (error) {
     return fail("failed", `archive ${path} does not open: ${messageOf(error)}`);
   }

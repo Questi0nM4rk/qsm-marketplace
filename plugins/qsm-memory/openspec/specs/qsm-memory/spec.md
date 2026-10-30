@@ -272,15 +272,15 @@ of a blob (an OCR transcription) is derived and never replaces the blob.
 
 ### Requirement: Save keeps the images a person pasted
 
-Claude Code deletes a transcript after `cleanupPeriodDays` (activate sets 7), and a turn holds text
-only, so `save` SHALL copy every base64 image block of a typed user prompt into the blob store and
-write one `blob_ref` row (session id, turn uuid, sha256, media type). The turn uuid is the image
-block's key, the record uuid plus the block's index, because a prompt of only an image has no turn
-row. A second save of the same transcript SHALL add no row and no blob. Images are kept from saves
-made after this behaviour shipped: a session archived earlier gets its images only when its
-transcript is still on disk and is saved again, and nothing re-reads an archived session on its own
-to backfill, because its transcript may already be deleted. Files a prompt names and
-URLs it contains are not kept.
+Claude Code deletes a transcript after `cleanupPeriodDays` (activate sets 36500, so never; a machine
+without the activation deletes after its default of 30), and a turn holds text only, so `save` SHALL
+copy every base64 image block of a typed user prompt into the blob store and write one `blob_ref`
+row (session id, turn uuid, sha256, media type). The turn uuid is the image block's key, the record
+uuid plus the block's index, because a prompt of only an image has no turn row. A second save of the
+same transcript SHALL add no row and no blob. Images are kept from saves made after this behaviour
+shipped: a session archived earlier gets its images only when its transcript is still on disk and is
+saved again, and nothing re-reads an archived session on its own to backfill, because its transcript
+may already be deleted. Files a prompt names and URLs it contains are not kept.
 
 #### Scenario: a pasted screenshot outlives the transcript
 
@@ -482,10 +482,16 @@ The plugin's hooks-facing contract SHALL be the `$.memory` noun generated from `
 ### Requirement: Activation turns the harness's own memory off, by choice
 
 `qsm-setup activate qsm-memory -- --memory <qsm|skip>` SHALL run `scripts/activate.ts`. With
-`qsm` it SHALL set `autoMemoryEnabled` to `false` and `cleanupPeriodDays` to `7` (unless the file
-already holds a lower value) in the Claude home's `settings.json`, leave every other key as it
-was, and create the file when there is none, so Claude Code stops writing its own memory files and
-deletes its transcripts a week after the archive has them. With `skip` it SHALL write nothing. A
+`qsm` it SHALL set `autoMemoryEnabled` to `false` and `cleanupPeriodDays` to `36500` (unless the
+file already holds that value or a higher one) in the Claude home's `settings.json`, leave every
+other key as it was, and create the file when there is none, so Claude Code stops writing its own
+memory files and never deletes a transcript. A lower value is raised, never kept: Claude Code's
+default of 30 days deleted every transcript older than a month on this machine before the archive
+existed, and a 7-day value this plugin once set deleted two weeks of them the day after; a
+transcript is the person's, holds what `show --full` reads (tool calls, results), and never comes
+back. Nothing in qsm SHALL ever write a value below 36500, and the doctor and the session start
+SHALL report any such value as `failed` naming the fix (the Retention requirement). With `skip` it
+SHALL write nothing. A
 `settings.json` that does not parse SHALL be an error naming the file, and the file SHALL be left
 as it was. Install SHALL never run it. The MCP connection is not a step: the plugin's `.mcp.json`
 registers `qsm-memory mcp` when the plugin is enabled.
@@ -493,13 +499,18 @@ registers `qsm-memory mcp` when the plugin is enabled.
 #### Scenario: qsm turns the harness memory off and keeps every other key
 
 - **WHEN** the activation runs with `--memory qsm` and `settings.json` holds other keys
-- **THEN** `autoMemoryEnabled` is `false`, `cleanupPeriodDays` is `7`, the other keys are
+- **THEN** `autoMemoryEnabled` is `false`, `cleanupPeriodDays` is `36500`, the other keys are
   unchanged, and the step is `installed`
 
-#### Scenario: qsm leaves a lower cleanupPeriodDays alone
+#### Scenario: qsm raises a deleting cleanupPeriodDays
 
 - **WHEN** `settings.json` holds `cleanupPeriodDays: 3`
-- **THEN** it stays `3` and `autoMemoryEnabled` is `false`
+- **THEN** it becomes `36500` and `autoMemoryEnabled` is `false`
+
+#### Scenario: qsm leaves a longer retention alone
+
+- **WHEN** `settings.json` holds `cleanupPeriodDays: 99999`
+- **THEN** it stays `99999` and `autoMemoryEnabled` is `false`
 
 #### Scenario: running it again with nothing changed is already
 
@@ -510,6 +521,26 @@ registers `qsm-memory mcp` when the plugin is enabled.
 
 - **WHEN** the activation runs with `--memory qsm` and `settings.json` is not JSON
 - **THEN** the step is `error`, names the file, and the file is byte-for-byte as it was
+
+### Requirement: Retention is checked wherever qsm reads the settings, and a deletion is failed
+
+`cleanupPeriodDays` is the one setting through which Claude Code deletes what the person typed, so
+`doctor` SHALL read it and answer `failed` (never a warning) when it is absent (Claude Code then
+deletes after 30 days) or below 36500, naming the file, the value in force, and the activation that
+fixes it; `ok` otherwise, naming the value. The `session.start` hook SHALL call `doctor` after its
+catch-up save, so a deleting retention is toasted at every session start until it is fixed. A
+`settings.json` that does not parse is `failed` too: an unknown retention is not a kept one.
+
+#### Scenario: a deleting retention fails the doctor and the session start
+
+- **WHEN** `settings.json` holds `cleanupPeriodDays: 30`, or no such key
+- **THEN** `doctor` is `failed` naming `settings.json`, the days in force and
+  `qsm-setup activate qsm-memory -- --memory qsm`, and a session start toasts that message
+
+#### Scenario: a kept retention is ok
+
+- **WHEN** `settings.json` holds `cleanupPeriodDays: 36500`
+- **THEN** `doctor` is `ok` and says transcripts are kept
 
 ### Requirement: The memory skill and the recall agent send the model to the archive first
 

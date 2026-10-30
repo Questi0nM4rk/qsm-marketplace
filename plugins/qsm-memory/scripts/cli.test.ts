@@ -1,6 +1,6 @@
 // qsm-memory through its real surface: the binary's argv, stdout, stderr, exit.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import { which } from "bun";
@@ -29,6 +29,8 @@ function sandbox(): Sandbox {
   const projects = join(home, "c", "projects", "-home-work");
   mkdirSync(work, { recursive: true });
   mkdirSync(projects, { recursive: true });
+  // the Claude home keeps its transcripts, as the activation sets it; doctor fails otherwise
+  writeFileSync(join(home, "c", "settings.json"), '{ "cleanupPeriodDays": 36500 }\n');
   return { home, work, projects };
 }
 
@@ -222,6 +224,18 @@ describe("qsm-memory cli, notes and errors", () => {
     const r = run(box, ["doctor", "--json"]);
     expect(r.exit).toBe(0);
     expect(envelopeOf(r.stdout).message).toContain("0 sessions, 0 notes; 1 unsaved");
+  });
+
+  test("doctor fails naming the fix when Claude Code is set to delete transcripts", () => {
+    const box = sandbox();
+    writeFileSync(join(box.home, "c", "settings.json"), '{ "cleanupPeriodDays": 30 }\n');
+    const r = run(box, ["doctor", "--json"]);
+    expect(r.exit).not.toBe(0);
+    expect(envelopeOf(r.stdout).code).toBe("failed");
+    expect(envelopeOf(r.stdout).message).toContain("deletes transcripts after 30 days");
+    expect(envelopeOf(r.stdout).message).toContain("--memory qsm");
+    rmSync(join(box.home, "c", "settings.json"));
+    expect(envelopeOf(run(box, ["doctor", "--json"]).stdout).message).toContain("default of 30");
   });
 
   test("no verb removes a saved session", () => {

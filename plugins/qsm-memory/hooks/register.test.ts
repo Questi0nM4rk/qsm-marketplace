@@ -23,6 +23,7 @@ const summary = (n: number) => ({
 const START = { cwd: "/work", surface: null, isInteractive: false } as const;
 const SAVE = "run qsm-memory save --catch-up --detach --json";
 const ORIENT_RUN = "run qsm-memory orient --cwd /work --json";
+const DOCTOR_RUN = "run qsm-memory doctor --json";
 
 /** The envelope each verb prints, by verb word; a verb not named here answers ok with no data. */
 const ENVELOPES: Readonly<
@@ -73,10 +74,24 @@ test("a session start starts the catch-up save and the first prompt carries the 
   await $.session.start(START);
   const r = await prompt($);
 
-  expect(runs(trail)).toEqual([SAVE, ORIENT_RUN]);
+  expect(runs(trail)).toEqual([SAVE, DOCTOR_RUN, ORIENT_RUN]);
   const [context] = r.context ?? [];
   expect(r.context).toHaveLength(1);
   expect(context).toBe(BRIEFING);
+});
+
+test("a session start toasts a doctor that fails, so a deleting retention is seen every session", async ($, on) => {
+  const deleting =
+    "Claude Code deletes transcripts after 30 days (settings.json); run qsm-setup activate qsm-memory -- --memory qsm";
+  const trail = record(on, {
+    ...ENVELOPES,
+    doctor: { code: "failed", exit: 1, message: deleting, data: null },
+  });
+
+  await $.session.start(START);
+
+  expect(trail.filter((line) => line.startsWith("toast "))).toHaveLength(1);
+  expect(trail.find((line) => line.startsWith("toast "))).toContain(deleting);
 });
 
 test("the briefing comes with the first prompt only", async ($, on) => {
@@ -99,7 +114,7 @@ test("the first prompt after a /clear carries the briefing again", async ($, on)
   const r = await prompt($);
 
   expect(r.context?.[0]).toBe(BRIEFING);
-  expect(runs(trail)).toEqual([SAVE, ORIENT_RUN, SAVE, ORIENT_RUN]);
+  expect(runs(trail)).toEqual([SAVE, DOCTOR_RUN, ORIENT_RUN, SAVE, ORIENT_RUN]);
 });
 
 test("the first prompt after each compaction carries the briefing again", async ($, on) => {
@@ -129,7 +144,7 @@ test("a session end of any other reason saves and owes no briefing", async ($, o
   const r = await prompt($);
 
   expect(r.context).toBeUndefined();
-  expect(runs(trail)).toEqual([SAVE, ORIENT_RUN, SAVE]);
+  expect(runs(trail)).toEqual([SAVE, DOCTOR_RUN, ORIENT_RUN, SAVE]);
 });
 
 test("a catch-up that cannot start toasts the event and the briefing still comes", async ($, on) => {

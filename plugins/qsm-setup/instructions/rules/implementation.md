@@ -123,4 +123,8 @@ A tool leaves the machine as it found it, plus only what it was asked to add. Be
 installer removes every artifact an older version left (links, PATH blocks, data directories,
 backups) completely, and names each removal; a second run removes nothing. Anything that creates a
 temporary directory writes its full cleanup, so the count of entries in the temporary directory is
-the same after a run as before.
+the same after a run as before. What the person made is never deleted by a tool: no retention
+period, no cleanup of their transcripts, notes, sessions or files, and no setting that makes another
+tool delete them (`cleanupPeriodDays` below 36500 is such a setting), because a deleted transcript
+never comes back and nobody asked for it to go. A tool that must make room archives at maximum
+compression and names the archive.
