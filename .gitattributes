@@ -2,4 +2,5 @@
 # export-ignore keeps them out of what qsm-langdev scores, as the root spec asks: tools leave
 # generated files to the generator.
 plugins/*/hooks/noun.generated.ts export-ignore linguist-generated=true
+plugins/*/hooks/host.generated.ts export-ignore linguist-generated=true
 plugins/*/types/index.d.ts linguist-generated=true

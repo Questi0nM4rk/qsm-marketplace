@@ -22,6 +22,7 @@
 // needs one returns `{ value }` from an `on("fs.read", ...)` of its own.
 import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
+import { printed, recordingHost } from "./host.generated.ts";
 
 const VALID = JSON.stringify({
   name: "qsm-example",
@@ -161,40 +162,14 @@ const BRIEF =
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>;
 type Engine = Parameters<Body>[0];
 
-/** What the brief verb prints under --json: `data` on ok, or a failure with `message`. */
-function printed(answer: { readonly text: string | null } | { readonly failed: string }) {
-  const failed = "failed" in answer;
-  const envelope = failed
-    ? { code: "missing", exit: 4, message: answer.failed, data: null }
-    : { code: "ok", exit: 0, message: "", data: { plugin: "qsm-web", text: answer.text } };
-  return {
-    value: {
-      stdout: JSON.stringify({ ...envelope, reason: "", warnings: [] }),
-      stderr: "",
-      exitCode: envelope.exit,
-      isStdoutTruncated: false,
-      isStderrTruncated: false,
-    },
-  };
-}
-
 function briefHost(on: On, answer: { readonly text: string | null } | { readonly failed: string }) {
-  const seen = { runs: [] as string[], toasts: [] as string[], logs: [] as string[] };
   on("tool.call", () => ({ result: "tool output", text: "tool output" }));
   on("session.id", () => ({ value: "s1" }));
-  on("ui.toast", (_$, e) => {
-    seen.toasts.push(e.text);
-    return { value: undefined };
-  });
-  on("ui.log", (_$, e) => {
-    seen.logs.push(e.text);
-    return { value: undefined };
-  });
-  on("process.run", (_$, e) => {
-    seen.runs.push(e.argv.join(" "));
-    return printed(answer);
-  });
-  return seen;
+  return recordingHost(on, () =>
+    "failed" in answer
+      ? printed("missing", 4, answer.failed)
+      : printed("ok", 0, "", { plugin: "qsm-web", text: answer.text }),
+  );
 }
 
 const read = ($: Engine, filePath: string) => $.tool.call({ tool: "Read", file_path: filePath });

@@ -7,6 +7,7 @@
 // their chains.
 import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
+import { printed, recordingHost } from "./host.generated.ts";
 
 type Body = Extract<Parameters<typeof test>[1], (...args: never[]) => unknown>;
 type Engine = Parameters<Body>[0];
@@ -17,23 +18,20 @@ type Answer = { readonly data?: unknown } | { readonly failed: string };
 const NOT_ON_PATH = "qsm-index could not start a background build: qsm-index is not on PATH";
 const START = { cwd: "/repo/src", surface: null, isInteractive: false } as const;
 
-/** The stdout and exit qsm-index has under --json for an answer. */
-function printed(answer: Answer): { stdout: string; exitCode: number } {
-  const failed = "failed" in answer;
-  const envelope = failed
-    ? { code: "failed", exit: 1, message: answer.failed, data: null }
-    : { code: "ok", exit: 0, message: "", data: answer.data ?? null };
-  return {
-    stdout: JSON.stringify({ ...envelope, reason: "", warnings: [] }),
-    exitCode: envelope.exit,
-  };
-}
+/** What qsm-index prints under --json for an answer. */
+const answered = (answer: Answer) =>
+  "failed" in answer
+    ? printed("failed", 1, answer.failed)
+    : printed("ok", 0, "", answer.data ?? null);
 
 /** The host under register.tsx: the chain bottoms, `ui.*`, the session's cwd, and, unless
  * `answer` is null, a `process.run` that answers it. A tool that fails answers `isError`. Records
  * each argv run, each toast and each tool call that reached the bottom. */
 function host(on: On, answer: Answer | null = {}, toolFails = false) {
-  const seen = { runs: [] as string[], toasts: [] as string[], logs: [] as string[], tools: 0 };
+  const seen = Object.assign(
+    recordingHost(on, answer === null ? undefined : () => answered(answer)),
+    { tools: 0 },
+  );
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
   on("prompt.submit", (_$, e) => ({ text: e.text, context: e.context }));
   on("tool.call", (_$, _e) => {
@@ -41,27 +39,6 @@ function host(on: On, answer: Answer | null = {}, toolFails = false) {
     return { result: "tool output", text: "tool output", ...(toolFails ? { isError: true } : {}) };
   });
   on("session.cwd", () => ({ value: "/repo" }));
-  on("ui.log", (_$, e) => {
-    seen.logs.push(e.text);
-    return { value: undefined };
-  });
-  on("ui.toast", (_$, e) => {
-    seen.toasts.push(e.text);
-    return { value: undefined };
-  });
-  if (answer !== null) {
-    on("process.run", (_$, e) => {
-      seen.runs.push(e.argv.join(" "));
-      return {
-        value: {
-          ...printed(answer),
-          stderr: "",
-          isStdoutTruncated: false,
-          isStderrTruncated: false,
-        },
-      };
-    });
-  }
   return seen;
 }
 

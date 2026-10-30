@@ -11,5 +11,9 @@
   "arrowParens": "always",
   "bracketSameLine": false,
   "bracketSpacing": true,
-  "ignorePatterns": ["**/hooks/noun.generated.ts", "**/types/index.d.ts"]
+  "ignorePatterns": [
+    "**/hooks/noun.generated.ts",
+    "**/hooks/host.generated.ts",
+    "**/types/index.d.ts"
+  ]
 }

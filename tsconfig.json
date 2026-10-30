@@ -20,7 +20,7 @@
     "node_modules",
     "**/dist/**",
     "plugins/*/hooks/register.ts",
-    "plugins/*/hooks/noun.generated.ts",
+    "plugins/*/hooks/*.generated.ts",
     "plugins/*/hooks/*.test.ts"
   ]
 }
