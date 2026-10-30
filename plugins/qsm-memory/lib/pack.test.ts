@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -268,5 +269,80 @@ describe("a sessions file Claude Code is rewriting", () => {
     expect(existsSync(box.jsonl("idle2"))).toBe(true);
     expect(box.archives()).toEqual([]);
     expect(getState(box.db, "last_pack_at")).toBeNull();
+  });
+});
+
+describe("a transcript that cannot be removed", () => {
+  /** The project directory is read-only while the originals go: unlink fails with EACCES. */
+  const lockDuringRemoval = (box: ReturnType<typeof packBox>) => ({
+    afterArchive: () => {
+      chmodSync(box.projects, 0o555);
+    },
+  });
+
+  test("puts the earlier packed row back, so no row names an archive that is gone", async () => {
+    const box = packBox(["stuck"]);
+    box.db.run(
+      "INSERT INTO packed VALUES ('stuck', '/older.tar.zst', '2026-08-01T00:00:00.000Z', '[\"a\"]')",
+    );
+
+    const r = await pack(box.db, box.env, new Date(), lockDuringRemoval(box));
+    chmodSync(box.projects, 0o755);
+
+    expect(r.code).toBe("partial");
+    expect(existsSync(box.jsonl("stuck"))).toBe(true);
+    expect(box.db.query("SELECT archive, packed_at, entries FROM packed").all()).toEqual([
+      { archive: "/older.tar.zst", packed_at: "2026-08-01T00:00:00.000Z", entries: '["a"]' },
+    ]);
+    expect(box.archives()).toEqual([]);
+  });
+
+  test("deletes the new row when there was none", async () => {
+    const box = packBox(["stuck"]);
+
+    await pack(box.db, box.env, new Date(), lockDuringRemoval(box));
+    chmodSync(box.projects, 0o755);
+
+    expect(box.db.query("SELECT session_id FROM packed").all()).toEqual([]);
+  });
+});
+
+describe("an archive no packed row names", () => {
+  test("whose transcripts never left, a killed run's copy, is removed and the run packs again", async () => {
+    const box = packBox(["idle"]);
+    const now = new Date("2026-10-30T12:00:00");
+    // the run is killed after the rename: the archive exists, no row names it, nothing was removed
+    await pack(box.db, box.env, now, {
+      afterArchive: () => {
+        throw new Error("killed");
+      },
+    }).catch(() => null);
+    expect(box.archives()).toEqual(["2026-10-30.tar.zst"]);
+
+    const r = await pack(box.db, box.env, now);
+
+    expect(r.code).toBe("ok");
+    expect(box.archives()).toEqual(["2026-10-30.tar.zst"]);
+    expect(existsSync(box.jsonl("idle"))).toBe(false);
+    expect(box.db.query("SELECT session_id FROM packed").all()).toEqual([{ session_id: "idle" }]);
+  });
+
+  test("holding a transcript gone from projects/ is kept, as after a rebuilt database", async () => {
+    const box = packBox(["idle1"]);
+    const first = await pack(box.db, box.env, new Date("2026-10-30T12:00:00"));
+    expect(first.code).toBe("ok");
+    // the database is rebuilt: the rows are lost, and idle1 now exists only in the archive
+    box.db.run("DELETE FROM packed");
+    setState(box.db, "last_pack_at", null);
+    expect(existsSync(box.jsonl("idle1"))).toBe(false);
+    const path = box.jsonl("idle2");
+    writeFileSync(path, new TranscriptBuilder({ sessionId: "idle2" }).human("x").text());
+    saveTranscript(box.db, path, box.env);
+    utimesSync(path, new Date("2026-09-01T12:00:00"), new Date("2026-09-01T12:00:00"));
+
+    const r = await pack(box.db, box.env, new Date("2026-10-31T12:00:00"));
+
+    expect(r.code).toBe("ok");
+    expect(box.archives().toSorted()).toEqual(["2026-10-30.tar.zst", "2026-10-31.tar.zst"]);
   });
 });
