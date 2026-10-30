@@ -1,7 +1,7 @@
 # Usage
 
 `qsm-memory <verb> [args]`; `--help` lists options. Verbs: `save`, `search`, `show`, `list`,
-`blob put`, `blob path`, `note`, `notes`, `orient`, `doctor`, `mcp`.
+`blob put`, `blob path`, `note`, `notes`, `orient`, `doctor`, `pack`, `mcp`.
 
 ```bash
 qsm-memory search "words" --since 7d
@@ -18,6 +18,16 @@ qsm-memory note "text" --expires 14
   outcome is appended to `save.log` beside the archive, every line led by an ISO timestamp
   (`save --log`). A transcript catch-up cannot save is named, the rest still save: the outcome
   is `partial` and lists it.
+- `pack` moves the transcripts nobody has used for 7 days of use (a local date on which a session
+  started, plus today; a break adds nothing) into `transcripts/<YYYY-MM-DD>.tar.zst` beside the
+  archive, each original removed only after `zstd -t` and a listing of the archive agree. It runs
+  only under `--memory qsm`, 30 days after activation and 30 days after the last pack; otherwise
+  it answers `ok` naming the first unmet condition and moves nothing. An unsaved or a live
+  transcript stays. `pack` fails `missing` without `tar` or `zstd`, and `partial` names a file
+  that changed while packing. `--detach` and `--log` work as for `save`. Restore:
+  `tar --zstd -xmf <archive> -C <claude home> <entries>`, as `show --full` prints it.
+- `--memory <qsm|claude>` of the activation records the choice; under `claude` `doctor` reports a
+  deleting `cleanupPeriodDays` as the person's, ok, and nothing is packed.
 - `list` prints at most `--limit` lines (default 20) and ends with `N more: --limit <M>` when
   there are others; `--since` takes `Nd` or a date and is a usage error otherwise.
 - `show <id>` prints the saved text; `--full` reads the transcript file instead (tool calls and
@@ -32,9 +42,9 @@ qsm-memory note "text" --expires 14
   the project's last three sessions, the in-progress tasks with their epics, the notes, how to
   search.
 - Hooks (function hooks in `hooks/register.tsx`): `session.end` and `session.start`
-  run `save --catch-up --detach`; the first prompt of a session, and the first after a `/clear` or
-  a compaction, carries `orient --cwd <cwd>` as hidden context. None blocks;
-  a failure is a toast `qsm-memory ERROR: <event>: <reason>` and a log line.
+  run `save --catch-up --detach`, and `session.start` also `pack --detach`; the first prompt of a
+  session, and the first after a `/clear` or a compaction, carries `orient --cwd <cwd>` as hidden
+  context. None blocks; a failure is a toast `qsm-memory ERROR: <event>: <reason>` and a log line.
 - `memory` (skill, `qsm-memory:memory`) fires at session start, before asking something an earlier
   session may have settled, and at a handoff: search first, act on the hit, write one note.
 - `recall` (agent, `qsm-memory:recall`, haiku) takes a question about earlier sessions and answers

@@ -22,10 +22,10 @@ keeps every transcript for good and searches them itself, this plugin has no rea
 | ----- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Skill | `memory`                       | Search the archive before asking you again, act on the hit, write one note at a handoff.                                             |
 | Agent | `recall`                       | Answers one question about earlier sessions, every claim cited as `<session-id> #<turn> <date>`.                                     |
-| Hook  | `session.start`, `session.end` | Save main sessions the archive lacks, in a background process.                                                                       |
+| Hook  | `session.start`, `session.end` | Save main sessions the archive lacks, in a background process; `session.start` also runs `pack`.                                     |
 | Hook  | `prompt.submit`                | Give the first prompt of a session, the first after a compaction, and the first after /clear, a briefing of at most 1500 characters. |
 | MCP   | `qsm-memory`                   | `search`, `show`, `list`, `notes` and `note` as tools.                                                                               |
-| CLI   | `qsm-memory`                   | 9 verbs, see [USAGE.md](USAGE.md).                                                                                                   |
+| CLI   | `qsm-memory`                   | 10 verbs, see [USAGE.md](USAGE.md).                                                                                                  |
 
 ## Install
 
@@ -62,6 +62,13 @@ Every verb takes `--json`. A note expires in 14 days unless you pass `--keep`.
   `qsm-setup activate qsm-memory -- --memory qsm` sets `autoMemoryEnabled: false` and
   `cleanupPeriodDays: 36500` in `~/.claude/settings.json`, raising any lower value; `doctor` and
   every session start report a deleting value as failed until it is fixed.
+- Under `--memory qsm`, `pack` moves transcripts nobody has used for 7 days of use (a day on which
+  a session started, so a break never ages one) into `transcripts/<date>.tar.zst` beside the
+  archive, at most once in 30 days and never in the first 30 days after activation. Each original
+  is removed only after the archive is tested and listed. `show --full` of a packed session names
+  the archive and the restore: `tar --zstd -xmf <archive> -C ~/.claude <entries>`, which also
+  makes the files fresh, so they are not packed again at once. Needs `tar` and `zstd` on `PATH`.
+  `--memory claude` leaves Claude Code's own retention in force and packs nothing.
 - The hooks save in a background process. What it did, or why it failed, is appended to `save.log`
   beside the archive, each line with its date and time.
 - A subagent transcript, and a session in which nobody typed a prompt, is not saved. The first
