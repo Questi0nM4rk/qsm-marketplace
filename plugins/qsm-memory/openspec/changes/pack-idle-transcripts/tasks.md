@@ -15,12 +15,12 @@
 
 ## 2. The pack
 
-- [ ] 2.1 `lib/pack.ts`, the rule: days of use from `sessions.started_at` plus today, a
-  transcript's age, the run gate (choice, grace, cadence, 3 of the 5 dates before today). Pure
-  functions over dates and session starts. Proof: `lib/pack.test.ts` with the person's cases as
-  data: Monday, a week off, Monday (age 5, stays); a 14-day break with 2 sessions (adds 2); three
-  days back after 20 idle days (gate closed each day, open on the fourth); 10 days after activation
-  (grace); 12 days after the last pack (cadence). Blocks: 1.1.
+- [ ] 2.1 `lib/pack.ts`, the rule: days of use from `sessions.started_at` plus today, a transcript's
+      age, whether a pack is due (choice, grace, cadence). Pure functions over dates and session
+      starts. Proof: `lib/pack.test.ts` with the person's cases as data: Monday, a week off, Monday
+      (age 5, stays); a 14-day break with 2 sessions (adds 2); the first day back after a 20-day
+      break (adds 1); 10 days after activation (grace); 12 days after the last pack (cadence).
+      Blocks: 1.1.
 - [ ] 2.2 `lib/pack.ts`, the move: idle transcripts minus `unsavedTranscripts` minus live sessions
   (`sessions/<pid>.json` with a running pid), `tar` piped to `zstd -19 -T0` into `<name>.part`,
   `zstd -t`, the listing compared, rename, originals removed, `packed` rows, `last_pack_at` claimed

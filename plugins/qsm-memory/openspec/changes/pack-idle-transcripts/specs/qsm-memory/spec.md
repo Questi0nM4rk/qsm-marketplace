@@ -11,11 +11,9 @@ transcript, and a day with one session on a break adds one.
 
 `pack` SHALL run only when all of these hold, and otherwise answer `ok` naming the first that does
 not, moving nothing: the recorded retention choice is `qsm`; 30 days have passed since
-`activated_at`; 30 days have passed since `last_pack_at` when there is one; and at least 3 of the 5
-calendar dates before today are days of use, so after a break the person has 3 full days of use to
-reopen what still matters before a pack can run. `last_pack_at` SHALL be claimed in one transaction
-before the run, so two runs started together move files once, and SHALL be set back to its earlier
-value when the run fails.
+`activated_at`; and 30 days have passed since `last_pack_at` when there is one. `last_pack_at` SHALL
+be claimed in one transaction before the run, so two runs started together move files once, and
+SHALL be set back to its earlier value when the run fails.
 
 A run SHALL take every idle main transcript (`projects/<dir>/<id>.jsonl` under the Claude home)
 together with its session directory (`projects/<dir>/<id>/`), except one the archive has not saved
@@ -34,7 +32,7 @@ mtime so the next run does not take them again.
 
 #### Scenario: a transcript idle for 7 days of use is packed and restores
 
-- **WHEN** a saved transcript last changed before 7 days of use, the gate holds, and `pack` runs
+- **WHEN** a saved transcript last changed before 7 days of use, a pack is due, and `pack` runs
 - **THEN** the transcript and its session directory are in `transcripts/<today>.tar.zst`, gone from
   `projects/`, and `tar --zstd -xmf` of that archive into the Claude home lets
   `claude --resume <id>` open the session
@@ -50,11 +48,10 @@ mtime so the next run does not take them again.
 - **WHEN** a transcript changed before a 14-day break with sessions on 2 of those days
 - **THEN** the break adds 2 to its age
 
-#### Scenario: the first days back after a break pack nothing
+#### Scenario: the first day back after a break ages a session by one
 
-- **WHEN** no session started for 20 days, then sessions start on three consecutive days
-- **THEN** `pack` on each of the three days answers `ok` naming the activity gate and moves
-  nothing, and on the fourth day the gate holds
+- **WHEN** a transcript had age 3 before a 20-day break with no session, and a session starts
+- **THEN** its age is 4 and a pack due that day leaves it in place
 
 #### Scenario: the first 30 days after activation pack nothing
 

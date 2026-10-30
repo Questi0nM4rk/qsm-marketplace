@@ -8,7 +8,7 @@ plus the session's `projects/<dir>/<id>/` directory: subagents, `tool-results/`)
 after a session starts (code.claude.com/docs/en/settings-reference, `cleanupPeriodDays`). The
 person settled the rule on 2026-10-30 (epic qsm-a0zj): age is counted in days of use, a pack runs
 monthly and only while the person is working, and nothing is deleted without an archive. The
-numbers in this design (7 days of use, 3 of the 5 days before today, 30 days of grace and cadence)
+numbers in this design (7 days of use, 30 days of grace and cadence)
 are the person's decisions, not measurements.
 
 ## Goals / Non-Goals
@@ -34,11 +34,10 @@ are the person's decisions, not measurements.
 2. **A transcript's age is the number of days of use after the local date of its mtime.** Out at
    7. A resumed session appends to its file, so its mtime moves and its age is 0 again, which is
    the person's "reopening makes it used".
-3. **The run gate is one function of today**: the choice is `qsm`; 30 days have passed since
-   `activated_at` and since `last_pack_at` (when there is one); and at least 3 of the 5 calendar
-   dates before today are days of use, so a return gives 3 full days of use before a pack can
-   run. Any condition false answers `ok` with the reason, never an
-   error, because not packing is the safe state.
+3. **Whether a pack is due is one function of today**: the choice is `qsm`, and 30 days have passed
+   since `activated_at` and since `last_pack_at` (when there is one). No separate activity gate: age
+   in days of use already adds nothing for a break. Any condition false answers `ok` with the
+   reason, never an error, because not packing is the safe state.
 4. **What is never packed**, whatever its age: a transcript the archive has not saved since its
    last change (the set `unsavedTranscripts` already computes, reused), so no text is lost to
    search; and a live session, one whose id appears in a `~/.claude/sessions/<pid>.json` whose pid

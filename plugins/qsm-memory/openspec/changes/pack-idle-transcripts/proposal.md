@@ -13,9 +13,7 @@ every day (epic qsm-a0zj).
   `zstd -19` archive beside the database, and removes each original only after the archive is
   checked. A day of use is a day on which a main session started; a day without Claude Code adds
   nothing, so a break never ages a transcript.
-- `pack` runs at most once every 30 days, never in the first 30 days after activation, and only
-  when at least 3 of the 5 days before today were days of use, so after a break the person has 3
-  full working days to reopen what still matters.
+- `pack` runs at most once every 30 days and never in the first 30 days after activation.
 - The `session.start` hook starts `pack` detached, beside the catch-up save. No timer.
 - Activation records the person's choice in the archive: `qsm` (cleanupPeriodDays 36500 and the
   pack) or `claude` (Claude Code's own retention, qsm writes nothing). **BREAKING**: the
@@ -56,9 +54,10 @@ None: packing is part of what the archive keeps, so it lives in the `qsm-memory`
   transcript. Waived: a touch only resets the clock, which delays a pack and never hastens one.
 - Devil's advocate: a session left open and idle in a pane would be packed while Claude Code still
   writes to it. Fixed: a live session (a `sessions/<pid>.json` with a running pid) is never taken.
-- Devil's advocate: the gate counted today, so a return gave 2 days, not the 3 promised. Fixed: the
-  gate counts the 5 dates before today.
-- Future archaeologist: 7 days of use, 3 of 5 and 30 days look like measured values. Fixed: the
+- Scope sniper: an activity gate (3 days of use in the last 5) protected the days after a break.
+  Cut on the person's review: age in days of use already adds nothing for a break, so the only
+  session the gate held back is one that sat 6 days of use idle before the break.
+- Future archaeologist: 7 days of use and 30 days look like measured values. Fixed: the
   design names them as the person's decisions of 2026-10-30.
 - Scope sniper: the doctor's count of packed sessions was not asked for. Fixed: cut from the spec
   and tasks. Kept: the `packed` table (it is how `show --full` names the archive to restore from)
