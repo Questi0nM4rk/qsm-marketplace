@@ -12,6 +12,16 @@ sig=""
 export LIBSEAT_BACKEND=noop XDG_STATE_HOME="$dir/xdg-state" XDG_CACHE_HOME="$dir/xdg-cache" XDG_DATA_HOME="$dir/xdg-data"
 mkdir -p "$XDG_STATE_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME"
 
+# One session bus for the whole slot, at a path the host reaches too: sway, niri, Hyprland, every
+# client Hyprland starts and the shell share it, so a real client (notify-send) reaches the shell.
+dbus-daemon --session --nofork --nopidfile --address="unix:path=$rt/bus" >"$dir/dbus.log" 2>&1 &
+for ((i = 0; i < 50; i++)); do
+  [[ -S "$rt/bus" ]] && break
+  sleep 0.1
+done
+[[ -S "$rt/bus" ]] || exit 2
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus"
+
 WLR_BACKENDS=headless WLR_RENDERER=gles2 WLR_RENDER_DRM_DEVICE="${DRIVE_RENDER_NODE:?}" WLR_LIBINPUT_NO_DEVICES=1 \
   sway -c "$dir/sway.conf" >"$dir/sway.log" 2>&1 &
 for ((i = 0; i < 50; i++)); do
@@ -21,7 +31,7 @@ done
 [[ -s "$dir/display" ]] || exit 3
 
 # DRIVE_AQUAMARINE is empty when the installed library is fixed (see slot_aquamarine_lib in drive-slot).
-WAYLAND_DISPLAY="$(cat "$dir/display")" dbus-run-session -- niri -c "$dir/niri.kdl" -- \
+WAYLAND_DISPLAY="$(cat "$dir/display")" niri -c "$dir/niri.kdl" -- \
   env ${DRIVE_AQUAMARINE:+LD_LIBRARY_PATH="$DRIVE_AQUAMARINE"} start-hyprland -- --config "$dir/hyprland.lua" >"$dir/niri.log" 2>&1 &
 for ((i = 0; i < 100; i++)); do
   sig="$(find "$rt/hypr" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | head -1)"
@@ -56,5 +66,5 @@ if [[ -n "${DRIVE_FAKETIME:-}" ]]; then
   chmod +x "$dir/bin/hyprlock"
   PATH="$dir/bin:$PATH"
 fi
-XDG_CONFIG_HOME="$cfg" QT_QPA_PLATFORMTHEME=qt6ct dbus-run-session -- qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
+XDG_CONFIG_HOME="$cfg" QT_QPA_PLATFORMTHEME=qt6ct qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 wait
