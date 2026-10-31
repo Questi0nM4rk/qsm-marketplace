@@ -160,9 +160,10 @@ MEASURED on 2026-10-31 unless it says otherwise. Nothing in any repository was w
 - taplo stays at edit against the use rule as measured: it is the only TOML checker, it catches a
   broken TOML file no other edit checker reads, and it costs 4 ms. Zero findings on valid files is
   what a syntax checker finds on valid files.
-- devskim stays at edit unmeasured: it is not installed here, and without it dotnet has no edit
-  checker, which the registry gate refuses. Open for the owner: install and measure it, or let
-  dotnet have no edit checker.
+- devskim stays at edit, measured on 2026-10-31 after the owner had it installed (DevSkim CLI
+  1.0.100): one `.cs` file 0.73-0.76 s at load 1.9, under the 1 s cost rule; 0 findings on 40 real
+  `.cs` files of two repositories, and on a synthetic file it reported DS126858 (MD5) and DS137138
+  (plain http). Like bandit for Python, it is the only security checker for C#.
 - zsh-lint and zshellcheck leave edit: not installed, so neither cost nor use is measured.
 
 ## The edit hook after the change (task 2.2)
