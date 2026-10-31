@@ -190,17 +190,29 @@ test("a Read of an ordinary file runs", async ($, on) => {
 const RAN = { exitCode: 0, stderr: "", isStdoutTruncated: false, isStderrTruncated: false };
 const PASTE = { text: "key ghp_x", wait: false, origin: { kind: "composer" } } as const;
 
-/** The prompt chain's bottom, `qsm-secrets capture` answering `stdout`; returns the last toast. */
-function host(on: On, stdout: string): () => string {
+/** The session a prompt is submitted in: its id and working directory. */
+function inSession(on: On): void {
+  on("session.id", () => ({ value: "s1" }));
+  on("session.cwd", () => ({ value: "/home/u/proj" }));
+}
+
+/** The prompt chain's bottom, `qsm-secrets capture` answering `stdout`; returns the last toast and
+ * the argv the verb ran with. */
+function host(on: On, stdout: string): { toast: () => string; argv: () => string[] } {
   let toast = "";
+  let argv: string[] = [];
   on("ui.toast", (_$, e) => {
     toast = e.text;
     return { value: undefined };
   });
   on("prompt.submit", (_$, e) => ({ text: e.text }));
-  on("process.run", () => ({ value: { ...RAN, stdout } }));
+  on("process.run", (_$, e) => {
+    argv = [...e.argv];
+    return { value: { ...RAN, stdout } };
+  });
   on("ui.log", () => ({ value: undefined }));
-  return () => toast;
+  inSession(on);
+  return { toast: () => toast, argv: () => argv };
 }
 
 test("a captured prompt reaches the model as the replacement, with a toast naming the id and its kind", async ($, on) => {
@@ -209,17 +221,26 @@ test("a captured prompt reaches the model as the replacement, with a toast namin
     captured: [{ id: "cap_1", suffix: "abcd", kind: "github-pat" }],
     taken: [],
   };
-  const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
+  const { toast, argv } = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
 
   const sent = await $.prompt.submit(PASTE);
 
   expect(sent.text).toBe("key {{secret:cap_1}}…abcd");
   expect(toast()).toBe("qsm-secrets: captured 1 secret(s) as cap_1 (github-pat)");
+  expect(argv()).toEqual([
+    "qsm-secrets",
+    "capture",
+    "--session",
+    "s1",
+    "--cwd",
+    "/home/u/proj",
+    "--json",
+  ]);
 });
 
 test("a failed capture drops the prompt, naming the cause and the fix, and toasts it loudly", async ($, on) => {
   const failure = { code: "missing", exit: 4, message: "no backend chosen", data: null };
-  const toast = host(on, JSON.stringify(failure));
+  const { toast } = host(on, JSON.stringify(failure));
 
   const sent = (await $.prompt.submit(PASTE)) as { text?: string; drop?: string };
 
@@ -236,7 +257,7 @@ test("a name that was already stored is said in the toast", async ($, on) => {
     captured: [{ id: "cap_1", suffix: "abcd", kind: "credential-value" }],
     taken: ["k"],
   };
-  const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
+  const { toast } = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
 
   await $.prompt.submit(PASTE);
 
@@ -423,6 +444,7 @@ test("a failed capture logs the verb, the exit code and the stderr, never the pr
     value: { ...RAN, exitCode: 1, stdout: "SECRET-PROMPT-TEXT", stderr: "EAGAIN: try again" },
   }));
   quietUi(on, logs);
+  inSession(on);
 
   await $.prompt.submit(PASTE);
 

@@ -28,6 +28,7 @@ import { runClean, runRender } from "../lib/render.ts";
 import {
   type Delivery,
   runCapture,
+  runCaptures,
   runCheck,
   runEnv,
   runGet,
@@ -176,9 +177,33 @@ const rm: Handler = (call) => {
 };
 
 /** The text on stdin with each secret swapped for its id; the values never leave the backend. */
-const capture: Handler = async () => {
-  const done = await runCapture();
+const capture: Handler = async (call) => {
+  const done = await runCapture({
+    session: optionalString(call, "session") ?? null,
+    cwd: optionalString(call, "cwd") ?? null,
+  });
   return ok(done, done.text);
+};
+
+/** One line per stored capture, never a value; a row whose entry went is named in a warning. */
+const captures: Handler = () => {
+  const { rows, gone } = runCaptures();
+  const text =
+    rows.length === 0
+      ? "nothing was captured"
+      : rows
+          .map((row) =>
+            [
+              row.capturedAt,
+              row.kind,
+              `${row.namespace}/${row.key}`,
+              row.session ?? "-",
+              row.cwd ?? "-",
+            ].join("  "),
+          )
+          .join("\n");
+  const warnings = gone.map((id) => `${id} is no longer stored; its index row was removed`);
+  return { ...ok({ rows }, text), warnings };
 };
 
 /**
@@ -308,6 +333,7 @@ if (import.meta.main) {
         get,
         doctor,
         capture,
+        captures,
         guard,
         mask,
         scrub,

@@ -8,6 +8,7 @@ import { writeAtomic } from "../../../lib/fs.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
+import { type CaptureRow, indexPath, readIndex, updateIndex, withoutRows } from "./captures.ts";
 import {
   formatMetadata,
   keyExists,
@@ -65,11 +66,17 @@ export function resolve(namespace: string, key: string): Uint8Array {
   return value;
 }
 
+/** Where a capture was made: the session and the working directory the hook passes. */
+export interface CaptureOrigin {
+  readonly session: string | null;
+  readonly cwd: string | null;
+}
+
 /**
  * `capture`: the text comes piped on stdin. The backend is resolved on the first secret, so a
- * prompt without one needs no backend at all.
+ * prompt without one needs no backend at all. Each stored secret gets its row in the capture index.
  */
-export async function runCapture(): Promise<Capture> {
+export async function runCapture(origin: CaptureOrigin): Promise<Capture> {
   if (process.stdin.isTTY) {
     fail("capture reads its text from stdin", "pipe the text in", "usage");
   }
@@ -78,12 +85,66 @@ export async function runCapture(): Promise<Capture> {
     backend ??= activeBackend();
     return backend;
   };
-  return captureSecrets(await readStdin(), {
+  const done = captureSecrets(await readStdin(), {
     store: (namespace, key, value) => {
       active().store(namespace, key, new TextEncoder().encode(value));
     },
     exists: (namespace, key) => keyExists(active().entries(), namespace, key),
   });
+  if (done.captured.length > 0) {
+    const capturedAt = new Date().toISOString();
+    updateIndex(indexPath(process.env), (index) => {
+      const added = { ...index };
+      for (const { id, kind } of done.captured) {
+        const { namespace, key } = locate(id);
+        added[`${namespace}/${key}`] = { kind, capturedAt, ...origin };
+      }
+      return added;
+    });
+  }
+  return done;
+}
+
+/** One row of `captures`: an index row whose entry is still stored. Never a value. */
+export interface CaptureListing extends CaptureRow {
+  readonly namespace: string;
+  readonly key: string;
+}
+
+/**
+ * `captures`: every index row whose entry the backend still stores, newest first. A row whose entry
+ * is gone (removed with the backend's own tool) is dropped from the index and returned in `gone`.
+ * An empty index needs no backend.
+ */
+export function runCaptures(): { rows: CaptureListing[]; gone: string[] } {
+  const path = indexPath(process.env);
+  const index = readIndex(path);
+  if (Object.keys(index).length === 0) {
+    return { rows: [], gone: [] };
+  }
+  const entries = activeBackend().entries();
+  const rows: CaptureListing[] = [];
+  const gone: string[] = [];
+  for (const [id, row] of Object.entries(index)) {
+    const { namespace, key } = locate(id);
+    if (keyExists(entries, namespace, key)) {
+      rows.push({ namespace, key, ...row });
+    } else {
+      gone.push(id);
+    }
+  }
+  if (gone.length > 0) {
+    updateIndex(path, (now) => withoutRows(now, gone));
+  }
+  return { rows: rows.toSorted((a, b) => b.capturedAt.localeCompare(a.capturedAt)), gone };
+}
+
+/** Drops the index rows of entries just removed from the backend. */
+function forgetCaptures(ids: readonly string[]): void {
+  const path = indexPath(process.env);
+  if (ids.length > 0 && existsSync(path)) {
+    updateIndex(path, (index) => withoutRows(index, ids));
+  }
 }
 
 /** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
@@ -313,6 +374,7 @@ export function runRemove(
   if (!backend.remove(namespace, key)) {
     fail(`could not remove ${key}`, `run ${backend.name} remove ${key} yourself to see why`);
   }
+  forgetCaptures([`${namespace}/${key}`]);
   return { namespace, key, removed: true };
 }
 
@@ -490,6 +552,7 @@ export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
         fail(`could not remove ${id}`, "run qsm-secrets prune again after qsm-secrets doctor");
       }
     }
+    forgetCaptures(ids.map((id) => `${CAPTURE_NAMESPACE}/${id}`));
   }
   return { ids, dryRun };
 }

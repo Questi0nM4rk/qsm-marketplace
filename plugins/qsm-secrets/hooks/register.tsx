@@ -425,7 +425,8 @@ export function register(on: On): void {
       });
       return next(e);
     }
-    const argv = argvOf(verbOf("capture"));
+    const [session, cwd] = await Promise.all([$.session.id(), $.session.cwd()]);
+    const argv = argvOf(verbOf("capture"), { session, cwd });
     const ran = await $.process.run(argv, {
       stdin: e.text,
       timeoutMs: CAPTURE_TIMEOUT_MS,

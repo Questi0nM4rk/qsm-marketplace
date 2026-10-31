@@ -15,6 +15,7 @@ const HELPERS = [
   "readStdin",
   "claudeDir",
   "writeAtomic",
+  "tryLock",
 ];
 const DEFINES = new RegExp(`\\b(?:function|const|let)\\s+(${HELPERS.join("|")})\\b`, "g");
 // root lib's messageOf body, written inline

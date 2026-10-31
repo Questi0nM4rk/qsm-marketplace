@@ -38,7 +38,11 @@ export type Secrets = {
     dryRun?: boolean;
   }): Promise<unknown>;
   guard(): Promise<unknown>;
-  capture(): Promise<unknown>;
+  capture(options: {
+    session?: string;
+    cwd?: string;
+  }): Promise<unknown>;
+  captures(): Promise<unknown>;
   mask(options: {
     id?: (string)[];
     all?: boolean;
