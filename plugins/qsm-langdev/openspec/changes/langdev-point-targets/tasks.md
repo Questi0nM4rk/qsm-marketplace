@@ -1,6 +1,6 @@
 ## 1. Points and the point table
 
-- [ ] 1.1 `lib/registry.ts`: `Point` is `edit | pre-commit | pre-push | ci`; `POINTS` holds each
+- [x] 1.1 `lib/registry.ts`: `Point` is `edit | pre-commit | pre-push | ci`; `POINTS` holds each
       target and timeout (design D2); every checker's `runsAt` and `prePush` become a required
       `points` list with per-point overrides, `ci` included; `selectedAt` reads `points`; `list` and
       `list --json` print `points`. Files: `lib/registry.ts`, `lib/registry.test.ts`, the verbs that
@@ -31,11 +31,12 @@
   `hooks/register.tsx`. Proof: in this repository, write a clean `.md` file and a `.ts` file with
   one oxlint finding through the real hook in a Claude Code session; the first adds no context, the
   second only that finding. Blocked by 2.2.
-- [ ] 2.4 Feedback `qsm-i1u.97`: the gate's copy of the tree resolves types as the checkout does,
+- [x] 2.4 Feedback `qsm-i1u.97`: the gate's copy of the tree resolves types as the checkout does,
   so a hooks module scores no `no-unsafe-*` finding the checkout lacks. Files: where the copy is
   made (`lib/tree.ts`, `lib/compare.ts`). Proof: a commit that adds a hooks module oxlint passes in
   the checkout is no worse at the commit gate, and `qsm-i1u.97` closes with the measured run.
-  Blocked by nothing.
+  Blocked by nothing. Done 2026-10-31 without code: not reproducible at 8c563f0a (oxlint 0 -> 0
+  through `check` and a real commit); fixed by 3262884a and 396218a2, `qsm-i1u.97` closed.
 
 ## 3. Slow lines and doctor
 

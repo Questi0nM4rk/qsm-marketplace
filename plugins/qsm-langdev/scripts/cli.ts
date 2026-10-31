@@ -147,7 +147,7 @@ const list: Handler = () => {
     name: spec.name,
     measures: spec.measures,
     language: spec.language,
-    runsAt: spec.runsAt,
+    points: spec.points,
     extensions: spec.extensions,
     ...(spec.names ? { names: spec.names.source } : {}),
     binary: spec.binary,
@@ -157,7 +157,7 @@ const list: Handler = () => {
   const covers = (row: (typeof rows)[number]) =>
     [...row.extensions, ...(row.names === undefined ? [] : [row.names])].join(",");
   const text = rows
-    .map((row) => [row.name, row.language, row.runsAt, covers(row)].join("\t"))
+    .map((row) => [row.name, row.language, row.points.join(","), covers(row)].join("\t"))
     .join("\n");
   return ok(rows, text);
 };
