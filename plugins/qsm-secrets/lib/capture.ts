@@ -14,6 +14,8 @@ interface Captured {
   readonly id: string;
   /** The last characters of the value; null when the value is too short to show any. */
   readonly suffix: string | null;
+  /** What the value is (`private-key`, `github-pat`, `credential-value`), for the toast. */
+  readonly kind: string;
 }
 
 export interface Capture {
@@ -42,7 +44,7 @@ export function captureSecrets(text: string, vault: Vault): Capture {
   const named = new Set<string>();
   let out = "";
   let at = 0;
-  for (const { start, end } of secretSpans(text)) {
+  for (const { start, end, kind } of secretSpans(text)) {
     const value = text.slice(start, end);
     const suffix = value.length >= SUFFIX_MIN_LENGTH ? value.slice(-SUFFIX_LENGTH) : null;
     const name = GIVEN_NAME.exec(text.slice(at, start))?.[1];
@@ -54,7 +56,7 @@ export function captureSecrets(text: string, vault: Vault): Capture {
       } else {
         vault.store(DEFAULT_NAMESPACE, name, value);
         named.add(name);
-        found = { id: `${DEFAULT_NAMESPACE}/${name}`, suffix };
+        found = { id: `${DEFAULT_NAMESPACE}/${name}`, suffix, kind };
         captured.push(found);
         byValue.set(value, found);
         from = start - name.length - 1;
@@ -62,7 +64,7 @@ export function captureSecrets(text: string, vault: Vault): Capture {
     }
     found ??= byValue.get(value);
     if (found === undefined) {
-      found = { id: `cap_${randomBytes(6).toString("hex")}`, suffix };
+      found = { id: `cap_${randomBytes(6).toString("hex")}`, suffix, kind };
       vault.store(CAPTURE_NAMESPACE, found.id, value);
       captured.push(found);
       byValue.set(value, found);

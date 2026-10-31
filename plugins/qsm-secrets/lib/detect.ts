@@ -148,7 +148,7 @@ function bareRuns(text: string): Span[] {
     const plain = !(token.includes(".") || token.startsWith("/") || token.startsWith("~"));
     const publicKey = SSH_KEY_TYPE.test(text.slice(0, m.index));
     return plain && !publicKey && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
-      ? [{ start, end: start + token.length }]
+      ? [{ start, end: start + token.length, kind: "random-token" }]
       : [];
   });
 }
@@ -184,7 +184,7 @@ function contextSpans(text: string): Span[] {
     const judged = long ? isContextSecret(token) : classes(token) >= 2 && !isSomethingElse(token);
     const start = m.index + m[0].length - value.length;
     return kind !== "none" && plain && (long || kind === "password") && judged
-      ? [{ start, end: start + token.length }]
+      ? [{ start, end: start + token.length, kind: "credential-value" }]
       : [];
   });
 }
@@ -194,6 +194,7 @@ export function secretSpans(text: string): Span[] {
   const placeholders = [...text.matchAll(PLACEHOLDER)].map((m) => ({
     start: m.index,
     end: m.index + m[0].length,
+    kind: "placeholder",
   }));
   const all = [...shapeSpans(text), ...contextSpans(text), ...bareRuns(text)]
     .filter((span) => !placeholders.some((p) => intersects(span, p)))

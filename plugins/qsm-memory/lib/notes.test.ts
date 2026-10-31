@@ -57,7 +57,7 @@ describe("notes", () => {
     const d = db();
     expect(() =>
       addNote(d, { text: `token ghp_${"a".repeat(36)}`, project: null, expiresDays: 14 }),
-    ).toThrow("secret shape (github-token)");
+    ).toThrow("secret shape (github-pat)");
     expect(d.query("SELECT COUNT(*) AS n FROM notes").get()).toEqual({ n: 0 });
   });
 

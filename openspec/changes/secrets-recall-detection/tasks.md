@@ -13,7 +13,7 @@
 
 ## 2. Claimed ranges and the block pass
 
-- [ ] 2.1 The span type of the shapes file (root `lib/`) gains a kind, and each pattern names its
+- [x] 2.1 The span type of the shapes file (root `lib/`) gains a kind, and each pattern names its
       kind. qsm-memory compiles and its tests pass. Proof: typecheck and
       `bun test plugins/qsm-memory`. Blocks: 1.1.
 - [ ] 2.2 `plugins/qsm-secrets/lib/detect.ts`: one claimed-range list shared by the passes in the
