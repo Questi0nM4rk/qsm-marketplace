@@ -32,8 +32,8 @@ jobs:
             (cd "$(dirname "$manifest")" && bun install --frozen-lockfile)
           done
       # The tests drive these real binaries and fail loud without them (no skip hides a broken
-      # pipeline): wt, gitleaks (the pre-push secrets gate blocks without it), rumdl and markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint
-      # (with oxlint-tsgolint for its type-aware rules) and oxfmt for its TypeScript gate and fixers,
+      # pipeline): wt, gitleaks (the pre-push secrets gate blocks without it), rumdl and
+      # markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint (with oxlint-tsgolint for its type-aware rules) and oxfmt for its TypeScript gate and fixers,
       # yamllint, taplo, semgrep and lizard because the pre-commit gate marks a checker whose
       # tool is absent `worse` and blocks the commit (init writes yaml and toml, a.ts is code),
       # imagemagick 7 for the `magick` of qsm-uix (apt ships 6, which has no `magick`), and the
