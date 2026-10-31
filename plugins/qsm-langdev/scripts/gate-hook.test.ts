@@ -60,6 +60,14 @@ function runGateHook(stateDir: string, sessionId: string, agentId: string) {
   return runHook(GATE_HOOK, stateDir, JSON.stringify({ session_id: sessionId, agent_id: agentId }));
 }
 
+/** Agent a1 of session s1 writes a fish syntax regression (`if` with no `end`) into a.fish, then
+ * stops: the stop gate's run. */
+function stopAfterFishRegression(stateDir: string, root: string) {
+  writeFileSync(join(root, "a.fish"), "if true\necho alpha\n");
+  runEditHook(stateDir, "s1", "a1", join(root, "a.fish"));
+  return runGateHook(stateDir, "s1", "a1");
+}
+
 describe("qsm-langdev gate hook", () => {
   test("An agent with no recorded edit", () => {
     const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
@@ -75,16 +83,25 @@ describe("qsm-langdev gate hook", () => {
     const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
     const root = repoWithFile("a.fish", "echo alpha\n");
 
-    // A genuine fish syntax regression — `if` with no matching `end` — but
-    // this repository has no .qsm-langdev/gates.json, so nothing here is
-    // ours to judge.
-    writeFileSync(join(root, "a.fish"), "if true\necho alpha\n");
-    runEditHook(stateDir, "s1", "a1", join(root, "a.fish"));
-
-    const r = runGateHook(stateDir, "s1", "a1");
+    // A genuine fish syntax regression, but this repository has no .qsm-langdev/gates.json, so
+    // nothing here is ours to judge.
+    const r = stopAfterFishRegression(stateDir, root);
 
     expect(r.exit).toBe(0);
     expect(r.stdout).toBe("");
+  });
+
+  test("An edit the agent did not stage", () => {
+    const stateDir = sandboxDir("qsm-langdev-gate-hook-state-");
+    const root = repoWithFile("a.fish", "echo alpha\n");
+    initGates(root, ["fish"]);
+
+    // The agent never stages the regression: it is on no way out, so it is named, not judged.
+    const r = stopAfterFishRegression(stateDir, root);
+
+    expect(r.exit).toBe(0);
+    expect(r.stdout).not.toContain('"decision":"block"');
+    expect(r.stderr).toContain("not scored, not staged: a.fish");
   });
 
   test("a tree back to its start commit never blocks the stop", () => {

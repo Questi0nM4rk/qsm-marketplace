@@ -5,7 +5,7 @@
     "noun": "langdev",
     "commands": {
       "qsm-langdev check": {
-        "description": "Compare the working tree against a reference commit through every selected checker (exit 3 = worse)",
+        "description": "Compare what is staged against a reference commit through every selected checker (exit 3 = worse)",
         "args": [
           {
             "name": "dir",
@@ -98,7 +98,7 @@
         ]
       },
       "qsm-langdev structure": {
-        "description": "Compare a commit's sentrux architecture quality with the working tree's (exit 3 = worse)",
+        "description": "Compare a commit's sentrux architecture quality with what is staged (exit 3 = worse)",
         "args": [
           {
             "name": "path",

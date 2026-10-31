@@ -8,7 +8,7 @@ import { editFindings } from "../lib/edit-findings.ts";
 import { resolveRef } from "../lib/gitref.ts";
 import { type Editor, editedTrees, MAIN_AGENT, readStartPoint } from "../lib/state.ts";
 import {
-  compareWorktreeSince,
+  compareIndexSince,
   type StructureResult,
   type StructureVerdict,
   verdict,
@@ -79,7 +79,7 @@ async function structureJudgeAll(trees: StructureTree[]): Promise<
 > {
   let last: (StructureVerdict & { tree: StructureTree; result: StructureResult }) | null = null;
   for (const tree of trees) {
-    const result = await compareWorktreeSince(tree.root, tree.start);
+    const result = await compareIndexSince(tree.root, tree.start);
     last = { tree, result, ...verdict(result) };
     if (!last.pass) {
       return last;

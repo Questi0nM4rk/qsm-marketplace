@@ -1,9 +1,8 @@
 // Materializes a tree as an on-disk directory for a checker to score: a
-// commit checked out through a scratch index, or the working tree via a
-// scratch git index (the live index copied, its tracked files refreshed with
-// `git add -u`, `git write-tree`, then that tree checked out) so an ignored
-// or untracked path — node_modules, dist, a file nobody added — never enters
-// a score just because it sits on disk; the ignored inputs the repository's
+// commit checked out through a scratch index, or what is staged via a copy of
+// the live index (`git write-tree`, then that tree checked out) so an
+// unstaged change, an ignored or an untracked path (node_modules, dist, a
+// file nobody added) never enters a score just because it sits on disk; the ignored inputs the repository's
 // own commands read are linked back in (linkInputs). Both sides of every comparison go through one of these,
 // so the only difference a checker ever sees is the change itself. The
 // materialized directory is then given its own throwaway git index (`git

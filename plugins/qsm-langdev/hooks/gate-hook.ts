@@ -24,7 +24,7 @@
 import { readHookEvent, runMain } from "../../../lib/hooks-kit.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { compareTrees, type Verdict } from "../lib/compare.ts";
-import { isLangdevRepo, readGatesConfig } from "../lib/config.ts";
+import { gitPaths, isLangdevRepo, readGatesConfig } from "../lib/config.ts";
 import { editorOf } from "../lib/hookio.ts";
 import {
   clearBlocks,
@@ -80,6 +80,13 @@ async function judgeTree(
     languages,
     ...testBudgetMs(),
   });
+  // Only what is staged is scored; an edit the agent left unstaged is named, never judged in silence.
+  const unstaged = gitPaths(tree.root, ["diff", "--name-only", "-z"]) ?? [];
+  if (unstaged.length > 0) {
+    const named = unstaged.slice(0, 5).join(", ");
+    const more = unstaged.length > 5 ? ` and ${unstaged.length - 5} more` : "";
+    warnings.push(`not scored, not staged: ${named}${more}`);
+  }
   const environment = verdicts.filter((v) => !v.pass && gap(v));
   const worse = verdicts.filter((v) => !(v.pass || gap(v)));
   if (environment.length > 0) {

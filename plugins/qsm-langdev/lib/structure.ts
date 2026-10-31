@@ -3,7 +3,7 @@
 // per-language linter.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob, TOML } from "bun";
 import { generatedPaths, gitPaths } from "./config.ts";
@@ -49,20 +49,23 @@ function leaveOutNonProduct(dir: string): Kept {
   return leaveOut(dir, (path) => isTestFile(path) || generated.has(path));
 }
 
-/** Overlays the working tree's `.sentrux/rules.toml` onto a materialized
- * commit, so a past commit is judged under the rules being shipped, not its
- * own past ones — the same rule compare.ts applies to profile configs. */
+/** Overlays the staged `.sentrux/rules.toml` onto a materialized commit, so a
+ * past commit is judged under the rules being shipped, not its own past ones,
+ * and an unstaged edit of the rules moves neither side. */
 function overlayRules(root: string, dir: string): void {
-  const rulesSrc = join(root, RULES_REL);
-  if (!existsSync(rulesSrc)) {
+  if ((gitPaths(root, ["ls-files", "-z", "--cached", "--", RULES_REL]) ?? []).length === 0) {
     return;
   }
+  const staged = spawnSync("git", ["-C", root, "show", `:${RULES_REL}`], { encoding: "utf8" });
+  if (staged.status !== 0) {
+    throw new Error(`git show :${RULES_REL} failed: ${staged.stderr.trim()}`);
+  }
   mkdirSync(join(dir, ".sentrux"), { recursive: true });
-  copyFileSync(rulesSrc, join(dir, RULES_REL));
+  writeFileSync(join(dir, RULES_REL), staged.stdout);
 }
 
 /** The tree at `ref` as an on-disk directory with its test files left out:
- * a scratch materialization of the working tree (never the live directory
+ * a scratch materialization of the index (never the live directory
  * itself — see lib/tree.ts), or a materialized commit with today's rules
  * overlaid on top of it. Both sides go through here, so both are filtered
  * by the one `isTestFile`. */
@@ -399,7 +402,7 @@ export function verdict(result: StructureResult): StructureVerdict {
 }
 
 /** The tree at `before` (a commit) against the tree at `after` (a commit, or
- * the working tree): materializes whichever side needs it, under the rules
+ * the index): materializes whichever side needs it, under the rules
  * being shipped and with test files left out, and scores them with `score`.
  * When what is left is the same on both sides, the change touched tests
  * only (or nothing), and that is said rather than scored: sentrux would
@@ -422,8 +425,8 @@ export async function compareStructure(
   );
 }
 
-/** The working tree against the commit at `before` — what a stop gate or
+/** The index against the commit at `before` — what a stop gate or
  * `structure` with no `--against` compares. */
-export function compareWorktreeSince(root: string, before: string): Promise<StructureResult> {
+export function compareIndexSince(root: string, before: string): Promise<StructureResult> {
   return compareStructure(root, before, "index");
 }
