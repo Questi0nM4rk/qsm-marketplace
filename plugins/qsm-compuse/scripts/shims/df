@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The desktop slot's df: the use of a mount from the state's `df` record (1K blocks by mount
+# point), in the one shape it answers, `df --output=used,size -k PATH`. A state without the record
+# means the slot shows the real df.
+state="${DRIVE_STATE:?the df shim runs only inside a desktop slot}"
+jq -e 'has("df")' "$state" >/dev/null || exec /usr/bin/df "$@"
+[[ $# -eq 3 && "$1" == --output=used,size && "$2" == -k ]] || {
+  printf 'the slot'"'"'s df answers only: df --output=used,size -k PATH (got: %s)\n' "$*" >&2
+  exit 2
+}
+jq -r --arg mount "$3" '.df[$mount] // error("the slot state has no df entry for \($mount)")
+  | " Used 1K-blocks\n\(.used) \(.size)"' "$state"

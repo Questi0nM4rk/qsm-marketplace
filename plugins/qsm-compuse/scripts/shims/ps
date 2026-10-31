@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The desktop slot's ps: the processes of the state's `ps` record (pid, pcpu, comm), in the one
+# shape it answers, `ps -eo pid,pcpu,comm --no-headers --sort=-pcpu`. A state without the record
+# means the slot shows the real ps.
+state="${DRIVE_STATE:?the ps shim runs only inside a desktop slot}"
+jq -e 'has("ps")' "$state" >/dev/null || exec /usr/bin/ps "$@"
+[[ "$*" == "-eo pid,pcpu,comm --no-headers --sort=-pcpu" ]] || {
+  printf 'the slot'"'"'s ps answers only: ps -eo pid,pcpu,comm --no-headers --sort=-pcpu (got: %s)\n' "$*" >&2
+  exit 2
+}
+jq -r '.ps | sort_by(-.pcpu)[] | "\(.pid) \(.pcpu) \(.comm)"' "$state"

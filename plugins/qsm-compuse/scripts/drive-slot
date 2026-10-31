@@ -275,6 +275,7 @@ slot_start_desktop() {
   fi
   local tool
   for tool in bwrap sway swaymsg niri start-hyprland qs dbus-daemon pkg-config; do need "$tool"; done
+  [[ -z "$mock" ]] || need bun
   slot_alive "$name" && die "slot '$name' is already running"
   aq="$(slot_aquamarine_lib)" || exit 1
   node="$(slot_render_node)"
@@ -285,10 +286,21 @@ slot_start_desktop() {
   mkdir -p "$dir" "$rt"
   chmod 700 "$rt"
   slot_write_desktop_config "$dir" "$size" "$scale" "$hypr" "$inside"
+  # The fake machine's kernel files (fake-machine.ts): laid out in the slot dir from the mock,
+  # each bound over the kernel file it stands in for; served from inside by slot-desktop.
+  local -a fake=()
+  local binds="" src dst
+  if [[ -n "$mock" ]]; then
+    binds="$(DRIVE_STATE="$mock" bun "$MOTION_DIR/fake-machine.ts" prepare "$dir/fake")" \
+      || die "the fake machine could not lay out '$mock'"
+    while IFS=$'\t' read -r src dst; do
+      [[ -n "$src" ]] && fake+=(--bind "$src" "$dst")
+    done <<<"$binds"
+  fi
   env -i HOME="$HOME" USER="${USER:-}" PATH="$PATH" LANG="${LANG:-C.UTF-8}" XDG_RUNTIME_DIR="$rt" \
     DRIVE_SLOT_ID="$dir" DRIVE_RENDER_NODE="$node" DRIVE_CLOCK="$clock" DRIVE_MOCK="$mock" DRIVE_FAKETIME="$faketime" DRIVE_AQUAMARINE="$aq" \
     setsid bwrap --ro-bind / / --dev /dev --tmpfs /dev/shm --dev-bind "$node" "$node" --proc /proc \
-    --tmpfs /run --bind "$rt" "$rt" --bind "$dir" "$inside" --tmpfs /tmp \
+    --tmpfs /run --bind "$rt" "$rt" --bind "$dir" "$inside" --tmpfs /tmp "${fake[@]}" \
     --unshare-pid --unshare-ipc --new-session \
     "$MOTION_DIR/slot-desktop" "$inside" "$qs_path" </dev/null >"$dir/sandbox.log" 2>&1 &
   echo $! >"$dir/pid"

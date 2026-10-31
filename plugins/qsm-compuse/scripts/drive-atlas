@@ -13,7 +13,7 @@
 # Steps: the route steps (move-to X Y, hover-wait MS, press, release, click, key COMBO, wheel DY),
 # plus type TEXT, exec CMD (a client started by the nested Hyprland), dispatch LUA, eval LUA (a
 # config call such as a window rule), wait-clients N,
-# ipc FN ARGS (the shell's own IPC: open a surface, post mock data),
+# ipc FN ARGS (the shell's own IPC, such as opening a surface),
 # shot NAME (taken once the screen is still), shot-now NAME (taken at once, for a state that times out).
 #
 # A run is <scenario>/<date>-<time>-<rng>/: index.html (everything on one page), shots/ (the
