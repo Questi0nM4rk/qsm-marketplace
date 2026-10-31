@@ -23,10 +23,10 @@
 
 ## 3. Shapes, credential values, bare tokens
 
-- [ ] 3.1 Shapes from gitleaks' prefix rules for the providers named in the spec, converted to JS,
+- [x] 3.1 Shapes from gitleaks' prefix rules for the providers named in the spec, converted to JS,
       the MIT notice in a header comment beside the data; no checksum filter. Proof: each shape's
       corpus positive and negative. Blocks: 2.2.
-- [ ] 3.2 Credential words with Czech, the 6-character floor for every credential name, the
+- [x] 3.2 Credential words with Czech, the 6-character floor for every credential name, the
       stopword set of the spec. Proof: the Czech and template corpus lines. Blocks: 2.2.
 - [ ] 3.3 Bare-token floor 0.8 and the hex rule (commit and UUID pass, other hex of 32+ is
       captured). Proof: the full corpus at recall 1.0 and precision of at least 0.85, and the

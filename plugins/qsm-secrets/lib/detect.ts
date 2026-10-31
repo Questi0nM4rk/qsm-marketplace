@@ -5,13 +5,10 @@
 import { type Span, shapeSpans } from "../../../lib/secret-shapes.ts";
 
 const BARE_TOKEN_MIN = 32;
-const CONTEXT_TOKEN_MIN = 16;
-/** A value after a password's name has no random-looking shape of its own, so it is judged shorter. */
-const PASSWORD_VALUE_MIN = 6;
+/** A value after a credential name counts from here, whatever its mix: a short token is a token. */
+const CREDENTIAL_VALUE_MIN = 6;
 /** Shannon entropy over the entropy a random token of the same length and alphabet would show. */
 const RANDOMNESS_FLOOR = 0.9;
-/** Hex repeats digits, so its floor is raw bits per character, not a ratio. */
-const HEX_ENTROPY_FLOOR = 3;
 const PRINTABLE_SHARE = 0.9;
 const MIN_SEPARATORS = 3;
 const SEPARATOR_RATIO = 0.1;
@@ -23,21 +20,29 @@ const PLACEHOLDER = /\{\{secret:[^}]*\}\}(?:…[\w-]{4})?/g;
 const BLOCK_BEGIN = /-----BEGIN ([^\r\n-][^\r\n]*?)-----/g;
 const PUTTY_KEY = /PuTTY-User-Key-File-\d+:/g;
 const PUTTY_MAC = /Private-MAC:[^\r\n]*/;
-// A name that says what follows is a credential; its value is then judged on a lower bar. The name is
-// split into its parts (`GITHUB_TOKEN`, `clientSecret`) and one part must be a credential word, so
-// `authorization_mode` and `passwordless` are not.
-const VALUE = String.raw`["']?([A-Za-z0-9_+/=.~-]{${PASSWORD_VALUE_MIN},})`;
-const NAMED = new RegExp(String.raw`\b([A-Za-z0-9_-]+)\s*[:=]\s*${VALUE}`, "g");
-const BEARER = new RegExp(String.raw`\bbearer\s+${VALUE}`, "gi");
-const NAME_PART = /[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])/g;
-const CREDENTIAL_PART = /(?:secret|token|passw(?:or)?d|pwd|passphrase|credentials?)$|^auth$/;
-const PASSWORD_PART = /passw(?:or)?d$|^pwd$|passphrase$/;
+// A name that says what follows is a credential. The name is split into its parts (`GITHUB_TOKEN`,
+// `clientSecret`) and one part must be a credential word, in English or Czech, so
+// `authorization_mode` and `passwordless` are not. The value runs to the next space or quote.
+const VALUE = String.raw`["'\x60]?([^\s"'\x60]{${CREDENTIAL_VALUE_MIN},})`;
+const NAMED = new RegExp(
+  String.raw`(?<![\p{L}\p{N}_-])([\p{L}\p{N}_-]+)["']?(?:\s*(?::=|=>|[:=])\s*|\s+(?:is|je)\s+)${VALUE}`,
+  "gu",
+);
+const BEARER = new RegExp(String.raw`(?<![\p{L}\p{N}_-])bearer\s+${VALUE}`, "giu");
+const NAME_PART = /\p{Lu}?[\p{Ll}\p{N}]+|\p{Lu}+(?!\p{Ll})/gu;
+const CREDENTIAL_PART =
+  /(?:secret|token|passw(?:or)?d|pwd|passphrase|credentials?|heslo|kl[ií][cč]|tajn[eé])$|^auth$/u;
 const CREDENTIAL_PAIRS = /^(?:api|access|private)key$/;
+// What is plainly not a value, and the only values a credential name does not make secret: a
+// literal, a template, a stopword; a repeated character and a sequential run are judged in code.
+const NOT_A_VALUE = /^(?:true|false|null|changeme|example|your-[\p{L}\p{N}-]+)$/iu;
+const TEMPLATE = /^(?:<[^<>]*>|\$\{[^{}]*\}|\{\{[^{}]*\}\}|\{[^{}]*\})$/;
+const REPEATED = /^(.)\1*$/su;
+const SEQUENCES = ["abcdefghijklmnopqrstuvwxyz", "0123456789"];
 const SSH_KEY_TYPE = /(?:ssh|ecdsa-sha2|sk-ssh|sk-ecdsa-sha2)-[a-z0-9@.-]*\s+$/;
 const HASH_PREFIX = /^(?:sha(?:1|224|256|384|512)|md5)[-:_]/i;
 const ID_PREFIX =
   /^(?:session|msg|toolu|req|cap|file|call|run|thread|resp|chatcmpl|agent|task|batch)[_-]/;
-const HEX = /^[0-9a-f]+$/i;
 const HEX_AND_HYPHENS = /^[0-9a-f-]+$/i;
 const BASE64 = /^[A-Za-z0-9+/_-]+={0,2}$/;
 
@@ -94,10 +99,6 @@ function isCamelWords(token: string): boolean {
   return pieces.length > 0 && token.length / pieces.length >= IDENTIFIER_PIECE;
 }
 
-function classes(token: string): number {
-  return [/[a-z]/, /[A-Z]/, /\d/].filter((pattern) => pattern.test(token)).length;
-}
-
 /** What every judged token is not: an id, a hash, a name, a path, base64 of text. */
 function isSomethingElse(token: string): boolean {
   return (
@@ -118,14 +119,6 @@ function isBareSecret(token: string): boolean {
     !isSomethingElse(token) &&
     randomness(token) >= RANDOMNESS_FLOOR
   );
-}
-
-/** The value after a credential name: a hash-looking hex is a secret here, a name or a word is not. */
-function isContextSecret(token: string): boolean {
-  if (HEX.test(token)) {
-    return /[a-f]/i.test(token) && entropy(token) >= HEX_ENTROPY_FLOOR;
-  }
-  return classes(token) >= 2 && !isSomethingElse(token);
 }
 
 function intersects(a: Span, b: Span): boolean {
@@ -156,37 +149,41 @@ function bareRuns(text: string): Span[] {
   });
 }
 
-/** Whether a name stands for a credential, and whether it is a password, which is judged on a lower bar. */
-function nameKind(name: string | undefined): "none" | "token" | "password" {
-  if (name === undefined) {
-    return "token";
-  }
-  const parts = (name.match(NAME_PART) ?? []).map((part) => part.toLowerCase());
-  const pairs = parts.flatMap((part, at) => (at > 0 ? [`${parts[at - 1]}${part}`] : []));
-  if (parts.some((part) => PASSWORD_PART.test(part))) {
-    return "password";
-  }
-  return [...parts, ...pairs].some(
-    (part) => CREDENTIAL_PART.test(part) || CREDENTIAL_PAIRS.test(part),
-  )
-    ? "token"
-    : "none";
+/** A run of the alphabet or of the digits, wrapping round: `abcdefgh`, `12345678`, `7890123`. */
+function isSequence(value: string): boolean {
+  const lower = value.toLowerCase();
+  return SEQUENCES.some((seq) =>
+    seq.repeat(Math.ceil(lower.length / seq.length) + 1).includes(lower),
+  );
 }
 
-function contextSpans(text: string): Span[] {
-  const found = [...text.matchAll(NAMED), ...text.matchAll(BEARER)];
-  return found.flatMap((m) => {
+/** What no credential is: `true`, a template, `changeme`, one character repeated, a sequence. */
+function isPlainlyNotAValue(value: string): boolean {
+  return (
+    NOT_A_VALUE.test(value) || TEMPLATE.test(value) || REPEATED.test(value) || isSequence(value)
+  );
+}
+
+/** Whether one part of a name, or two parts together (`api_key`), is a credential word. */
+function isCredentialName(name: string): boolean {
+  const parts = (name.match(NAME_PART) ?? []).map((part) => part.toLowerCase());
+  const pairs = parts.flatMap((part, at) => (at > 0 ? [`${parts[at - 1] ?? ""}${part}`] : []));
+  return [...parts, ...pairs].some(
+    (part) => CREDENTIAL_PART.test(part) || CREDENTIAL_PAIRS.test(part),
+  );
+}
+
+/** Every value after a credential name or `Bearer` that is not plainly something else. */
+function credentialSpans(text: string): Span[] {
+  const named = [...text.matchAll(NAMED)].filter((m) => isCredentialName(m[1] ?? ""));
+  return [...named, ...text.matchAll(BEARER)].flatMap((m) => {
     const value = m.at(-1);
     if (value === undefined) {
       return [];
     }
-    const kind = nameKind(m.length === 3 ? m[1] : undefined);
     const token = value.replace(/[.,;:]+$/, "");
-    const plain = !(token.startsWith("/") || token.startsWith("~") || token.startsWith("."));
-    const long = token.length >= CONTEXT_TOKEN_MIN;
-    const judged = long ? isContextSecret(token) : classes(token) >= 2 && !isSomethingElse(token);
     const start = m.index + m[0].length - value.length;
-    return kind !== "none" && plain && (long || kind === "password") && judged
+    return token.length >= CREDENTIAL_VALUE_MIN && !isPlainlyNotAValue(token)
       ? [{ start, end: start + token.length, kind: "credential-value" }]
       : [];
   });
@@ -234,7 +231,7 @@ export function secretSpans(text: string): Span[] {
     kind: "placeholder",
   }));
   const found: Span[] = [];
-  for (const pass of [blockSpans, shapeSpans, contextSpans, bareRuns]) {
+  for (const pass of [blockSpans, shapeSpans, credentialSpans, bareRuns]) {
     for (const span of pass(text).toSorted((a, b) => a.start - b.start || b.end - a.end)) {
       if (!claimed.some((c) => intersects(c, span))) {
         claimed.push(span);
