@@ -9,11 +9,11 @@ import { compareTrees, headline, type Verdict } from "./compare.ts";
 import { findRepoRoot, isLangdevRepo, readGatesConfig } from "./config.ts";
 import { fixFiles } from "./fixers.ts";
 import { resolveRef } from "./gitref.ts";
+import { POINTS } from "./registry.ts";
 import { type Editor, recordStartPoint } from "./state.ts";
 
-// The engine gives a noun call 10 s; the checkers get what is left of 7.5 s after the binary's start
-// and the fixers, so several edits at once still answer, with a slow checker marked not measured.
-const DEADLINE_MS = 7500;
+// The checkers get what is left of the edit point's timeout after the binary's start and the fixers,
+// so several edits at once still answer inside the engine's 10 s, a slow checker not measured.
 const CHECK_FLOOR_MS = 1000;
 const MAX_OUTPUT_CHARS = 4000;
 
@@ -68,11 +68,11 @@ export async function editFindings(editor: Editor, file: string): Promise<EditRe
   }
   fixFiles(root, [relPath]);
   const { verdicts, warnings } = await compareTrees(root, resolveRef(root, "HEAD"), "worktree", {
-    at: "pre-commit",
+    at: "edit",
     languages: readGatesConfig(root).languages,
     only: [relPath],
     allFindings: true,
-    timeoutMs: Math.max(CHECK_FLOOR_MS, DEADLINE_MS - performance.now()),
+    timeoutMs: Math.max(CHECK_FLOOR_MS, POINTS.edit.timeoutMs - performance.now()),
   });
   return report(relPath, verdicts, warnings);
 }

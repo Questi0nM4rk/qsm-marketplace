@@ -13,7 +13,7 @@ import { isRecord } from "../../../lib/outcome.ts";
 import { isErrno } from "./errors.ts";
 import { recordOf } from "./json.ts";
 import { tsconfigInputs } from "./tree.ts";
-import type { EnforcementPoint } from "./registry.ts";
+import type { StorePoint } from "./registry.ts";
 
 /**
  * What a checker's run over one side comes to: a tally and the tool's own words, or the reason it
@@ -214,12 +214,12 @@ const ABANDONED_TMP_MS = 10 * 60 * 1000;
 /** The store of one checkout for one run at one enforcement point. */
 export class ResultStore {
   readonly #root: string;
-  readonly #point: EnforcementPoint;
+  readonly #point: StorePoint;
   readonly #used = new Map<string, Set<string>>();
   readonly #inFlight = new Map<string, Promise<Score>>();
   #unwritten: string | undefined;
 
-  constructor(root: string, point: EnforcementPoint) {
+  constructor(root: string, point: StorePoint) {
     this.#root = root;
     this.#point = point;
   }

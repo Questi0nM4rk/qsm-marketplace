@@ -21,12 +21,13 @@ import { recordTimings, slowLines, type Timing } from "./timings.ts";
 import {
   asRunAt,
   type CheckSpec,
-  type EnforcementPoint,
   installLine,
   JOBS,
   type Language,
   type LocalRules,
+  type Point,
   POINTS,
+  storePointOf,
   REGISTRY,
   selectedAt,
 } from "./registry.ts";
@@ -749,7 +750,7 @@ function renamedBetween(root: string, beforeRef: string, after: string): Renames
 
 export interface CompareOptions {
   /** Enforcement point whose checker set runs. Default pre-commit. */
-  at?: EnforcementPoint;
+  at?: Point;
   /** Language selection, opt-in; empty/omitted enables no language checker
    * (the always-on languages run regardless). */
   languages?: readonly Language[];
@@ -1204,7 +1205,7 @@ async function verdictOnEngine(
  */
 /** The point a run is at, its target and the limits it applies: the point's, unless a test sets one. */
 function runLimits(options: CompareOptions): {
-  at: EnforcementPoint;
+  at: Point;
   targetMs: number;
   timeoutMs: number;
   probeTimeoutMs: number;
@@ -1278,7 +1279,7 @@ export async function compareTrees(
       changed,
       generated: generatedPaths(root, [...changed, ...given]),
       all: options.allFindings === true,
-      store: new ResultStore(root, at),
+      store: new ResultStore(root, storePointOf(at)),
       versions: new Map([...probes].map(([binary, probe]) => [binary, probe.version])),
       uses: new Map(),
       jobs: options.jobs ?? JOBS,

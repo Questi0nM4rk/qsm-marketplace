@@ -158,15 +158,21 @@ export const POINT_NAMES: readonly Point[] = ["edit", "pre-commit", "pre-push", 
 
 /**
  * Per point, the time one checker is meant to finish under (a run over it is reported slow and
- * goes on) and the time after which a run is taken for stuck. The edit hook has no timeout of its
- * own: it is a function hook, and the engine gives every hook 10 s (edit-findings.ts).
+ * goes on) and the time after which a run is taken for stuck. The edit hook is a function hook, and
+ * the engine gives every hook 10 s that no plugin can raise, so the edit checkers share what is left
+ * of 7.5 s from the binary's start, the rest going to the start and the fixers.
  */
 export const POINTS = {
-  edit: { targetMs: 5_000 },
+  edit: { targetMs: 5_000, timeoutMs: 7_500 },
   "pre-commit": { targetMs: 30_000, timeoutMs: 300_000 },
   "pre-push": { targetMs: 60_000, timeoutMs: 300_000 },
   ci: { targetMs: 600_000, timeoutMs: 1_200_000 },
-} as const satisfies Record<Point, { targetMs: number; timeoutMs?: number }>;
+} as const satisfies Record<Point, { targetMs: number; timeoutMs: number }>;
+
+/** The point whose stored results a point reads and writes: the edit hook runs a checker the way
+ * the commit does, so it shares the commit's. */
+export type StorePoint = Exclude<Point, "edit">;
+export const storePointOf = (point: Point): StorePoint => (point === "edit" ? "pre-commit" : point);
 
 const FROM_EDIT: readonly Point[] = POINT_NAMES;
 const FROM_COMMIT: readonly Point[] = ["pre-commit", "pre-push", "ci"];
@@ -515,7 +521,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "oxfmt",
     measures: { counts: "files whose formatting differs from oxfmt's, one per file" },
     language: "ts",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc"],
     binary: "oxfmt",
     install: bunGlobal("oxfmt"),
@@ -635,6 +641,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "ruff-format",
     measures: { counts: "files whose formatting differs from ruff's, one per file" },
     ...RUFF,
+    points: FROM_COMMIT,
     args: (files) => ["format", "--check", ...files],
     count: countRuffFormat,
   },
@@ -644,7 +651,7 @@ const SPECS: readonly CheckSpec[] = [
       counts: "unused names at or above the confidence threshold, one per reported name",
     },
     language: "py",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".py"],
     binary: "vulture",
     install: uvTool("vulture"),
@@ -730,7 +737,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "bash-syntax",
     measures: { counts: "files bash's own parser refuses, one per file", overlaps: ["shellcheck"] },
     language: "shell",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".sh", ".bash"],
     binary: "bash",
     install: shipsWith("the OS"),
@@ -741,7 +748,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "shfmt",
     measures: { counts: "files whose formatting differs from shfmt's, one per file" },
     language: "shell",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".sh", ".bash"],
     binary: "shfmt",
     install: systemPackage("shfmt"),
@@ -816,7 +823,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "zsh-lint",
     measures: { counts: "zsh-lint diagnostics, one per `path:line` line" },
     language: "zsh",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".zsh"],
     binary: "zsh-lint",
     install: goInstall("github.com/z-shell/zsh-lint/cmd/zsh-lint@latest"),
@@ -829,7 +836,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "zshellcheck",
     measures: { counts: "zshellcheck rule matches, one per SARIF result" },
     language: "zsh",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".zsh"],
     binary: "zshellcheck",
     install: goInstall("github.com/afadesigns/zshellcheck/cmd/zshellcheck@latest"),
@@ -852,7 +859,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "shfmt-zsh",
     measures: { counts: "files whose zsh formatting differs from shfmt's, one per file" },
     language: "zsh",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".zsh"],
     binary: "shfmt",
     install: systemPackage("shfmt"),
@@ -876,7 +883,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "fish-indent",
     measures: { counts: "files whose formatting differs from fish_indent's, one per file" },
     language: "fish",
-    points: FROM_EDIT,
+    points: FROM_COMMIT,
     extensions: [".fish"],
     binary: "fish_indent",
     install: shipsWith("fish"),
