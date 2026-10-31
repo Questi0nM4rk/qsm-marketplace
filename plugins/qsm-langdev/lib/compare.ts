@@ -16,6 +16,7 @@ import {
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { isErrno } from "./errors.ts";
+import { messageOf } from "../../../lib/outcome.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
 import { recordTimings, slowLines, type Timing } from "./timings.ts";
 import {
@@ -757,6 +758,9 @@ export interface CompareOptions {
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
+  /** An instant on `performance.now()`'s clock by which every process the run starts must have
+   * ended; each one gets what is left. The edit hook's, inside the engine's 10 s. */
+  deadlineMs?: number;
   /** Test seam; production reports a run slow over the point's target. */
   targetMs?: number;
   /** Test seam; production gives a binary's `--version` probe the point's timeout. */
@@ -1199,20 +1203,32 @@ async function verdictOnEngine(
   return (await verdictFor(spec, sides, setOf(spec), context)).verdict;
 }
 
-/** The point a run is at, its target and the limits it applies: the point's, unless a test sets one. */
+/** The least a process gets under a deadline, so a late phase still measures something. */
+const DEADLINE_FLOOR_MS = 1000;
+
+/**
+ * The point a run is at, its target, and the limit each process gets: the point's timeout, or with a
+ * deadline what is left of it when the process starts, at least DEADLINE_FLOOR_MS.
+ */
 function runLimits(options: CompareOptions): {
   at: Point;
   targetMs: number;
-  timeoutMs: number;
+  limit: () => number;
   probeTimeoutMs: number;
 } {
   const at = options.at ?? "pre-commit";
   const { targetMs, timeoutMs } = POINTS[at];
+  const fixed = options.timeoutMs ?? timeoutMs;
+  const { deadlineMs } = options;
+  const limit =
+    deadlineMs === undefined
+      ? () => fixed
+      : () => Math.max(DEADLINE_FLOOR_MS, deadlineMs - performance.now());
   return {
     at,
     targetMs: options.targetMs ?? targetMs,
-    timeoutMs: options.timeoutMs ?? timeoutMs,
-    probeTimeoutMs: options.probeTimeoutMs ?? timeoutMs,
+    limit,
+    probeTimeoutMs: options.probeTimeoutMs ?? limit(),
   };
 }
 
@@ -1250,7 +1266,7 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const { at, targetMs, timeoutMs, probeTimeoutMs } = runLimits(options);
+  const { at, targetMs, limit, probeTimeoutMs } = runLimits(options);
   const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
@@ -1273,7 +1289,7 @@ export async function compareTrees(
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
-      timeoutMs,
+      timeoutMs: limit(),
       renames:
         beforeRef === null ? new Map<string, string>() : renamedBetween(root, beforeRef, after),
       changed,
@@ -1290,12 +1306,17 @@ export async function compareTrees(
     const found = await withBeforeAndAfter(root, beforeRef, after, async (before, afterSide) => {
       const trees = before === null ? [afterSide] : [before, afterSide];
       const bySet = await setsFor(base, selected, trees, sets);
+      run.timeoutMs = limit();
       return runSelected(selected, { before, after: afterSide }, bySet, run);
     });
     return { context: run, verdicts: found };
   });
   const store = prunedStore(selected, context);
-  recordTimings(root, at, context.timed);
+  try {
+    recordTimings(root, at, context.timed);
+  } catch (cause) {
+    warnings.push(`timings not recorded: ${messageOf(cause)}`);
+  }
   warnings.push(...slowLines(at, context.timed, targetMs));
   return {
     changed,

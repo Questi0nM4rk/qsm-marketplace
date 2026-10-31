@@ -12,9 +12,6 @@ import { resolveRef } from "./gitref.ts";
 import { POINTS } from "./registry.ts";
 import { type Editor, recordStartPoint } from "./state.ts";
 
-// The checkers get what is left of the edit point's timeout after the binary's start and the fixers,
-// so several edits at once still answer inside the engine's 10 s, a slow checker not measured.
-const CHECK_FLOOR_MS = 1000;
 const MAX_OUTPUT_CHARS = 4000;
 
 /** What one edit gives: the model's text (null when the file has no finding) and the log's lines. */
@@ -72,7 +69,10 @@ export async function editFindings(editor: Editor, file: string): Promise<EditRe
     languages: readGatesConfig(root).languages,
     only: [relPath],
     allFindings: true,
-    timeoutMs: Math.max(CHECK_FLOOR_MS, POINTS.edit.timeoutMs - performance.now()),
+    // The edit point's timeout counts from the binary's start, so the start, the fixers, the probes
+    // and the trees all come out of it, and several edits at once still answer inside the engine's
+    // 10 s, a slow checker not measured.
+    deadlineMs: POINTS.edit.timeoutMs,
   });
   return report(relPath, verdicts, warnings);
 }

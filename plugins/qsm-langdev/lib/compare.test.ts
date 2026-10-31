@@ -271,6 +271,17 @@ describe("compareTrees: checker availability", () => {
     );
   });
 
+  test("under a deadline a stuck probe gets only what is left, so the run ends by the deadline", async () => {
+    const { root, head, bin } = stagedWithLocalBin("alpha and more\n");
+    executable(bin, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
+    const started = performance.now();
+
+    const { verdicts } = await runWith(root, head, SLOW_PROBE, { deadlineMs: started + 1500 });
+
+    expect(verdicts[0]?.notMeasured).toBe(true);
+    expect(performance.now() - started).toBeLessThan(2500);
+  });
+
   test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
     const dir = sandboxDir("qsm-langdev-doctor-");
     executable(dir, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
