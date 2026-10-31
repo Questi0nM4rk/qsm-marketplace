@@ -2,7 +2,7 @@
 // the --json envelope out. Its text is what the hook hands the model as context.
 
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { commit, git } from "../../../lib/fixtures/git.ts";
@@ -22,20 +22,13 @@ function repoWithFile(fileName: string, content: string): { root: string; head: 
   return { root, head: git(root, "rev-parse", "HEAD") };
 }
 
-/** Opts `root` into qsm-langdev with no gates and no languages. */
-function initGates(root: string): void {
-  mkdirSync(join(root, ".qsm-langdev"), { recursive: true });
-  writeFileSync(
-    join(root, ".qsm-langdev", "gates.json"),
-    `${JSON.stringify({ hooks: { "pre-commit": [], "pre-push": [] }, languages: [] })}\n`,
-  );
-}
-
-/** notes.md edited to `content` in a repository set up for qsm-langdev, and what the hook said. */
+/** notes.md edited to `content` in a repository that ran `init` and committed its configs, as a
+ * person does, and what the hook said. */
 function editMarkdown(content: string) {
   const { root } = repoWithFile("notes.md", "# notes\n");
+  runBin(CLI, ["init", root, "--profile", "general"], { env: tmpEnv() });
+  commit(root, "init");
   writeFileSync(join(root, "notes.md"), content);
-  initGates(root);
   return { root, r: runEdited(join(root, "notes.md")) };
 }
 
@@ -110,10 +103,20 @@ describe("qsm-langdev edit hook: a repository that never ran init", () => {
   });
 
   test("A written file gained a finding", () => {
-    const { r } = editMarkdown("#no-space-heading\n");
+    // A fence with no language is a finding no fixer can rewrite.
+    const { r } = editMarkdown("# notes\n\n```\nx\n```\n");
 
     expect(r.status).toBe(0);
-    expect(r.text).toContain("qsm-langdev on notes.md against HEAD");
+    expect(r.text).toContain("qsm-langdev: notes.md breaks this project's rules");
+    expect(r.text).toContain("+ notes.md:3: MD040/fenced-code-language");
+    expect(r.text).not.toContain(" -> ");
+  });
+
+  test("A clean edit says nothing", () => {
+    const { r } = editMarkdown("# notes\n\nfine\n");
+
+    expect(r.status).toBe(0);
+    expect(r.text).toBeNull();
   });
 });
 
