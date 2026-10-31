@@ -2,7 +2,7 @@
 // Secret Service daemon on the session bus, never to a network, and never to rbw.
 
 import { spawnSync } from "node:child_process";
-import { onPath } from "../../../lib/outcome.ts";
+import { messageOf, onPath } from "../../../lib/outcome.ts";
 import { binCheck } from "./bin.ts";
 import type { Check } from "./doctor.ts";
 import type { Entry } from "./entries.ts";
@@ -178,8 +178,7 @@ function health(namespace: string): Check[] {
   try {
     listed = entries();
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return [bin, daemon, { name, ok: false, detail, fix: SEARCH_CAUSES }];
+    return [bin, daemon, { name, ok: false, detail: messageOf(error), fix: SEARCH_CAUSES }];
   }
   const count = listed.filter((entry) => entry.folder === namespace || namespace === "").length;
   return [bin, daemon, { name, ok: true, detail: `${count} entries`, fix: null }];
