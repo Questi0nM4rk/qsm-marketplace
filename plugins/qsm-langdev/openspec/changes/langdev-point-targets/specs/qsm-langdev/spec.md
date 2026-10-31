@@ -49,11 +49,12 @@ record nothing. A run stopped at its timeout SHALL record the timeout.
 
 ### Requirement: Doctor names a checker that is slow at a point
 
-Each recorded time SHALL be appended to `.qsm-langdev/timings/<point>.jsonl` in the worktree, inside
-the directory the result store keeps out of git, one JSON line with the checker, the milliseconds
-and the time of the run, and a write SHALL keep only the last 10 lines per checker. `doctor` SHALL
-name every checker whose median over its recorded runs at a point is above that point's target, with
-the median, the target and the number of runs, as a warning that does not change its exit code.
+Each recorded time SHALL be appended to `.qsm-langdev/timings/<point>.jsonl` in the worktree, a
+directory that holds its own `.gitignore` of `*` as the store does, one JSON line with the checker,
+the milliseconds and the time of the run, and a write SHALL keep only the last 10 lines per checker.
+`doctor` SHALL name every checker whose median over its recorded runs at a point is above that
+point's target, with the median, the target and the number of runs, as a warning that does not
+change its exit code.
 
 #### Scenario: A checker slow every time
 

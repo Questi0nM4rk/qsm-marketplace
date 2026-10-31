@@ -127,10 +127,10 @@ counts as slow too.
 ### D5. Run times live beside the result store
 
 Each recorded time is appended to `.qsm-langdev/timings/<point>.jsonl` in the worktree, one line
-`{"checker","ms","at"}`, inside the directory the store already keeps out of git. A write keeps the
-last 10 lines per checker, so the file stays bounded. `doctor` reads them and names each checker
-whose median of its last 10 runs is above its point's target, with the median and the target.
-Alternative rejected: a machine-wide file, because every worktree would mix its numbers, and
+`{"checker","ms","at"}`, a directory that keeps itself out of git as the store does (`cacheDir`). A
+write keeps the last 10 lines per checker, so the file stays bounded. `doctor` reads them and names
+each checker whose median of its last 10 runs is above its point's target, with the median and the
+target. Alternative rejected: a machine-wide file, because every worktree would mix its numbers, and
 `doctor` runs in a repository.
 
 ### D6. The registry gate checks profiles and points per language

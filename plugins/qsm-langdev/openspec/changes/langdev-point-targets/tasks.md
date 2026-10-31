@@ -40,7 +40,7 @@
 
 ## 3. Slow lines and doctor
 
-- [ ] 3.1 A scored checker records its wall time; over target the report prints the `slow:` line;
+- [x] 3.1 A scored checker records its wall time; over target the report prints the `slow:` line;
       times append to `.qsm-langdev/timings/<point>.jsonl`, last 10 per checker. Files:
       `lib/compare.ts`, a new `lib/timings.ts` (one job: the timing record, read by compare and
       doctor). Proof: a commit in a sandbox repo with `POINTS` target overridden to 1 ms through the

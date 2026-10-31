@@ -17,6 +17,7 @@ import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from ".
 import type { Finding, Tally } from "./findings.ts";
 import { isErrno } from "./errors.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
+import { recordTimings, slowLines, type Timing } from "./timings.ts";
 import {
   asRunAt,
   type CheckSpec,
@@ -755,6 +756,8 @@ export interface CompareOptions {
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
+  /** Test seam; production reports a run slow over the point's target. */
+  targetMs?: number;
   /** Test seam; production gives a binary's `--version` probe the point's timeout. */
   probeTimeoutMs?: number;
   jobs?: number;
@@ -1014,6 +1017,8 @@ interface RunContext {
   packs: ReadonlyMap<string, ResolvedPack>;
   /** What the run says once about how it ran, added to as checkers run. */
   warnings: string[];
+  /** How long each checker that scored a side took; a store hit is not a run. */
+  timed: Timing[];
 }
 
 /** Stands for the report directory in a stored key: it is new every run. */
@@ -1128,6 +1133,11 @@ function keptSides(
   return { before, after: keep(trees.after, narrowed.after, use.shipped) };
 }
 
+/** Whether the checker ran on either side, rather than answering both from the store. */
+function scoredASide(use: StoreUse | undefined): boolean {
+  return (use?.shipped.scored ?? 0) + (use?.reference?.scored ?? 0) > 0;
+}
+
 /** A verdict, and the cause when it is not measured because a run failed. */
 interface Judged {
   verdict: Verdict;
@@ -1154,7 +1164,11 @@ async function verdictFor(
   const { before, after } = keptSides(spec, sides, narrowed, context);
   const { renames } = context;
   const { timeoutMs } = context;
+  const started = performance.now();
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
+  if (scoredASide(context.uses.get(spec.name))) {
+    context.timed.push({ checker: spec.name, ms: performance.now() - started });
+  }
   const verdict: Verdict = {
     check: spec.name,
     pass: result.pass,
@@ -1188,16 +1202,18 @@ async function verdictOnEngine(
  * Compares the tree at `beforeRef` against `after` (a commit, or the working tree) through every
  * checker the change selects, each over the file set it declares.
  */
-/** The point a run is at, and the limits it applies: the point's timeout unless a test sets one. */
+/** The point a run is at, its target and the limits it applies: the point's, unless a test sets one. */
 function runLimits(options: CompareOptions): {
   at: EnforcementPoint;
+  targetMs: number;
   timeoutMs: number;
   probeTimeoutMs: number;
 } {
   const at = options.at ?? "pre-commit";
-  const { timeoutMs } = POINTS[at];
+  const { targetMs, timeoutMs } = POINTS[at];
   return {
     at,
+    targetMs: options.targetMs ?? targetMs,
     timeoutMs: options.timeoutMs ?? timeoutMs,
     probeTimeoutMs: options.probeTimeoutMs ?? timeoutMs,
   };
@@ -1233,7 +1249,7 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const { at, timeoutMs, probeTimeoutMs } = runLimits(options);
+  const { at, targetMs, timeoutMs, probeTimeoutMs } = runLimits(options);
   const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
@@ -1268,6 +1284,7 @@ export async function compareTrees(
       jobs: options.jobs ?? JOBS,
       packs,
       warnings,
+      timed: [],
     };
     const found = await withBeforeAndAfter(root, beforeRef, after, async (before, afterSide) => {
       const trees = before === null ? [afterSide] : [before, afterSide];
@@ -1277,6 +1294,8 @@ export async function compareTrees(
     return { context: run, verdicts: found };
   });
   const store = prunedStore(selected, context);
+  recordTimings(root, at, context.timed);
+  warnings.push(...slowLines(at, context.timed, targetMs));
   return {
     changed,
     sets,

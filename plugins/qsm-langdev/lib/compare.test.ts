@@ -1227,3 +1227,39 @@ test.each(["ok", "timeout"] as const)("Semgrep findings at a non-zero exit: %s",
   expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
   expect(entries(root, "semgrep-ts", "pre-push")).toEqual([]);
 });
+
+describe("compareTrees: run times", () => {
+  const timingLines = (root: string): string[] =>
+    readFileSync(join(root, ".qsm-langdev", "timings", "pre-commit.jsonl"), "utf8")
+      .trim()
+      .split("\n");
+
+  test("a run over its target is reported slow and still passes; a store hit is no run", async () => {
+    const { root, head } = repoWith({ "a.txt": "alpha\n" });
+    write(root, { "a.txt": "alpha and more\n" });
+    stage(root);
+
+    const first = await runWith(root, head, MARKED, { targetMs: 0 });
+    const again = await runWith(root, head, MARKED, { targetMs: 0 });
+
+    expect(first.verdicts.map((v) => v.pass)).toEqual([true]);
+    const slow = first.warnings.filter((w) => w.startsWith("slow: "));
+    expect(slow).toHaveLength(1);
+    expect(slow[0]).toMatch(/^slow: marked \d+\.\d s at pre-commit, target 0\.0 s$/);
+    expect(again.warnings.filter((w) => w.startsWith("slow: "))).toEqual([]);
+    expect(timingLines(root)).toHaveLength(1);
+  });
+
+  test("the timings keep the last ten runs of a checker", async () => {
+    const { root, head } = repoWith({ "a.txt": "alpha\n" });
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      write(root, { "a.txt": `alpha ${attempt}\n` });
+      stage(root);
+      await runWith(root, head, MARKED);
+    }
+
+    const lines = timingLines(root);
+    expect(lines).toHaveLength(10);
+    expect(JSON.parse(lines[0] ?? "")).toMatchObject({ checker: "marked" });
+  });
+});
