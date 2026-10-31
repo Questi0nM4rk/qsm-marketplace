@@ -1,6 +1,8 @@
-// Where the secrets in a text are. A known shape always wins. A token with no shape of its own is
-// a secret only when it is nothing else: not inside a placeholder, not a path, a name, a hash or an
-// id, not base64 of text, and as random as its alphabet and length allow.
+// Where the secrets in a text are. Recall comes first: a miss stays in a transcript for good, a
+// false positive is one vault entry the person removes, so a value is captured unless it is plainly
+// not one. A block or a known shape always wins; a value after a credential name is a secret unless
+// it is a template or a stopword; a token with no shape of its own is a secret when it is nothing
+// else (a path, a name, a hash, an id, base64 of text) and as random as its alphabet and length allow.
 
 import { type Span, shapeSpans } from "../../../lib/secret-shapes.ts";
 
@@ -8,7 +10,9 @@ const BARE_TOKEN_MIN = 32;
 /** A value after a credential name counts from here, whatever its mix: a short token is a token. */
 const CREDENTIAL_VALUE_MIN = 6;
 /** Shannon entropy over the entropy a random token of the same length and alphabet would show. */
-const RANDOMNESS_FLOOR = 0.9;
+const RANDOMNESS_FLOOR = 0.8;
+/** A git commit: hex of exactly this length is an id this machine shows every turn. */
+const COMMIT_LENGTH = 40;
 const PRINTABLE_SHARE = 0.9;
 const MIN_SEPARATORS = 3;
 const SEPARATOR_RATIO = 0.1;
@@ -43,7 +47,9 @@ const SSH_KEY_TYPE = /(?:ssh|ecdsa-sha2|sk-ssh|sk-ecdsa-sha2)-[a-z0-9@.-]*\s+$/;
 const HASH_PREFIX = /^(?:sha(?:1|224|256|384|512)|md5)[-:_]/i;
 const ID_PREFIX =
   /^(?:session|msg|toolu|req|cap|file|call|run|thread|resp|chatcmpl|agent|task|batch)[_-]/;
-const HEX_AND_HYPHENS = /^[0-9a-f-]+$/i;
+const HEX = /^[0-9a-f]+$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const HASH_BEFORE = /(?:sha(?:1|224|256|384|512)|md5):$/i;
 const BASE64 = /^[A-Za-z0-9+/_-]+={0,2}$/;
 
 function entropy(token: string): number {
@@ -58,7 +64,11 @@ function entropy(token: string): number {
   return bits;
 }
 
+/** The alphabet a token was drawn from: hex is sixteen characters, else its character classes. */
 function alphabetSize(token: string): number {
+  if (HEX.test(token)) {
+    return 16;
+  }
   let size = 0;
   for (const [pattern, add] of [
     [/[a-z]/, 26],
@@ -110,13 +120,14 @@ function isSomethingElse(token: string): boolean {
   );
 }
 
-/** A long run with no shape: random enough in its own alphabet, and none of the above. */
+/** A long run with no shape: random enough in its own alphabet, and none of the above. A UUID and
+ * a commit are ids; any other hex is judged on its randomness alone. */
 function isBareSecret(token: string): boolean {
+  const hex = HEX.test(token);
   return (
-    /\d/.test(token) &&
-    /[A-Za-z]/.test(token) &&
-    !HEX_AND_HYPHENS.test(token) &&
-    !isSomethingElse(token) &&
+    !UUID.test(token) &&
+    !(hex && token.length === COMMIT_LENGTH) &&
+    (hex || !isSomethingElse(token)) &&
     randomness(token) >= RANDOMNESS_FLOOR
   );
 }
@@ -142,8 +153,10 @@ function bareRuns(text: string): Span[] {
     const start = m.index + offset;
     const token = m[0].slice(offset);
     const plain = !(token.includes(".") || token.startsWith("/") || token.startsWith("~"));
-    const publicKey = SSH_KEY_TYPE.test(text.slice(0, m.index));
-    return plain && !publicKey && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
+    const before = text.slice(0, m.index);
+    // A public key and a hash named as one (`sha256:<hex>`) say what follows is not a secret.
+    const named = SSH_KEY_TYPE.test(before) || HASH_BEFORE.test(before);
+    return plain && !named && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
       ? [{ start, end: start + token.length, kind: "random-token" }]
       : [];
   });
