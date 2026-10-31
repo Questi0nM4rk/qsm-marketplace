@@ -58,18 +58,11 @@ function registerMarker(on: On): void {
 
   on("session.end", async ($, e, next) => {
     await setMarker(runner($), "cleared");
-    // The branches the working branch has not absorbed are finished work it does not have.
-    const ahead: unknown = await $.worktrunk.ahead();
-    if (Array.isArray(ahead) && ahead.length > 0) {
-      const names = ahead.join(", ");
-      $.ui.toast(`qsm-worktrunk: branches ahead of the working branch: ${names}`.slice(0, 200));
-      $.ui.log(`branches ahead of the working branch: ${names}`);
-    }
     return next(e);
   }).catch(($, e, next) => {
     const reason = failure(next.error);
     $.ui.toast(`qsm-worktrunk ERROR: session.end: ${reason}`);
-    $.ui.log(`clearing the marker or listing the branches ahead failed (${next.error.kind})`);
+    $.ui.log(`clearing the marker failed (${next.error.kind})`);
     return next(e);
   });
 }
