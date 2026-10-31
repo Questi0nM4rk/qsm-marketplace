@@ -35,7 +35,7 @@ jobs:
       # pipeline): wt, gitleaks (the pre-push secrets gate blocks without it), rumdl and
       # markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint (with oxlint-tsgolint for its
       # type-aware rules) and oxfmt for its TypeScript gate and fixers,
-      # yamllint, taplo, semgrep and lizard because the pre-commit gate marks a checker whose
+      # yamllint, taplo, semgrep, lizard and jscpd because the pre-commit gate marks a checker whose
       # tool is absent `worse` and blocks the commit (init writes yaml and toml, a.ts is code),
       # imagemagick 7 for the `magick` of qsm-uix (apt ships 6, which has no `magick`), and the
       # upstream openspec CLI for qsm-openspec doctor.
@@ -46,7 +46,7 @@ jobs:
           pipx install semgrep
           pipx install lizard
           bun add -g @fission-ai/openspec
-          bun add -g oxlint@1.88.0 oxlint-tsgolint@7.0.2004 oxfmt@0.73.0
+          bun add -g oxlint@1.88.0 oxlint-tsgolint@7.0.2004 oxfmt@0.73.0 jscpd@5.3.2
           echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
