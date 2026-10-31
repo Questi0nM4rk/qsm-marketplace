@@ -1007,7 +1007,8 @@ async function setsFor(
 /** What every checker of a run shares: the store, each binary's version,
  * and where each checker's use of the store is recorded. */
 interface RunContext {
-  timeoutMs: number;
+  /** The limit a checker gets, read when it starts: under a deadline, what is left of it. */
+  limit: () => number;
   renames: Renames;
   changed: readonly string[];
   /** The paths `.gitattributes` marks generated: a quality checker leaves them out of its set. */
@@ -1168,7 +1169,7 @@ async function verdictFor(
   }
   const { before, after } = keptSides(spec, sides, narrowed, context);
   const { renames } = context;
-  const { timeoutMs } = context;
+  const timeoutMs = context.limit();
   const started = performance.now();
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
   if (scoredASide(context.uses.get(spec.name))) {
@@ -1289,7 +1290,7 @@ export async function compareTrees(
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
-      timeoutMs: limit(),
+      limit,
       renames:
         beforeRef === null ? new Map<string, string>() : renamedBetween(root, beforeRef, after),
       changed,
@@ -1306,7 +1307,6 @@ export async function compareTrees(
     const found = await withBeforeAndAfter(root, beforeRef, after, async (before, afterSide) => {
       const trees = before === null ? [afterSide] : [before, afterSide];
       const bySet = await setsFor(base, selected, trees, sets);
-      run.timeoutMs = limit();
       return runSelected(selected, { before, after: afterSide }, bySet, run);
     });
     return { context: run, verdicts: found };
