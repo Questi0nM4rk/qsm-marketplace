@@ -47,7 +47,7 @@ interface MaskData {
 
 interface CaptureData {
   readonly text: string;
-  readonly captured: readonly { readonly id: string }[];
+  readonly captured: readonly { readonly id: string; readonly kind: string }[];
   readonly taken: string[];
 }
 
@@ -57,7 +57,10 @@ const isCaptureData = (value: unknown): value is CaptureData =>
   isRecord(value) &&
   typeof value.text === "string" &&
   Array.isArray(value.captured) &&
-  value.captured.every((item: unknown) => isRecord(item) && typeof item.id === "string") &&
+  value.captured.every(
+    (item: unknown) =>
+      isRecord(item) && typeof item.id === "string" && typeof item.kind === "string",
+  ) &&
   isStrings(value.taken);
 
 interface Envelope {
@@ -432,7 +435,7 @@ export function register(on: On): void {
     if (done.captured.length === 0) {
       return next(e);
     }
-    const ids = done.captured.map((c) => c.id).join(", ");
+    const ids = done.captured.map((c) => `${c.id} (${c.kind})`).join(", ");
     const why = done.taken.map((name) => `; ${name} is already stored, so it got a generated id`);
     $.ui.toast(`qsm-secrets: captured ${done.captured.length} secret(s) as ${ids}${why.join("")}`);
     return next({ ...e, text: done.text });

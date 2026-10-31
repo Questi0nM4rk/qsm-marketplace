@@ -203,10 +203,10 @@ function host(on: On, stdout: string): () => string {
   return () => toast;
 }
 
-test("a captured prompt reaches the model as the replacement, with a toast naming the id", async ($, on) => {
+test("a captured prompt reaches the model as the replacement, with a toast naming the id and its kind", async ($, on) => {
   const data = {
     text: "key {{secret:cap_1}}…abcd",
-    captured: [{ id: "cap_1", suffix: "abcd" }],
+    captured: [{ id: "cap_1", suffix: "abcd", kind: "github-pat" }],
     taken: [],
   };
   const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
@@ -214,7 +214,7 @@ test("a captured prompt reaches the model as the replacement, with a toast namin
   const sent = await $.prompt.submit(PASTE);
 
   expect(sent.text).toBe("key {{secret:cap_1}}…abcd");
-  expect(toast()).toBe("qsm-secrets: captured 1 secret(s) as cap_1");
+  expect(toast()).toBe("qsm-secrets: captured 1 secret(s) as cap_1 (github-pat)");
 });
 
 test("a failed capture drops the prompt, naming the cause and the fix, and toasts it loudly", async ($, on) => {
@@ -233,7 +233,7 @@ test("a failed capture drops the prompt, naming the cause and the fix, and toast
 test("a name that was already stored is said in the toast", async ($, on) => {
   const data = {
     text: "k=cap_1",
-    captured: [{ id: "cap_1", suffix: "abcd" }],
+    captured: [{ id: "cap_1", suffix: "abcd", kind: "credential-value" }],
     taken: ["k"],
   };
   const toast = host(on, JSON.stringify({ code: "ok", exit: 0, message: "", data }));
