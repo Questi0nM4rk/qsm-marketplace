@@ -93,25 +93,23 @@ line reflects the agent's state without polling.
 - **WHEN** the session terminates
 - **THEN** the marker SHALL be cleared
 
-### Requirement: The session end names every branch ahead of the working branch
+### Requirement: `qsm-worktrunk ahead` lists every branch ahead of the working branch
 
-When a session ends, the plugin SHALL list the local branches that hold commits the working
-branch does not, through the `qsm-worktrunk ahead` verb, and SHALL toast and log their names, so
-finished work left on a branch is never forgotten silently. The verb SHALL answer from one git
-call and an empty list outside a git repository. A failure of the verb SHALL toast
-`qsm-worktrunk ERROR: session.end` and SHALL NOT keep the session from ending.
+The `qsm-worktrunk ahead` verb SHALL list the local branches that hold commits the working branch
+does not, one name per line, from one git call, and SHALL answer an empty list outside a git
+repository.
 
 #### Scenario: A branch holds unmerged work
 
-- **WHEN** the session ends while a local branch holds a commit the working branch lacks
-- **THEN** the toast and the log SHALL name that branch, and a branch already merged into the
+- **WHEN** a local branch holds a commit the working branch lacks
+- **THEN** `qsm-worktrunk ahead` SHALL name that branch, and a branch already merged into the
   working branch SHALL NOT be named
 
 #### Scenario: No branch is ahead
 
 - **WHEN** every local branch is merged into the working branch, or the directory is no git
   repository
-- **THEN** `qsm-worktrunk ahead` SHALL print nothing and exit 0, and no toast SHALL be shown
+- **THEN** `qsm-worktrunk ahead` SHALL print nothing and exit 0
 
 ### Requirement: Creating an isolated workspace goes through `wt`
 

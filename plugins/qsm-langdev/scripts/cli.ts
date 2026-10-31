@@ -53,6 +53,7 @@ import {
   resolveLanguage,
 } from "../lib/registry.ts";
 import { semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
+import { slowCheckers } from "../lib/timings.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import { dirOf, err, optOneOf, required, requireRepo } from "./call.ts";
 import { handlers as judgeHandlers } from "./cli-judge.ts";
@@ -147,7 +148,7 @@ const list: Handler = () => {
     name: spec.name,
     measures: spec.measures,
     language: spec.language,
-    runsAt: spec.runsAt,
+    points: spec.points,
     extensions: spec.extensions,
     ...(spec.names ? { names: spec.names.source } : {}),
     binary: spec.binary,
@@ -157,7 +158,7 @@ const list: Handler = () => {
   const covers = (row: (typeof rows)[number]) =>
     [...row.extensions, ...(row.names === undefined ? [] : [row.names])].join(",");
   const text = rows
-    .map((row) => [row.name, row.language, row.runsAt, covers(row)].join("\t"))
+    .map((row) => [row.name, row.language, row.points.join(","), covers(row)].join("\t"))
     .join("\n");
   return ok(rows, text);
 };
@@ -203,6 +204,7 @@ const doctor: Handler = async (call) => {
   if (login !== null) {
     warnings.push(login);
   }
+  warnings.push(...slowCheckers(root));
   const data = { checks: rows, gaps, structural };
   // a gate binary that is absent fails the hook, so it is the verdict, not a row
   const gone = rows.some((row) => !row.present && !row.timedOut) || !structural.patched;

@@ -120,7 +120,7 @@ const MARKED: CheckSpec = {
   name: "marked",
   measures: { counts: "marked lines, one per line the fixture prints" },
   language: "fish",
-  runsAt: "pre-commit",
+  points: ["pre-commit", "pre-push", "ci"],
   extensions: [".txt"],
   binary: "grep",
   install: { bundled: "ships with the system" },
@@ -271,6 +271,17 @@ describe("compareTrees: checker availability", () => {
     );
   });
 
+  test("under a deadline a stuck probe gets only what is left, so the run ends by the deadline", async () => {
+    const { root, head, bin } = stagedWithLocalBin("alpha and more\n");
+    executable(bin, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
+    const started = performance.now();
+
+    const { verdicts } = await runWith(root, head, SLOW_PROBE, { deadlineMs: started + 1500 });
+
+    expect(verdicts[0]?.notMeasured).toBe(true);
+    expect(performance.now() - started).toBeLessThan(2500);
+  });
+
   test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
     const dir = sandboxDir("qsm-langdev-doctor-");
     executable(dir, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
@@ -323,7 +334,7 @@ function recorder(fileSet: CheckSpec["fileSet"], extensions: readonly string[] =
     name: "recorder",
     measures: { counts: "nothing; the recorder only records what it was handed" },
     language: "fish",
-    runsAt: "pre-commit",
+    points: ["pre-commit", "pre-push", "ci"],
     extensions,
     binary: "printf",
     install: { bundled: "ships with the system" },
@@ -585,19 +596,6 @@ test("A timeout stops the launcher's engine child", async () => {
       }
     }
   }
-});
-
-test("time limit: a checker's declared pre-push limit is the one its pre-push run gets", async () => {
-  const { root, head } = repoWith({ "a.txt": "alpha\n" });
-  write(root, { "a.txt": "alpha and more\n" });
-  stage(root);
-  const declared: CheckSpec = { ...SLOW, prePush: { fileSet: "changed", timeoutMs: 200 } };
-
-  const { verdicts } = await runWith(root, head, declared, { at: "pre-push", timeoutMs: 60_000 });
-
-  expect(verdicts.map((v) => v.summary)).toEqual([
-    "slow: not measured: timed out after 0.2s; retry",
-  ]);
 });
 
 test("time limit: the checkers after one not measured still run, so the report is whole", async () => {
@@ -1239,4 +1237,40 @@ test.each(["ok", "timeout"] as const)("Semgrep findings at a non-zero exit: %s",
   expect(headline(defined(verdicts[0], "a verdict"))).not.toContain("WORSE");
   expect(describeStore(again.store).at(-1)).toStartWith("store: 0 hits,");
   expect(entries(root, "semgrep-ts", "pre-push")).toEqual([]);
+});
+
+describe("compareTrees: run times", () => {
+  const timingLines = (root: string): string[] =>
+    readFileSync(join(root, ".qsm-langdev", "timings", "pre-commit.jsonl"), "utf8")
+      .trim()
+      .split("\n");
+
+  test("a run over its target is reported slow and still passes; a store hit is no run", async () => {
+    const { root, head } = repoWith({ "a.txt": "alpha\n" });
+    write(root, { "a.txt": "alpha and more\n" });
+    stage(root);
+
+    const first = await runWith(root, head, MARKED, { targetMs: 0 });
+    const again = await runWith(root, head, MARKED, { targetMs: 0 });
+
+    expect(first.verdicts.map((v) => v.pass)).toEqual([true]);
+    const slow = first.warnings.filter((w) => w.startsWith("slow: "));
+    expect(slow).toHaveLength(1);
+    expect(slow[0]).toMatch(/^slow: marked \d+\.\d s at pre-commit, target 0\.0 s$/);
+    expect(again.warnings.filter((w) => w.startsWith("slow: "))).toEqual([]);
+    expect(timingLines(root)).toHaveLength(1);
+  });
+
+  test("the timings keep the last ten runs of a checker", async () => {
+    const { root, head } = repoWith({ "a.txt": "alpha\n" });
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      write(root, { "a.txt": `alpha ${attempt}\n` });
+      stage(root);
+      await runWith(root, head, MARKED);
+    }
+
+    const lines = timingLines(root);
+    expect(lines).toHaveLength(10);
+    expect(JSON.parse(lines[0] ?? "")).toMatchObject({ checker: "marked" });
+  });
 });

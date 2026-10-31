@@ -132,8 +132,8 @@ const edited: Handler = async (call) => {
     sessionId: requiredString(call, "session"),
     agentId: optionalString(call, "agent") ?? MAIN_AGENT,
   };
-  const text = await editFindings(editor, requiredString(call, "file"));
-  return ok({ text }, text ?? "");
+  const report = await editFindings(editor, requiredString(call, "file"));
+  return ok(report, report.text ?? "");
 };
 
 export const handlers: Readonly<Record<string, Handler>> = { structure, edited };

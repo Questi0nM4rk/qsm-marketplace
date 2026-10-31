@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
 /** Local branches with commits `HEAD` lacks, by name; none outside a git repository. One
- * for-each-ref call, so the session-end hook that asks stays well inside its 1.5 s. */
+ * for-each-ref call. */
 export function branchesAhead(cwd: string): string[] {
   const run = spawnSync(
     "git",

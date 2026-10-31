@@ -16,8 +16,16 @@ function failed($: EngineInterface, event: string, error: Caught["error"]): stri
   return said;
 }
 
-/** The `text` of the edited verb's data; null when it had nothing to say. */
-function findingsText(data: unknown): string | null {
+/** The `text` of the edited verb's data, for the model; null when the file has no finding. Its `log`
+ * lines, how the run went, go to the debug log, because the model cannot act on them. */
+function findingsText($: EngineInterface, data: unknown): string | null {
+  // A hooks module imports nothing outside the plugin, and lib/json.ts reaches the root lib/.
+  const field: unknown =
+    typeof data === "object" && data !== null ? Reflect.get(data, "log") : undefined;
+  const log = (Array.isArray(field) ? field : []).filter((line) => typeof line === "string");
+  if (log.length > 0) {
+    $.ui.log(log.join("\n"), { to: "debug" });
+  }
   const text = stringField(data, "text");
   return text !== null && text.length > 0 ? text : null;
 }
@@ -55,6 +63,7 @@ function registerEditFindings(on: On): void {
       return result;
     }
     const text = findingsText(
+      $,
       await $.langdev.edited({ file, session: await $.session.id(), agent: e.agentId }),
     );
     return text === null ? result : { ...result, context: [...(result.context ?? []), text] };

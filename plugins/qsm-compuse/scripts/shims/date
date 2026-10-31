@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# The desktop slot's date: the fake machine's clock (`clock` in DRIVE_STATE) is now. A command that
+# names its own date (-d, --date, -r, --reference, -f, --file) gets the real date, so arithmetic on
+# a given date still works. A state without a clock means the slot runs on the real clock.
+for arg; do
+  case "$arg" in -d* | --date* | -r* | --reference* | -f* | --file*) exec /usr/bin/date "$@" ;; *) ;; esac
+done
+clock="$(jq -r '.clock // empty' "${DRIVE_STATE:?the date shim runs only inside a desktop slot}")"
+[[ -n "$clock" ]] || exec /usr/bin/date "$@"
+exec /usr/bin/date -d "$clock" "$@"

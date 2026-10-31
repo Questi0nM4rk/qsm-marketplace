@@ -16,15 +16,19 @@ import {
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { isErrno } from "./errors.ts";
+import { messageOf } from "../../../lib/outcome.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
+import { recordTimings, slowLines, type Timing } from "./timings.ts";
 import {
   asRunAt,
   type CheckSpec,
-  type EnforcementPoint,
   installLine,
   JOBS,
   type Language,
   type LocalRules,
+  type Point,
+  POINTS,
+  storePointOf,
   REGISTRY,
   selectedAt,
 } from "./registry.ts";
@@ -92,11 +96,9 @@ function sidePaths(root: string, ref: string): string[] | null {
 
 type Spawned = Pick<SpawnSyncReturns<string>, "status" | "signal" | "error" | "stdout" | "stderr">;
 
-/** How long any process the gate starts may run before it counts as stuck: a probe, a checker, a
- * version check. A busy machine or a cold cache is slow, not broken, so the gate fails only on a
- * finding or on a process stuck this long (the owner: "failing only on a gate or after rly bad
- * 5min stuck process"). */
-const STUCK_MS = 300_000;
+/** How long a process outside any point may run before it counts as stuck: doctor's and the
+ * structural checker's `--version` probes. The commit's timeout, the same five minutes. */
+const PROBE_MS = POINTS["pre-commit"].timeoutMs;
 
 function spawnAsync(
   cwd: string,
@@ -749,14 +751,19 @@ function renamedBetween(root: string, beforeRef: string, after: string): Renames
 
 export interface CompareOptions {
   /** Enforcement point whose checker set runs. Default pre-commit. */
-  at?: EnforcementPoint;
+  at?: Point;
   /** Language selection, opt-in; empty/omitted enables no language checker
    * (the always-on languages run regardless). */
   languages?: readonly Language[];
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
-  /** Test seam; production gives a binary's `--version` probe STUCK_MS. */
+  /** An instant on `performance.now()`'s clock by which every process the run starts must have
+   * ended; each one gets what is left. The edit hook's, inside the engine's 10 s. */
+  deadlineMs?: number;
+  /** Test seam; production reports a run slow over the point's target. */
+  targetMs?: number;
+  /** Test seam; production gives a binary's `--version` probe the point's timeout. */
   probeTimeoutMs?: number;
   jobs?: number;
   /** Score only these paths (relative to root) on both sides — the edit hook's one file. */
@@ -1000,7 +1007,8 @@ async function setsFor(
 /** What every checker of a run shares: the store, each binary's version,
  * and where each checker's use of the store is recorded. */
 interface RunContext {
-  timeoutMs: number;
+  /** The limit a checker gets, read when it starts: under a deadline, what is left of it. */
+  limit: () => number;
   renames: Renames;
   changed: readonly string[];
   /** The paths `.gitattributes` marks generated: a quality checker leaves them out of its set. */
@@ -1015,6 +1023,8 @@ interface RunContext {
   packs: ReadonlyMap<string, ResolvedPack>;
   /** What the run says once about how it ran, added to as checkers run. */
   warnings: string[];
+  /** How long each checker that scored a side took; a store hit is not a run. */
+  timed: Timing[];
 }
 
 /** Stands for the report directory in a stored key: it is new every run. */
@@ -1129,6 +1139,11 @@ function keptSides(
   return { before, after: keep(trees.after, narrowed.after, use.shipped) };
 }
 
+/** Whether the checker ran on either side, rather than answering both from the store. */
+function scoredASide(use: StoreUse | undefined): boolean {
+  return (use?.shipped.scored ?? 0) + (use?.reference?.scored ?? 0) > 0;
+}
+
 /** A verdict, and the cause when it is not measured because a run failed. */
 interface Judged {
   verdict: Verdict;
@@ -1154,8 +1169,12 @@ async function verdictFor(
   }
   const { before, after } = keptSides(spec, sides, narrowed, context);
   const { renames } = context;
-  const timeoutMs = spec.timeoutMs ?? context.timeoutMs;
+  const timeoutMs = context.limit();
+  const started = performance.now();
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
+  if (scoredASide(context.uses.get(spec.name))) {
+    context.timed.push({ checker: spec.name, ms: performance.now() - started });
+  }
   const verdict: Verdict = {
     check: spec.name,
     pass: result.pass,
@@ -1183,6 +1202,35 @@ async function verdictOnEngine(
       : new Set([...set].filter((f) => !context.generated.has(f)));
   };
   return (await verdictFor(spec, sides, setOf(spec), context)).verdict;
+}
+
+/** The least a process gets under a deadline, so a late phase still measures something. */
+const DEADLINE_FLOOR_MS = 1000;
+
+/**
+ * The point a run is at, its target, and the limit each process gets: the point's timeout, or with a
+ * deadline what is left of it when the process starts, at least DEADLINE_FLOOR_MS.
+ */
+function runLimits(options: CompareOptions): {
+  at: Point;
+  targetMs: number;
+  limit: () => number;
+  probeTimeoutMs: number;
+} {
+  const at = options.at ?? "pre-commit";
+  const { targetMs, timeoutMs } = POINTS[at];
+  const fixed = options.timeoutMs ?? timeoutMs;
+  const { deadlineMs } = options;
+  const limit =
+    deadlineMs === undefined
+      ? () => fixed
+      : () => Math.max(DEADLINE_FLOOR_MS, deadlineMs - performance.now());
+  return {
+    at,
+    targetMs: options.targetMs ?? targetMs,
+    limit,
+    probeTimeoutMs: options.probeTimeoutMs ?? limit(),
+  };
 }
 
 /**
@@ -1219,7 +1267,8 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const probes = await probeAll(applicable, root, options.probeTimeoutMs ?? STUCK_MS);
+  const { at, targetMs, limit, probeTimeoutMs } = runLimits(options);
+  const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
   // run: the others still measure, and its verdict stands beside theirs. A language without its
@@ -1241,18 +1290,19 @@ export async function compareTrees(
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
-      timeoutMs: options.timeoutMs ?? STUCK_MS,
+      limit,
       renames:
         beforeRef === null ? new Map<string, string>() : renamedBetween(root, beforeRef, after),
       changed,
       generated: generatedPaths(root, [...changed, ...given]),
       all: options.allFindings === true,
-      store: new ResultStore(root, options.at ?? "pre-commit"),
+      store: new ResultStore(root, storePointOf(at)),
       versions: new Map([...probes].map(([binary, probe]) => [binary, probe.version])),
       uses: new Map(),
       jobs: options.jobs ?? JOBS,
       packs,
       warnings,
+      timed: [],
     };
     const found = await withBeforeAndAfter(root, beforeRef, after, async (before, afterSide) => {
       const trees = before === null ? [afterSide] : [before, afterSide];
@@ -1262,6 +1312,12 @@ export async function compareTrees(
     return { context: run, verdicts: found };
   });
   const store = prunedStore(selected, context);
+  try {
+    recordTimings(root, at, context.timed);
+  } catch (cause) {
+    warnings.push(`timings not recorded: ${messageOf(cause)}`);
+  }
+  warnings.push(...slowLines(at, context.timed, targetMs));
   return {
     changed,
     sets,
@@ -1347,7 +1403,7 @@ export interface DoctorRow {
 /** Binary presence per check, every distinct binary probed once. */
 export async function doctorRows(
   specs: readonly CheckSpec[] = REGISTRY,
-  probeTimeoutMs: number = STUCK_MS,
+  probeTimeoutMs: number = PROBE_MS,
 ): Promise<DoctorRow[]> {
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
   const probes = new Map(
@@ -1377,7 +1433,7 @@ export interface StructuralCheckerStatus {
  * that from an unpatched upstream `sentrux` and from none present at all.
  */
 export async function structuralCheckerStatus(): Promise<StructuralCheckerStatus> {
-  const result = await spawnAsync(tmpdir(), "sentrux", ["--version"], STUCK_MS);
+  const result = await spawnAsync(tmpdir(), "sentrux", ["--version"], PROBE_MS);
   if (spawnFailure(result, "sentrux") !== null) {
     return { present: false, patched: false };
   }
