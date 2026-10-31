@@ -40,7 +40,10 @@ fi
 gate_commit() {
   local sha=$1 dir="$scratch/$1" deps
   mkdir "$dir"
-  git archive "$sha" | tar -x -C "$dir"
+  # read-tree and checkout-index write every tracked file; git archive would drop the export-ignore
+  # ones, the generated nouns the hooks modules import.
+  GIT_INDEX_FILE="$dir.index" git read-tree "$sha"
+  GIT_INDEX_FILE="$dir.index" git checkout-index -a --prefix="$dir/"
   for deps in node_modules plugins/*/node_modules; do
     if [[ -d "$deps" && -d "$dir/$(dirname "$deps")" ]]; then
       ln -s "$PWD/$deps" "$dir/$deps"
