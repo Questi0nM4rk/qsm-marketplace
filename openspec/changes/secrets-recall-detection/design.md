@@ -44,8 +44,10 @@ is a few KB), an outside binary.
 6. **The bare-token pass** keeps the Miller-Madow floor but at 0.8 instead of 0.9, and keeps its
    32-character minimum; the hash, id, path and URL filters stay, since those are values this
    machine shows every turn and they are not credentials. The hex-only rule (`HEX_AND_HYPHENS`)
-   becomes: hex of 40 characters (a commit) or a UUID passes, any other hex run of 32 or more is
-   captured.
+   becomes: hex of 40 characters (a commit) or a UUID passes, and any other hex run of 32 or more
+   is judged like any token, at the same 0.8 floor measured against the 16-letter hex alphabet, so
+   a random hex key is captured and `0000...` or `aaaa...1` is not. A token no longer needs both a
+   letter and a digit, since a random token of one class is still random.
 7. **A span carries `kind`**, a string the review pane prints. `Span` in `lib/secret-shapes.ts`
    gains it, so qsm-memory reads it too and ignores it.
 8. **Key material comes from real producers, run at test time**: an OpenVPN key from

@@ -16,18 +16,20 @@ It SHALL run these passes in order, and a later pass SHALL skip any text an earl
 3. a known token shape (GitHub, GitLab, npm, Anthropic, OpenAI, AWS, Slack, Stripe, Google, JWT, a
    connection string's password, and the prefix rules taken from gitleaks' rule data) is a secret,
    whatever its checksum;
-4. a value of 6 or more characters after a name that says credential is a secret; a credential
-   name counts when one of its parts (`GITHUB_TOKEN`, `clientSecret`) is a credential word, in
-   English (`token`, `secret`, `password`, `pwd`, `passphrase`, `credentials`, `auth`, `api_key`,
-   `Bearer`) or in Czech (`heslo`, `klic`, `klíč`, `tajne`, `tajné`), so `authorization_mode` and
-   `passwordless` do not; a value is not a secret only when it is `true`, `false` or `null`, a
-   template (`<x>`, `${x}`, `{x}`, `{{x}}`), one character repeated, a run of the alphabet or the
-   digits, or `changeme`, `example`, `your-` followed by a word;
+4. a value of 6 or more characters after a name that says credential, joined to it by `=`, `:`,
+   `:=`, `=>`, `is` or `je`, or as a quoted JSON key, is a secret, and the value runs to the next
+   space or quote; a credential name counts when one of its parts (`GITHUB_TOKEN`, `clientSecret`)
+   is a credential word, in English (`token`, `secret`, `password`, `pwd`, `passphrase`,
+   `credentials`, `auth`, `api_key`, `Bearer`) or in Czech (`heslo`, `klic`, `klíč`, `tajne`,
+   `tajné`), so `authorization_mode` and `passwordless` do not; a value is not a secret only when it
+   is `true`, `false` or `null`, a template (`<x>`, `${x}`, `{x}`, `{{x}}`), one character repeated,
+   a run of the alphabet or the digits, or `changeme`, `example`, `your-` followed by a word;
 5. a bare token of 32 or more characters is a secret when its Shannon entropy is at least 0.8 of
-   what a random token of its length and alphabet averages, unless it is a path, a URL or a dotted
-   name, an id (`session_`, `toolu_`, `cap_`, `msg_`), a 40-character hex commit or a UUID, a
-   `sha256-` style hash, a name (separators at a tenth of its length or more, or camelCase words of
-   four letters or more on average), or base64 of text (decoding to printable bytes).
+   what a random token of its length and alphabet averages, a hex run measured against the hex
+   alphabet, unless it is a path, a URL or a dotted name, an id (`session_`, `toolu_`, `cap_`,
+   `msg_`), a 40-character hex commit or a UUID, a `sha256-` or `sha256:` style hash, a name
+   (separators at a tenth of its length or more, or camelCase words of four letters or more on
+   average), or base64 of text (decoding to printable bytes).
 
 Each captured secret SHALL carry a kind: `private-key` for a block whose label ends in `PRIVATE KEY`
 or `PRIVATE KEY BLOCK` and for a PuTTY key, `openvpn-key` for `OpenVPN Static key V1`, `pem-block`

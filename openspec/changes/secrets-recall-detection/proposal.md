@@ -60,7 +60,9 @@ None.
   `plugins/qsm-secrets/lib/capture.corpus.ts`, `lib/capture.test.ts`.
 - qsm-memory's "this looks secret" check reads `lib/secret-shapes.ts`, so it sees the new shapes as
   well; its own spec keeps its behaviour.
-- No change to the hook, the CLI verbs, or the backends.
+- The hook's toast names each id with its kind (`hooks/register.tsx`); no change to the CLI verbs
+  or the backends. Shape kinds take gitleaks' rule ids (`github-pat`), which qsm-memory's notes test
+  reads.
 
 ## Critiques
 
