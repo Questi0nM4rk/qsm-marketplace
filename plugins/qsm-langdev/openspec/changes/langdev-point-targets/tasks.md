@@ -26,7 +26,7 @@
   Files: `lib/edit-findings.ts`, `lib/result-store.ts`. Proof: the real path at load: run
   `qsm-langdev edited <abs .ts file> --session probe` three times while `stress-ng --cpu 12` runs;
   each answers under 7.5 s with the TypeScript edit set and no semgrep. Blocked by 2.1.
-- [ ] 2.3 What the model gets: the project's errors in the edited file and nothing else; every
+- [x] 2.3 What the model gets: the project's errors in the edited file and nothing else; every
   `not run`, `not measured`, total and `slow` line to the hook's log. Files: `lib/edit-findings.ts`,
   `hooks/register.tsx`. Proof: in this repository, write a clean `.md` file and a `.ts` file with
   one oxlint finding through the real hook in a Claude Code session; the first adds no context, the
@@ -60,7 +60,7 @@
 
 ## 5. CI
 
-- [ ] 5.1 CI green again: today every run fails at `bun install --frozen-lockfile`, and before that
+- [x] 5.1 CI green again: today every run fails at `bun install --frozen-lockfile`, and before that
   at `Test`. Find each cause from the run logs and fix it. Files: what the logs name. Proof: a green
   `CI` run on `main`. Blocked by nothing.
 - [ ] 5.2 Verify that `semgrep scan --pro` with only `SEMGREP_APP_TOKEN` set runs the Pro engine and
