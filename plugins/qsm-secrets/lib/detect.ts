@@ -20,6 +20,9 @@ const IDENTIFIER_PIECE = 4;
 // Everything a token, a path or a dotted name is made of; a run is judged whole, never in part.
 const RUN = /[A-Za-z0-9_+/=.~-]+/g;
 const PLACEHOLDER = /\{\{secret:[^}]*\}\}(?:…[\w-]{4})?/g;
+const BLOCK_BEGIN = /-----BEGIN ([^\r\n-][^\r\n]*?)-----/g;
+const PUTTY_KEY = /PuTTY-User-Key-File-\d+:/g;
+const PUTTY_MAC = /Private-MAC:[^\r\n]*/;
 // A name that says what follows is a credential; its value is then judged on a lower bar. The name is
 // split into its parts (`GITHUB_TOKEN`, `clientSecret`) and one part must be a credential word, so
 // `authorization_mode` and `passwordless` are not.
@@ -189,21 +192,55 @@ function contextSpans(text: string): Span[] {
   });
 }
 
-/** Every secret in the text, in order, none overlapping another or a placeholder. */
+/** What a block's label says it holds; any label is a secret, only its name differs. */
+function blockKind(label: string): string {
+  if (/PRIVATE KEY(?: BLOCK)?$/.test(label)) {
+    return "private-key";
+  }
+  return label === "OpenVPN Static key V1" ? "openvpn-key" : "pem-block";
+}
+
+/** Where a block that never closes ends: the end of the text, less its trailing blank. */
+function untilEnd(text: string, from: number): number {
+  return Math.max(from, text.trimEnd().length);
+}
+
+/** Every armoured block, any label, from its BEGIN line to the END line of the same label or to the
+ * end of the text, and every PuTTY key from its header to its Private-MAC line. */
+function blockSpans(text: string): Span[] {
+  const armoured = [...text.matchAll(BLOCK_BEGIN)].map((m) => {
+    const label = m[1] ?? "";
+    const close = `-----END ${label}-----`;
+    const at = text.indexOf(close, m.index + m[0].length);
+    const end = at === -1 ? untilEnd(text, m.index + m[0].length) : at + close.length;
+    return { start: m.index, end, kind: blockKind(label) };
+  });
+  const putty = [...text.matchAll(PUTTY_KEY)].map((m) => {
+    const mac = PUTTY_MAC.exec(text.slice(m.index));
+    const end =
+      mac === null ? untilEnd(text, m.index + m[0].length) : m.index + mac.index + mac[0].length;
+    return { start: m.index, end, kind: "private-key" };
+  });
+  return [...armoured, ...putty];
+}
+
+/** Every secret in the text, in order. The passes run from the surest to the weakest, and a pass
+ * skips any text an earlier one claimed, so a block's lines are never judged one by one and a
+ * placeholder is never captured again. */
 export function secretSpans(text: string): Span[] {
-  const placeholders = [...text.matchAll(PLACEHOLDER)].map((m) => ({
+  const claimed: Span[] = [...text.matchAll(PLACEHOLDER)].map((m) => ({
     start: m.index,
     end: m.index + m[0].length,
     kind: "placeholder",
   }));
-  const all = [...shapeSpans(text), ...contextSpans(text), ...bareRuns(text)]
-    .filter((span) => !placeholders.some((p) => intersects(span, p)))
-    .toSorted((a, b) => a.start - b.start || b.end - a.end);
-  const kept: Span[] = [];
-  for (const span of all) {
-    if (span.start >= (kept.at(-1)?.end ?? 0)) {
-      kept.push(span);
+  const found: Span[] = [];
+  for (const pass of [blockSpans, shapeSpans, contextSpans, bareRuns]) {
+    for (const span of pass(text).toSorted((a, b) => a.start - b.start || b.end - a.end)) {
+      if (!claimed.some((c) => intersects(c, span))) {
+        claimed.push(span);
+        found.push(span);
+      }
     }
   }
-  return kept;
+  return found.toSorted((a, b) => a.start - b.start);
 }

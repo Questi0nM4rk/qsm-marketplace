@@ -16,7 +16,7 @@
 - [x] 2.1 The span type of the shapes file (root `lib/`) gains a kind, and each pattern names its
       kind. qsm-memory compiles and its tests pass. Proof: typecheck and
       `bun test plugins/qsm-memory`. Blocks: 1.1.
-- [ ] 2.2 `plugins/qsm-secrets/lib/detect.ts`: one claimed-range list shared by the passes in the
+- [x] 2.2 `plugins/qsm-secrets/lib/detect.ts`: one claimed-range list shared by the passes in the
       spec's order; the block pass for any label, the unfinished block, and the kind table. Proof:
       the corpus lines for blocks (OpenVPN, certificate, CSR, PGP, cut-short key, `.ovpn`) each give
       the expected spans and kinds. Blocks: 2.1.
