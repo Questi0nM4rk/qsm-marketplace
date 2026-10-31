@@ -6,6 +6,7 @@
 
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 
 export interface Case {
   readonly text: string;
@@ -143,36 +144,14 @@ const NAMED_PASSWORDS: Case[] = [
   { text: "MYSQL_PWD=Pa55w0rdX", secrets: ["Pa55w0rdX"] },
 ];
 
-const BASE62 = DIGITS + UPPER + LOWER;
-
-/** GitHub's checksum of a classic token: the CRC32 of its random part, six characters of base62. */
-function githubChecksum(body: string): string {
-  let n = Bun.hash.crc32(body);
-  let out = "";
-  for (let i = 0; i < 6; i += 1) {
-    out = `${BASE62[n % 62] ?? ""}${out}`;
-    n = Math.floor(n / 62);
-  }
-  return out;
-}
-
-/** A `ghp_` token whose last six characters are its checksum moved one step along the alphabet. */
-function wrongChecksumToken(): string {
-  const body = random(ALNUM, 30);
-  const wrong = githubChecksum(body)
-    .split("")
-    .map((char) => BASE62[(BASE62.indexOf(char) + 1) % BASE62.length])
-    .join("");
-  return `ghp_${body}${wrong}`;
-}
-
 const hex = (length: number): string => random(HEX, length);
 /** The bech32 alphabet: letters and digits without 1, b, i and o. */
 const BECH32 = (UPPER + DIGITS).replaceAll(/[1BIO]/g, "");
 
 /** One token per provider shape, named by the kind the capture must give it. */
 const SHAPED: ReadonlyArray<readonly [string, string]> = [
-  ["github-pat", wrongChecksumToken()],
+  // A random body fails GitHub's CRC32 check with probability 1 - 62^-6: a wrong checksum is still caught.
+  ["github-pat", `ghp_${random(ALNUM, 36)}`],
   ["github-app-token", `ghs_${random(ALNUM, 36)}`],
   ["github-refresh-token", `ghr_${random(ALNUM, 36)}`],
   ["anthropic-admin-api-key", `sk-ant-admin01-${random(BASE64URL, 93)}AA`],
@@ -414,10 +393,8 @@ function produce(tool: string, args: readonly string[], cwd: string, gnupgHome?:
       `capture corpus: ${tool} is not installed, and the corpus needs its key material`,
     );
   }
-  const env: Record<string, string> = { PATH: process.env.PATH ?? "" };
-  if (gnupgHome !== undefined) {
-    env.GNUPGHOME = gnupgHome;
-  }
+  // HOME is the sandbox, so ssh-keygen and gpg never read or write the person's own files.
+  const env = isolatedEnv(cwd, gnupgHome === undefined ? {} : { GNUPGHOME: gnupgHome });
   const done = Bun.spawnSync([tool, ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
   if (done.exitCode !== 0) {
     throw new Error(`capture corpus: ${tool} ${args[0] ?? ""} failed: ${done.stderr.toString()}`);
@@ -446,7 +423,7 @@ export function producedCases(dir: string): Produced {
   for (const [type, extra] of [
     ["ed25519", ["-N", ""]],
     ["rsa", ["-N", ""]],
-    ["ecdsa", ["-N", "corpus passphrase"]],
+    ["ecdsa", ["-N", "corpus passphrase", "-a", "1"]],
   ] as const) {
     produce("ssh-keygen", ["-q", "-t", type, ...extra, "-C", "corpus", "-f", `id_${type}`], dir);
   }
@@ -462,7 +439,11 @@ export function producedCases(dir: string): Produced {
       "key.pem",
       "-out",
       "cert.pem",
-    ].concat(["-subj", "/CN=corpus.example.test", "-days", "1"]),
+      "-subj",
+      "/CN=corpus.example.test",
+      "-days",
+      "1",
+    ],
     dir,
   );
   produce(
@@ -485,20 +466,18 @@ export function producedCases(dir: string): Produced {
   produce("gpgconf", ["--remove-socketdir"], dir, home);
 
   const staticKey = read("ta.key");
-  const [ed, rsa, ecdsa] = ["ed25519", "rsa", "ecdsa"].map((type) => read(`id_${type}`));
-  const [cert, key, csr] = ["cert.pem", "key.pem", "req.csr"].map(read);
-  if ([ed, rsa, ecdsa, cert, key, csr].some((file) => file === undefined)) {
-    throw new Error("capture corpus: a producer wrote no file");
-  }
-  const cut = block(ed ?? "")
-    .split("\n")
-    .slice(0, -1)
-    .join("\n");
+  const ed = read("id_ed25519");
+  const rsa = read("id_rsa");
+  const ecdsa = read("id_ecdsa");
+  const cert = read("cert.pem");
+  const key = read("key.pem");
+  const csr = read("req.csr");
+  const cut = block(ed).split("\n").slice(0, -1).join("\n");
   const ovpn = [
     "client\ndev tun\nproto udp\nremote vpn.example.test 1194\n<ca>",
-    block(cert ?? ""),
+    block(cert),
     "</ca>\n<key>",
-    block(key ?? ""),
+    block(key),
     "</key>\nkey-direction 1\n<tls-auth>",
     staticKey.trimEnd(),
     "</tls-auth>\nverb 3\n",
@@ -506,18 +485,18 @@ export function producedCases(dir: string): Produced {
   return {
     positives: [
       one(`tls-auth key for the vpn:\n${staticKey}`, block(staticKey), "openvpn-key"),
-      one(`the deploy key\n${ed ?? ""}`, block(ed ?? ""), "private-key"),
-      one(rsa ?? "", block(rsa ?? ""), "private-key"),
-      one(`${ecdsa ?? ""}the passphrase is in the vault`, block(ecdsa ?? ""), "private-key"),
-      one(`key.pem:\n${key ?? ""}`, block(key ?? ""), "private-key"),
-      one(`the server certificate:\n${cert ?? ""}`, block(cert ?? ""), "pem-block"),
-      one(`csr for the ca:\n${csr ?? ""}`, block(csr ?? ""), "pem-block"),
+      one(`the deploy key\n${ed}`, block(ed), "private-key"),
+      one(rsa, block(rsa), "private-key"),
+      one(`${ecdsa}the passphrase is in the vault`, block(ecdsa), "private-key"),
+      one(`key.pem:\n${key}`, block(key), "private-key"),
+      one(`the server certificate:\n${cert}`, block(cert), "pem-block"),
+      one(`csr for the ca:\n${csr}`, block(csr), "pem-block"),
       one(`my gpg key\n${pgpPrivate}`, block(pgpPrivate), "private-key"),
       one(`my public gpg key\n${pgpPublic}`, block(pgpPublic), "pem-block"),
       one(`the key, cut short:\n${cut}`, cut, "private-key"),
       {
         text: ovpn,
-        secrets: [block(cert ?? ""), block(key ?? ""), block(staticKey)],
+        secrets: [block(cert), block(key), block(staticKey)],
         kinds: ["pem-block", "private-key", "openvpn-key"],
       },
     ],
