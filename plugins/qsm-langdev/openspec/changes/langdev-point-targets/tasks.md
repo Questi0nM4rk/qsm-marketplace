@@ -46,7 +46,7 @@
       doctor). Proof: a commit in a sandbox repo with `POINTS` target overridden to 1 ms through the
       test seam prints the slow line and passes; the file holds 10 lines after 12 runs. Blocked by
       1.2.
-- [ ] 3.2 `doctor` names a checker whose median at a point is over target. Files: the doctor verb,
+- [x] 3.2 `doctor` names a checker whose median at a point is over target. Files: the doctor verb,
   `lib/timings.ts`. Proof: `qsm-langdev doctor` in a sandbox with a recorded file of 10 runs at 41 s
   prints the warning of the spec scenario and exits as before. Blocked by 3.1.
 

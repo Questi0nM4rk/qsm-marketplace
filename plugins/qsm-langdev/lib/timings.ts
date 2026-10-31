@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { writeAtomic } from "../../../lib/fs.ts";
 import { cacheDir } from "./cache-dir.ts";
 import { num, recordOf, str } from "./json.ts";
-import { type Point, POINTS } from "./registry.ts";
+import { type Point, POINT_NAMES, POINTS } from "./registry.ts";
 
 /** Runs kept per checker and point: enough for a median, and the file stays bounded. */
 const KEPT_RUNS = 10;
@@ -82,4 +82,29 @@ export function recordTimings(root: string, point: Point, timings: readonly Timi
     JSON.stringify({ checker, ms: Math.round(ms), at: ran }),
   );
   writeAtomic(timingsPath(root, point), `${lines.join("\n")}\n`);
+}
+
+function median(values: readonly number[]): number {
+  const sorted = values.toSorted((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? (sorted[middle] ?? 0)
+    : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+}
+
+/** One line per checker whose median over its kept runs at a point is above that point's target. */
+export function slowCheckers(root: string): string[] {
+  return POINT_NAMES.flatMap((point) => {
+    const runs = readTimings(root, point);
+    const { targetMs } = POINTS[point];
+    return [...new Set(runs.map(({ checker }) => checker))].flatMap((checker) => {
+      const times = runs.filter((run) => run.checker === checker).map(({ ms }) => ms);
+      const ms = median(times);
+      return ms > targetMs
+        ? [
+            `${checker} is slow at ${point}: median ${seconds(ms)} s over ${times.length} runs, target ${seconds(targetMs)} s`,
+          ]
+        : [];
+    });
+  });
 }

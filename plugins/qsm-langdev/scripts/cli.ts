@@ -53,6 +53,7 @@ import {
   resolveLanguage,
 } from "../lib/registry.ts";
 import { semgrepLogin, semgrepLoginWarning } from "../lib/semgrep-login.ts";
+import { slowCheckers } from "../lib/timings.ts";
 import manifestJson from "../qsm.json" with { type: "json" };
 import { dirOf, err, optOneOf, required, requireRepo } from "./call.ts";
 import { handlers as judgeHandlers } from "./cli-judge.ts";
@@ -203,6 +204,7 @@ const doctor: Handler = async (call) => {
   if (login !== null) {
     warnings.push(login);
   }
+  warnings.push(...slowCheckers(root));
   const data = { checks: rows, gaps, structural };
   // a gate binary that is absent fails the hook, so it is the verdict, not a row
   const gone = rows.some((row) => !row.present && !row.timedOut) || !structural.patched;
