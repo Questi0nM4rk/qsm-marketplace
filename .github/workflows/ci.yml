@@ -16,6 +16,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2.2.0
         with:
           bun-version: 1.4.3
+      # The root `prepare` script (.gates/plugin-deps.ts) builds the Python venv with uv and fails
+      # loud without it, so uv is on PATH before the root install.
+      - name: Install uv
+        run: |
+          pipx install uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
       # A plugin owns its npm dependencies (plugins/<name>/package.json); typecheck and the tests
       # resolve them from the plugin's own node_modules, as the install base does.
@@ -26,7 +32,7 @@ jobs:
             (cd "$(dirname "$manifest")" && bun install --frozen-lockfile)
           done
       # The tests drive these real binaries and fail loud without them (no skip hides a broken
-      # pipeline): wt, rumdl and markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint
+      # pipeline): wt, gitleaks (the pre-push secrets gate blocks without it), rumdl and markdownlint-cli2 for qsm-langdev's markdown fixers, oxlint
       # (with oxlint-tsgolint for its type-aware rules) and oxfmt for its TypeScript gate and fixers,
       # yamllint, taplo, semgrep and lizard because the pre-commit gate marks a checker whose
       # tool is absent `worse` and blocks the commit (init writes yaml and toml, a.ts is code),
@@ -35,7 +41,7 @@ jobs:
       - name: Install the tools the tests run
         run: |
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-          brew install worktrunk rumdl markdownlint-cli2 imagemagick yamllint taplo
+          brew install worktrunk gitleaks rumdl markdownlint-cli2 imagemagick yamllint taplo
           pipx install semgrep
           pipx install lizard
           bun add -g @fission-ai/openspec
