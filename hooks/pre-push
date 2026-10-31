@@ -39,24 +39,20 @@ fi
 # tree's node_modules.
 gate_commit() {
   local sha=$1 dir="$scratch/$1" deps
-  mkdir "$dir"
+  # Called left of `||`, where bash ignores set -e, so every step that can fail returns by hand.
+  mkdir "$dir" || return 1
   # read-tree and checkout-index write every tracked file; git archive would drop the export-ignore
   # ones, the generated nouns the hooks modules import.
-  GIT_INDEX_FILE="$dir.index" git read-tree "$sha"
-  GIT_INDEX_FILE="$dir.index" git checkout-index -a --prefix="$dir/"
+  GIT_INDEX_FILE="$dir.index" git read-tree "$sha" || return 1
+  GIT_INDEX_FILE="$dir.index" git checkout-index -a --prefix="$dir/" || return 1
   for deps in node_modules plugins/*/node_modules; do
     if [[ -d "$deps" && -d "$dir/$(dirname "$deps")" ]]; then
-      ln -s "$PWD/$deps" "$dir/$deps"
+      ln -s "$PWD/$deps" "$dir/$deps" || return 1
     fi
   done
   echo "pre-push: gates on ${sha:0:8}" >&2
-  (
-    cd "$dir"
-    bun run validate
-    # .claude/types is gitignored and copied from the engine, so a commit never carries it.
-    bun run plugin-types >/dev/null
-    bun run typecheck
-  )
+  # .claude/types is gitignored and copied from the engine, so a commit never carries it.
+  (cd "$dir" && bun run validate && bun run plugin-types >/dev/null && bun run typecheck)
 }
 
 declare -A gated=()
