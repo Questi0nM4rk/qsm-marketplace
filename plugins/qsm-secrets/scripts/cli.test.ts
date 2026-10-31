@@ -967,6 +967,17 @@ for (const flavor of FLAVORS) {
         expect(run.code).toBe(0);
       });
 
+      test("A listing that fails is a failed check, not a doctor that dies", () => {
+        const run = cli(["doctor", "--json"], { env: { FAKE_LIST_FAILS: "1" } });
+        const parsed = envelope(run);
+        const checks = field(parsed.data, "checks", isChecks);
+        const failed = checks.filter((check) => !check.ok);
+        expect(parsed.data.ok).toBe(false);
+        expect(failed).toHaveLength(1);
+        // The search's own error says to run doctor; doctor must not send the person back there.
+        expect(failed[0]?.fix).not.toContain("run qsm-secrets doctor");
+      });
+
       test("One prerequisite missing", () => {
         const run = cli(["doctor", "--json"], { backend: false });
         const parsed = envelope(run);

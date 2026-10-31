@@ -18,8 +18,9 @@ const START_PROVIDER =
   "start a Secret Service provider, for example gnome-keyring-daemon or KeePassXC";
 const INSTALL_FIX = "install libsecret (it ships secret-tool)";
 /** Why a search that ran fails: measured, no session bus; expected, a cancelled unlock prompt. */
-const SEARCH_FIX =
-  "run qsm-secrets doctor; the usual causes are a locked keyring whose unlock prompt was cancelled, a provider that stopped, or no session bus";
+const SEARCH_CAUSES =
+  "the usual causes are a locked keyring whose unlock prompt was cancelled, a provider that stopped, or no session bus";
+const SEARCH_FIX = `run qsm-secrets doctor; ${SEARCH_CAUSES}`;
 
 /** The attributes every entry of ours carries; `secret-tool` matches on all of them. */
 function attributes(namespace: string, key?: string): string[] {
@@ -171,12 +172,17 @@ function health(namespace: string): Check[] {
   if (!(bin.ok && owned)) {
     return [bin, daemon];
   }
-  const count = entries().filter((entry) => entry.folder === namespace || namespace === "").length;
-  return [
-    bin,
-    daemon,
-    { name: `namespace ${namespace}`, ok: true, detail: `${count} entries`, fix: null },
-  ];
+  const name = `namespace ${namespace}`;
+  // doctor is where a failed search sends the person, so it reports the failure as a check.
+  let listed: Entry[];
+  try {
+    listed = entries();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return [bin, daemon, { name, ok: false, detail, fix: SEARCH_CAUSES }];
+  }
+  const count = listed.filter((entry) => entry.folder === namespace || namespace === "").length;
+  return [bin, daemon, { name, ok: true, detail: `${count} entries`, fix: null }];
 }
 
 /** Shaped like `Backend`; `backend.ts` is where that is checked. */
