@@ -587,19 +587,6 @@ test("A timeout stops the launcher's engine child", async () => {
   }
 });
 
-test("time limit: a checker's declared pre-push limit is the one its pre-push run gets", async () => {
-  const { root, head } = repoWith({ "a.txt": "alpha\n" });
-  write(root, { "a.txt": "alpha and more\n" });
-  stage(root);
-  const declared: CheckSpec = { ...SLOW, prePush: { fileSet: "changed", timeoutMs: 200 } };
-
-  const { verdicts } = await runWith(root, head, declared, { at: "pre-push", timeoutMs: 60_000 });
-
-  expect(verdicts.map((v) => v.summary)).toEqual([
-    "slow: not measured: timed out after 0.2s; retry",
-  ]);
-});
-
 test("time limit: the checkers after one not measured still run, so the report is whole", async () => {
   const { root, head } = repoWith({ "a.txt": "alpha\n" });
   write(root, { "a.txt": `alpha\n${MARKER} fresh\n` });

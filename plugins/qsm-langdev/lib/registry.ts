@@ -392,17 +392,11 @@ export type CheckSpec = {
   /** How the checker runs at pre-push and ci where that differs from pre-commit.
    * Absent: the same way at every point. */
   prePush?: PrePush;
-  /** The limit one run of the checker gets, where the run's default is too
-   * short; set from `prePush` for a pre-push run. */
-  timeoutMs?: number;
 } & Scoring;
 
-/**
- * A checker's pre-push run: the set it scores, and a longer limit when that run is known to need one.
- */
+/** A checker's pre-push run: the set it scores. Its limit is the point's (POINTS). */
 interface PrePush {
   fileSet: FileSet;
-  timeoutMs?: number;
 }
 
 /** `spec` as it runs at `point`: at pre-push and ci its `prePush` declaration, elsewhere itself. */
@@ -411,11 +405,7 @@ export function asRunAt(spec: CheckSpec, point: Point): CheckSpec {
   if (point === "edit" || point === "pre-commit" || push === undefined) {
     return spec;
   }
-  return {
-    ...spec,
-    fileSet: push.fileSet,
-    ...(push.timeoutMs === undefined ? {} : { timeoutMs: push.timeoutMs }),
-  };
+  return { ...spec, fileSet: push.fileSet };
 }
 
 /** Whether a checker belongs to the set a point runs: the points it declares. */
@@ -989,9 +979,6 @@ const SPECS: readonly CheckSpec[] = [
     // the solution at the root costs four times a project and a file list costs nothing more. The
     // restore is the build's; a format that restored would write obj/ on both sides.
     groupBy: nearestProject,
-    // One project load is 24 s quiet and 56 s at a load of 6, and the two sides load at once; the
-    // limit is a last line of defence, never the budget.
-    timeoutMs: 300_000,
     args: (files, root, reportDir) => [
       "format",
       nearestProject(root, files[0] ?? ""),

@@ -7,7 +7,7 @@
       read `runsAt` (`grep -rn runsAt lib hooks`). Proof:
       `qsm-langdev list --json | jq '.[].points'` prints four-point lists, and
       `bun test plugins/qsm-langdev` passes. Blocked by nothing.
-- [ ] 1.2 `lib/compare.ts`, `lib/edit-findings.ts`, `hooks/gate-hook.ts`: every limit read from
+- [x] 1.2 `lib/compare.ts`, `lib/edit-findings.ts`, `hooks/gate-hook.ts`: every limit read from
       `POINTS`; `STUCK_MS`, `DEFAULT_CHECK_BUDGET_MS` and the `dotnet-format` `timeoutMs` deleted;
       the stop gate runs at `pre-commit`; `QSM_LANGDEV_GATE_BUDGET_MS` stays the stop gate's test
       seam. Proof: `grep -rnE "STUCK_MS|CHECK_BUDGET" lib hooks` finds nothing, and the stop gate

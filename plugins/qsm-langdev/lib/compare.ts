@@ -25,6 +25,7 @@ import {
   JOBS,
   type Language,
   type LocalRules,
+  POINTS,
   REGISTRY,
   selectedAt,
 } from "./registry.ts";
@@ -92,11 +93,9 @@ function sidePaths(root: string, ref: string): string[] | null {
 
 type Spawned = Pick<SpawnSyncReturns<string>, "status" | "signal" | "error" | "stdout" | "stderr">;
 
-/** How long any process the gate starts may run before it counts as stuck: a probe, a checker, a
- * version check. A busy machine or a cold cache is slow, not broken, so the gate fails only on a
- * finding or on a process stuck this long (the owner: "failing only on a gate or after rly bad
- * 5min stuck process"). */
-const STUCK_MS = 300_000;
+/** How long a process outside any point may run before it counts as stuck: doctor's and the
+ * structural checker's `--version` probes. The commit's timeout, the same five minutes. */
+const PROBE_MS = POINTS["pre-commit"].timeoutMs;
 
 function spawnAsync(
   cwd: string,
@@ -756,7 +755,7 @@ export interface CompareOptions {
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
-  /** Test seam; production gives a binary's `--version` probe STUCK_MS. */
+  /** Test seam; production gives a binary's `--version` probe the point's timeout. */
   probeTimeoutMs?: number;
   jobs?: number;
   /** Score only these paths (relative to root) on both sides — the edit hook's one file. */
@@ -1154,7 +1153,7 @@ async function verdictFor(
   }
   const { before, after } = keptSides(spec, sides, narrowed, context);
   const { renames } = context;
-  const timeoutMs = spec.timeoutMs ?? context.timeoutMs;
+  const { timeoutMs } = context;
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
   const verdict: Verdict = {
     check: spec.name,
@@ -1189,6 +1188,21 @@ async function verdictOnEngine(
  * Compares the tree at `beforeRef` against `after` (a commit, or the working tree) through every
  * checker the change selects, each over the file set it declares.
  */
+/** The point a run is at, and the limits it applies: the point's timeout unless a test sets one. */
+function runLimits(options: CompareOptions): {
+  at: EnforcementPoint;
+  timeoutMs: number;
+  probeTimeoutMs: number;
+} {
+  const at = options.at ?? "pre-commit";
+  const { timeoutMs } = POINTS[at];
+  return {
+    at,
+    timeoutMs: options.timeoutMs ?? timeoutMs,
+    probeTimeoutMs: options.probeTimeoutMs ?? timeoutMs,
+  };
+}
+
 export async function compareTrees(
   root: string,
   beforeRef: string | null,
@@ -1219,7 +1233,8 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const probes = await probeAll(applicable, root, options.probeTimeoutMs ?? STUCK_MS);
+  const { at, timeoutMs, probeTimeoutMs } = runLimits(options);
+  const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
   // run: the others still measure, and its verdict stands beside theirs. A language without its
@@ -1241,13 +1256,13 @@ export async function compareTrees(
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
-      timeoutMs: options.timeoutMs ?? STUCK_MS,
+      timeoutMs,
       renames:
         beforeRef === null ? new Map<string, string>() : renamedBetween(root, beforeRef, after),
       changed,
       generated: generatedPaths(root, [...changed, ...given]),
       all: options.allFindings === true,
-      store: new ResultStore(root, options.at ?? "pre-commit"),
+      store: new ResultStore(root, at),
       versions: new Map([...probes].map(([binary, probe]) => [binary, probe.version])),
       uses: new Map(),
       jobs: options.jobs ?? JOBS,
@@ -1347,7 +1362,7 @@ export interface DoctorRow {
 /** Binary presence per check, every distinct binary probed once. */
 export async function doctorRows(
   specs: readonly CheckSpec[] = REGISTRY,
-  probeTimeoutMs: number = STUCK_MS,
+  probeTimeoutMs: number = PROBE_MS,
 ): Promise<DoctorRow[]> {
   const binaries = [...new Set(specs.map((spec) => spec.binary))];
   const probes = new Map(
@@ -1377,7 +1392,7 @@ export interface StructuralCheckerStatus {
  * that from an unpatched upstream `sentrux` and from none present at all.
  */
 export async function structuralCheckerStatus(): Promise<StructuralCheckerStatus> {
-  const result = await spawnAsync(tmpdir(), "sentrux", ["--version"], STUCK_MS);
+  const result = await spawnAsync(tmpdir(), "sentrux", ["--version"], PROBE_MS);
   if (spawnFailure(result, "sentrux") !== null) {
     return { present: false, patched: false };
   }
