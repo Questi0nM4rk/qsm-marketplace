@@ -15,7 +15,7 @@
 
 ## 2. The edit set
 
-- [ ] 2.1 Measure every checker of every language, per file type, on real files of this repository
+- [x] 2.1 Measure every checker of every language, per file type, on real files of this repository
   (the stack's other repos for a language this one lacks): the cost, three runs of one file on a
   quiet machine, and the use, what each finds under the project's rules that no faster checker of
   the same file type finds. Pick the edit set by the two rules of design D3 and record the table and

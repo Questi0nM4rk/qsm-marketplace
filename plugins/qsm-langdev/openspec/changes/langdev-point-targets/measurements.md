@@ -151,3 +151,29 @@ MEASURED on 2026-10-31 unless it says otherwise. Nothing in any repository was w
     already names.
 11. Semgrep, all languages: 3.2 to 21 s for one file (3.8 s dockerfile, 9.3 s ts, 21 s py): none at
     edit.
+
+## Decisions taken from these tables (main agent, 2026-10-31)
+
+- The edit set in `lib/registry.ts`: docs yamllint, taplo, markdownlint-cli2; ts oxlint, jscpd;
+  py ruff, bandit; shell shellcheck, shellmetrics; zsh zsh-syntax, shellmetrics-zsh; fish
+  fish-syntax; multi lizard; rust rustfmt; dotnet devskim.
+- taplo stays at edit against the use rule as measured: it is the only TOML checker, it catches a
+  broken TOML file no other edit checker reads, and it costs 4 ms. Zero findings on valid files is
+  what a syntax checker finds on valid files.
+- devskim stays at edit unmeasured: it is not installed here, and without it dotnet has no edit
+  checker, which the registry gate refuses. Open for the owner: install and measure it, or let
+  dotnet have no edit checker.
+- zsh-lint and zshellcheck leave edit: not installed, so neither cost nor use is measured.
+
+## The edit hook after the change (task 2.2)
+
+`qsm-langdev edited` on one `.ts` file, run from source, timing marks inside the binary:
+
+| Load (12 cores) | Wall | Fixers | Trees | Checkers (oxlint, jscpd, lizard at once) |
+| --- | --- | --- | --- | --- |
+| 7.4 | 3.7 s | 0.5-0.7 s | 0.6 s | 2.0 s |
+| 11.4-13.1, every core also busy with a burner | 8.2, 8.4, 10.4 s | | | oxlint 1.4-2.3 s |
+
+Before the change, the same edit took 16.0-18.2 s at a load of 13-18 and 8.4-12.0 s at 2.4. oxlint
+runs type-aware twice, as the fixer and as the checker, because the project's `.oxlintrc.json`
+turns type-aware on and oxlint has no flag to turn it off.
