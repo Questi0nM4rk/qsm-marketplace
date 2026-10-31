@@ -22,7 +22,7 @@
   the reason per checker in the change's `measurements.md`. Files: `measurements.md`,
   `lib/registry.ts`. Proof: the table, and `qsm-langdev list --json` agreeing with it. Blocked by
   1.1.
-- [ ] 2.2 The edit hook runs the `edit` set. Reopened 2026-10-31: the store sharing with
+- [x] 2.2 The edit hook runs the `edit` set. Reopened 2026-10-31: the store sharing with
       `pre-commit` it shipped is gone with 2.5. Files: `lib/edit-findings.ts`. Proof: the real path
       at load: run `qsm-langdev edited <abs .ts file> --session probe` three times while
       `stress-ng --cpu 12` runs; each answers under 7.5 s with the TypeScript edit set and no

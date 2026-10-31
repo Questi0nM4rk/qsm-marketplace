@@ -169,10 +169,8 @@ export const POINTS = {
   ci: { targetMs: 600_000, timeoutMs: 1_200_000 },
 } as const satisfies Record<Point, { targetMs: number; timeoutMs: number }>;
 
-/** The point whose stored results a point reads and writes: the edit hook runs a checker the way
- * the commit does, so it shares the commit's. */
-export type StorePoint = Exclude<Point, "edit">;
-export const storePointOf = (point: Point): StorePoint => (point === "edit" ? "pre-commit" : point);
+/** A point that compares two trees and stores results; the edit point checks in place. */
+export type ComparedPoint = Exclude<Point, "edit">;
 
 const FROM_COMMIT: readonly Point[] = ["pre-commit", "pre-push", "ci"];
 const FROM_PUSH: readonly Point[] = ["pre-push", "ci"];

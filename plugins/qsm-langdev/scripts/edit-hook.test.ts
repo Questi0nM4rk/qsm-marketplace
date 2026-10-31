@@ -108,7 +108,7 @@ describe("qsm-langdev edit hook: a repository that never ran init", () => {
 
     expect(r.status).toBe(0);
     expect(r.text).toContain("qsm-langdev: notes.md breaks this project's rules");
-    expect(r.text).toContain("+ notes.md:3: MD040/fenced-code-language");
+    expect(r.text).toContain("notes.md:3: MD040/fenced-code-language");
     expect(r.text).not.toContain(" -> ");
   });
 
@@ -117,6 +117,26 @@ describe("qsm-langdev edit hook: a repository that never ran init", () => {
 
     expect(r.status).toBe(0);
     expect(r.text).toBeNull();
+  });
+
+  test("A new file git does not track is checked in place", () => {
+    const { root } = editMarkdown("# notes\n");
+    writeFileSync(join(root, "new.md"), "# new\n\n```\nx\n```\n");
+
+    const r = runEdited(join(root, "new.md"));
+
+    expect(r.status).toBe(0);
+    expect(r.text).toContain("new.md:3: MD040/fenced-code-language");
+  });
+
+  test("A finding the file already had at HEAD is reported: the rules decide, not HEAD", () => {
+    const { root } = editMarkdown("# notes\n\n```\nx\n```\n");
+    commit(root, "the finding lands");
+    writeFileSync(join(root, "notes.md"), "# notes\n\n```\nx\n```\n\nmore\n");
+
+    const r = runEdited(join(root, "notes.md"));
+
+    expect(r.text).toContain("notes.md:3: MD040/fenced-code-language");
   });
 });
 

@@ -178,3 +178,13 @@ MEASURED on 2026-10-31 unless it says otherwise. Nothing in any repository was w
 Before the change, the same edit took 16.0-18.2 s at a load of 13-18 and 8.4-12.0 s at 2.4. oxlint
 runs type-aware twice, as the fixer and as the checker, because the project's `.oxlintrc.json`
 turns type-aware on and oxlint has no flag to turn it off.
+
+## The edit hook in place (task 2.5)
+
+The same `qsm-langdev edited` on one `.ts` file, from source, after the edit stopped comparing
+against HEAD and runs the edit set on the live file (no scratch trees, no version probes, no store):
+
+| Load (12 cores) | Before (HEAD comparison) | In place |
+| --- | --- | --- |
+| 1.3 | 3.7 s at 7.4 | 1.1, 1.1, 1.2 s |
+| 7.2-8.8, every core also busy with a burner | 8.2, 8.4, 10.4 s at 11.4-13.1 | 3.2, 3.5, 3.5 s |

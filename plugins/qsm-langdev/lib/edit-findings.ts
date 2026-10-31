@@ -1,16 +1,17 @@
 // What the edit hook tells the model after a file edit: the errors the project's own rules raise in
-// that one file, compared against its version at HEAD, each marked new or not, and nothing else.
-// Advisory only, except that an edited file is first fixed (lib/fixers.ts), so what a tool can
-// rewrite is never a finding. How the run went goes to the hook's log: the model cannot act on it,
-// and the commit scores the file again.
+// that one file, checked in place in the live checkout, against nothing else. Advisory only, except
+// that an edited file is first fixed (lib/fixers.ts), so what a tool can rewrite is never a finding.
+// How the run went goes to the hook's log: the model cannot act on it, and the commit compares the
+// file against HEAD again.
 
 import { dirname, relative } from "node:path";
-import { compareTrees, headline, type Verdict } from "./compare.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { checkInPlace } from "./compare.ts";
 import { findRepoRoot, isLangdevRepo, readGatesConfig } from "./config.ts";
 import { fixFiles } from "./fixers.ts";
-import { resolveRef } from "./gitref.ts";
 import { POINTS } from "./registry.ts";
 import { type Editor, recordStartPoint } from "./state.ts";
+import { recordTimings, slowLines } from "./timings.ts";
 
 const MAX_OUTPUT_CHARS = 4000;
 
@@ -22,30 +23,19 @@ export interface EditReport {
 
 const NOTHING: EditReport = { text: null, log: [] };
 
-/** A verdict whose lines are findings: the checker ran on the file and was measured. */
-const measured = (v: Verdict): boolean =>
-  v.skipped !== true && v.notMeasured !== true && v.missing !== true && v.missingConfig !== true;
-
-function report(
-  file: string,
-  verdicts: readonly Verdict[],
-  warnings: readonly string[],
-): EditReport {
-  const findings = verdicts.filter(measured).flatMap((v) => v.lines ?? []);
-  const log = [...verdicts.map(headline), ...warnings];
+function modelText(file: string, findings: readonly string[]): string | null {
   if (findings.length === 0) {
-    return { text: null, log };
+    return null;
   }
   const body = findings.join("\n");
   const cut = body.length > MAX_OUTPUT_CHARS;
-  const text = [
-    `qsm-langdev: ${file} breaks this project's rules (+ marks what this tree added against HEAD):`,
+  return [
+    `qsm-langdev: ${file} breaks this project's rules:`,
     body.slice(0, MAX_OUTPUT_CHARS),
     cut ? `[truncated at ${MAX_OUTPUT_CHARS} chars]` : "",
   ]
     .filter(Boolean)
     .join("\n");
-  return { text, log };
 }
 
 /** The report for one edited file; nothing at all for no repository, a repository that never ran
@@ -64,15 +54,17 @@ export async function editFindings(editor: Editor, file: string): Promise<EditRe
     return NOTHING;
   }
   fixFiles(root, [relPath]);
-  const { verdicts, warnings } = await compareTrees(root, resolveRef(root, "HEAD"), "worktree", {
-    at: "edit",
+  // The edit point's timeout counts from the binary's start, so the start and the fixers come out of
+  // it, and several edits at once still answer inside the engine's 10 s, a slow checker not measured.
+  const { findings, log, timed } = await checkInPlace(root, relPath, {
     languages: readGatesConfig(root).languages,
-    only: [relPath],
-    allFindings: true,
-    // The edit point's timeout counts from the binary's start, so the start, the fixers, the probes
-    // and the trees all come out of it, and several edits at once still answer inside the engine's
-    // 10 s, a slow checker not measured.
     deadlineMs: POINTS.edit.timeoutMs,
   });
-  return report(relPath, verdicts, warnings);
+  try {
+    recordTimings(root, "edit", timed);
+  } catch (cause) {
+    log.push(`timings not recorded: ${messageOf(cause)}`);
+  }
+  log.push(...slowLines("edit", timed, POINTS.edit.targetMs));
+  return { text: modelText(relPath, findings), log };
 }

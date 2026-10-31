@@ -19,6 +19,7 @@ import {
 import { dirname, join } from "node:path";
 import { sandboxDir } from "../../../lib/fixtures/sandbox.ts";
 import {
+  checkInPlace,
   type CompareOptions,
   compareTrees,
   doctorRows,
@@ -269,17 +270,6 @@ describe("compareTrees: checker availability", () => {
     expect(verdicts[0]?.summary).toBe(
       "slow-probe: not measured: 'qsm-langdev-slow-version --version' timed out after 0.2s; retry",
     );
-  });
-
-  test("under a deadline a stuck probe gets only what is left, so the run ends by the deadline", async () => {
-    const { root, head, bin } = stagedWithLocalBin("alpha and more\n");
-    executable(bin, "qsm-langdev-slow-version", "#!/bin/sh\nexec sleep 5\n");
-    const started = performance.now();
-
-    const { verdicts } = await runWith(root, head, SLOW_PROBE, { deadlineMs: started + 1500 });
-
-    expect(verdicts[0]?.notMeasured).toBe(true);
-    expect(performance.now() - started).toBeLessThan(2500);
   });
 
   test("doctor reports a binary whose probe times out as not measured, never as missing", async () => {
@@ -1272,5 +1262,35 @@ describe("compareTrees: run times", () => {
     const lines = timingLines(root);
     expect(lines).toHaveLength(10);
     expect(JSON.parse(lines[0] ?? "")).toMatchObject({ checker: "marked" });
+  });
+});
+
+describe("checkInPlace: the edit point", () => {
+  test("a checker past the deadline is not measured, and the run ends by the deadline", async () => {
+    const { root } = repoWith({ "a.txt": "alpha\n" });
+    const started = performance.now();
+
+    const { findings, log } = await checkInPlace(root, "a.txt", {
+      languages: ["fish"],
+      deadlineMs: started + 1500,
+      registry: [{ ...SLOW, points: ["edit"] }],
+    });
+
+    expect(findings).toEqual([]);
+    expect(log).toEqual(["slow: not measured: sleep timed out"]);
+    expect(performance.now() - started).toBeLessThan(2500);
+  });
+
+  test("the live file is checked, not a copy: an untracked file's findings come back", async () => {
+    const { root } = repoWith({ "a.txt": "alpha\n" });
+    write(root, { "b.txt": `${MARKER} here\n` });
+
+    const { findings } = await checkInPlace(root, "b.txt", {
+      languages: ["fish"],
+      deadlineMs: performance.now() + 5000,
+      registry: [{ ...MARKED, points: ["edit"] }],
+    });
+
+    expect(findings).toEqual([`b.txt:1: ${MARKER} here`]);
   });
 });

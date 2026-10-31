@@ -26,9 +26,8 @@ import {
   JOBS,
   type Language,
   type LocalRules,
-  type Point,
+  type ComparedPoint,
   POINTS,
-  storePointOf,
   REGISTRY,
   selectedAt,
 } from "./registry.ts";
@@ -299,7 +298,7 @@ function failureCause(spec: CheckSpec, stdout: string, stderr: string, exitCode:
 function scoreWithReport(
   spec: CheckSpec,
   reportFile: string,
-  side: KeptSide,
+  side: Side & { rules: LocalRules },
   files: readonly string[],
   timeoutMs: number,
 ): Promise<Score> {
@@ -317,7 +316,7 @@ function scoreWithReport(
 }
 
 /** How a checker's run is cut: by the spec's key, one file at a time, or the whole side at once. */
-function groupsOf(spec: CheckSpec, side: KeptSide): readonly (readonly string[])[] {
+function groupsOf(spec: CheckSpec, side: Side): readonly (readonly string[])[] {
   if (spec.groupBy === undefined) {
     return spec.eachFile === true ? side.files.map((file) => [file]) : [side.files];
   }
@@ -370,17 +369,19 @@ interface SideStore {
   use: SideUse;
 }
 
-/**
- * The tool's number for one side: one spawn, one per file summed, or one that writes a report
- * file, each answered from the store when it already holds that content.
- */
-async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promise<Score> {
+/** How one group of files gets its score: computed, or answered from a store that holds it. */
+type Through = (files: readonly string[], compute: () => Promise<Score>) => Promise<Score>;
+
+/** The tool's number for `side`: one spawn, one per file summed, or one that writes a report file. */
+async function scoreFiles(
+  spec: CheckSpec,
+  side: Side & { rules: LocalRules },
+  timeoutMs: number,
+  through: Through,
+): Promise<Score> {
   if (side.files.length === 0) {
     return { tally: { total: 0, byPath: {}, findings: [] }, output: "" };
   }
-  const { store, keying, use } = side.kept;
-  const through = (files: readonly string[], compute: () => Promise<Score>): Promise<Score> =>
-    store.through(keying, contentHash(side.root, files), compute, use);
   const argsFor = (files: readonly string[]) => spec.args(files, side.root, undefined, side.rules);
   const { reportFile } = spec;
   const perFile = spec.eachFile === true && spec.groupBy === undefined;
@@ -397,6 +398,14 @@ async function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promis
   const groups = groupsOf(spec, side);
   const scores = await mapLimit(groups, JOBS, (files) => through(files, () => scoreOf(files)));
   return merged(groups, scores, perFile);
+}
+
+/** One side of a comparison, each group answered from the store when it holds that content. */
+function score(spec: CheckSpec, side: KeptSide, timeoutMs: number): Promise<Score> {
+  const { store, keying, use } = side.kept;
+  return scoreFiles(spec, side, timeoutMs, (files, compute) =>
+    store.through(keying, contentHash(side.root, files), compute, use),
+  );
 }
 
 /** After-path -> before-path, for files git sees moved between two trees. */
@@ -751,16 +760,13 @@ function renamedBetween(root: string, beforeRef: string, after: string): Renames
 
 export interface CompareOptions {
   /** Enforcement point whose checker set runs. Default pre-commit. */
-  at?: Point;
+  at?: ComparedPoint;
   /** Language selection, opt-in; empty/omitted enables no language checker
    * (the always-on languages run regardless). */
   languages?: readonly Language[];
   /** Test seam; production uses REGISTRY. */
   registry?: readonly CheckSpec[];
   timeoutMs?: number;
-  /** An instant on `performance.now()`'s clock by which every process the run starts must have
-   * ended; each one gets what is left. The edit hook's, inside the engine's 10 s. */
-  deadlineMs?: number;
   /** Test seam; production reports a run slow over the point's target. */
   targetMs?: number;
   /** Test seam; production gives a binary's `--version` probe the point's timeout. */
@@ -1008,7 +1014,7 @@ async function setsFor(
  * and where each checker's use of the store is recorded. */
 interface RunContext {
   /** The limit a checker gets, read when it starts: under a deadline, what is left of it. */
-  limit: () => number;
+  timeoutMs: number;
   renames: Renames;
   changed: readonly string[];
   /** The paths `.gitattributes` marks generated: a quality checker leaves them out of its set. */
@@ -1169,7 +1175,7 @@ async function verdictFor(
   }
   const { before, after } = keptSides(spec, sides, narrowed, context);
   const { renames } = context;
-  const timeoutMs = context.limit();
+  const { timeoutMs } = context;
   const started = performance.now();
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
   if (scoredASide(context.uses.get(spec.name))) {
@@ -1204,32 +1210,20 @@ async function verdictOnEngine(
   return (await verdictFor(spec, sides, setOf(spec), context)).verdict;
 }
 
-/** The least a process gets under a deadline, so a late phase still measures something. */
-const DEADLINE_FLOOR_MS = 1000;
-
-/**
- * The point a run is at, its target, and the limit each process gets: the point's timeout, or with a
- * deadline what is left of it when the process starts, at least DEADLINE_FLOOR_MS.
- */
+/** The point a run is at, its target and the limits it applies: the point's, unless a test sets one. */
 function runLimits(options: CompareOptions): {
-  at: Point;
+  at: ComparedPoint;
   targetMs: number;
-  limit: () => number;
+  timeoutMs: number;
   probeTimeoutMs: number;
 } {
   const at = options.at ?? "pre-commit";
   const { targetMs, timeoutMs } = POINTS[at];
-  const fixed = options.timeoutMs ?? timeoutMs;
-  const { deadlineMs } = options;
-  const limit =
-    deadlineMs === undefined
-      ? () => fixed
-      : () => Math.max(DEADLINE_FLOOR_MS, deadlineMs - performance.now());
   return {
     at,
     targetMs: options.targetMs ?? targetMs,
-    limit,
-    probeTimeoutMs: options.probeTimeoutMs ?? limit(),
+    timeoutMs: options.timeoutMs ?? timeoutMs,
+    probeTimeoutMs: options.probeTimeoutMs ?? timeoutMs,
   };
 }
 
@@ -1267,7 +1261,7 @@ export async function compareTrees(
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const { at, targetMs, limit, probeTimeoutMs } = runLimits(options);
+  const { at, targetMs, timeoutMs, probeTimeoutMs } = runLimits(options);
   const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
@@ -1290,13 +1284,13 @@ export async function compareTrees(
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
-      limit,
+      timeoutMs,
       renames:
         beforeRef === null ? new Map<string, string>() : renamedBetween(root, beforeRef, after),
       changed,
       generated: generatedPaths(root, [...changed, ...given]),
       all: options.allFindings === true,
-      store: new ResultStore(root, storePointOf(at)),
+      store: new ResultStore(root, at),
       versions: new Map([...probes].map(([binary, probe]) => [binary, probe.version])),
       uses: new Map(),
       jobs: options.jobs ?? JOBS,
@@ -1325,6 +1319,80 @@ export async function compareTrees(
     store,
     warnings,
   };
+}
+
+/** The least a checker gets under the edit deadline, so a late one still measures something. */
+const DEADLINE_FLOOR_MS = 1000;
+
+/** What one file says under the project's rules, checked in place. */
+export interface InPlace {
+  /** Each finding with its rule and line. */
+  findings: string[];
+  /** How the run went, per checker: what it found, or why it found nothing. */
+  log: string[];
+  timed: Timing[];
+}
+
+/** The lines a checker's score gives the model: its findings, else its output naming the file. */
+function findingLines(spec: CheckSpec, one: Scored, file: string): string[] {
+  const { tally } = one;
+  if (tally.findings !== undefined) {
+    return tally.findings.map(describeFinding);
+  }
+  if (tally.total === 0) {
+    return [];
+  }
+  const named = linesNaming(one.output, [file]);
+  return named.length > 0 ? named : [`${file}: ${spec.name}: ${tally.total} findings`];
+}
+
+/**
+ * The checkers that declare `edit`, over `file` in the live checkout, against nothing but the
+ * project's rules: no reference side, no scratch tree, no store, no version probe. Each gets what is
+ * left of `deadlineMs` when it starts.
+ */
+export async function checkInPlace(
+  root: string,
+  file: string,
+  options: {
+    languages: readonly Language[];
+    deadlineMs: number;
+    registry?: readonly CheckSpec[];
+    fetchPack?: FetchPack;
+  },
+): Promise<InPlace> {
+  const covering = (options.registry ?? REGISTRY).filter(
+    (spec) =>
+      selectedAt(spec, "edit") &&
+      languageEnabled(spec.language, options.languages) &&
+      matchingFiles(root, [file], spec.extensions, spec.names).length > 0,
+  );
+  const unconfigured = new Set(
+    covering
+      .map((spec) => spec.language)
+      .filter((language) => !hasScaffoldedConfig(root, language)),
+  );
+  const log = [...unconfigured].map((language) => `${language}: no config; run qsm-langdev init`);
+  const runnable = covering.filter((spec) => !unconfigured.has(spec.language));
+  const left = () => Math.max(DEADLINE_FLOOR_MS, options.deadlineMs - performance.now());
+  const runs = await withPacks(runnable, options.fetchPack ?? fetchFromRegistry, (packs) =>
+    mapLimit(runnable, JOBS, async (spec) => {
+      const started = performance.now();
+      const side = { root, files: [file], rules: packsOf(spec, packs).rules };
+      const one = await scoreFiles(spec, side, left(), (_files, compute) => compute());
+      return { spec, one, ms: performance.now() - started };
+    }),
+  );
+  const findings: string[] = [];
+  for (const { spec, one } of runs) {
+    if ("reason" in one) {
+      log.push(`${spec.name}: not measured: ${one.reason}`);
+      continue;
+    }
+    findings.push(...findingLines(spec, one, file));
+    log.push(`${spec.name}: ${one.tally.total} findings`);
+  }
+  return { findings, log, timed: runs.map(({ spec, ms }) => ({ checker: spec.name, ms })) };
 }
 
 /** The run's store pruned to what it used, and each checker's use of it. */
