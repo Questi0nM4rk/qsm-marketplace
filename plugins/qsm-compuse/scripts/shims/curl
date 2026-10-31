@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The desktop slot's curl: answers a URL from the fake machine's state (`http` in DRIVE_STATE, the
+# body by URL) the way `curl -sf` answers a server, the body on stdout, or exit 22 (curl's HTTP
+# failure) and nothing for a URL the state does not hold. The slot has no other network.
+url=""
+for arg; do
+  case "$arg" in http://* | https://*) url="$arg" ;; *) ;; esac
+done
+body="$(jq -r --arg url "$url" '.http[$url] // empty | if type == "string" then . else tojson end' \
+  "${DRIVE_STATE:?the curl shim runs only inside a desktop slot}")"
+[[ -n "$body" ]] || exit 22
+printf '%s\n' "$body"

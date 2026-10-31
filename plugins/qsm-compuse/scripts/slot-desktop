@@ -22,6 +22,14 @@ done
 [[ -S "$rt/bus" ]] || exit 2
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus"
 
+# The fake machine: with a mock, its readings are the slot's state (DRIVE_STATE, a copy the `mock`
+# step changes during a run), and the tools in shims/ answer from it ahead of the real ones on PATH,
+# for every process in the slot.
+if [[ -n "${DRIVE_MOCK:-}" ]]; then
+  cp "$DRIVE_MOCK" "$dir/state.json"
+  export DRIVE_STATE="$dir/state.json" PATH="${0%/*}/shims:$PATH"
+fi
+
 WLR_BACKENDS=headless WLR_RENDERER=gles2 WLR_RENDER_DRM_DEVICE="${DRIVE_RENDER_NODE:?}" WLR_LIBINPUT_NO_DEVICES=1 \
   sway -c "$dir/sway.conf" >"$dir/sway.log" 2>&1 &
 for ((i = 0; i < 50; i++)); do
