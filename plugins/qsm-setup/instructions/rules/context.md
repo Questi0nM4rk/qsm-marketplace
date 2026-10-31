@@ -112,8 +112,9 @@ keeps its context, so it reads no file twice, but pays the write again. The one-
 minutes. The person said: "prefer less agents, that have more
 work, so that we dont burn the cache".
 
-The main agent makes a subagent's worktree before dispatch, reviews the branch there (the
-subagents skill says how), merges by merge commit or cherry-pick, then deletes worktree and
+A subagent that edits works in its own worktree, cut through wt from the main agent's branch at
+dispatch (the implementer declares `isolation: worktree`). The main agent reviews the branch there
+(the subagents skill says how), merges by merge commit or cherry-pick, then deletes worktree and
 branch. A worker never merges, rebases, pushes, or deletes; a leftover worktree is a defect. Any
 branch an agent opens, the main agent's own included, is merged into the working branch or deleted
 before the turn that finished its work ends, because an unmerged branch is finished work the

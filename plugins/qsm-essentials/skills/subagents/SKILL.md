@@ -25,15 +25,14 @@ does what").
    worker can run. Without it you cannot reject the result.
 4. A task that needs a design decision goes to the user first with your recommendation, because a
    worker closes it silently.
-5. A worker that edits gets its own worktree and branch, made before dispatch. Two writers in one
-   tree lose changes. An implementation worker is your extension: run, implement, sync, as if you
-   wrote it yourself. So sync your working branch first (`git fetch`, then pull or rebase it onto
-   its remote, `origin/main` when you work on main), cut the worker's branch from that synced
-   branch, never from a stale side branch, and merge it back into your branch right after review,
-   in the same turn. The dispatch prompt names the path made for that one worker, never your own
-   tree or another worker's. An isolated worktree is cut from the repository of your current
-   directory at dispatch, so change into the target repository first; the prompt tells the worker
-   to stop and report when its tree is not the one named.
+5. A worker that edits runs in its own worktree and branch, because two writers in one tree lose
+   changes. The implementer declares `isolation: worktree`; any other agent that edits gets
+   `isolation: "worktree"` on the dispatch. The harness then cuts the worktree through wt from the
+   branch of your current directory, your own session's worktree, so change into the target
+   repository first. An implementation worker is your extension: run, implement, sync, as if you
+   wrote it yourself. So sync your branch before dispatch (`git fetch`, then merge `origin/main`
+   into it; rebase only when it is needed), and merge the worker's branch back into yours right
+   after review, in the same turn.
 6. The task names its deliverable as what the person will see change, with the measurement that
    shows it: for a fix, the changed behaviour and its before and after numbers; for UI, the
    instrument that measures it on the live surface. A worker asked for a record writes records, so

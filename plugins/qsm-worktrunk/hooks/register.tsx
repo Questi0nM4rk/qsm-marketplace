@@ -4,7 +4,12 @@
 import type { EngineInterface, On } from "claude-code";
 import { doctor } from "../lib/doctor.ts";
 import { denialFor } from "../lib/git-worktree-block.ts";
-import { gitReader, readWorkspace, workspaceContext } from "../lib/workspace.ts";
+import {
+  gitReader,
+  MAIN_CHECKOUT_CONTEXT,
+  readWorkspace,
+  workspaceContext,
+} from "../lib/workspace.ts";
 import type { Runner } from "../lib/wt.ts";
 import { setMarker } from "../lib/wt.ts";
 import { registerNoun } from "./noun.generated.ts";
@@ -39,8 +44,14 @@ function registerBlock(on: On): void {
 /** The workspace the prompt runs in, as the hidden context line the agent reads; null in the main
  * checkout and outside a repository. */
 async function workspaceLine($: Engine): Promise<string | null> {
-  const workspace = await readWorkspace(gitReader(runner($), await $.session.cwd()));
-  return workspace === null ? null : workspaceContext(workspace, await $.env.get("HOME"));
+  const git = gitReader(runner($), await $.session.cwd());
+  const workspace = await readWorkspace(git);
+  if (workspace !== null) {
+    return workspaceContext(workspace, await $.env.get("HOME"));
+  }
+  return (await git(["rev-parse", "--is-inside-work-tree"])) === "true"
+    ? MAIN_CHECKOUT_CONTEXT
+    : null;
 }
 
 function registerMarker(on: On): void {

@@ -84,6 +84,18 @@ function stubPromptSubmit(on: On) {
   return () => bottomRan;
 }
 
+/** A prompt.submit bottom that keeps the context the turn reached it with, in a session at `cwd`. */
+function captureContext(on: On, cwd: string) {
+  let seen: readonly string[] = [];
+  on("prompt.submit", (_$, e) => {
+    seen = e.context ?? [];
+    return { text: e.text };
+  });
+  on("session.cwd", () => ({ value: cwd }));
+  on("env.get", () => ({ value: "/home/p" }));
+  return () => seen.join("\n");
+}
+
 /** A ui.toast bottom that keeps what it was told. */
 function stubToasts(on: On) {
   const toasts: string[] = [];
@@ -124,13 +136,7 @@ test("a git call that is not git worktree reaches the tool untouched", async ($,
 });
 
 test("a prompt submitted inside a workspace carries its name, path and branch", async ($, on) => {
-  let seen: readonly string[] = [];
-  on("prompt.submit", (_$, e) => {
-    seen = e.context ?? [];
-    return { text: e.text };
-  });
-  on("session.cwd", () => ({ value: "/home/p/repo.feature" }));
-  on("env.get", () => ({ value: "/home/p" }));
+  const seen = captureContext(on, "/home/p/repo.feature");
   on("process.run", (_$, e) => {
     const git = e.argv.slice(1).join(" ");
     const answers: Record<string, string> = {
@@ -145,26 +151,20 @@ test("a prompt submitted inside a workspace carries its name, path and branch", 
 
   await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
-  expect(seen.join("\n")).toContain("branch: feature");
-  expect(seen.join("\n")).toContain("path: ~/repo.feature");
+  expect(seen()).toContain("branch: feature");
+  expect(seen()).toContain("path: ~/repo.feature");
 });
 
-test("a prompt submitted in the main checkout carries no workspace context", async ($, on) => {
-  let seen: readonly string[] | undefined;
-  on("prompt.submit", (_$, e) => {
-    seen = e.context;
-    return { text: e.text };
-  });
-  on("session.cwd", () => ({ value: "/home/p/repo" }));
-  on("env.get", () => ({ value: "/home/p" }));
+test("a prompt submitted in the main checkout tells the agent to move into its own worktree", async ($, on) => {
+  const seen = captureContext(on, "/home/p/repo");
   on("process.run", (_$, e) => {
     const inside = e.argv.includes("--is-inside-work-tree");
-    return done(inside ? "true\n" : "/home/p/repo/.git\n");
+    return done(inside ? "true\n" : "/home/p/repo/.git\n/home/p/repo/.git\n");
   });
 
   await $.prompt.submit({ text: "hello", wait: false, origin: { kind: "composer" } });
 
-  expect(seen).toBeUndefined();
+  expect(seen()).toContain("move into this session's own worktree with EnterWorktree");
 });
 
 test("A new turn starts", async ($, on) => {

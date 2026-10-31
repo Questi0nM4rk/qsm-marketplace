@@ -130,7 +130,9 @@ Everything lands on `main`, and the main checkout follows it. The main checkout 
 root, the tree Claude Code installs this marketplace from and every bin is compiled from. A
 `git pull --ff-only` there runs `hooks/post-merge`, which rebuilds every bin and refreshes every
 plugin, so the whole system runs the commit on `main`. A worktree is only where a change is made,
-never the installed tree.
+never the installed tree, and no session works in the main checkout: each has its own worktree,
+so a gate judges only its own agent's commits. The pre-push gates unpack each pushed commit into
+a scratch directory, so a file not yet committed can neither pass nor block a push.
 
 ## Before a commit
 

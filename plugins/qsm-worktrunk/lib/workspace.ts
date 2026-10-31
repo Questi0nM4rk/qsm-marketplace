@@ -67,6 +67,14 @@ async function readBranch(git: GitReader): Promise<string> {
   return `detached at ${head ?? "an unknown commit"}`;
 }
 
+/** What the turn carries in the main checkout: it only follows main, so a change starts by leaving it. */
+export const MAIN_CHECKOUT_CONTEXT = [
+  "---",
+  "workspace: the main checkout, which only follows main; no session works in it",
+  "Before any change, move into this session's own worktree with EnterWorktree.",
+  "---",
+].join("\n");
+
 /** What the turn carries: the three facts the agent would otherwise ask for. */
 export function workspaceContext(workspace: Workspace, home?: string): string {
   return [

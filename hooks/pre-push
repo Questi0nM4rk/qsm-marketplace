@@ -3,6 +3,13 @@
 # Remove with: qsm-langdev uninstall
 set -euo pipefail
 
+# git hands the pushed refs on stdin once; keep them so qsm-langdev and the gates below both read them.
+pushed_refs=$(mktemp)
+scratch=$(mktemp -d)
+trap 'rm -rf "$pushed_refs" "$scratch"' EXIT
+cat >"$pushed_refs"
+exec <"$pushed_refs"
+
 qsm-langdev hook pre-push "${1:-}" || exit 1
 
 # A fresh worktree has no node_modules, and the gates below then fail with type errors that hide
@@ -19,15 +26,42 @@ missing_node_modules() {
 }
 missing_node_modules || exit 1
 
-# The marketplace's own gates, repo-specific, so nothing outside a langdev checker
-# (the generated contracts, every plugin's hooks tsconfig against .claude/types)
-# reaches origin red.
 # `bun check` arrived in Bun 1.4; an older bun says only "Script not found".
 if ! bun check --help >/dev/null 2>&1; then
   echo "pre-push: bun $(bun --version) has no 'bun check'; mise.toml pins the version, run: mise install" >&2
   exit 1
 fi
-bun run validate || exit 1
-# .claude/types is gitignored and copied from the engine, so a fresh clone or worktree has none.
-bun run plugin-types >/dev/null || exit 1
-bun run typecheck || exit 1
+
+# The marketplace's own gates, repo-specific, so nothing outside a langdev checker (the generated
+# contracts, every plugin's hooks tsconfig against .claude/types) reaches origin red. They judge
+# each pushed commit, never this directory: a file not yet committed here is not pushed, so it can
+# neither pass nor block the push. The commit is unpacked into a scratch directory and borrows this
+# tree's node_modules.
+gate_commit() {
+  local sha=$1 dir="$scratch/$1" deps
+  mkdir "$dir"
+  git archive "$sha" | tar -x -C "$dir"
+  for deps in node_modules plugins/*/node_modules; do
+    if [[ -d "$deps" && -d "$dir/$(dirname "$deps")" ]]; then
+      ln -s "$PWD/$deps" "$dir/$deps"
+    fi
+  done
+  echo "pre-push: gates on ${sha:0:8}" >&2
+  (
+    cd "$dir"
+    bun run validate
+    # .claude/types is gitignored and copied from the engine, so a commit never carries it.
+    bun run plugin-types >/dev/null
+    bun run typecheck
+  )
+}
+
+declare -A gated=()
+while read -r _ local_sha _ _; do
+  # A deleted ref pushes no commit.
+  if [[ $local_sha =~ ^0+$ || -n ${gated[$local_sha]:-} ]]; then
+    continue
+  fi
+  gated[$local_sha]=1
+  gate_commit "$local_sha" || exit 1
+done <"$pushed_refs"

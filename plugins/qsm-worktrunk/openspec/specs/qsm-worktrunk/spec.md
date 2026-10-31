@@ -64,12 +64,22 @@ leaves the caller to track the path itself.
 When the working directory sits inside an isolated workspace rather than the
 main checkout, the plugin SHALL attach that workspace's name, path, and current
 branch to the next turn's context, so the agent never has to ask which
-workspace it is in.
+workspace it is in. When it sits in the main checkout, the plugin SHALL attach
+a line saying that the main checkout only follows main and that the agent moves
+into its own worktree with EnterWorktree before any change, because no session
+works in a shared checkout: one session's uncommitted file would otherwise
+reach every other session's gates.
 
 #### Scenario: Working from the main checkout
 
 - **WHEN** the current directory is the repository's main checkout, not an
   isolated workspace
+- **THEN** the next turn's context SHALL tell the agent to move into its own
+  worktree with EnterWorktree before any change
+
+#### Scenario: Working outside a repository
+
+- **WHEN** the current directory is in no git repository
 - **THEN** no workspace context SHALL be attached
 
 ### Requirement: Session activity is signaled through a shared marker
