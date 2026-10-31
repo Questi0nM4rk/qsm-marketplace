@@ -48,10 +48,13 @@ is a few KB), an outside binary.
    captured.
 7. **A span carries `kind`**, a string the review pane prints. `Span` in `lib/secret-shapes.ts`
    gains it, so qsm-memory reads it too and ignores it.
-8. **The corpus grows from real producers**: an OpenVPN key from `openvpn --genkey secret`, keys
-   from `ssh-keygen` (ed25519, rsa, ecdsa), a certificate and a CSR from `openssl req`, a PuTTY
-   key from `puttygen` when installed, a GitHub-format token, and Czech prompts. Each is recorded
-   by running the tool once and pasting its output into the corpus with the command in a comment.
+8. **Key material comes from real producers, run at test time**: an OpenVPN key from
+   `openvpn --genkey secret`, keys from `ssh-keygen` (ed25519, rsa, ecdsa, one with a passphrase),
+   a certificate and a CSR from `openssl req`, a PGP key from `gpg` in a throwaway home, all in a
+   sandbox directory the test removes. Pasting their output into the corpus is ruled out by the
+   corpus file's own rule (no literal token in the repository for a scanner to flag), which the
+   repository's gitleaks and detect-secrets gates enforce. Tokens and Czech prompts stay in the
+   seeded generator. A missing producer fails the test loud; PuTTY waits for `puttygen`.
 
 ## Risks / Trade-offs
 

@@ -1,15 +1,15 @@
 ## 1. Corpus first, from real producers
 
-- [ ] 1.1 Record new corpus lines in `plugins/qsm-secrets/lib/capture.corpus.ts`, each with the
-      command that made it in a comment: `openvpn --genkey secret /dev/stdout`, `ssh-keygen`
-      (ed25519, rsa, ecdsa; one encrypted with `-N`), `openssl req -x509` (certificate) and
-      `openssl req -new` (CSR), `gpg --armor --export-secret-keys` and `--export` of a throwaway
-      key, a cut-short private key, an `.ovpn` with `<ca>` `<key>` `<tls-auth>`, a `ghp_` token with
-      a wrong CRC32, Czech prompts (`heslo je ...`, `HESLO=...`), templates (`<your-password>`,
-      `${GITHUB_TOKEN}`, `changeme`). The person runs the producers whose output the agent may not
-      generate itself (`! <command>`); throwaway keys only. PuTTY lines wait for `puttygen`, which
-      is absent. Proof: `bun test plugins/qsm-secrets/lib/capture.test.ts` fails on the new
-      positives today (recall below 1.0), which shows the corpus reaches the gaps. Blocks: nothing.
+- [ ] 1.1 Key-material cases made at test time in a `sandboxDir` by the real producers:
+      `openvpn --genkey secret <file>`, `ssh-keygen` (ed25519, rsa, ecdsa; one with `-N`),
+      `openssl req -x509` (certificate) and `openssl req -new` (CSR), `gpg` with a throwaway
+      `GNUPGHOME` (`--armor --export-secret-keys` and `--export`), a cut-short private key, an
+      `.ovpn` with `<ca>` `<key>` `<tls-auth>`. In the seeded generator of
+      `plugins/qsm-secrets/lib/capture.corpus.ts`: a `ghp_` token with a wrong CRC32, Czech prompts
+      (`heslo je ...`, `HESLO=...`), templates (`<your-password>`, `${GITHUB_TOKEN}`, `changeme`).
+      No literal key or token is committed. PuTTY waits for `puttygen`, which is absent. Proof:
+      `bun test plugins/qsm-secrets/lib/capture.test.ts` fails on the new positives today (recall
+      below 1.0), which shows the corpus reaches the gaps. Blocks: nothing.
 
 ## 2. Claimed ranges and the block pass
 

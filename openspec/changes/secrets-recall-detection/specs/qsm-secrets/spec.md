@@ -29,20 +29,21 @@ It SHALL run these passes in order, and a later pass SHALL skip any text an earl
    `sha256-` style hash, a name (separators at a tenth of its length or more, or camelCase words of
    four letters or more on average), or base64 of text (decoding to printable bytes).
 
-Each captured secret SHALL carry a kind: `private-key` for a block whose label ends in `PRIVATE
-KEY` or `PRIVATE KEY BLOCK` and for a PuTTY key, `openvpn-key` for `OpenVPN Static key V1`,
-`pem-block` for any other block label, the shape's name for a known shape, `credential-value`
-after a credential name, `random-token` for a bare token. A public key line (`ssh-ed25519
-AAAA...`) is never captured. On the labelled corpus in `lib/capture.corpus.ts` the capture SHALL
-keep recall 1.0 and precision of at least 0.85; the test `lib/capture.test.ts` asserts both, as a
-guard against a regression, not a measure on text the corpus does not hold. Every corpus line taken
-from a key or token tool SHALL be that tool's real output, with the command that made it in a
-comment beside it. A prompt with no secret SHALL pass down unchanged. The person SHALL see a toast
-naming each id and its kind. The hook SHALL act only on a prompt the person typed or pasted (origin
-`composer`, `bridge`, `sdk` or `channel`); a prompt of any other origin (a task notification, a
-subagent hand-back, a schedule, another session) is text the engine or a model wrote, so it SHALL
-pass down unchanged and the debug log SHALL name its origin. The limit SHALL be stated: the
-terminal already showed the text, and a secret sent before this hook existed is not recalled.
+Each captured secret SHALL carry a kind: `private-key` for a block whose label ends in `PRIVATE KEY`
+or `PRIVATE KEY BLOCK` and for a PuTTY key, `openvpn-key` for `OpenVPN Static key V1`, `pem-block`
+for any other block label, the shape's name for a known shape, `credential-value` after a credential
+name, `random-token` for a bare token. A public key line (`ssh-ed25519 AAAA...`) is never captured.
+On the labelled corpus in `lib/capture.corpus.ts` the capture SHALL keep recall 1.0 and precision of
+at least 0.85; the test `lib/capture.test.ts` asserts both, as a guard against a regression, not a
+measure on text the corpus does not hold. Every key-material case SHALL be made by running its real
+producer (`openvpn`, `ssh-keygen`, `openssl`, `gpg`) in a sandbox when the test runs, so no key sits
+in the repository; a producer that is not installed fails the test and names the tool. A prompt with
+no secret SHALL pass down unchanged. The person SHALL see a toast naming each id and its kind. The
+hook SHALL act only on a prompt the person typed or pasted (origin `composer`, `bridge`, `sdk` or
+`channel`); a prompt of any other origin (a task notification, a subagent hand-back, a schedule,
+another session) is text the engine or a model wrote, so it SHALL pass down unchanged and the debug
+log SHALL name its origin. The limit SHALL be stated: the terminal already showed the text, and a
+secret sent before this hook existed is not recalled.
 
 A secret pasted as `name=value`, with the name matching `[a-z][a-z0-9-]{1,40}`, SHALL be stored in
 the namespace `qsm` under the key `<name>`, and the prompt SHALL show `{{secret:qsm/<name>}}` in
