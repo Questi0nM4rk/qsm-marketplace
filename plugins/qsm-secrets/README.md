@@ -109,16 +109,18 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   call answers `missing`. It never falls back to Bitwarden.
 - The content denylist is only as good as the names you approved. A name never written down on
   this machine is not found.
-- Capture prefers catching too much: a miss stays in the transcript, a false positive is one vault
-  entry you remove. It catches every armoured BEGIN/END block whatever its label (a private key, an
+- Capture prefers catching too much where a value can be one, and refuses code and prose: a miss
+  stays in the transcript, and a captured value is masked as a substring in everything the agent
+  reads afterwards. It catches every armoured BEGIN/END block whatever its label (a private key, an
   OpenVPN static key, a certificate, a PGP block) as one entry, a known token shape (`ghp_`,
   `glpat-`, `sk-`, `AKIA`, `xox`, JWT and gitleaks' fixed-prefix provider rules), a value of 6 or
-  more characters after a credential name (English or Czech, such as `heslo`), unless it is a
-  template or a stopword, and a 32-character token that is random for its alphabet and is not a
-  path, a name, an id, a commit, a UUID or base64 of text. The toast names each id and its kind. On
-  a labelled corpus the test holds recall 1.0 and precision of at least 0.85; that guards a
-  regression and is not the precision on your own text. The model also sees the last four
-  characters when the secret has 20 or more.
+  more characters after a credential name on the same line (English or Czech, such as `heslo`),
+  unless it is a template, a stopword, a type name, a variable or code reference, a path or a URL,
+  and a 32-character token that is random for its alphabet and is not hex, a path, a name, a word,
+  an id, a UUID or base64 of plain text. The toast names each id and its kind. On a labelled corpus
+  the test holds recall 1.0 and precision of at least 0.85; that guards a regression and is not
+  the precision on your own text. The model also sees the last four characters when the secret
+  has 20 or more.
 - `render` writes to `$XDG_RUNTIME_DIR/qsm-secrets/<session>/<name>` (directory 0700, file 0600).
   The session end removes it.
 - The content denylist lives at `${XDG_CONFIG_HOME:-~/.config}/qsm/content-denylist.toml`, never in

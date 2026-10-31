@@ -5,31 +5,54 @@
 A function hook on `prompt.submit` SHALL find the secrets in the prompt text, SHALL store each in
 the chosen backend under a generated id, and SHALL pass down a prompt in which the value is replaced
 by `{{secret:<id>}}` followed, for a secret of 20 or more characters, by its last four characters.
-The detection SHALL prefer recall: a value it cannot rule out as plainly not a secret is captured,
-because a miss stays in the transcript and a false positive is one vault entry the person removes.
-It SHALL run these passes in order, and a later pass SHALL skip any text an earlier one claimed:
+The detection SHALL prefer recall where a value can be one, and SHALL refuse what is plainly code,
+prose, a path or a reference, because a miss stays in the transcript and a captured value is masked
+as a substring in every later tool result and transcript, so a false positive also hides that word
+wherever the agent reads it. It SHALL run these passes in order, and a later pass SHALL skip any
+text an earlier one claimed:
 
-1. a `{{secret:...}}` placeholder is claimed and never captured;
-2. every block from `-----BEGIN <label>-----` to the matching `-----END <label>-----`, or to the end
-   of the text when the end line is missing, of any label, and a PuTTY key from
-   `PuTTY-User-Key-File-` to its `Private-MAC:` line, is one secret;
+1. a `{{secret:...}}` placeholder is skipped by every pass and never captured;
+2. every block from `-----BEGIN <label>-----` to the matching `-----END <label>-----`, of any label
+   but a clearsigned message's (`PGP SIGNED MESSAGE`, whose signature block is a block of its own),
+   is one secret; a block whose end line is missing runs to the last line of its key body (base64
+   or hex lines, headers such as `Proc-Type:`, blank lines) and is a secret only when the first
+   line after its BEGIN line is such a body line, so a label named in prose is not; a PuTTY key
+   from `PuTTY-User-Key-File-` to its `Private-MAC:` line is one secret;
 3. a known token shape (GitHub, GitLab, npm, Anthropic, OpenAI, AWS, Slack, Stripe, Google, JWT, a
-   connection string's password, and the prefix rules taken from gitleaks' rule data) is a secret,
-   whatever its checksum;
-4. a value of 6 or more characters after a name that says credential, joined to it by `=`, `:`,
-   `:=`, `=>`, `is` or `je`, or as a quoted JSON key, is a secret, and the value runs to the next
-   space or quote; a credential name counts when one of its parts (`GITHUB_TOKEN`, `clientSecret`)
-   is a credential word, in English (`token`, `secret`, `password`, `pwd`, `passphrase`,
-   `credentials`, `auth`, `api_key`, `Bearer`) or in Czech (`heslo`, `klic`, `klíč`, `tajne`,
-   `tajné`), so `authorization_mode` and `passwordless` do not; a value is not a secret only when it
-   is `true`, `false` or `null`, a template (`<x>`, `${x}`, `{x}`, `{{x}}`), one character repeated,
-   a run of the alphabet or the digits, or `changeme`, `example`, `your-` followed by a word;
+   value after `api_key`, a connection string's password up to the last `@` before the host, and
+   the prefix rules taken from gitleaks' rule data) is a secret, whatever its checksum;
+4. a value of 6 or more characters after a name that says credential is a secret. Name and value
+   sit on one line, joined by `=`, `:`, `:=` or `=>` (also as a quoted JSON key), or by the prose
+   word `is` or `je`; a flag `--<name>=<value>` or `--<name> <value>`, a netrc `password <value>`
+   and `Bearer <value>` count too. A quoted value runs to its closing quote on the same line, any
+   other to the next blank, less a trailing comma, quote or unbalanced bracket. A credential name
+   counts when one of its parts (`GITHUB_TOKEN`, `clientSecret`) is a credential word, in English
+   (`token`, `secret`, `password`, `pwd`, `pass`, `passphrase`, `credentials`, `auth`, `api_key`)
+   or in Czech (`heslo`, `klic`, `klíč`, `tajne`, `tajné`), or when it is an UPPER_SNAKE name
+   ending in `_KEY` other than `PUBLIC_KEY`, `PRIMARY_KEY` and `FOREIGN_KEY`; so
+   `authorization_mode`, `passwordless` and `primary_key` do not. A value is not a secret when it
+   is `true`, `false`, `null`, `nil` or `none`, `changeme`, `example`, `your-` followed by a word,
+   a type name (`string`, `number`, `boolean`, `any`, `required`, ...), a template (`<x>`, `{x}`,
+   `{{x}}`, `%(x)s`), a reference (starting with `$`, or a word followed by `.`, `(` or `[`, as in
+   `process.env.X` and `os.environ[...]`), a path (starting with `/`, `~/`, `./` or `../`), a URL,
+   an SSH key type, a YAML tag such as `!vault`, a lowercase slug of five words or more, one
+   character repeated, or a run of the alphabet or the digits. After `is`, `je`, `Bearer` or a flag
+   with a space, the value SHALL also look random (a digit, a capital after its first letter, or a
+   symbol), so `heslo je Xk9pQ2mL` is captured and `heslo je špatně` and `the token is expired` are
+   not; after `=` or `:` a plain word such as `password=sunshine` is captured, because a weak
+   password is still a password;
 5. a bare token of 32 or more characters is a secret when its Shannon entropy is at least 0.8 of
-   what a random token of its length and alphabet averages, a hex run measured against the hex
-   alphabet, unless it is a path, a URL or a dotted name, an id (`session_`, `toolu_`, `cap_`,
-   `msg_`), a 40-character hex commit or a UUID, a `sha256-` or `sha256:` style hash, a name
-   (separators at a tenth of its length or more, or camelCase words of four letters or more on
-   average), or base64 of text (decoding to printable bytes).
+   what a random token of its length and alphabet averages, unless it is a path, a URL or a dotted
+   name, hex of any length (a digest, an image id, a request id, an ETag, a commit), a UUID, an id
+   (`session_`, `toolu_`, `cap_`, `msg_`), a `sha256-` or `sha256:` style hash, a name (separators
+   at a tenth of its length or more, or mixed-case words of four letters or more on average), or
+   letters in one case with as many vowels as words have; a single-case run of letters and digits
+   with no separator (a random a-z token, a base32 seed) is judged on its randomness. Base64 that
+   decodes to text is judged by what it decodes to: a block or a known shape inside it makes the
+   whole run a secret of that kind (a kubeconfig `client-key-data`), a decoded token with no blank
+   that is random enough makes it a `random-token`, and other text is not a secret. Hex counts only
+   after a credential name (item 4); whether bare hex should count is open, for the person to
+   decide.
 
 Each captured secret SHALL carry a kind: `private-key` for a block whose label ends in `PRIVATE KEY`
 or `PRIVATE KEY BLOCK` and for a PuTTY key, `openvpn-key` for `OpenVPN Static key V1`, `pem-block`
@@ -149,8 +172,39 @@ the fix (`qsm-secrets doctor`), and never lets an unchecked prompt in.
   CRC32
 - **THEN** it is captured as `github-pat`, because a shape that matches is a secret
 
-#### Scenario: an unfinished block is captured to the end
+#### Scenario: an unfinished block is captured to the end of its key body
 
-- **WHEN** a prompt holds the BEGIN line of an OpenSSH private key and its key lines but no END line
-- **THEN** everything from the BEGIN line to the end of the prompt is one secret of kind
-  `private-key`
+- **WHEN** a prompt holds the BEGIN line of an OpenSSH private key and its key lines but no END
+  line, followed by a line of prose
+- **THEN** everything from the BEGIN line to the last key line is one secret of kind `private-key`,
+  and the prose passes down unchanged
+
+#### Scenario: a BEGIN label named in prose is not a block
+
+- **WHEN** a prompt asks about a BEGIN line of a public key, or holds a clearsigned message and
+  asks whether its signature is valid
+- **THEN** the question passes down unchanged; of a clearsigned message only the signature block is
+  captured, as `pem-block`
+
+#### Scenario: code and prose after a credential word are not captured
+
+- **WHEN** a prompt holds `readonly token: string`, `const secret = process.env.API_SECRET`,
+  `token: ${{secrets.GITHUB_TOKEN}}`, `pwd: /home/me/Projects`, `the token is expired` or
+  `heslo je špatně`
+- **THEN** it passes down byte for byte, so no word of code or prose is masked afterwards
+
+#### Scenario: a value on the line after another key is still a value
+
+- **WHEN** a prompt holds YAML `database:` with `password: <value>` on the next line, or an env file
+  with `DB_HOST=` empty and `DB_PASSWORD=<value>` on the next line
+- **THEN** the value is captured as `credential-value`
+
+#### Scenario: a key encoded in base64 is captured whole
+
+- **WHEN** a prompt holds a kubeconfig whose `client-key-data` is a private key in base64
+- **THEN** the base64 run is one secret of kind `private-key`
+
+#### Scenario: bare hex is not captured
+
+- **WHEN** a prompt holds a sha256 digest, a Docker image id, a request id or an ETag in hex
+- **THEN** it passes down byte for byte; hex is captured only after a credential name
