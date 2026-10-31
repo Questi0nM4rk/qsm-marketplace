@@ -67,6 +67,9 @@ interface Bin {
   reset: () => void;
   rows: Listed[];
   removed: string[][];
+  /** Every verb the plugin ran, in order. */
+  verbs: string[];
+  opened: { id: string; focus?: true }[];
   toasts: string[];
   /** The outcome `rm` answers; `ok` removes the row from `rows`. */
   rmCode: "ok" | "missing";
@@ -76,15 +79,25 @@ interface Bin {
 function bin(on: On, rows: Listed[] = ROWS): Bin {
   const state: Bin = {
     reset: () => {
-      Object.assign(state, { rows: [...rows], removed: [], toasts: [], rmCode: "ok" });
+      Object.assign(state, {
+        rows: [...rows],
+        removed: [],
+        verbs: [],
+        opened: [],
+        toasts: [],
+        rmCode: "ok",
+      });
     },
     rows: [...rows],
     removed: [],
+    verbs: [],
+    opened: [],
     toasts: [],
     rmCode: "ok",
   };
   on("process.run", (_$, e) => {
     const [, verb, key, , folder] = e.argv;
+    state.verbs.push(verb ?? "");
     if (verb === "captures") {
       const data = { rows: state.rows };
       return {
@@ -110,12 +123,22 @@ function bin(on: On, rows: Listed[] = ROWS): Bin {
     return { value: undefined };
   });
   on("ui.log", () => ({ value: undefined }));
+  on("ui.open", (_$, e) => {
+    state.opened.push({ id: e.id, ...(e.focus === undefined ? {} : { focus: e.focus }) });
+    return { value: { isPlaced: true } };
+  });
   return state;
 }
 
 /** The pane drawn on a surface that has a `Client`. */
 const mountPane = ($: Engine, surface: (typeof SURFACES)[number]) =>
   $.ui.mount({ ...PANE, surface });
+
+/** /qsm-secrets review, which lists the captures, then the pane it opened, drawn. */
+async function openPane($: Engine, surface: (typeof SURFACES)[number]): Promise<Mounted> {
+  await $.command.run({ ...RUN, args: "review" });
+  return mountPane($, surface);
+}
 
 type Mounted = Awaited<ReturnType<typeof mountPane>>;
 
@@ -130,16 +153,12 @@ const press = async (ui: Mounted, ...keys: string[]): Promise<void> => {
   }
 };
 
-test("/qsm-secrets is registered at the session start, and review opens the pane with the focus", async ($, on) => {
+test("/qsm-secrets is registered at the session start, and review lists the captures and opens the pane with the focus", async ($, on) => {
   const registered: string[] = [];
-  const opened: { id: string; focus?: true }[] = [];
+  const host = bin(on);
   on("command.register", (_$, e) => {
     registered.push(e.name);
     return { value: { command: e.name } };
-  });
-  on("ui.open", (_$, e) => {
-    opened.push({ id: e.id, ...(e.focus === undefined ? {} : { focus: e.focus }) });
-    return { value: { isPlaced: true } };
   });
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
 
@@ -150,21 +169,27 @@ test("/qsm-secrets is registered at the session start, and review opens the pane
   expect(registered).toEqual(["qsm-secrets"]);
   expect(usage.text).toContain("/qsm-secrets review");
   expect(run.text).toBeUndefined();
-  expect(opened).toEqual([{ id: "qsm-secrets-review", focus: true }]);
+  expect(host.opened).toEqual([{ id: "qsm-secrets-review", focus: true }]);
+  expect(host.verbs).toEqual(["captures"]);
 });
 
 test("a row shows kind, local date and time, the project and the session's first eight characters", async ($, on) => {
   bin(on);
   for (const surface of SURFACES) {
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
     const drawn = await lines(ui);
-    const at = new Date(ROWS[1]?.capturedAt ?? "");
-    const hm = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+    const date = new Date(ROWS[1]?.capturedAt ?? "")
+      .toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      .padEnd(13);
 
     expect(drawn[0]).toContain("d or DEL then y");
     expect(drawn[2]).toStartWith("> github-pat");
     // The kind column is as wide as the longest kind listed, credential-value.
-    const date = `${at.getDate()} Oct ${hm}`.padEnd(12);
     expect(drawn[3]).toBe(`  ${"pem-block".padEnd(16)}  ${date}  qsm-marketplace  42ffbd7c`);
     expect(drawn[4]).toEndWith("  -  -");
     await ui.unmount();
@@ -175,7 +200,7 @@ test("down, DEL and y delete the pem-block capture through qsm-secrets rm and th
   const host = bin(on);
   for (const surface of SURFACES) {
     host.reset();
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
 
     await press(ui, "down", "delete");
     expect((await lines(ui))[3]).toEndWith("y to delete");
@@ -184,6 +209,8 @@ test("down, DEL and y delete the pem-block capture through qsm-secrets rm and th
     expect(host.removed).toEqual([
       ["qsm-secrets", "rm", "cap_pem", "--folder", "capture", "--json"],
     ]);
+    // Listed once, when the pane opened: neither the renders nor the delete list again.
+    expect(host.verbs).toEqual(["captures", "rm"]);
     const after = (await lines(ui)).join("\n");
     expect(after).not.toContain("pem-block");
     expect(after).toContain("credential-value");
@@ -195,7 +222,7 @@ test("an arm expires after 3 seconds, and y afterwards removes nothing", async (
   const host = bin(on);
   for (const surface of SURFACES) {
     host.reset();
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
 
     await press(ui, "d");
     await ui.advance(2900);
@@ -213,7 +240,7 @@ test("another key disarms: d then down moves the focus and removes nothing", asy
   const host = bin(on);
   for (const surface of SURFACES) {
     host.reset();
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
 
     await press(ui, "d", "down");
     const drawn = await lines(ui);
@@ -231,19 +258,21 @@ test("a failed delete keeps the row with its code, and a toast names the id and 
   for (const surface of SURFACES) {
     host.reset();
     host.rmCode = "missing";
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
 
     await press(ui, "delete", "y");
 
     expect((await lines(ui))[2]).toEndWith("failed: missing");
     expect(host.toasts).toContain("qsm-secrets: could not delete capture/cap_new: missing");
+    await ui.redraw();
+    expect((await lines(ui))[2]).toEndWith("failed: missing");
     await ui.unmount();
   }
 });
 
 test("a post naming no listed capture deletes nothing", async ($, on) => {
   const host = bin(on);
-  const ui = await mountPane($, "terminal");
+  const ui = await openPane($, "terminal");
 
   await ui.post({ delete: "qsm/github-token" }, { in: "review" });
 
@@ -251,10 +280,19 @@ test("a post naming no listed capture deletes nothing", async ($, on) => {
   await ui.unmount();
 });
 
+test("a pane drawn before any /qsm-secrets review lists the captures itself", async ($, on) => {
+  const host = bin(on);
+  const ui = await mountPane($, "terminal");
+
+  expect((await lines(ui))[2]).toStartWith("> github-pat");
+  expect(host.verbs).toEqual(["captures"]);
+  await ui.unmount();
+});
+
 test("an empty index says nothing was captured", async ($, on) => {
   bin(on, []);
   for (const surface of SURFACES) {
-    const ui = await mountPane($, surface);
+    const ui = await openPane($, surface);
     expect(await lines(ui)).toEqual(["Nothing was captured."]);
     await press(ui, "delete", "y");
     await ui.unmount();

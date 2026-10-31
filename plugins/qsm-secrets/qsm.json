@@ -155,7 +155,7 @@
         ]
       },
       "qsm-secrets rename": {
-        "description": "Rename a stored key without its value leaving this process: the new entry is written and read back equal before the old one is removed, and an existing target is refused",
+        "description": "Rename a stored key without its value leaving this process: the new entry is written and read back equal before the old one is removed, a capture index row moves with it, and an existing target is refused",
         "args": [
           {
             "name": "from",

@@ -1051,6 +1051,18 @@ for (const flavor of FLAVORS) {
         expect(textOf(capture(`here: ${token}`))).toMatch(/^here: \{\{secret:cap_/);
       });
 
+      test("a renamed capture keeps its index row under the new name", () => {
+        const run = cli(["capture", "--session", "s1", "--cwd", "/p", "--json"], { input: token });
+        const [first] = field(envelope(run).data, "captured", isCaptured);
+        const id = first?.id ?? "";
+        expect(cli(["rename", id, "kept", "--folder", "capture"]).code).toBe(0);
+
+        const listed = envelope(cli(["captures", "--json"])).data.rows;
+        expect(listed).toMatchObject([
+          { namespace: "capture", key: "kept", kind: "github-pat", session: "s1", cwd: "/p" },
+        ]);
+      });
+
       test("a path and a placeholder pass byte for byte, and need no backend", () => {
         const text = `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s/scratchpad and ${placeholderOf("cap_03c8872d7caa")}`;
         const run = capture(text, { backend: false });

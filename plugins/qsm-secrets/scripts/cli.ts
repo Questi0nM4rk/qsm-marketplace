@@ -21,6 +21,7 @@ import { parseManifest } from "../../../lib/qsm-manifest.ts";
 import { ask } from "../lib/askpass/ask.ts";
 import { argvFor, envLines, linkedKinds } from "../lib/askpass/link.ts";
 import { activeBackend } from "../lib/backend.ts";
+import { rowId } from "../lib/capture-row.ts";
 import { type Check, formatChecks } from "../lib/doctor.ts";
 import { guardCommand } from "../lib/guard.ts";
 import { pathEnvOf } from "../lib/protected.ts";
@@ -196,7 +197,7 @@ const captures: Handler = () => {
             [
               row.capturedAt,
               row.kind,
-              `${row.namespace}/${row.key}`,
+              rowId(row.namespace, row.key),
               row.session ?? "-",
               row.cwd ?? "-",
             ].join("  "),

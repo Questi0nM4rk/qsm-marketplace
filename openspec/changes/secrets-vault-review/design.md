@@ -29,18 +29,26 @@ what the terminal tree gives for free.
    entry is stored, newest first, and removes rows whose entry is gone, naming each in a warning:
    a half-state that still works. The pane and a person at a shell read the same verb (one logic,
    two doors).
-4. **`rm` and `prune` own the removal of a row**, after the backend removed the entry; a row whose
-   removal fails after the entry went is the drift `captures` repairs on its next run.
+4. **The index follows the backend operation, not the verb.** One step in `lib/run.ts` removes an
+   entry from the backend and then its row, or moves the row when the entry was copied to a new
+   name first; `rm`, `prune` and `rename` all go through it, so a renamed capture keeps its kind,
+   time, session and cwd under the new id. A row whose update fails after the entry went is the
+   drift `captures` repairs on its next run.
 5. **The pane is a `Client`** in `hooks/review.tsx`, because the person asked for `DEL` and only a
    `Client` gets raw keys. The hooks module registers the command `qsm-secrets` (args `review`),
-   opens the pane with focus, loads `captures --json` into the `Client`'s props, and answers its
-   `ui.message` posts: `delete <namespace>/<key>` runs `qsm-secrets rm`, then reloads. The 3-second
-   arm lives in the `Client`'s own timer, so a reload of the hooks module cannot leave a row armed.
+   lists `captures --json` when the command runs into the session's state (`$.state`), opens the
+   pane with focus, and draws the `Client` from that cache, so a render spawns nothing (a pane drawn
+   before the command ever ran lists the rows itself, because a render may not write state). It
+   answers the `ui.message` post `{ delete: <namespace>/<key> }` only for an id the cache lists,
+   runs `qsm-secrets rm`, and drops the row from the cache and the props it answers, one spawn per
+   delete. The 3-second arm lives in the `Client`: a one-shot timer started with the arm, so a
+   reload of the hooks module cannot leave a row armed.
 6. **A row shows kind, local date and time, the working directory's last segment, and the session's
-   first eight characters**, e.g. `private-key  31 Oct 14:02  qsm-marketplace  42ffbd7c`. Escape
-   returns focus to the prompt; the pane stays until closed.
+   first eight characters**, e.g. `private-key  31 Oct, 14:02  qsm-marketplace  42ffbd7c`
+   (`toLocaleString("en-GB")`). Escape returns focus to the prompt; the pane stays until closed.
 7. **A failed delete keeps the row** and shows the outcome code beside it (`missing`, `failed`),
-   and the toast names the id and the code; nothing is retried.
+   kept in the cache beside the rows so a redraw shows it too, and the toast names the id and the
+   code; nothing is retried.
 
 ## Risks / Trade-offs
 

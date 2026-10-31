@@ -30,7 +30,8 @@ or any part of one. `captures` lists the rows whose entry is still stored, newes
 each: time, kind, `<namespace>/<key>`, session, working directory (`--json` answers
 `{ rows: [{ namespace, key, kind, capturedAt, session, cwd }] }`); a row whose entry was removed
 with the backend's own tool is dropped from the index and named in a warning, and an empty index
-prints `nothing was captured`. `rm` and `prune` remove the row with the entry.
+prints `nothing was captured`. `rm` and `prune` remove the row with the entry, and `rename` files it
+under the new name.
 
 `/qsm-secrets review` in a session opens a pane over the same rows (kind, local date and time, the
 working directory's last segment, the session's first eight characters). The arrows move, `d` or

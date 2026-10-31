@@ -8,7 +8,8 @@ import { writeAtomic } from "../../../lib/fs.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
-import { type CaptureRow, indexPath, readIndex, updateIndex, withoutRows } from "./captures.ts";
+import { type CaptureListing, rowId } from "./capture-row.ts";
+import { addRows, type CaptureIndex, forgetRows, moveRow, readRows } from "./captures.ts";
 import {
   formatMetadata,
   keyExists,
@@ -81,6 +82,7 @@ export async function runCapture(origin: CaptureOrigin): Promise<Capture> {
     fail("capture reads its text from stdin", "pipe the text in", "usage");
   }
   let backend: Backend | undefined;
+  let stored: Set<string> | undefined;
   const active = (): Backend => {
     backend ??= activeBackend();
     return backend;
@@ -89,26 +91,26 @@ export async function runCapture(origin: CaptureOrigin): Promise<Capture> {
     store: (namespace, key, value) => {
       active().store(namespace, key, new TextEncoder().encode(value));
     },
-    exists: (namespace, key) => keyExists(active().entries(), namespace, key),
+    exists: (namespace, key) => {
+      // Listed once per capture: one backend list, however many names the prompt gave.
+      stored ??= new Set(
+        active()
+          .entries()
+          .map((entry) => rowId(entry.folder, entry.name)),
+      );
+      return stored.has(rowId(namespace, key));
+    },
   });
   if (done.captured.length > 0) {
     const capturedAt = new Date().toISOString();
-    updateIndex(indexPath(process.env), (index) => {
-      const added = { ...index };
-      for (const { id, kind } of done.captured) {
-        const { namespace, key } = locate(id);
-        added[`${namespace}/${key}`] = { kind, capturedAt, ...origin };
-      }
-      return added;
-    });
+    const rows: CaptureIndex = {};
+    for (const { id, kind } of done.captured) {
+      const { namespace, key } = locate(id);
+      rows[rowId(namespace, key)] = { kind, capturedAt, ...origin };
+    }
+    addRows(process.env, rows);
   }
   return done;
-}
-
-/** One row of `captures`: an index row whose entry is still stored. Never a value. */
-export interface CaptureListing extends CaptureRow {
-  readonly namespace: string;
-  readonly key: string;
 }
 
 /**
@@ -117,8 +119,7 @@ export interface CaptureListing extends CaptureRow {
  * An empty index needs no backend.
  */
 export function runCaptures(): { rows: CaptureListing[]; gone: string[] } {
-  const path = indexPath(process.env);
-  const index = readIndex(path);
+  const index = readRows(process.env);
   if (Object.keys(index).length === 0) {
     return { rows: [], gone: [] };
   }
@@ -134,17 +135,32 @@ export function runCaptures(): { rows: CaptureListing[]; gone: string[] } {
     }
   }
   if (gone.length > 0) {
-    updateIndex(path, (now) => withoutRows(now, gone));
+    forgetRows(process.env, gone);
   }
   return { rows: rows.toSorted((a, b) => b.capturedAt.localeCompare(a.capturedAt)), gone };
 }
 
-/** Drops the index rows of entries just removed from the backend. */
-function forgetCaptures(ids: readonly string[]): void {
-  const path = indexPath(process.env);
-  if (ids.length > 0 && existsSync(path)) {
-    updateIndex(path, (index) => withoutRows(index, ids));
+/**
+ * Removes an entry from the backend and its capture index row with it, or, when the entry was
+ * copied to `movedTo` first, files the row under that name: the index follows the backend. False
+ * when the backend refused, and then the row stays.
+ */
+function removeEntry(
+  backend: Backend,
+  namespace: string,
+  key: string,
+  movedTo?: { namespace: string; key: string },
+): boolean {
+  if (!backend.remove(namespace, key)) {
+    return false;
   }
+  const id = rowId(namespace, key);
+  if (movedTo === undefined) {
+    forgetRows(process.env, [id]);
+  } else {
+    moveRow(process.env, id, rowId(movedTo.namespace, movedTo.key));
+  }
+  return true;
 }
 
 /** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
@@ -371,10 +387,9 @@ export function runRemove(
   key: string,
 ): { namespace: string; key: string; removed: true } {
   const backend = backendHolding(namespace, key);
-  if (!backend.remove(namespace, key)) {
+  if (!removeEntry(backend, namespace, key)) {
     fail(`could not remove ${key}`, `run ${backend.name} remove ${key} yourself to see why`);
   }
-  forgetCaptures([`${namespace}/${key}`]);
   return { namespace, key, removed: true };
 }
 
@@ -507,7 +522,7 @@ export function runRename(
     }
   };
   copyTo(holds);
-  if (!backend.remove(from.namespace, from.key) && !legacy) {
+  if (!removeEntry(backend, from.namespace, from.key, to) && !legacy) {
     fail(
       `copied to ${label(to)} but could not remove ${label(from)}`,
       `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
@@ -548,11 +563,10 @@ export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
     .toSorted((a, b) => a.localeCompare(b));
   if (!dryRun) {
     for (const id of ids) {
-      if (!backend.remove(CAPTURE_NAMESPACE, id)) {
+      if (!removeEntry(backend, CAPTURE_NAMESPACE, id)) {
         fail(`could not remove ${id}`, "run qsm-secrets prune again after qsm-secrets doctor");
       }
     }
-    forgetCaptures(ids.map((id) => `${CAPTURE_NAMESPACE}/${id}`));
   }
   return { ids, dryRun };
 }

@@ -5,14 +5,22 @@
 `qsm-secrets capture` SHALL, for each secret it stores, write one row to the index file
 `<dataDir>/qsm-secrets/captures.json` keyed by `<namespace>/<key>`, holding the secret's kind, the
 capture time, the session id and the working directory it was given with `--session` and `--cwd`.
-The index SHALL never hold a value or any part of one. Two captures that run at once SHALL both keep
-their rows. The `prompt.submit` hook SHALL pass the session id and the working directory.
+The index SHALL never hold a value or any part of one. A `rename` of a captured entry SHALL file its
+row under the new name with its kind, time, session and working directory kept. Two captures that
+run at once SHALL both keep their rows. The `prompt.submit` hook SHALL pass the session id and the
+working directory.
 
 #### Scenario: a capture writes its row
 
 - **WHEN** a prompt with one private key is captured in session `s1` under `/home/u/proj`
 - **THEN** the index holds one row for the new id with kind `private-key`, a capture time, session
   `s1` and cwd `/home/u/proj`, and no byte of the key
+
+#### Scenario: a renamed capture keeps its row
+
+- **WHEN** a captured entry is renamed with `qsm-secrets rename`
+- **THEN** `qsm-secrets captures` lists it under the new name with its kind, time, session and cwd,
+  and no longer under the old one
 
 #### Scenario: two captures at once keep both rows
 
