@@ -28,7 +28,7 @@ interface Kept extends Timing {
 const seconds = (ms: number): string => (ms / 1000).toFixed(1);
 
 /** The report line for each run over `targetMs`. */
-export function slowLines(point: Point, timings: readonly Timing[], targetMs: number): string[] {
+function slowLines(point: Point, timings: readonly Timing[], targetMs: number): string[] {
   return timings
     .filter(({ ms }) => ms > targetMs)
     .map(
@@ -80,7 +80,7 @@ function byChecker(runs: readonly Kept[]): Map<string, Kept[]> {
 }
 
 /** Adds this run's timings at `point`, keeping the last KEPT_RUNS of each checker. */
-export function recordTimings(root: string, point: Point, timings: readonly Timing[]): void {
+function recordTimings(root: string, point: Point, timings: readonly Timing[]): void {
   if (timings.length === 0) {
     return;
   }
