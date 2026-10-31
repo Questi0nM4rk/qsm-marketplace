@@ -174,7 +174,6 @@ export const POINTS = {
 export type StorePoint = Exclude<Point, "edit">;
 export const storePointOf = (point: Point): StorePoint => (point === "edit" ? "pre-commit" : point);
 
-const FROM_EDIT: readonly Point[] = POINT_NAMES;
 const FROM_COMMIT: readonly Point[] = ["pre-commit", "pre-push", "ci"];
 const FROM_PUSH: readonly Point[] = ["pre-push", "ci"];
 
@@ -257,7 +256,6 @@ const syntaxProbe = (flags: readonly string[]): Scoring => ({
 
 const RUFF = {
   language: "py",
-  points: FROM_EDIT,
   extensions: [".py", ".pyi"],
   binary: "ruff",
   install: uvTool("ruff"),
@@ -444,7 +442,7 @@ export const RUSTFMT = { edition: 2021 };
 export const SHFMT_STYLE = ["-i", "2", "-ci", "-bn"];
 
 const SHELLMETRICS_SPEC = {
-  points: FROM_EDIT,
+  points: POINT_NAMES,
   binary: "shellmetrics",
   install: SHELLMETRICS_INSTALL,
   fileSet: "changed",
@@ -463,7 +461,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "yamllint",
     measures: { counts: "yamllint rule violations, one per `file:line:col` diagnostic on stdout" },
     language: "docs",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".yml", ".yaml"],
     binary: "yamllint",
     install: systemPackage("yamllint"),
@@ -476,7 +474,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "taplo",
     measures: { counts: "TOML lint errors, one per `error:` line taplo prints on stderr" },
     language: "docs",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".toml"],
     binary: "taplo",
     install: systemPackage("taplo-cli"),
@@ -492,7 +490,7 @@ const SPECS: readonly CheckSpec[] = [
         "markdown rule violations, the number in markdownlint's own `Summary: N issues` (or `N error(s)`) line",
     },
     language: "docs",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".md", ".markdown"],
     binary: "markdownlint-cli2",
     install: bunGlobal("markdownlint-cli2"),
@@ -507,7 +505,7 @@ const SPECS: readonly CheckSpec[] = [
       counts: "oxlint diagnostics about the code, type-aware rules included, one per diagnostic",
     },
     language: "ts",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
     binary: "oxlint",
     // tsgolint runs the type-aware rules; oxlint finds it beside itself.
@@ -595,7 +593,7 @@ const SPECS: readonly CheckSpec[] = [
       counts: "clone pairs, the number in jscpd's own report at statistics.total.clones",
     },
     language: "ts",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".ts", ".tsx", ".js", ".jsx"],
     binary: "jscpd",
     install: bunGlobal("jscpd"),
@@ -634,6 +632,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "ruff",
     measures: { counts: "ruff lint rule violations, one per JSON diagnostic" },
     ...RUFF,
+    points: POINT_NAMES,
     args: (files) => ["check", "--output-format=json", "--exit-zero", ...files],
     count: (stdout) => countRuff(stdout),
   },
@@ -679,7 +678,7 @@ const SPECS: readonly CheckSpec[] = [
     guardsSafety: true,
     measures: { counts: "security issues, one per result" },
     language: "py",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".py"],
     binary: "bandit",
     install: uvTool("bandit"),
@@ -714,7 +713,7 @@ const SPECS: readonly CheckSpec[] = [
       // separate bashism checker runs
     },
     language: "shell",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".sh", ".bash"],
     binary: "shellcheck",
     install: systemPackage("shellcheck"),
@@ -784,7 +783,7 @@ const SPECS: readonly CheckSpec[] = [
       counts: "functions whose cyclomatic complexity exceeds the threshold, one per function",
     },
     language: "multi",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".ts", ".tsx", ".js", ".py", ".cs", ".rs", ".go"],
     binary: "lizard",
     install: uvTool("lizard"),
@@ -812,7 +811,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "zsh-syntax",
     measures: { counts: "files zsh's own parser refuses, one per file" },
     language: "zsh",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".zsh"],
     binary: "zsh",
     install: systemPackage("zsh"),
@@ -871,7 +870,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "fish-syntax",
     measures: { counts: "files fish's own parser refuses, one per file" },
     language: "fish",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".fish"],
     binary: "fish",
     install: systemPackage("fish"),
@@ -924,7 +923,7 @@ const SPECS: readonly CheckSpec[] = [
     name: "rustfmt",
     measures: { counts: "files whose formatting differs from rustfmt's, one per file" },
     language: "rust",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".rs"],
     binary: "rustfmt",
     install: rustupComponent("rustfmt"),
@@ -1023,7 +1022,7 @@ const SPECS: readonly CheckSpec[] = [
         "devskim findings, one per SARIF result or, on versions printing a bare array, one per entry as a bare total",
     },
     language: "dotnet",
-    points: FROM_EDIT,
+    points: POINT_NAMES,
     extensions: [".cs"],
     binary: "devskim",
     install: dotnetTool("Microsoft.CST.DevSkim.CLI"),

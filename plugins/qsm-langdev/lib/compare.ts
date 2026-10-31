@@ -1199,10 +1199,6 @@ async function verdictOnEngine(
   return (await verdictFor(spec, sides, setOf(spec), context)).verdict;
 }
 
-/**
- * Compares the tree at `beforeRef` against `after` (a commit, or the working tree) through every
- * checker the change selects, each over the file set it declares.
- */
 /** The point a run is at, its target and the limits it applies: the point's, unless a test sets one. */
 function runLimits(options: CompareOptions): {
   at: Point;
@@ -1220,6 +1216,10 @@ function runLimits(options: CompareOptions): {
   };
 }
 
+/**
+ * Compares the tree at `beforeRef` against `after` (a commit, or the working tree) through every
+ * checker the change selects, each over the file set it declares.
+ */
 export async function compareTrees(
   root: string,
   beforeRef: string | null,

@@ -26,7 +26,6 @@ import { isRecord } from "../../../lib/outcome.ts";
 import { compareTrees, type Verdict } from "../lib/compare.ts";
 import { isLangdevRepo, readGatesConfig } from "../lib/config.ts";
 import { editorOf } from "../lib/hookio.ts";
-import { POINTS } from "../lib/registry.ts";
 import {
   clearBlocks,
   type EditedTree,
@@ -39,16 +38,14 @@ import { compareStructure, verdict } from "../lib/structure.ts";
 
 const GATE = "langdev";
 const MAX_BLOCKS = 3;
-const DEFAULT_CHECK_BUDGET_MS = POINTS["pre-commit"].timeoutMs;
-
 /**
- * Each checker's time limit: the commit's timeout, because the gate runs at pre-commit, or
- * QSM_LANGDEV_GATE_BUDGET_MS when it is a positive whole number of milliseconds, which is how a
- * test reaches the not-measured path without waiting out the default.
+ * A checker's time limit set by a test, QSM_LANGDEV_GATE_BUDGET_MS when it is a positive whole
+ * number of milliseconds, so a test reaches the not-measured path without waiting; otherwise none,
+ * and the run takes the pre-commit timeout from POINTS.
  */
-function checkBudgetMs(): number {
+function testBudgetMs(): { timeoutMs?: number } {
   const override = Number(process.env.QSM_LANGDEV_GATE_BUDGET_MS);
-  return Number.isInteger(override) && override > 0 ? override : DEFAULT_CHECK_BUDGET_MS;
+  return Number.isInteger(override) && override > 0 ? { timeoutMs: override } : {};
 }
 
 function log(msg: string): void {
@@ -81,7 +78,7 @@ async function judgeTree(
   const { verdicts } = await compareTrees(tree.root, tree.start, "worktree", {
     at: "pre-commit",
     languages,
-    timeoutMs: checkBudgetMs(),
+    ...testBudgetMs(),
   });
   const environment = verdicts.filter((v) => !v.pass && gap(v));
   const worse = verdicts.filter((v) => !(v.pass || gap(v)));

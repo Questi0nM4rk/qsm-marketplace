@@ -2,10 +2,11 @@
 // last runs are kept under `.qsm-langdev/timings/<point>.jsonl` so doctor can name a checker that is
 // slow every time.
 
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeAtomic } from "../../../lib/fs.ts";
 import { cacheDir } from "./cache-dir.ts";
+import { isErrno } from "./errors.ts";
 import { num, recordOf, str } from "./json.ts";
 import { type Point, POINT_NAMES, POINTS } from "./registry.ts";
 
@@ -18,19 +19,15 @@ export interface Timing {
   ms: number;
 }
 
-/** A kept run: a timing and when it ran (ISO 8601). */
+/** A kept run: a timing and when it ran (ISO 8601), for the person reading the file. */
 interface Kept extends Timing {
   at: string;
 }
 
 const seconds = (ms: number): string => (ms / 1000).toFixed(1);
 
-/** The report line for each run over the point's target. */
-export function slowLines(
-  point: Point,
-  timings: readonly Timing[],
-  targetMs: number = POINTS[point].targetMs,
-): string[] {
+/** The report line for each run over `targetMs`. */
+export function slowLines(point: Point, timings: readonly Timing[], targetMs: number): string[] {
   return timings
     .filter(({ ms }) => ms > targetMs)
     .map(
@@ -44,26 +41,41 @@ function timingsPath(root: string, point: Point): string {
 }
 
 /** Every kept run at `point`, oldest first; a line that is not a timing is no run. */
-export function readTimings(root: string, point: Point): Kept[] {
-  const path = timingsPath(root, point);
-  if (!existsSync(path)) {
-    return [];
+function readTimings(root: string, point: Point): Kept[] {
+  let text: string;
+  try {
+    text = readFileSync(timingsPath(root, point), "utf8");
+  } catch (cause) {
+    if (isErrno(cause) && cause.code === "ENOENT") {
+      return [];
+    }
+    throw cause;
   }
-  return readFileSync(path, "utf8")
-    .split("\n")
-    .flatMap((line) => {
-      let value: unknown;
-      try {
-        value = JSON.parse(line);
-      } catch {
-        return [];
-      }
-      const record = recordOf(value);
-      const ms = num(record?.ms);
-      return record === null || ms === undefined
-        ? []
-        : [{ checker: str(record.checker), ms, at: str(record.at) }];
-    });
+  return text.split("\n").flatMap((line) => {
+    if (line === "") {
+      return [];
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      return [];
+    }
+    const record = recordOf(value);
+    const ms = num(record?.ms);
+    return record === null || ms === undefined
+      ? []
+      : [{ checker: str(record.checker), ms, at: str(record.at) }];
+  });
+}
+
+/** Each checker's runs, oldest first. */
+function byChecker(runs: readonly Kept[]): Map<string, Kept[]> {
+  const groups = new Map<string, Kept[]>();
+  for (const run of runs) {
+    groups.set(run.checker, [...(groups.get(run.checker) ?? []), run]);
+  }
+  return groups;
 }
 
 /** Adds this run's timings at `point`, keeping the last KEPT_RUNS of each checker. */
@@ -73,10 +85,7 @@ export function recordTimings(root: string, point: Point, timings: readonly Timi
   }
   const at = new Date().toISOString();
   const all = [...readTimings(root, point), ...timings.map((timing) => ({ ...timing, at }))];
-  const kept = all.filter(
-    (timing, index) =>
-      all.slice(index + 1).filter((later) => later.checker === timing.checker).length < KEPT_RUNS,
-  );
+  const kept = [...byChecker(all).values()].flatMap((runs) => runs.slice(-KEPT_RUNS));
   cacheDir(root, "timings");
   const lines = kept.map(({ checker, ms, at: ran }) =>
     JSON.stringify({ checker, ms: Math.round(ms), at: ran }),
@@ -95,14 +104,12 @@ function median(values: readonly number[]): number {
 /** One line per checker whose median over its kept runs at a point is above that point's target. */
 export function slowCheckers(root: string): string[] {
   return POINT_NAMES.flatMap((point) => {
-    const runs = readTimings(root, point);
     const { targetMs } = POINTS[point];
-    return [...new Set(runs.map(({ checker }) => checker))].flatMap((checker) => {
-      const times = runs.filter((run) => run.checker === checker).map(({ ms }) => ms);
-      const ms = median(times);
+    return [...byChecker(readTimings(root, point))].flatMap(([checker, runs]) => {
+      const ms = median(runs.map((run) => run.ms));
       return ms > targetMs
         ? [
-            `${checker} is slow at ${point}: median ${seconds(ms)} s over ${times.length} runs, target ${seconds(targetMs)} s`,
+            `${checker} is slow at ${point}: median ${seconds(ms)} s over ${runs.length} runs, target ${seconds(targetMs)} s`,
           ]
         : [];
     });

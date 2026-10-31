@@ -4,6 +4,7 @@
 // event is SubagentStop, which has no function form, and a function hook cannot block a stop.
 import type { Caught, EngineInterface, On } from "claude-code";
 import { gitDenial } from "../lib/blocked-git.ts";
+import { arrayOf, recordOf } from "../lib/json.ts";
 import { registerNoun } from "./noun.generated.ts";
 
 const EDIT_TOOLS: ReadonlySet<string> = new Set(["Write", "Edit", "NotebookEdit"]);
@@ -19,10 +20,9 @@ function failed($: EngineInterface, event: string, error: Caught["error"]): stri
 /** The `text` of the edited verb's data, for the model; null when the file has no finding. Its `log`
  * lines, how the run went, go to the debug log, because the model cannot act on them. */
 function findingsText($: EngineInterface, data: unknown): string | null {
-  const log: unknown =
-    typeof data === "object" && data !== null ? Reflect.get(data, "log") : undefined;
-  for (const line of Array.isArray(log) ? log : []) {
-    $.ui.log(String(line), { to: "debug" });
+  const log = (arrayOf(recordOf(data)?.log) ?? []).filter((line) => typeof line === "string");
+  if (log.length > 0) {
+    $.ui.log(log.join("\n"), { to: "debug" });
   }
   const text = stringField(data, "text");
   return text !== null && text.length > 0 ? text : null;
