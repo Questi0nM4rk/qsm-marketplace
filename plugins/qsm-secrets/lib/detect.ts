@@ -87,7 +87,7 @@ const NOT_SECRET_KEY = /(?:^|_)(?:PUBLIC|PRIMARY|FOREIGN)_KEY$/;
 // What is plainly not a value: a literal, a template, a stopword, a type name, a reference to a
 // variable or to code, a path, a URL, an SSH key type, a YAML tag, a slug of five words or more.
 const NOT_A_VALUE =
-  /^(?:true|false|null|nil|none|changeme|example|your-[\p{L}\p{N}-]+|basic|bearer|digest|oauth2?|oidc|saml|ntlm|kerberos|negotiate)$/iu;
+  /^(?:true|false|null|nil|none|changeme|example|your-[\p{L}\p{N}-]+|(?:basic|bearer|digest|oauth2?|oidc|saml|ntlm|kerberos|negotiate)(?:[-_][\p{L}\p{N}]+)*)$/iu;
 const TYPE_NAME =
   /^(?:string|number|boolean|bigint|any|unknown|object|undefined|void|never|int|integer|float|double|str|bool|bytes|required|optional)(?:\[\])?$/i;
 const TEMPLATE = /^(?:<[^<>]*>|\{\{[^{}]*\}\}|\{[^{}]*\}|%\(\w+\)[sd])$/;

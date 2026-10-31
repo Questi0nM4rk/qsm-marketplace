@@ -536,6 +536,7 @@ const CODE_AND_PROSE: readonly string[] = [
   "set the auth=oauth2 flow",
   "token_type: bearer",
   "auth: negotiate",
+  "auth: oauth2-proxy",
   "AUTH_MODE=kerberos",
   `${PASS} managers are great\nand this is another line`,
   `${PASS}: \${DB_${PASS.toUpperCase()}:-postgres}`,

@@ -45,7 +45,8 @@ text an earlier one claimed:
    `GITHUB_TOKEN`, a lowercase slug such as `qsm-secrets` or `tls-secret`, a file name such as
    `creds-2024.json`), a lowercase slug of five words or more, one character repeated, or a run of
    the alphabet or the digits. An auth scheme name (`basic`, `bearer`, `digest`, `oauth`, `oauth2`,
-   `oidc`, `saml`, `ntlm`, `kerberos`, `negotiate`) is not a value either. An UPPER_SNAKE name, a
+   `oidc`, `saml`, `ntlm`, `kerberos`, `negotiate`), alone or as the first part of a name
+   (`oauth2-proxy`), is not a value either. An UPPER_SNAKE name, a
    lowercase slug or a file name is refused only when no segment between `-`, `_` or `.` mixes
    letters and digits, and never when assigned with `=` or `:` to a name holding a password word
    (`password`, `passwd`, `pwd`, `pass`, `passphrase`, `heslo`), so a generated password of
