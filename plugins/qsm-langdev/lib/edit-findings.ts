@@ -5,7 +5,7 @@
 // file against HEAD again.
 
 import { dirname, relative } from "node:path";
-import { checkInPlace } from "./compare.ts";
+import { checkInPlace, scoredAtCommit } from "./compare.ts";
 import { findRepoRoot, isLangdevRepo, readGatesConfig } from "./config.ts";
 import { fixFiles } from "./fixers.ts";
 import { POINTS } from "./registry.ts";
@@ -37,7 +37,8 @@ function modelText(file: string, findings: readonly string[]): string | null {
 }
 
 /** The report for one edited file; nothing at all for no repository, a repository that never ran
- * `qsm-langdev init`, or a file outside it. */
+ * `qsm-langdev init`, a file outside it, or a file no commit scores (ignored or export-ignore), which
+ * no fixer touches either. */
 export async function editFindings(editor: Editor, file: string): Promise<EditReport> {
   const root = findRepoRoot(dirname(file));
   if (root === null) {
@@ -48,7 +49,7 @@ export async function editFindings(editor: Editor, file: string): Promise<EditRe
     return NOTHING;
   }
   const relPath = relative(root, file);
-  if (relPath.startsWith("..")) {
+  if (relPath.startsWith("..") || !scoredAtCommit(root, relPath)) {
     return NOTHING;
   }
   fixFiles(root, [relPath]);

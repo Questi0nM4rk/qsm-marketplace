@@ -2,7 +2,7 @@
 // the --json envelope out. Its text is what the hook hands the model as context.
 
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isolatedEnv, runBin } from "../../../lib/fixtures/cli.ts";
 import { commit, git } from "../../../lib/fixtures/git.ts";
@@ -127,6 +127,29 @@ describe("qsm-langdev edit hook: a repository that never ran init", () => {
 
     expect(r.status).toBe(0);
     expect(r.text).toContain("new.md:3: MD040/fenced-code-language");
+  });
+
+  test("A file git ignores is neither fixed nor checked: no commit will score it", () => {
+    const { root } = editMarkdown("# notes\n");
+    writeFileSync(join(root, ".gitignore"), "dist/\n");
+    commit(root, "ignore dist");
+    mkdirSync(join(root, "dist"));
+    const content = "# out\n\n*   one\n\n```\nx\n```\n";
+    writeFileSync(join(root, "dist", "out.md"), content);
+
+    const r = runEdited(join(root, "dist", "out.md"));
+
+    expect(r.text).toBeNull();
+    expect(readFileSync(join(root, "dist", "out.md"), "utf8")).toBe(content);
+  });
+
+  test("A file of a language the repository does not gate tells the model nothing", () => {
+    const { root } = editMarkdown("# notes\n");
+    writeFileSync(join(root, "a.py"), "import os\n");
+
+    const r = runEdited(join(root, "a.py"));
+
+    expect(r.text).toBeNull();
   });
 
   test("A finding the file already had at HEAD is reported: the rules decide, not HEAD", () => {

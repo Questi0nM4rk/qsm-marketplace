@@ -49,7 +49,7 @@ import {
   type ResolvedPack,
   resolvePacks,
 } from "./rule-packs.ts";
-import { withCommitTree, withScratchDir, withWorktreeTree } from "./tree.ts";
+import { isIgnored, withCommitTree, withScratchDir, withWorktreeTree } from "./tree.ts";
 
 const REPORT_SCRATCH_PREFIX = "qsm-langdev-report-";
 
@@ -725,6 +725,11 @@ function scoredPaths(root: string, paths: readonly string[]): string[] {
   return paths.filter((path) => !ignored.has(path));
 }
 
+/** Whether a commit would ever score `file`: git does not ignore it and it is not export-ignore. */
+export function scoredAtCommit(root: string, file: string): boolean {
+  return !isIgnored(root, file) && scoredPaths(root, [file]).length === 1;
+}
+
 function changedBetween(root: string, beforeRef: string, after: string): string[] | null {
   const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
   // --no-renames: a moved file is in the set under both names.
@@ -1367,7 +1372,10 @@ export async function checkInPlace(
     findings.push(...findingLines(spec, one, file));
     log.push(`${spec.name}: ${one.tally.total} findings`);
   }
-  const timed = runs.map(({ spec, ms }) => ({ checker: spec.name, ms }));
+  // A run that scored, or ran out its time, is a run; a binary that never started is none.
+  const timed = runs
+    .filter(({ one }) => "tally" in one || one.timedOut === true)
+    .map(({ spec, ms }) => ({ checker: spec.name, ms }));
   log.push(...recordRun(root, "edit", timed, POINTS.edit.targetMs));
   return { findings, log };
 }

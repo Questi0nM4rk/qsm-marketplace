@@ -103,6 +103,11 @@ function gitLines(root: string, args: readonly string[], input?: string): string
   return result.stdout.split("\0").filter((path) => path.length > 0);
 }
 
+/** Whether git ignores `path`: a tracked file never is, wherever it sits. */
+export function isIgnored(root: string, path: string): boolean {
+  return gitLines(root, ["check-ignore", "-z", "--stdin"], path).length > 0;
+}
+
 // obj/ holds dotnet's restore (project.assets.json), which `dotnet format --no-restore` reads.
 const DEPENDENCY_DIRS = new Set(["node_modules", ".venv", "obj"]);
 const TSCONFIG = /^tsconfig(?:\.[^/]*)?\.json$/;
