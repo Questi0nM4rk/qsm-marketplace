@@ -34,7 +34,7 @@
 
 ## 4. The real path
 
-- [ ] 4.1 The toast names the kind. Proof: the installed `qsm-secrets capture` on each producer's
+- [x] 4.1 The toast names the kind. Proof: the installed `qsm-secrets capture` on each producer's
       real output (piped, in a scratch vault namespace) prints one placeholder per block, and a
       prompt of a few KB is captured in under 5 ms of detection time, measured. Blocks: 3.3.
 - [ ] 4.2 Gates: validate, lint, typecheck, `bun test ./ ./.gates`, `test:hooks`. Blocks: 4.1.

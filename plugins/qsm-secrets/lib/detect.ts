@@ -153,10 +153,13 @@ function bareRuns(text: string): Span[] {
     const start = m.index + offset;
     const token = m[0].slice(offset);
     const plain = !(token.includes(".") || token.startsWith("/") || token.startsWith("~"));
-    const before = text.slice(0, m.index);
+    if (!plain || token.length < BARE_TOKEN_MIN) {
+      return [];
+    }
     // A public key and a hash named as one (`sha256:<hex>`) say what follows is not a secret.
+    const before = text.slice(0, m.index);
     const named = SSH_KEY_TYPE.test(before) || HASH_BEFORE.test(before);
-    return plain && !named && token.length >= BARE_TOKEN_MIN && isBareSecret(token)
+    return !named && isBareSecret(token)
       ? [{ start, end: start + token.length, kind: "random-token" }]
       : [];
   });

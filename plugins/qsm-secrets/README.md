@@ -78,20 +78,22 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
 - Capture: the terminal already showed the text, and a secret sent before the hook existed is not
   recalled. A failed capture stops the prompt (it is dropped with the cause and the fix, and you
   send it again). A hex-only secret is caught only after a credential name (`token=`, `secret:`).
-- Masking: every row is masked against every stored value of six or more characters, one process
-  per row. Not masked: a value printed re-encoded (base64, escaped), inside an image or PDF, or on the
-  screen just before its row is rewritten; the session end swaps what the engine stores as made. A row the mask cannot
-  read is withheld, with a toast. Without a chosen backend every row is withheld.
+- Masking: every row is masked against every stored value of six or more characters, one process per
+  row. Not masked: a value printed re-encoded (base64, escaped), inside an image or PDF, or on the
+  screen just before its row is rewritten; the session end swaps what the engine stores as made. A
+  row the mask cannot read is withheld, with a toast. Without a chosen backend every row is
+  withheld.
 - `prune` trusts the transcripts: run it after your sessions end, since a capture made in a live
   session is named in its transcript only once the prompt is rewritten.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.
 - `set` needs a terminal, or `--gui`, and stores one line only.
-- The default namespace is `qsm` (`--folder` or `QSM_SECRETS_FOLDER`); `list` with neither shows every
-  namespace. A libsecret entry stored before namespaces existed fails `list` and `mask` until
+- The default namespace is `qsm` (`--folder` or `QSM_SECRETS_FOLDER`); `list` with neither shows
+  every namespace. A libsecret entry stored before namespaces existed fails `list` and `mask` until
   `qsm-secrets rename <key> <new> --legacy` moves it into one.
-- The askpass pane runs on Quickshell (`qs` on PATH) as an instance of its own, started on demand and
-  addressed by its config path. Without `qs` or the installed pane the call answers `missing`; there
-  is no terminal fallback. 120 seconds without an answer, or Escape, is `failed` with the reason.
+- The askpass pane runs on Quickshell (`qs` on PATH) as an instance of its own, started on demand
+  and addressed by its config path. Without `qs` or the installed pane the call answers `missing`;
+  there is no terminal fallback. 120 seconds without an answer, or Escape, is `failed` with the
+  reason.
 - The pane's colours are the qsm palette in `~/.config/qsm-marketplace/colors.json`, which install
   writes once from the defaults and never replaces; an open pane takes an edit at once.
 - The pane names the parent process that asked, with its executable and the first 12 hex of its
@@ -101,17 +103,22 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   target, runs a `qsm-askpass-<kind>` link or `qsm-secrets askpass <kind>` itself, or names the
   socket directory; a determined agent can still route around it. Peer credentials on the reply
   socket are not checked.
-- With `SSH_ASKPASS_PROMPT=confirm` ssh gets a yes or no (Allow is exit 0), with `none` the pane shows
-  the prompt as a notice.
+- With `SSH_ASKPASS_PROMPT=confirm` ssh gets a yes or no (Allow is exit 0), with `none` the pane
+  shows the prompt as a notice.
 - libsecret needs a Secret Service on the session bus (GNOME Keyring, KeePassXC). Without one the
   call answers `missing`. It never falls back to Bitwarden.
 - The content denylist is only as good as the names you approved. A name never written down on
   this machine is not found.
-- Capture catches a known token shape (`ghp_`, `glpat-`, `sk-`, `AKIA`, `xox`, JWT), a value after
-  a credential name (a password from 6 characters), or a 32-character token that is random for its alphabet and is not a path, a
-  name, an id, a hash or base64 of text. On a labelled corpus the test holds precision 1.0 and recall of at least 0.95; that guards a
-  regression and is not the precision on your own text. The model also sees the last four characters when the secret
-  has 20 or more.
+- Capture prefers catching too much: a miss stays in the transcript, a false positive is one vault
+  entry you remove. It catches every armoured BEGIN/END block whatever its label (a private key, an
+  OpenVPN static key, a certificate, a PGP block) as one entry, a known token shape (`ghp_`,
+  `glpat-`, `sk-`, `AKIA`, `xox`, JWT and gitleaks' fixed-prefix provider rules), a value of 6 or
+  more characters after a credential name (English or Czech, such as `heslo`), unless it is a
+  template or a stopword, and a 32-character token that is random for its alphabet and is not a
+  path, a name, an id, a commit, a UUID or base64 of text. The toast names each id and its kind. On
+  a labelled corpus the test holds recall 1.0 and precision of at least 0.85; that guards a
+  regression and is not the precision on your own text. The model also sees the last four
+  characters when the secret has 20 or more.
 - `render` writes to `$XDG_RUNTIME_DIR/qsm-secrets/<session>/<name>` (directory 0700, file 0600).
   The session end removes it.
 - The content denylist lives at `${XDG_CONFIG_HOME:-~/.config}/qsm/content-denylist.toml`, never in
