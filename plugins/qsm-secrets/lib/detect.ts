@@ -4,7 +4,9 @@
 // it is a template or a stopword; a token with no shape of its own is a secret when it is nothing
 // else (a path, a name, a hash, an id, base64 of text) and as random as its alphabet and length allow.
 
-import { type Span, shapeSpans } from "../../../lib/secret-shapes.ts";
+import { blockSpans, type Span, shapeSpans } from "../../../lib/secret-shapes.ts";
+
+type Range = Pick<Span, "start" | "end">;
 
 const BARE_TOKEN_MIN = 32;
 /** A value after a credential name counts from here, whatever its mix: a short token is a token. */
@@ -13,6 +15,9 @@ const CREDENTIAL_VALUE_MIN = 6;
 const RANDOMNESS_FLOOR = 0.8;
 /** A git commit: hex of exactly this length is an id this machine shows every turn. */
 const COMMIT_LENGTH = 40;
+const HEX_ALPHABET = 16;
+/** How far back a public key's type or a hash's name can sit before the run it names. */
+const NAMED_WINDOW = 48;
 const PRINTABLE_SHARE = 0.9;
 const MIN_SEPARATORS = 3;
 const SEPARATOR_RATIO = 0.1;
@@ -21,9 +26,6 @@ const IDENTIFIER_PIECE = 4;
 // Everything a token, a path or a dotted name is made of; a run is judged whole, never in part.
 const RUN = /[A-Za-z0-9_+/=.~-]+/g;
 const PLACEHOLDER = /\{\{secret:[^}]*\}\}(?:…[\w-]{4})?/g;
-const BLOCK_BEGIN = /-----BEGIN ([^\r\n-][^\r\n]*?)-----/g;
-const PUTTY_KEY = /PuTTY-User-Key-File-\d+:/g;
-const PUTTY_MAC = /Private-MAC:[^\r\n]*/;
 // A name that says what follows is a credential. The name is split into its parts (`GITHUB_TOKEN`,
 // `clientSecret`) and one part must be a credential word, in English or Czech, so
 // `authorization_mode` and `passwordless` are not. The value runs to the next space or quote.
@@ -64,11 +66,8 @@ function entropy(token: string): number {
   return bits;
 }
 
-/** The alphabet a token was drawn from: hex is sixteen characters, else its character classes. */
+/** The alphabet a token was drawn from, from the character classes it holds. */
 function alphabetSize(token: string): number {
-  if (HEX.test(token)) {
-    return 16;
-  }
   let size = 0;
   for (const [pattern, add] of [
     [/[a-z]/, 26],
@@ -81,8 +80,7 @@ function alphabetSize(token: string): number {
 }
 
 /** The measured entropy over what a random token of this length and alphabet averages (Miller-Madow). */
-function randomness(token: string): number {
-  const size = alphabetSize(token);
+function randomness(token: string, size: number): number {
   const expected = Math.log2(size) - (size - 1) / (2 * token.length * Math.LN2);
   return entropy(token) / expected;
 }
@@ -103,10 +101,11 @@ function isNamelike(token: string): boolean {
   return separators >= MIN_SEPARATORS && separators / token.length > SEPARATOR_RATIO;
 }
 
-/** camelCase and PascalCase break into long words; a random mixed-case token into runs of one or two. */
+/** camelCase and PascalCase break into long words; a random token, hex included, into letter runs
+ * of one or two. Digits are not words, so a long digit run cannot make a token look like a name. */
 function isCamelWords(token: string): boolean {
-  const pieces = token.match(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+/g) ?? [];
-  return pieces.length > 0 && token.length / pieces.length >= IDENTIFIER_PIECE;
+  const words = token.match(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])/g) ?? [];
+  return words.length > 0 && words.join("").length / words.length >= IDENTIFIER_PIECE;
 }
 
 /** What every judged token is not: an id, a hash, a name, a path, base64 of text. */
@@ -120,19 +119,19 @@ function isSomethingElse(token: string): boolean {
   );
 }
 
-/** A long run with no shape: random enough in its own alphabet, and none of the above. A UUID and
- * a commit are ids; any other hex is judged on its randomness alone. */
+/** A long run with no shape: none of the above, no commit and no UUID, and random enough in its
+ * own alphabet, which for hex is sixteen characters. */
 function isBareSecret(token: string): boolean {
   const hex = HEX.test(token);
   return (
+    !isSomethingElse(token) &&
     !UUID.test(token) &&
     !(hex && token.length === COMMIT_LENGTH) &&
-    (hex || !isSomethingElse(token)) &&
-    randomness(token) >= RANDOMNESS_FLOOR
+    randomness(token, hex ? HEX_ALPHABET : alphabetSize(token)) >= RANDOMNESS_FLOOR
   );
 }
 
-function intersects(a: Span, b: Span): boolean {
+function intersects(a: Range, b: Range): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
@@ -157,7 +156,7 @@ function bareRuns(text: string): Span[] {
       return [];
     }
     // A public key and a hash named as one (`sha256:<hex>`) say what follows is not a secret.
-    const before = text.slice(0, m.index);
+    const before = text.slice(Math.max(0, m.index - NAMED_WINDOW), m.index);
     const named = SSH_KEY_TYPE.test(before) || HASH_BEFORE.test(before);
     return !named && isBareSecret(token)
       ? [{ start, end: start + token.length, kind: "random-token" }]
@@ -205,55 +204,22 @@ function credentialSpans(text: string): Span[] {
   });
 }
 
-/** What a block's label says it holds; any label is a secret, only its name differs. */
-function blockKind(label: string): string {
-  if (/PRIVATE KEY(?: BLOCK)?$/.test(label)) {
-    return "private-key";
-  }
-  return label === "OpenVPN Static key V1" ? "openvpn-key" : "pem-block";
-}
-
-/** Where a block that never closes ends: the end of the text, less its trailing blank. */
-function untilEnd(text: string, from: number): number {
-  return Math.max(from, text.trimEnd().length);
-}
-
-/** Every armoured block, any label, from its BEGIN line to the END line of the same label or to the
- * end of the text, and every PuTTY key from its header to its Private-MAC line. */
-function blockSpans(text: string): Span[] {
-  const armoured = [...text.matchAll(BLOCK_BEGIN)].map((m) => {
-    const label = m[1] ?? "";
-    const close = `-----END ${label}-----`;
-    const at = text.indexOf(close, m.index + m[0].length);
-    const end = at === -1 ? untilEnd(text, m.index + m[0].length) : at + close.length;
-    return { start: m.index, end, kind: blockKind(label) };
-  });
-  const putty = [...text.matchAll(PUTTY_KEY)].map((m) => {
-    const mac = PUTTY_MAC.exec(text.slice(m.index));
-    const end =
-      mac === null ? untilEnd(text, m.index + m[0].length) : m.index + mac.index + mac[0].length;
-    return { start: m.index, end, kind: "private-key" };
-  });
-  return [...armoured, ...putty];
-}
-
 /** Every secret in the text, in order. The passes run from the surest to the weakest, and a pass
- * skips any text an earlier one claimed, so a block's lines are never judged one by one and a
- * placeholder is never captured again. */
+ * skips any text an earlier one claimed, so a block's lines are never judged one by one; a
+ * placeholder is skipped by every pass and never captured again. */
 export function secretSpans(text: string): Span[] {
-  const claimed: Span[] = [...text.matchAll(PLACEHOLDER)].map((m) => ({
+  const placeholders: Range[] = [...text.matchAll(PLACEHOLDER)].map((m) => ({
     start: m.index,
     end: m.index + m[0].length,
-    kind: "placeholder",
   }));
-  const found: Span[] = [];
+  const claimed: Span[] = [];
   for (const pass of [blockSpans, shapeSpans, credentialSpans, bareRuns]) {
     for (const span of pass(text).toSorted((a, b) => a.start - b.start || b.end - a.end)) {
-      if (!claimed.some((c) => intersects(c, span))) {
+      const free = (taken: Range): boolean => !intersects(taken, span);
+      if (placeholders.every(free) && claimed.every(free)) {
         claimed.push(span);
-        found.push(span);
       }
     }
   }
-  return found.toSorted((a, b) => a.start - b.start);
+  return claimed.toSorted((a, b) => a.start - b.start);
 }
