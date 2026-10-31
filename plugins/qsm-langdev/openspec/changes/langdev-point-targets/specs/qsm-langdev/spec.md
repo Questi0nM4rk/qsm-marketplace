@@ -398,8 +398,9 @@ comparison SHALL block the stop, reporting the changed files and, for the
 comparison that regressed, the totals or the quality before and after. The
 gate SHALL allow the stop when both comparisons held or improved. The edited
 tree's side is its index, as for `check`: an edit the agent did not stage is
-not scored, and the gate SHALL name each such file in a warning (`not scored,
-not staged:`) rather than pass over it in silence. When a tree
+not scored, and the gate SHALL name each file with an unstaged change in a
+warning (`unstaged changes not scored:`) rather than pass over it in silence;
+a file staged and then edited again is scored as staged and named too. When a tree
 has no ruleset to score one comparison under, or the checker that comparison
 needs is unavailable, the gate SHALL allow the stop and report a warning for
 that comparison rather than a block. The gate SHALL run at the pre-commit
@@ -423,7 +424,7 @@ point, with that point's target and timeout for every checker.
 
 - **WHEN** the stopping agent edited a tracked file and staged none of it
 - **THEN** the gate SHALL pass without scoring that edit and SHALL warn
-  `not scored, not staged:` naming the file
+  `unstaged changes not scored:` naming the file
 
 #### Scenario: An agent with no recorded edit
 

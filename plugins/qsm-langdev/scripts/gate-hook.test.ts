@@ -101,7 +101,7 @@ describe("qsm-langdev gate hook", () => {
 
     expect(r.exit).toBe(0);
     expect(r.stdout).not.toContain('"decision":"block"');
-    expect(r.stderr).toContain("not scored, not staged: a.fish");
+    expect(r.stderr).toContain("unstaged changes not scored: a.fish");
   });
 
   test("a tree back to its start commit never blocks the stop", () => {

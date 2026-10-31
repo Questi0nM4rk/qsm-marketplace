@@ -85,7 +85,7 @@ async function judgeTree(
   if (unstaged.length > 0) {
     const named = unstaged.slice(0, 5).join(", ");
     const more = unstaged.length > 5 ? ` and ${unstaged.length - 5} more` : "";
-    warnings.push(`not scored, not staged: ${named}${more}`);
+    warnings.push(`unstaged changes not scored: ${named}${more}`);
   }
   const environment = verdicts.filter((v) => !v.pass && gap(v));
   const worse = verdicts.filter((v) => !(v.pass || gap(v)));
