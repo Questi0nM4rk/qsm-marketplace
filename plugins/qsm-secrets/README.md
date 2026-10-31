@@ -24,9 +24,10 @@ this plugin can go.
 | Hook | `tool.call` (Read, Grep) | Denies reading the keyring files, the vault's data directory and the rendered config directory. |
 | Hook | `tool.call` (use by id) | Runs a command holding `{{secret:<id>}}` with the value in one environment variable. |
 | Hook | `session.append` | Masks every stored value in every row the conversation keeps (tool results, file reads, responses) before it is stored; a row it cannot mask is withheld. |
-| Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`) and gives the model a placeholder; a prompt it cannot check is not sent. |
+| Hook | `prompt.submit` | Stores a pasted secret under `cap_<hex>` (or under `<name>` for a pasted `name=value`), records its kind, time, session and working directory in the capture index, and gives the model a placeholder; a prompt it cannot check is not sent. |
+| Command | `/qsm-secrets review` | Opens a pane listing what the capture stored (kind, date, project, session; never a value): the arrows move, `d` or DEL then `y` within 3 seconds deletes the entry from the vault. |
 | Hook | `session.end` | Scrubs every stored value from the transcript and its subagents' and removes rendered files. |
-| CLI | `qsm-secrets` | 20 verbs, see [USAGE.md](USAGE.md). |
+| CLI | `qsm-secrets` | 21 verbs, see [USAGE.md](USAGE.md). |
 | Pane | `qml/askpass/` | A Quickshell pane that asks the person for a secret, a `sudo -A`, ssh or git answer, or an allow or deny, and returns it to the asker. |
 
 ## Install
@@ -55,6 +56,7 @@ qsm-secrets list                                             # key names of ever
 qsm-secrets check npm-token=NPM_TOKEN -- npm whoami          # does the stored token still work: ok or failed
 qsm-secrets rename old-name new-name                         # value never printed, old name removed last
 qsm-secrets prune --dry-run                                  # captures no transcript names; drop --dry-run to remove
+qsm-secrets captures                                         # what the capture stored: time, kind, id, session, cwd
 qsm-secrets render ./app.env.tpl --out app.env               # fills {{secret:<id>}}, prints the path
 ```
 
@@ -62,6 +64,13 @@ Paste a token into a prompt and the hook stores it. The model reads `{{secret:ca
 instead of the value. Paste `deploy-key=<token>` and it is stored as the key `deploy-key` in the
 `qsm` namespace, and the model reads `{{secret:qsm/deploy-key}}`; a name that is already stored is
 never overwritten, the value gets a `cap_<hex>` and the toast says why.
+
+When the capture took something that was no secret (a certificate, a test value), run
+`/qsm-secrets review`: a pane lists every capture still stored, newest first, as kind, date,
+project and the session's first eight characters. Move with the arrows, press `d` or DEL, and `y`
+within 3 seconds removes the entry from the vault and its row from the list; any other key, or the
+3 seconds, leaves it. A failed delete stays in the list with its outcome code. Escape gives the
+keyboard back to the prompt.
 
 ## Caveats
 
@@ -83,6 +92,14 @@ never overwritten, the value gets a `cap_<hex>` and the toast says why.
   screen just before its row is rewritten; the session end swaps what the engine stores as made. A
   row the mask cannot read is withheld, with a toast. Without a chosen backend every row is
   withheld.
+- The capture index, `$XDG_DATA_HOME/qsm-secrets/captures.json`, is plain text in your home
+  directory and holds, per captured entry, its kind, the capture time, the session id and the
+  working directory, never a value or any part of one. An entry removed with `rbw` or `secret-tool`
+  directly leaves its row until the next `qsm-secrets captures` (or the review pane) drops it with a
+  warning. A deleted capture leaves its `{{secret:<id>}}` in the transcript, where it now answers
+  `missing`.
+- The review list is a `Client` pane: it needs the terminal or the desktop app, and draws a notice
+  elsewhere.
 - `prune` trusts the transcripts: run it after your sessions end, since a capture made in a live
   session is named in its transcript only once the prompt is rewritten.
 - `get <key> 3>FILE` is a last resort and leaves a secret on disk until you remove it.

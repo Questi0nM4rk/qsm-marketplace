@@ -32,6 +32,11 @@ each: time, kind, `<namespace>/<key>`, session, working directory (`--json` answ
 with the backend's own tool is dropped from the index and named in a warning, and an empty index
 prints `nothing was captured`. `rm` and `prune` remove the row with the entry.
 
+`/qsm-secrets review` in a session opens a pane over the same rows (kind, local date and time, the
+working directory's last segment, the session's first eight characters). The arrows move, `d` or
+DEL arms a row (`y to delete`), and `y` within 3 seconds runs `qsm-secrets rm` for it; any other
+key or 3 seconds disarms. A failed delete keeps the row with its outcome code and a toast.
+
 `guard` reads a Bash command on stdin and answers `ok`, or `blocked` (exit 5) with a code and the
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,
 `keyring-library`, `credential-file`, `fd3-to-output`, `single-quoted-placeholder`, `askpass-pane`

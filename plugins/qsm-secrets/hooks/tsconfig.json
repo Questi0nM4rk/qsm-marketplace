@@ -3,7 +3,9 @@
   "include": [
     "../../../.claude/types",
     "register.tsx",
+    "review.tsx",
     "register.test.ts",
+    "review.test.ts",
     "../lib/protected.ts",
     "noun.generated.ts",
     "../types"
