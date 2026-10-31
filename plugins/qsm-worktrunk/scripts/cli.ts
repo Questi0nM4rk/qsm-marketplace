@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-// qsm-worktrunk: the one question the hooks module cannot ask in its sandbox, which branches are
-// ahead of the working branch.
+// qsm-worktrunk: which branches are ahead of the working branch, asked from a shell, and whether
+// wt is ready.
 
 import { runCli } from "../../../lib/cli-base.ts";
 import { checkTools, doctorVerdict, ok } from "../../../lib/outcome.ts";
