@@ -294,8 +294,10 @@ slot_start_desktop() {
   local -a fake=()
   local binds="" src dst
   if [[ -n "$mock" ]]; then
-    binds="$(DRIVE_STATE="$mock" bun "$MOTION_DIR/fake-machine.ts" prepare "$dir/fake")" \
-      || die "the fake machine could not lay out '$mock'"
+    binds="$(DRIVE_STATE="$mock" bun "$MOTION_DIR/fake-machine.ts" prepare "$dir/fake")" || {
+      rm -rf "${SLOT_ROOT:?}/${name:?}" "$rt"
+      die "the fake machine could not lay out '$mock'"
+    }
     while IFS=$'\t' read -r src dst; do
       [[ -n "$src" ]] && fake+=(--bind "$src" "$dst")
     done <<<"$binds"
@@ -316,10 +318,26 @@ slot_start_desktop() {
     slot_kill "$name"
     die "the nested desktop did not start in slot '$name' (logs were in $dir)"
   }
+  [[ ! -d "$dir/fake" ]] || slot_wait_fake "$name" "$dir"
   slot_publish_desktop "$name" "$size" "$scale" "$qs_path"
   slot_hold "$name"
   printf 'slot %s: desktop=%s output=%s size=%s scale=%s hyprland=%s pid=%s\n' "$name" "$qs_path" \
     "$(slot_field "$name" SLOT_OUTPUT)" "$size" "$scale" "$(slot_field "$name" SLOT_HYPR_SIG)" "$(cat "$dir/pid")"
+}
+
+# The shell starts only once the fake machine is ready; a machine that fails stops the slot here,
+# not at the first step that needs the shell.
+slot_wait_fake() {
+  local name="$1" dir="$2" i why
+  for ((i = 0; i < 100; i++)); do
+    [[ -e "$dir/fake/ready" ]] && return
+    kill -0 "$(cat "$dir/pid")" 2>/dev/null || break
+    sleep 0.1
+  done
+  [[ -e "$dir/fake/ready" ]] && return
+  why="$(tail -3 "$dir/fake-machine.log" 2>/dev/null)"
+  slot_kill "$name"
+  die "the fake machine did not become ready in slot '$name': ${why:-no log}"
 }
 
 slot_publish_desktop() {
