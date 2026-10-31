@@ -49,11 +49,16 @@ is a few KB), an outside binary.
    job. The GitHub CRC32 is not checked: a shape that matches is captured.
 5. **Credential words** gain Czech (`heslo`, `klic`, `klíč`, `tajne`, `tajné`, `token` already
    counts), `pass` as a whole part (`DB_PASS`), and `_KEY` at the end of an UPPER_SNAKE name
-   (`STRIPE_KEY`, not `primary_key`); a value after any credential word counts from 6 characters,
-   no longer 16 for the non-password words, because a short token is still a token. Name and value
-   sit on one line, so a YAML key with no value never takes the next line's key as its value. A
-   netrc `password X`, `--password X` and `--password=X` count; `-p` does not (it is `ssh -p 22`).
-   A quoted value runs to its closing quote, so a passphrase with blanks is stored whole.
+   (`STRIPE_KEY`, not `primary_key`); a value after any credential word counts from 6 characters, no
+   longer 16 for the non-password words, because a short token is still a token. Name and value sit
+   on one line, so a YAML key with no value never takes the next line's key as its value. A netrc
+   `password X` counts after `machine` or `login` on its line, `--password X` and `--password=X`
+   count when the flag's last part is a credential word; `-p` does not (it is `ssh -p 22`). A value
+   that is a name in code or config (camelCase, PascalCase, UPPER_SNAKE, a lowercase slug, a file
+   name) or is a flag (`--username`, `-postgres`) is refused, because `token: accessToken` is code;
+   a value that mixes letters and digits or symbols the way a password does (`Welcome.2024`,
+   `Abc(2024)xyz`) is kept, and a slug is kept under a passphrase or `heslo` name. A quoted value
+   runs to its closing quote, so a passphrase with blanks is stored whole.
 6. **The bare-token pass** keeps the Miller-Madow floor but at 0.8 instead of 0.9, and keeps its
    32-character minimum; the hash, id, path and URL filters stay, since those are values this
    machine shows every turn and they are not credentials. Bare hex of any length passes, as before
