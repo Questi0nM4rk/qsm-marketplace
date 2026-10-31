@@ -1,6 +1,6 @@
 ## 1. Corpus first, from real producers
 
-- [ ] 1.1 Key-material cases made at test time in a `sandboxDir` by the real producers:
+- [x] 1.1 Key-material cases made at test time in a `sandboxDir` by the real producers:
       `openvpn --genkey secret <file>`, `ssh-keygen` (ed25519, rsa, ecdsa; one with `-N`),
       `openssl req -x509` (certificate) and `openssl req -new` (CSR), `gpg` with a throwaway
       `GNUPGHOME` (`--armor --export-secret-keys` and `--export`), a cut-short private key, an
