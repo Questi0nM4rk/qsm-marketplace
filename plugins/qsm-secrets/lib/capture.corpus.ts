@@ -275,6 +275,29 @@ const MIXED: Case[] = [
   return { text: say(value), secrets: [value], kinds: ["credential-value"] };
 });
 const netrcValue = random(ALNUM, 16);
+/** Generated passwords shaped like a name in config: a slug, UPPER_SNAKE or a file name with a
+ * segment that mixes letters and digits, or any of these under a password word. */
+const mixedSegment = (): string => `${random(LOWER, 2)}${random(DIGITS, 1)}${random(LOWER, 2)}`;
+const GENERATED: Case[] = [
+  [`DB_${PASS.toUpperCase()}`, [mixedSegment(), mixedSegment(), mixedSegment()].join("-")],
+  [PASS, `${mixedSegment()}-${mixedSegment()}`],
+  [PASS, `${random(LOWER, 4)}_${random(LOWER, 2)}_${random(DIGITS, 4)}${random(LOWER, 1)}`],
+  [PASS, `${random(LOWER, 6)}${random(DIGITS, 1)}.${random(LOWER, 3)}`],
+  [
+    PASS,
+    `${random(UPPER, 1)}${random(DIGITS, 1)}${random(LOWER, 4)}${random(DIGITS, 1)}.${random(LOWER, 3)}`,
+  ],
+  [PASS, `${random(UPPER, 3)}_${random(DIGITS, 3)}_${random(UPPER, 3)}`],
+  [
+    "API_TOKEN",
+    `${random(UPPER, 1)}${random(DIGITS, 1)}${random(UPPER, 2)}_${random(UPPER, 1)}${random(DIGITS, 2)}${random(UPPER, 1)}`,
+  ],
+].map(([name, value]) => ({
+  text: `${name ?? ""}=${value ?? ""}`,
+  secrets: [value ?? ""],
+  kinds: ["credential-value"],
+}));
+
 const NETRC: Case[] = [
   {
     text: `machine github.example.test login me ${PASS} ${netrcValue}`,
@@ -313,6 +336,7 @@ export const POSITIVES: readonly Case[] = [
   ...SPELLED,
   ...MIXED,
   ...NETRC,
+  ...GENERATED,
   ...SINGLE_CASE,
   ...ENCODED,
 ];
@@ -508,6 +532,11 @@ const CODE_AND_PROSE: readonly string[] = [
   "the token is refreshTokenHandler",
   `docker login --${PASS}-stdin --username qs_m4rk ghcr.io`,
   "gh auth --auth-type oauth2",
+  // an auth scheme names how, not what
+  "set the auth=oauth2 flow",
+  "token_type: bearer",
+  "auth: negotiate",
+  "AUTH_MODE=kerberos",
   `${PASS} managers are great\nand this is another line`,
   `${PASS}: \${DB_${PASS.toUpperCase()}:-postgres}`,
   // an @ in a URL path is no password

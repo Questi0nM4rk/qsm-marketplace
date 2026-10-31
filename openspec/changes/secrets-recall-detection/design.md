@@ -57,8 +57,10 @@ is a few KB), an outside binary.
    that is a name in code or config (camelCase, PascalCase, UPPER_SNAKE, a lowercase slug, a file
    name) or is a flag (`--username`, `-postgres`) is refused, because `token: accessToken` is code;
    a value that mixes letters and digits or symbols the way a password does (`Welcome.2024`,
-   `Abc(2024)xyz`) is kept, and a slug is kept under a passphrase or `heslo` name. A quoted value
-   runs to its closing quote, so a passphrase with blanks is stored whole.
+   `Abc(2024)xyz`) is kept; an UPPER_SNAKE name, slug or file name is kept when a segment mixes
+   letters and digits or when it is assigned to a password word, since generated passwords take
+   those shapes; an auth scheme name (`oauth2`, `basic`, `negotiate`) is never a value. A quoted
+   value runs to its closing quote, so a passphrase with blanks is stored whole.
 6. **The bare-token pass** keeps the Miller-Madow floor but at 0.8 instead of 0.9, and keeps its
    32-character minimum; the hash, id, path and URL filters stay, since those are values this
    machine shows every turn and they are not credentials. Bare hex of any length passes, as before

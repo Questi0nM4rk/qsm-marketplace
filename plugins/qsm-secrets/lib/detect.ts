@@ -86,7 +86,8 @@ const NOT_SECRET_KEY = /(?:^|_)(?:PUBLIC|PRIMARY|FOREIGN)_KEY$/;
 
 // What is plainly not a value: a literal, a template, a stopword, a type name, a reference to a
 // variable or to code, a path, a URL, an SSH key type, a YAML tag, a slug of five words or more.
-const NOT_A_VALUE = /^(?:true|false|null|nil|none|changeme|example|your-[\p{L}\p{N}-]+)$/iu;
+const NOT_A_VALUE =
+  /^(?:true|false|null|nil|none|changeme|example|your-[\p{L}\p{N}-]+|basic|bearer|digest|oauth2?|oidc|saml|ntlm|kerberos|negotiate)$/iu;
 const TYPE_NAME =
   /^(?:string|number|boolean|bigint|any|unknown|object|undefined|void|never|int|integer|float|double|str|bool|bytes|required|optional)(?:\[\])?$/i;
 const TEMPLATE = /^(?:<[^<>]*>|\{\{[^{}]*\}\}|\{[^{}]*\}|%\(\w+\)[sd])$/;
@@ -99,16 +100,18 @@ const REFERENCE = new RegExp(
 /** A path: `~/`, `./`, `../`, or a `/` with a second `/` after it (one leading slash is base64). */
 const PATH = /^(?:~\/|\.\.?\/|\/[^/\s]+\/)/;
 // A name in code or config: camelCase, PascalCase, UPPER_SNAKE, a lowercase slug, a file name.
-const IDENTIFIER = [
-  /^[a-z]+(?:[A-Z][a-z]+)+$/,
-  /^(?:[A-Z][a-z]+)+$/,
+const IDENTIFIER = [/^[a-z]+(?:[A-Z][a-z]+)+$/, /^(?:[A-Z][a-z]+)+$/];
+// A name in config: UPPER_SNAKE, a file name, a lowercase slug. A generated password takes these
+// shapes too, so they are refused only when no segment mixes letters and digits and the name before
+// them is no password word.
+const CONFIG_NAME = [
   /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/,
   /^[\w-]+(?:\.[a-z]{1,5})+$/,
+  /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+$/,
 ];
 /** A flag or a shell default (`--username`, `-postgres`); a random token may start with `-` too. */
 const FLAG = /^--?[a-z][a-z-]*$/;
-const LOWER_SLUG = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+$/;
-const PASSPHRASE_NAME = /passphrase|heslo/i;
+const PASSWORD_PART = /(?:passw(?:or)?d|pwd|passphrase|heslo)$|^pass$/;
 const URL = /^[a-z][a-z0-9+.-]*:\/\//i;
 const SSH_TYPE_VALUE = /^(?:ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-|sk-ssh-|sk-ecdsa-)/;
 const YAML_TAG = /^![a-z]+$/;
@@ -294,9 +297,11 @@ function isPlainlyNotAValue(value: string): boolean {
   );
 }
 
-/** A lowercase slug: a name such as `tls-secret`, unless the name before it says passphrase. */
-function isSlug(value: string): boolean {
-  return SLUG.test(value) || LOWER_SLUG.test(value);
+/** A name in config (`SECRETS_BACKEND`, `creds-2024.json`, `tls-secret`) with no segment that
+ * mixes letters and digits, as `k3j9x-q8m2z` does. */
+function isConfigName(value: string): boolean {
+  const mixed = value.split(/[-_.]/).some((seg) => /[A-Za-z]/.test(seg) && /\d/.test(seg));
+  return !mixed && (SLUG.test(value) || CONFIG_NAME.some((pattern) => pattern.test(value)));
 }
 
 /** A digit, a capital after the first letter, or a symbol: not a word of prose. */
@@ -357,12 +362,14 @@ function namedCredential(where: Pattern["name"], said: string): boolean {
 }
 
 /** Whether a value after a credential name is kept: long enough, not plainly something else, a
- * slug only under a passphrase name, and random-looking where prose stands before it. */
+ * name in config only assigned to a password word (never after prose: `heslo je HESLO_DB` is
+ * prose), and random-looking where prose stands before it. */
 function isKept(pattern: Pattern, said: string, value: string): boolean {
   return (
     value.length >= CREDENTIAL_VALUE_MIN &&
     !isPlainlyNotAValue(value) &&
-    (PASSPHRASE_NAME.test(said) || !isSlug(value)) &&
+    ((!pattern.random && nameParts(said).some((part) => PASSWORD_PART.test(part))) ||
+      !isConfigName(value)) &&
     (!pattern.random || looksRandom(value))
   );
 }
