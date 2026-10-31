@@ -42,29 +42,36 @@ const VALUE = String.raw`(?=(?:"([^"\n]*)"|'([^'\n]*)'|\x60([^\x60\n]*)\x60|["'\
 
 interface Pattern {
   readonly re: RegExp;
-  /** Whether group 1 is a name that must say credential; else the pattern itself says it. */
-  readonly named: boolean;
+  /** Which part of group 1 must be a credential word: any part of a name, the last of a flag
+   * (`--password`, not `--auth-type`), or none when the pattern itself says credential. */
+  readonly name: "any" | "last" | "none";
   /** Whether the value must look random: after a word of prose, a plain word is prose. */
   readonly random: boolean;
 }
 
 const PATTERNS: readonly Pattern[] = [
-  { re: new RegExp(`${NAME}${ASSIGN}${VALUE}`, "dgu"), named: true, random: false },
-  { re: new RegExp(`${NAME}${JOIN}${VALUE}`, "dgu"), named: true, random: true },
-  { re: new RegExp(String.raw`(?<![\w-])--([\w-]+)=${VALUE}`, "dgu"), named: true, random: false },
+  { re: new RegExp(`${NAME}${ASSIGN}${VALUE}`, "dgu"), name: "any", random: false },
+  { re: new RegExp(`${NAME}${JOIN}${VALUE}`, "dgu"), name: "any", random: true },
+  { re: new RegExp(String.raw`(?<![\w-])--([\w-]+)=${VALUE}`, "dgu"), name: "last", random: false },
   {
     re: new RegExp(String.raw`(?<![\w-])--([\w-]+)[ \t]+${VALUE}`, "dgu"),
-    named: true,
+    name: "last",
     random: true,
   },
   {
-    re: new RegExp(String.raw`(?:\blogin[ \t]+\S+[ \t]+|^[ \t]*)(password)[ \t]+${VALUE}`, "dgmu"),
-    named: false,
+    // netrc: `machine` or `login` earlier on the line says what `password` is.
+    re: new RegExp(String.raw`\b(?:machine|login)[ \t]+\S.*?[ \t](password)[ \t]+${VALUE}`, "dgu"),
+    name: "none",
     random: false,
   },
   {
+    re: new RegExp(String.raw`^[ \t]*(password)[ \t]+${VALUE}`, "dgmu"),
+    name: "none",
+    random: true,
+  },
+  {
     re: new RegExp(String.raw`(?<![\p{L}\p{N}_-])(bearer)[ \t]+${VALUE}`, "dgiu"),
-    named: false,
+    name: "none",
     random: true,
   },
 ];
@@ -83,8 +90,25 @@ const NOT_A_VALUE = /^(?:true|false|null|nil|none|changeme|example|your-[\p{L}\p
 const TYPE_NAME =
   /^(?:string|number|boolean|bigint|any|unknown|object|undefined|void|never|int|integer|float|double|str|bool|bytes|required|optional)(?:\[\])?$/i;
 const TEMPLATE = /^(?:<[^<>]*>|\{\{[^{}]*\}\}|\{[^{}]*\}|%\(\w+\)[sd])$/;
-const REFERENCE = /^(?:\$|[A-Za-z_]+[.([])/;
-const PATH = /^(?:\/|~\/|\.\.?\/)/;
+// A reference to code: `$X`, `x.y` of identifier words or constants (`process.env.API_SECRET`,
+// `settings.SECRET_KEY`), a call `f()` or `f(x)`; not `Welcome.2024`, `Summer.Sun42`, `Abc(2024)`.
+const SEGMENT = String.raw`(?:[a-z_][A-Za-z_]*|[A-Z][A-Z0-9_]*)`;
+const REFERENCE = new RegExp(
+  String.raw`^(?:\$|${SEGMENT}\.${SEGMENT}(?![\w$])|[A-Za-z_]\w*\((?:\)|[A-Za-z_'"$]))`,
+);
+/** A path: `~/`, `./`, `../`, or a `/` with a second `/` after it (one leading slash is base64). */
+const PATH = /^(?:~\/|\.\.?\/|\/[^/\s]+\/)/;
+// A name in code or config: camelCase, PascalCase, UPPER_SNAKE, a lowercase slug, a file name.
+const IDENTIFIER = [
+  /^[a-z]+(?:[A-Z][a-z]+)+$/,
+  /^(?:[A-Z][a-z]+)+$/,
+  /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/,
+  /^[\w-]+(?:\.[a-z]{1,5})+$/,
+];
+/** A flag or a shell default (`--username`, `-postgres`); a random token may start with `-` too. */
+const FLAG = /^--?[a-z][a-z-]*$/;
+const LOWER_SLUG = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)+$/;
+const PASSPHRASE_NAME = /passphrase|heslo/i;
 const URL = /^[a-z][a-z0-9+.-]*:\/\//i;
 const SSH_TYPE_VALUE = /^(?:ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-|sk-ssh-|sk-ecdsa-)/;
 const YAML_TAG = /^![a-z]+$/;
@@ -174,13 +198,16 @@ function isWordlike(token: string): boolean {
 }
 
 /** What a decoded base64 run hides: a block or a shape by its kind, or a random token of its own;
- * null when it is text. */
+ * null when it is text, JSON, a URL or a path. */
 function hiddenKind(decoded: string): string | null {
   const inner = blockSpans(decoded)[0] ?? shapeSpans(decoded)[0];
   if (inner !== undefined) {
     return inner.kind;
   }
-  return !/\s/.test(decoded) &&
+  const plain = !/\s/.test(decoded) && !/^[[{]/.test(decoded);
+  return plain &&
+    !URL.test(decoded) &&
+    !PATH.test(decoded) &&
     decoded.length >= DECODED_TOKEN_MIN &&
     randomness(decoded) >= RANDOMNESS_FLOOR
     ? "random-token"
@@ -246,9 +273,11 @@ function isSequence(value: string): boolean {
   );
 }
 
-/** What no credential is: a literal, a template, a type, a reference, a path, a URL, a slug. */
+/** What no credential is: a literal, a template, a type, a reference, a path, a URL, a name in
+ * code, a flag. */
 function isPlainlyNotAValue(value: string): boolean {
   return (
+    FLAG.test(value) ||
     [
       NOT_A_VALUE,
       TYPE_NAME,
@@ -258,10 +287,16 @@ function isPlainlyNotAValue(value: string): boolean {
       URL,
       SSH_TYPE_VALUE,
       YAML_TAG,
-      SLUG,
       REPEATED,
-    ].some((pattern) => pattern.test(value)) || isSequence(value)
+      ...IDENTIFIER,
+    ].some((pattern) => pattern.test(value)) ||
+    isSequence(value)
   );
+}
+
+/** A lowercase slug: a name such as `tls-secret`, unless the name before it says passphrase. */
+function isSlug(value: string): boolean {
+  return SLUG.test(value) || LOWER_SLUG.test(value);
 }
 
 /** A digit, a capital after the first letter, or a symbol: not a word of prose. */
@@ -269,17 +304,28 @@ function looksRandom(value: string): boolean {
   return /\d/.test(value) || /.\p{Lu}/u.test(value) || /[^\p{L}\p{N}]/u.test(value);
 }
 
-/** Whether one part of a name, two parts together (`api_key`), or an UPPER_SNAKE `_KEY` says
- * credential. */
-function isCredentialName(name: string): boolean {
-  if (UPPER_KEY.test(name)) {
-    return !NOT_SECRET_KEY.test(name);
-  }
-  const parts = (name.match(NAME_PART) ?? []).map((part) => part.toLowerCase());
+/** `STRIPE_KEY`, `ENCRYPTION_KEY`: an UPPER_SNAKE name ending in `_KEY` that is no column key. */
+function isUpperKey(name: string): boolean {
+  return UPPER_KEY.test(name) && !NOT_SECRET_KEY.test(name);
+}
+
+/** Whether one of the parts, or two together (`api_key`), is a credential word. */
+function saysCredential(parts: readonly string[]): boolean {
   const pairs = parts.flatMap((part, at) => (at > 0 ? [`${parts[at - 1] ?? ""}${part}`] : []));
   return [...parts, ...pairs].some(
     (part) => CREDENTIAL_PART.test(part) || CREDENTIAL_PAIRS.test(part),
   );
+}
+
+/** A name's parts in lower case: `GITHUB_TOKEN` is `github`, `token`; `clientSecret` is `client`,
+ * `secret`. */
+function nameParts(name: string): string[] {
+  return (name.match(NAME_PART) ?? []).map((part) => part.toLowerCase());
+}
+
+/** Whether a flag's parts say credential: its last part, or its last two together (`--api-key`). */
+function flagSaysCredential(parts: readonly string[]): boolean {
+  return saysCredential(parts.slice(-1)) || CREDENTIAL_PAIRS.test(parts.slice(-2).join(""));
 }
 
 /** An unquoted value less what closes the sentence or the code around it: a trailing comma, quote
@@ -299,23 +345,52 @@ function trimmed(value: string): string {
   }
 }
 
+/** Whether what stands before the value says credential: any part of a name, the last part of a
+ * flag, an UPPER_SNAKE `_KEY`, or the pattern itself (netrc, Bearer). */
+function namedCredential(where: Pattern["name"], said: string): boolean {
+  const parts = nameParts(said);
+  return (
+    where === "none" ||
+    isUpperKey(said) ||
+    (where === "last" ? flagSaysCredential(parts) : saysCredential(parts))
+  );
+}
+
+/** Whether a value after a credential name is kept: long enough, not plainly something else, a
+ * slug only under a passphrase name, and random-looking where prose stands before it. */
+function isKept(pattern: Pattern, said: string, value: string): boolean {
+  return (
+    value.length >= CREDENTIAL_VALUE_MIN &&
+    !isPlainlyNotAValue(value) &&
+    (PASSPHRASE_NAME.test(said) || !isSlug(value)) &&
+    (!pattern.random || looksRandom(value))
+  );
+}
+
+/** Where the value of a credential match sits: the quoted text inside its quotes, or an unquoted
+ * run less its trailing punctuation; null when the match holds none. */
+function valueOf(m: RegExpExecArray): Range | null {
+  const group = [2, 3, 4].find((g) => m[g] !== undefined) ?? 5;
+  const raw = m[group];
+  const at = m.indices?.[group]?.[0];
+  if (raw === undefined || at === undefined) {
+    return null;
+  }
+  return { start: at, end: at + (group === 5 ? trimmed(raw) : raw).length };
+}
+
 /** Every value after a credential name, a credential flag, a netrc `password` or `Bearer` that is
  * not plainly something else; after a word of prose it must also look random. */
 function credentialSpans(text: string): Span[] {
-  return PATTERNS.flatMap(({ re, named, random }) =>
-    [...text.matchAll(re)].flatMap((m) => {
-      const group = [2, 3, 4].find((g) => m[g] !== undefined) ?? 5;
-      const raw = m[group];
-      const at = m.indices?.[group]?.[0];
-      if (raw === undefined || at === undefined || (named && !isCredentialName(m[1] ?? ""))) {
-        return [];
-      }
-      const value = group === 5 ? trimmed(raw) : raw;
+  return PATTERNS.flatMap((pattern) =>
+    [...text.matchAll(pattern.re)].flatMap((m) => {
+      const said = m[1] ?? "";
+      const at = valueOf(m);
       const kept =
-        value.length >= CREDENTIAL_VALUE_MIN &&
-        !isPlainlyNotAValue(value) &&
-        (!random || looksRandom(value));
-      return kept ? [{ start: at, end: at + value.length, kind: "credential-value" }] : [];
+        at !== null &&
+        namedCredential(pattern.name, said) &&
+        isKept(pattern, said, text.slice(at.start, at.end));
+      return kept ? [{ ...at, kind: "credential-value" }] : [];
     }),
   );
 }

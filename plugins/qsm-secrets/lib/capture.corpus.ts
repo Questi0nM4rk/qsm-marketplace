@@ -248,6 +248,41 @@ const SPELLED: Case[] = [
   },
 ];
 
+/** Values with a dot, a bracket or a parenthesis that are no code, a base64 secret that starts with
+ * one slash, and a passphrase slug under a name that says passphrase. */
+const word = (): string => `${random(UPPER, 1)}${random(LOWER, 5)}`;
+const MIXED: Case[] = [
+  (v: string) => `${PASS}=${v}`,
+  (v: string) => `DB_${PASS.toUpperCase()}=${v}`,
+  (v: string) => `${PASS}: ${v}`,
+  (v: string) => `token=${v}`,
+  (v: string) => `secret=${v}`,
+  (v: string) => `aws_secret_access_key = ${v}`,
+  (v: string) => `PASSPHRASE=${v}`,
+  (v: string) => `heslo=${v}`,
+].map((say, i) => {
+  const value =
+    [
+      `${word()}.${random(DIGITS, 4)}`,
+      `${word()}.${word()}${random(DIGITS, 2)}`,
+      `${word()}(${random(DIGITS, 4)})${random(LOWER, 3)}`,
+      `${random(LOWER, 3)}.${random(LOWER, 3)}${random(DIGITS, 3)}${random(LOWER, 3)}${random(DIGITS, 3)}`,
+      `${word()}[${random(LOWER, 2)}]${random(LOWER, 4)}${random(DIGITS, 2)}`,
+      `/${random(ALNUM, 39)}`,
+      Array.from({ length: 5 }, () => random(LOWER, 6)).join("-"),
+      Array.from({ length: 5 }, () => random(LOWER, 5)).join("-"),
+    ][i] ?? "";
+  return { text: say(value), secrets: [value], kinds: ["credential-value"] };
+});
+const netrcValue = random(ALNUM, 16);
+const NETRC: Case[] = [
+  {
+    text: `machine github.example.test login me ${PASS} ${netrcValue}`,
+    secrets: [netrcValue],
+    kinds: ["credential-value"],
+  },
+];
+
 /** Random runs in one case and a base32 seed: no humps, no words, still random. */
 const SINGLE_CASE: Case[] = [
   random(LOWER, 40),
@@ -276,6 +311,8 @@ export const POSITIVES: readonly Case[] = [
   ...CREDENTIAL_VALUES,
   ...PLACED,
   ...SPELLED,
+  ...MIXED,
+  ...NETRC,
   ...SINGLE_CASE,
   ...ENCODED,
 ];
@@ -453,6 +490,32 @@ const CODE_AND_PROSE: readonly string[] = [
   "ssh -p 2222 deploy@host.example.test",
   `${BEGIN} is a public key header`,
   "Why does -----BEGIN <label>----- in detect.ts swallow the rest? Please check.",
+  // names in code and config after a credential word, and prose words after a joiner or a flag
+  "return { token: accessToken, secret: clientSecret };",
+  "function login(token: TokenType, secret: Buffer) {}",
+  "readonly auth: AuthConfig;",
+  "apiKey: ApiKeyProvider,",
+  "PARTITION_KEY=userId",
+  "SORT_KEY=createdAt",
+  "secret=SECRETS_BACKEND",
+  "token=qsm-secrets",
+  "secretName: tls-secret",
+  "credentials: creds-2024.json",
+  "token: accessToken",
+  "the token is GITHUB_TOKEN, set it in CI",
+  "the token is `GITHUB_TOKEN`",
+  "heslo je HESLO_DB v .env",
+  "the token is refreshTokenHandler",
+  `docker login --${PASS}-stdin --username qs_m4rk ghcr.io`,
+  "gh auth --auth-type oauth2",
+  `${PASS} managers are great\nand this is another line`,
+  `${PASS}: \${DB_${PASS.toUpperCase()}:-postgres}`,
+  // an @ in a URL path is no password
+  "open http://localhost:5173/@vite/client",
+  "http://localhost:4873/@questi0nm4rk/hook-kit",
+  // base64 of a URL and of JSON
+  Buffer.from("https://github.com/Questi0nM4rk/qsm-marketplace").toString("base64"),
+  Buffer.from('{"sessionId":"87ee6dec","cwd":"/home/qs_m4rk"}').toString("base64url"),
 ];
 
 /** Bare hex is a digest, an image id, a request id or an ETag until a credential name says else;

@@ -22,7 +22,9 @@ const OURS: ReadonlyArray<readonly [string, RegExp]> = [
   ["github-fine-grained-pat", /github_pat_\w{20,}/g],
   ["gitlab-pat", /(?<![A-Za-z0-9])glpat-[\w-]{20,}(?:\.[0-9a-z]{9})?/g],
   ["slack-token", /xox[abeoprs]-[A-Za-z0-9.-]{10,}/g],
-  ["connection-string", /(?<=:\/\/[^/\s:@]+:)\S+(?=@[^@\s/]+)/g],
+  // The password runs to the last `@` of the authority, never past a `/`, so `host:5173/@vite` is no
+  // password.
+  ["connection-string", /(?<=:\/\/[^/\s:@]+:)[^/\s]+(?=@[^@\s/]+)/g],
   ["stripe-access-token", /(?<![A-Za-z0-9])[sr]k_(?:live|test|prod)_[A-Za-z0-9]{10,}/g],
   ["gcp-api-key", /AIza[\w-]{35}/g],
   ["npm-access-token", /(?<![A-Za-z0-9])npm_[A-Za-z0-9]{36}/g],
