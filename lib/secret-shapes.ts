@@ -13,7 +13,7 @@ export interface Span {
 /** Shapes kept broader than gitleaks' own, because a pasted token is often cut or reformatted. */
 const OURS: ReadonlyArray<readonly [string, RegExp]> = [
   ["aws-access-token", /(?<![A-Z0-9])(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}(?![A-Z0-9])/g],
-  ["api-key", /(?<=api[_-]?key\s*[:=]\s*)\S{16,}/gi],
+  ["api-key", /(?<=api[_-]?key["']?[ \t]*[:=][ \t]*["'`]?)[\w+/=-]{16,}(?![\w.([])/gi],
   ["jwt", /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*/g],
   ["github-pat", /(?<![A-Za-z0-9])ghp_[A-Za-z0-9]{36,}/g],
   ["github-oauth", /(?<![A-Za-z0-9])gho_[A-Za-z0-9]{36,}/g],
@@ -22,7 +22,7 @@ const OURS: ReadonlyArray<readonly [string, RegExp]> = [
   ["github-fine-grained-pat", /github_pat_\w{20,}/g],
   ["gitlab-pat", /(?<![A-Za-z0-9])glpat-[\w-]{20,}(?:\.[0-9a-z]{9})?/g],
   ["slack-token", /xox[abeoprs]-[A-Za-z0-9.-]{10,}/g],
-  ["connection-string", /(?<=:\/\/[^/\s:]+:)[^@\s]+(?=@)/g],
+  ["connection-string", /(?<=:\/\/[^/\s:@]+:)\S+(?=@[^@\s/]+)/g],
   ["stripe-access-token", /(?<![A-Za-z0-9])[sr]k_(?:live|test|prod)_[A-Za-z0-9]{10,}/g],
   ["gcp-api-key", /AIza[\w-]{35}/g],
   ["npm-access-token", /(?<![A-Za-z0-9])npm_[A-Za-z0-9]{36}/g],
@@ -112,33 +112,62 @@ function blockKind(label: string): string {
   return label === "OpenVPN Static key V1" ? "openvpn-key" : "pem-block";
 }
 
-/** Where a block that never closes ends: the end of the text, less its trailing blank. */
-function untilEnd(text: string, from: number): number {
-  return Math.max(from, text.trimEnd().length);
+/** A line of a key body: base64 or hex, a header such as Proc-Type, or blank. */
+const BODY_LINE = /^(?:[A-Za-z0-9+/=]+|[A-Za-z][\w-]*: .*|[ \t]*)$/;
+const BODY_START = /^(?:[A-Za-z0-9+/=]{16,}|[A-Za-z][\w-]*: .*)$/;
+/** A clearsigned message is text anyone may read; only its signature block is a block. */
+const CLEARSIGNED = "PGP SIGNED MESSAGE";
+
+/** Where a block that never closes ends: after the last line of the key body that follows its
+ * BEGIN line, or null when what follows is no key body (a label named in prose). */
+function bodyEnd(text: string, from: number): number | null {
+  const lines = text.slice(from).split("\n");
+  const first = lines.slice(1).find((line) => line.trim() !== "");
+  if (first === undefined || !BODY_START.test(first)) {
+    return null;
+  }
+  let end = from + (lines[0]?.length ?? 0);
+  let at = end + 1;
+  for (const line of lines.slice(1)) {
+    if (!BODY_LINE.test(line)) {
+      break;
+    }
+    if (line.trim() !== "") {
+      end = at + line.length;
+    }
+    at += line.length + 1;
+  }
+  return end;
 }
 
-/** Every armoured block, any label, from its BEGIN line to the END line of the same label or to the
- * end of the text, and every PuTTY key from its header to its Private-MAC line. */
+/** Every armoured block, any label but a clearsigned message's, from its BEGIN line to the END line
+ * of the same label, or to the end of its key body when it was cut short; and every PuTTY key from
+ * its header to its Private-MAC line. */
 export function blockSpans(text: string): Span[] {
-  const armoured = [...text.matchAll(BLOCK_BEGIN)].map((m) => {
+  const armoured = [...text.matchAll(BLOCK_BEGIN)].flatMap((m) => {
     const label = m[1] ?? "";
     const close = `-----END ${label}-----`;
     const at = text.indexOf(close, m.index + m[0].length);
-    const end = at === -1 ? untilEnd(text, m.index + m[0].length) : at + close.length;
-    return { start: m.index, end, kind: blockKind(label) };
+    const end = at === -1 ? bodyEnd(text, m.index + m[0].length) : at + close.length;
+    return label === CLEARSIGNED || end === null
+      ? []
+      : [{ start: m.index, end, kind: blockKind(label) }];
   });
   const putty = [...text.matchAll(PUTTY_KEY)].map((m) => {
     const mac = PUTTY_MAC.exec(text.slice(m.index));
     const end =
-      mac === null ? untilEnd(text, m.index + m[0].length) : m.index + mac.index + mac[0].length;
+      mac === null
+        ? (bodyEnd(text, m.index) ?? text.trimEnd().length)
+        : m.index + mac.index + mac[0].length;
     return { start: m.index, end, kind: "private-key" };
   });
   return [...armoured, ...putty];
 }
 
-/** The kind of the first key block or shape in the text, or null when nothing looks secret. */
+/** The kind of the first private key block or shape in the text, or null when nothing looks
+ * secret; a public block (a certificate, a public key) is not refused. */
 export function looksLikeSecret(text: string): string | null {
-  const block = blockSpans(text)[0];
+  const block = blockSpans(text).find((span) => span.kind !== "pem-block");
   if (block !== undefined) {
     return block.kind;
   }

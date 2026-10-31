@@ -4,7 +4,7 @@
 // same run always yields the same corpus. Key material is made at test time by its real producers
 // (`producedCases`), for the same reason.
 
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isolatedEnv } from "../../../lib/fixtures/cli.ts";
 
@@ -214,11 +214,58 @@ const CREDENTIAL_VALUES: Case[] = [
   return { text: say(value), secrets: [value], kinds: ["credential-value"] };
 });
 
-/** A hex run that is no commit and no UUID: a key, not an id. */
-const BARE_HEX: Case[] = [32, 48].map((length) => {
-  const value = hex(length);
-  return { text: `use ${value} for the webhook`, secrets: [value], kinds: ["random-token"] };
+/** The credential pass on its own lines (a joiner never crosses a newline), after `pass`, an
+ * UPPER_SNAKE `_KEY`, a netrc `password` and a `--password` flag, with a quoted phrase, a quote
+ * inside the value, and an `@` inside a connection string's password. */
+const PASS = ["pass", "word"].join("");
+const LAYOUTS: ReadonlyArray<(v: string) => string> = [
+  (v) => `database:\n  ${PASS}: ${v}`,
+  (v) => `github:\n  token: ${v}`,
+  (v) => `DB_HOST=\nDB_${PASS.toUpperCase()}=${v}`,
+  (v) => `DB_PASS=${v}`,
+  (v) => `pass: ${v}`,
+  (v) => `STRIPE_KEY=${v}`,
+  (v) => `ENCRYPTION_KEY=${v}`,
+  (v) => `machine api.example.test login me ${PASS} ${v}`,
+  (v) => `psql --${PASS} ${v}`,
+  (v) => `mysql --${PASS}=${v} -u app`,
+];
+const PLACED: Case[] = LAYOUTS.map((say) => {
+  const value = random(ALNUM, 12);
+  return { text: say(value), secrets: [value], kinds: ["credential-value"] };
 });
+
+const phrase = Array.from({ length: 4 }, () => random(LOWER, 6)).join(" ");
+const quoteInside = `ab'cd${random(ALNUM, 12)}`;
+const atInside = `p@ss${random(ALNUM, 12)}`;
+const SPELLED: Case[] = [
+  { text: `{"${PASS}": "${phrase}"}`, secrets: [phrase], kinds: ["credential-value"] },
+  { text: `${PASS}=${quoteInside}`, secrets: [quoteInside], kinds: ["credential-value"] },
+  {
+    text: `postgres://app:${atInside}@db.example.test:5432/app`,
+    secrets: [atInside],
+    kinds: ["connection-string"],
+  },
+];
+
+/** Random runs in one case and a base32 seed: no humps, no words, still random. */
+const SINGLE_CASE: Case[] = [
+  random(LOWER, 40),
+  random(UPPER, 40),
+  random(`${UPPER}234567`, 32),
+].map((value) => ({
+  text: `otpauth seed ${value} now`,
+  secrets: [value],
+  kinds: ["random-token"],
+}));
+
+/** Base64 of a token: a Kubernetes Secret's data holds it encoded. */
+const encodedToken = Buffer.from(`ghp_${random(ALNUM, 36)}`).toString("base64");
+const encodedRandom = Buffer.from(random(BASE64URL, 40)).toString("base64");
+const ENCODED: Case[] = [
+  { text: `data:\n  GITHUB_PAT: ${encodedToken}`, secrets: [encodedToken], kinds: ["github-pat"] },
+  { text: `data:\n  webhook: ${encodedRandom}`, secrets: [encodedRandom], kinds: ["random-token"] },
+];
 
 export const POSITIVES: readonly Case[] = [
   ...wrapped(KNOWN, 0),
@@ -227,7 +274,10 @@ export const POSITIVES: readonly Case[] = [
   ...NAMED_PASSWORDS,
   ...SHAPED_CASES,
   ...CREDENTIAL_VALUES,
-  ...BARE_HEX,
+  ...PLACED,
+  ...SPELLED,
+  ...SINGLE_CASE,
+  ...ENCODED,
 ];
 
 /** A UUID, a hash, a path, an id: what a coding session is full of, and never a credential. */
@@ -371,14 +421,63 @@ const NOT_VALUES: readonly string[] = [
   "auth=false",
 ];
 
+/** Code, prose, references and paths after a credential word, a public SSH key type, a BEGIN label
+ * named in prose: a capture would mask these words in every file the agent reads afterwards. */
+const BEGIN = ["-----BEGIN", "PUBLIC KEY-----"].join(" ");
+const CODE_AND_PROSE: readonly string[] = [
+  `interface Opts { readonly token: string; ${PASS}: string | null; }`,
+  "const secret = process.env.API_SECRET;",
+  `${PASS} = os.environ['DB_${PASS.toUpperCase()}']`,
+  '{"type":"object","properties":{"token":{"type":"string"}}}',
+  "the token is expired, refresh it",
+  `the ${PASS} is incorrect`,
+  "the secret is stored in the vault",
+  "auth: required",
+  "token je neplatný, heslo je špatně",
+  "klíč je uložený v trezoru",
+  "Bearer authentication is required",
+  "NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+  "token: ${{secrets.GITHUB_TOKEN}}",
+  `${PASS}: !vault |`,
+  "auth: { type: 'bearer' }",
+  "pwd: /home/qs_m4rk/Projects",
+  "credentials: ~/.aws/credentials",
+  "token_path=/run/secrets/token",
+  "secret=$(cat /run/secrets/x)",
+  `${PASS.toUpperCase()}=$DB_${PASS.toUpperCase()}`,
+  `${PASS}=%(db_${PASS})s`,
+  `${PASS}: '{{ vault_db_${PASS} }}'`,
+  "ssh_auth: ssh-ed25519 is the key type we use",
+  "auth_url: https://login.example.test/oauth2/authorize",
+  "primary_key: user_id_column",
+  "ssh -p 2222 deploy@host.example.test",
+  `${BEGIN} is a public key header`,
+  "Why does -----BEGIN <label>----- in detect.ts swallow the rest? Please check.",
+];
+
+/** Bare hex is a digest, an image id, a request id or an ETag until a credential name says else;
+ * whether bare hex should count is the owner's decision, open. */
+const BARE_HEX: readonly string[] = [
+  `sha256sum: ${hex(64)}  empty.txt`,
+  `md5 ${hex(32)}`,
+  `docker image ${hex(64)}`,
+  `x-request-id: ${hex(32)}`,
+  `Etag: W/"${hex(32)}"`,
+  `use ${hex(48)} for the webhook`,
+];
+
 /** Only the first characters of each shape: the prefix alone is no token. */
 const SHAPE_PREFIXES: readonly string[] = SHAPED.map(
   ([, token]) => `only the first characters were pasted: ${token.slice(0, 12)}`,
 );
 
-export const NEGATIVES: readonly Case[] = [...NEGATIVE_TEXTS, ...NOT_VALUES, ...SHAPE_PREFIXES].map(
-  (text) => ({ text, secrets: [] }),
-);
+export const NEGATIVES: readonly Case[] = [
+  ...NEGATIVE_TEXTS,
+  ...NOT_VALUES,
+  ...CODE_AND_PROSE,
+  ...BARE_HEX,
+  ...SHAPE_PREFIXES,
+].map((text) => ({ text, secrets: [] }));
 
 /** The producers' own output, read back once each has written it. */
 interface Produced {
@@ -454,16 +553,24 @@ export function producedCases(dir: string): Produced {
   const home = join(dir, "gnupg");
   mkdirSync(home, { mode: 0o700 });
   const gpg = ["--batch", "--pinentry-mode", "loopback", "--passphrase", ""];
-  produce(
-    "gpg",
-    [...gpg, "--quick-gen-key", "Corpus <corpus@example.test>", "ed25519", "default", "never"],
-    dir,
-    home,
-  );
-  const pgpPrivate = produce("gpg", [...gpg, "--armor", "--export-secret-keys"], dir, home);
-  const pgpPublic = produce("gpg", ["--armor", "--export"], dir, home);
-  produce("gpgconf", ["--kill", "all"], dir, home);
-  produce("gpgconf", ["--remove-socketdir"], dir, home);
+  writeFileSync(join(dir, "release.txt"), "release 1.2\n");
+  let pgpPrivate: string;
+  let pgpPublic: string;
+  try {
+    produce(
+      "gpg",
+      [...gpg, "--quick-gen-key", "Corpus <corpus@example.test>", "ed25519", "default", "never"],
+      dir,
+      home,
+    );
+    pgpPrivate = produce("gpg", [...gpg, "--armor", "--export-secret-keys"], dir, home);
+    pgpPublic = produce("gpg", ["--armor", "--export"], dir, home);
+    produce("gpg", [...gpg, "--clearsign", "--output", "release.asc", "release.txt"], dir, home);
+  } finally {
+    // A failed step still stops the agent and removes its socket directory.
+    produce("gpgconf", ["--kill", "all"], dir, home);
+    produce("gpgconf", ["--remove-socketdir"], dir, home);
+  }
 
   const staticKey = read("ta.key");
   const ed = read("id_ed25519");
@@ -473,6 +580,9 @@ export function producedCases(dir: string): Produced {
   const key = read("key.pem");
   const csr = read("req.csr");
   const cut = block(ed).split("\n").slice(0, -1).join("\n");
+  const signed = read("release.asc");
+  const signature = block(signed.slice(signed.indexOf("-----BEGIN", 1)));
+  const keyData = Buffer.from(key).toString("base64");
   const ovpn = [
     "client\ndev tun\nproto udp\nremote vpn.example.test 1194\n<ca>",
     block(cert),
@@ -494,6 +604,13 @@ export function producedCases(dir: string): Produced {
       one(`my gpg key\n${pgpPrivate}`, block(pgpPrivate), "private-key"),
       one(`my public gpg key\n${pgpPublic}`, block(pgpPublic), "pem-block"),
       one(`the key, cut short:\n${cut}`, cut, "private-key"),
+      one(`${cut}\nthat is all I have`, cut, "private-key"),
+      one(`${signed}\nIs this signature valid?`, signature, "pem-block"),
+      one(
+        `users:\n- name: admin\n  user:\n    client-key-data: ${keyData}`,
+        keyData,
+        "private-key",
+      ),
       {
         text: ovpn,
         secrets: [block(cert), block(key), block(staticKey)],
