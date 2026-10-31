@@ -26,7 +26,8 @@ export const verbs: Readonly<Record<string, VerbRow>> = {
   browserboxStop: { words: ["qsm-web","browserbox","stop"], args: [{ name: "name", flag: null }, { name: "all", flag: "--all", boolean: true }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
   browserboxFetch: { words: ["qsm-web","browserbox","fetch"], args: [{ name: "url", flag: null }, { name: "in", flag: "--in" }, { name: "html", flag: "--html", boolean: true }, { name: "screenshot", flag: "--screenshot", boolean: true }, { name: "cookies", flag: "--cookies", boolean: true }, { name: "settle", flag: "--settle" }, { name: "timeout", flag: "--timeout" }, { name: "keep", flag: "--keep", boolean: true }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
   browserboxScript: { words: ["qsm-web","browserbox","script"], args: [{ name: "name", flag: null }, { name: "file", flag: "--file" }, { name: "steps", flag: "--steps" }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
-  browserboxTakeover: { words: ["qsm-web","browserbox","takeover"], args: [{ name: "name", flag: null }, { name: "tab", flag: null }, { name: "reason", flag: "--reason" }, { name: "timeout", flag: "--timeout" }, { name: "open", flag: "--open", boolean: true }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
+  browserboxView: { words: ["qsm-web","browserbox","view"], args: [{ name: "name", flag: null }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
+  browserboxTakeover: { words: ["qsm-web","browserbox","takeover"], args: [{ name: "name", flag: null }, { name: "tab", flag: null }, { name: "reason", flag: "--reason" }, { name: "timeout", flag: "--timeout" }, { name: "dryRun", flag: "--dry-run", boolean: true }] },
 };
 
 /** One verb's argv: its words, each option in declaration order, the
