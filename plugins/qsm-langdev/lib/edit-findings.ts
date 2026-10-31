@@ -5,13 +5,11 @@
 // file against HEAD again.
 
 import { dirname, relative } from "node:path";
-import { messageOf } from "../../../lib/outcome.ts";
 import { checkInPlace } from "./compare.ts";
 import { findRepoRoot, isLangdevRepo, readGatesConfig } from "./config.ts";
 import { fixFiles } from "./fixers.ts";
 import { POINTS } from "./registry.ts";
 import { type Editor, recordStartPoint } from "./state.ts";
-import { recordTimings, slowLines } from "./timings.ts";
 
 const MAX_OUTPUT_CHARS = 4000;
 
@@ -56,15 +54,9 @@ export async function editFindings(editor: Editor, file: string): Promise<EditRe
   fixFiles(root, [relPath]);
   // The edit point's timeout counts from the binary's start, so the start and the fixers come out of
   // it, and several edits at once still answer inside the engine's 10 s, a slow checker not measured.
-  const { findings, log, timed } = await checkInPlace(root, relPath, {
+  const { findings, log } = await checkInPlace(root, relPath, {
     languages: readGatesConfig(root).languages,
     deadlineMs: POINTS.edit.timeoutMs,
   });
-  try {
-    recordTimings(root, "edit", timed);
-  } catch (cause) {
-    log.push(`timings not recorded: ${messageOf(cause)}`);
-  }
-  log.push(...slowLines("edit", timed, POINTS.edit.targetMs));
   return { text: modelText(relPath, findings), log };
 }

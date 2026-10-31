@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeAtomic } from "../../../lib/fs.ts";
+import { messageOf } from "../../../lib/outcome.ts";
 import { cacheDir } from "./cache-dir.ts";
 import { isErrno } from "./errors.ts";
 import { num, recordOf, str } from "./json.ts";
@@ -91,6 +92,23 @@ export function recordTimings(root: string, point: Point, timings: readonly Timi
     JSON.stringify({ checker, ms: Math.round(ms), at: ran }),
   );
   writeAtomic(timingsPath(root, point), `${lines.join("\n")}\n`);
+}
+
+/** Records `timed` at `point` and gives the run's lines: each run over `targetMs`, and a record that
+ * could not be written, which never costs a verdict. */
+export function recordRun(
+  root: string,
+  point: Point,
+  timed: readonly Timing[],
+  targetMs: number,
+): string[] {
+  const lines = slowLines(point, timed, targetMs);
+  try {
+    recordTimings(root, point, timed);
+  } catch (cause) {
+    lines.push(`timings not recorded: ${messageOf(cause)}`);
+  }
+  return lines;
 }
 
 function median(values: readonly number[]): number {

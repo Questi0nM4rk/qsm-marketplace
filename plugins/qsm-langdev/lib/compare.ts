@@ -16,9 +16,8 @@ import {
 import { changedPlusSet, describeSets, givenSet, type SetSize, setName } from "./file-sets.ts";
 import type { Finding, Tally } from "./findings.ts";
 import { isErrno } from "./errors.ts";
-import { messageOf } from "../../../lib/outcome.ts";
 import { hasScaffoldedConfig } from "./profiles.ts";
-import { recordTimings, slowLines, type Timing } from "./timings.ts";
+import { recordRun, type Timing } from "./timings.ts";
 import {
   asRunAt,
   type CheckSpec,
@@ -27,6 +26,7 @@ import {
   type Language,
   type LocalRules,
   type ComparedPoint,
+  type Point,
   POINTS,
   REGISTRY,
   selectedAt,
@@ -298,7 +298,7 @@ function failureCause(spec: CheckSpec, stdout: string, stderr: string, exitCode:
 function scoreWithReport(
   spec: CheckSpec,
   reportFile: string,
-  side: Side & { rules: LocalRules },
+  side: RuledSide,
   files: readonly string[],
   timeoutMs: number,
 ): Promise<Score> {
@@ -375,7 +375,7 @@ type Through = (files: readonly string[], compute: () => Promise<Score>) => Prom
 /** The tool's number for `side`: one spawn, one per file summed, or one that writes a report file. */
 async function scoreFiles(
   spec: CheckSpec,
-  side: Side & { rules: LocalRules },
+  side: RuledSide,
   timeoutMs: number,
   through: Through,
 ): Promise<Score> {
@@ -637,9 +637,11 @@ interface Evaluation {
 
 /** A side narrowed to one checker, with where its results are kept and the
  * local copy of each rule pack the checker names that the run fetched. */
-interface KeptSide extends Side {
+/** A side and the local copy of each rule pack its checker names. */
+type RuledSide = Side & { rules: LocalRules };
+
+interface KeptSide extends RuledSide {
   kept: SideStore;
-  rules: LocalRules;
 }
 
 type Scored = Extract<Score, { tally: Tally }>;
@@ -772,8 +774,6 @@ export interface CompareOptions {
   /** Test seam; production gives a binary's `--version` probe the point's timeout. */
   probeTimeoutMs?: number;
   jobs?: number;
-  /** Score only these paths (relative to root) on both sides — the edit hook's one file. */
-  only?: readonly string[];
   /** The files and directories (relative to root) the caller names: the
    * `given` set. Empty or omitted = the repository root. */
   given?: readonly string[];
@@ -790,16 +790,16 @@ function applicability(
   root: string,
   spec: CheckSpec,
   changed: readonly string[],
-  options: CompareOptions,
+  scope: { at: Point; languages: readonly Language[] | undefined },
 ): Applicable | null {
   const covered = matchingFiles(root, changed, spec.extensions, spec.names).length;
   if (covered === 0) {
     return null;
   }
-  if (!selectedAt(spec, options.at ?? "pre-commit")) {
+  if (!selectedAt(spec, scope.at)) {
     return null;
   }
-  if (!languageEnabled(spec.language, options.languages ?? [])) {
+  if (!languageEnabled(spec.language, scope.languages ?? [])) {
     return {
       spec,
       skip: `${spec.name} covers ${covered} changed file(s) but language '${spec.language}' is off in .qsm-langdev/gates.json`,
@@ -854,18 +854,10 @@ async function probeAll(
 }
 
 /**
- * The paths a comparison scores: `options.only` verbatim, every path the tree holds when there is
- * no previous commit to diff against, or else whatever changed between the two sides.
+ * The paths a comparison scores: every path the tree holds when there is no previous commit to diff
+ * against, or else whatever changed between the two sides.
  */
-function resolveChanged(
-  root: string,
-  beforeRef: string | null,
-  after: string,
-  options: CompareOptions,
-): string[] {
-  if (options.only !== undefined) {
-    return [...options.only];
-  }
+function resolveChanged(root: string, beforeRef: string | null, after: string): string[] {
   if (beforeRef === null) {
     return trackedFiles(root) ?? [];
   }
@@ -885,9 +877,9 @@ function selectApplicable(
   root: string,
   registry: readonly CheckSpec[],
   changed: readonly string[],
-  options: CompareOptions,
+  scope: { at: Point; languages: readonly Language[] | undefined },
 ): Selection {
-  const applicable = registry.map((spec) => applicability(root, spec, changed, options));
+  const applicable = registry.map((spec) => applicability(root, spec, changed, scope));
   const skipped = applicable.filter(
     (a): a is { spec: CheckSpec; skip: string } => a !== null && "skip" in a,
   );
@@ -935,8 +927,12 @@ function missingPrerequisiteVerdicts(
       };
     });
 
-  const languagesInPlay = [...new Set(selected.map((spec) => spec.language))];
-  const missingConfigVerdicts: Verdict[] = languagesInPlay
+  return [...missingBinaryVerdicts, ...missingConfigVerdicts(selected, root)];
+}
+
+/** One verdict per language of `selected` that has no profile-scaffolded config here. */
+function missingConfigVerdicts(selected: readonly CheckSpec[], root: string): Verdict[] {
+  return [...new Set(selected.map((spec) => spec.language))]
     .filter((language) => !hasScaffoldedConfig(root, language))
     .map((language) => ({
       check: `${language} config`,
@@ -946,8 +942,6 @@ function missingPrerequisiteVerdicts(
         `${language}: no profile-scaffolded config in this repository — run ` +
         `'qsm-langdev init', or remove '${language}' from .qsm-langdev/gates.json`,
     }));
-
-  return [...missingBinaryVerdicts, ...missingConfigVerdicts];
 }
 
 /**
@@ -964,9 +958,7 @@ function resolveGiven(
     ...(beforeRef === null ? [] : (sidePaths(root, beforeRef) ?? [])),
     ...(sidePaths(root, after) ?? []),
   ];
-  const given = scoredPaths(root, givenSet(listed, options.given ?? []));
-  const { only } = options;
-  return only === undefined ? given : given.filter((path) => only.includes(path));
+  return scoredPaths(root, givenSet(listed, options.given ?? []));
 }
 
 /** The selected checkers as they run at the run's enforcement point. */
@@ -977,14 +969,12 @@ function engage(selected: readonly CheckSpec[], options: CompareOptions): CheckS
 
 /** Every set a selected checker declares, by name, each computed once:
  * `changed` and `given` are handed in; every `changed+N` is built here from
- * the import graph of both sides and narrowed to `only` when it is set.
- * The sizes of the `changed+N` sets are pushed onto `sizes`. */
+ * the import graph of both sides. The sizes of the `changed+N` sets are pushed onto `sizes`. */
 async function setsFor(
   base: {
     root: string;
     changed: readonly string[];
     given: readonly string[];
-    only?: readonly string[];
   },
   selected: readonly CheckSpec[],
   trees: readonly Side[],
@@ -1000,12 +990,10 @@ async function setsFor(
     ),
   );
   for (const n of [...depths].toSorted((a, b) => a - b)) {
-    const plus = await changedPlusSet(base.root, trees, base.changed, n);
-    const { only } = base;
-    const files = only === undefined ? plus.files : plus.files.filter((f) => only.includes(f));
+    const { files, noExtractor } = await changedPlusSet(base.root, trees, base.changed, n);
     const name = setName({ changedPlus: n });
     sets.set(name, new Set(files));
-    sizes.push({ set: name, files: files.length, noExtractor: plus.noExtractor });
+    sizes.push({ set: name, files: files.length, noExtractor });
   }
   return sets;
 }
@@ -1174,8 +1162,7 @@ async function verdictFor(
     return { verdict: { check: spec.name, pass: true, skipped: true, summary } };
   }
   const { before, after } = keptSides(spec, sides, narrowed, context);
-  const { renames } = context;
-  const { timeoutMs } = context;
+  const { renames, timeoutMs } = context;
   const started = performance.now();
   const result = await evalChecker({ spec, before, after, timeoutMs, renames });
   if (scoredASide(context.uses.get(spec.name))) {
@@ -1243,25 +1230,25 @@ export async function compareTrees(
   store: StoreReport;
   warnings: string[];
 }> {
-  const changed = resolveChanged(root, beforeRef, after, options);
+  const changed = resolveChanged(root, beforeRef, after);
   const given = resolveGiven(root, beforeRef, after, options);
   const sets: SetSize[] = [
     { set: "changed", files: changed.length },
     { set: "given", files: given.length },
   ];
 
+  const { at, targetMs, timeoutMs, probeTimeoutMs } = runLimits(options);
   const { selected: applicable, skipVerdicts } = selectApplicable(
     root,
     options.registry ?? REGISTRY,
     changed,
-    options,
+    { at, languages: options.languages },
   );
   const unused: StoreReport = { checkers: [] };
   if (applicable.length === 0) {
     return { changed, sets, verdicts: skipVerdicts, store: unused, warnings: [] };
   }
 
-  const { at, targetMs, timeoutMs, probeTimeoutMs } = runLimits(options);
   const probes = await probeAll(applicable, root, probeTimeoutMs);
   const missingVerdicts = missingPrerequisiteVerdicts(applicable, root, probes);
   // A binary that is missing or slow to answer takes its own checkers out of the run, never the
@@ -1275,12 +1262,7 @@ export async function compareTrees(
   const selected = engage(runnable, options);
   const warnings: string[] = [];
 
-  const base = {
-    root,
-    changed,
-    given,
-    ...(options.only === undefined ? {} : { only: options.only }),
-  };
+  const base = { root, changed, given };
   const fetchPack = options.fetchPack ?? fetchFromRegistry;
   const { context, verdicts } = await withPacks(selected, fetchPack, async (packs) => {
     const run: RunContext = {
@@ -1306,12 +1288,7 @@ export async function compareTrees(
     return { context: run, verdicts: found };
   });
   const store = prunedStore(selected, context);
-  try {
-    recordTimings(root, at, context.timed);
-  } catch (cause) {
-    warnings.push(`timings not recorded: ${messageOf(cause)}`);
-  }
-  warnings.push(...slowLines(at, context.timed, targetMs));
+  warnings.push(...recordRun(root, at, context.timed, targetMs));
   return {
     changed,
     sets,
@@ -1330,7 +1307,6 @@ export interface InPlace {
   findings: string[];
   /** How the run went, per checker: what it found, or why it found nothing. */
   log: string[];
-  timed: Timing[];
 }
 
 /** The lines a checker's score gives the model: its findings, else its output naming the file. */
@@ -1361,19 +1337,18 @@ export async function checkInPlace(
     fetchPack?: FetchPack;
   },
 ): Promise<InPlace> {
-  const covering = (options.registry ?? REGISTRY).filter(
-    (spec) =>
-      selectedAt(spec, "edit") &&
-      languageEnabled(spec.language, options.languages) &&
-      matchingFiles(root, [file], spec.extensions, spec.names).length > 0,
+  const { selected, skipVerdicts } = selectApplicable(root, options.registry ?? REGISTRY, [file], {
+    at: "edit",
+    languages: options.languages,
+  });
+  // A generated file is outside the quality checkers, never the safety ones, as at a commit.
+  const generated = generatedPaths(root, [file]).has(file);
+  const covering = selected.filter((spec) => !generated || spec.guardsSafety === true);
+  const unconfigured = missingConfigVerdicts(covering, root);
+  const log = [...skipVerdicts, ...unconfigured].map(headline);
+  const runnable = covering.filter(
+    (spec) => !unconfigured.some((verdict) => verdict.check === `${spec.language} config`),
   );
-  const unconfigured = new Set(
-    covering
-      .map((spec) => spec.language)
-      .filter((language) => !hasScaffoldedConfig(root, language)),
-  );
-  const log = [...unconfigured].map((language) => `${language}: no config; run qsm-langdev init`);
-  const runnable = covering.filter((spec) => !unconfigured.has(spec.language));
   const left = () => Math.max(DEADLINE_FLOOR_MS, options.deadlineMs - performance.now());
   const runs = await withPacks(runnable, options.fetchPack ?? fetchFromRegistry, (packs) =>
     mapLimit(runnable, JOBS, async (spec) => {
@@ -1392,7 +1367,9 @@ export async function checkInPlace(
     findings.push(...findingLines(spec, one, file));
     log.push(`${spec.name}: ${one.tally.total} findings`);
   }
-  return { findings, log, timed: runs.map(({ spec, ms }) => ({ checker: spec.name, ms })) };
+  const timed = runs.map(({ spec, ms }) => ({ checker: spec.name, ms }));
+  log.push(...recordRun(root, "edit", timed, POINTS.edit.targetMs));
+  return { findings, log };
 }
 
 /** The run's store pruned to what it used, and each checker's use of it. */

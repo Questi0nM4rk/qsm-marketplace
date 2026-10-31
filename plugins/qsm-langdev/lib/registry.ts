@@ -163,6 +163,8 @@ export const POINT_NAMES: readonly Point[] = ["edit", "pre-commit", "pre-push", 
  * of 7.5 s from the binary's start, the rest going to the start and the fixers.
  */
 export const POINTS = {
+  // At edit the timeout is a deadline from the binary's start that every checker shares, not a
+  // limit per process: the engine's 10 s is for the whole hook.
   edit: { targetMs: 5_000, timeoutMs: 7_500 },
   "pre-commit": { targetMs: 30_000, timeoutMs: 300_000 },
   "pre-push": { targetMs: 60_000, timeoutMs: 300_000 },
@@ -402,9 +404,9 @@ interface PrePush {
 }
 
 /** `spec` as it runs at `point`: at pre-push and ci its `prePush` declaration, elsewhere itself. */
-export function asRunAt(spec: CheckSpec, point: Point): CheckSpec {
+export function asRunAt(spec: CheckSpec, point: ComparedPoint): CheckSpec {
   const push = spec.prePush;
-  if (point === "edit" || point === "pre-commit" || push === undefined) {
+  if (point === "pre-commit" || push === undefined) {
     return spec;
   }
   return { ...spec, fileSet: push.fileSet };
