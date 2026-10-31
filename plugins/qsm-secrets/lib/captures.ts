@@ -5,7 +5,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { sleepSync } from "bun";
-import { tryLock, writeAtomic } from "../../../lib/fs.ts";
+import { tryFlock, writeAtomic } from "../../../lib/fs.ts";
 import { isRecord } from "../../../lib/outcome.ts";
 import { dataDir, type Env } from "../../../lib/paths.ts";
 import { fail } from "./errors.ts";
@@ -73,7 +73,7 @@ export function updateIndex(path: string, change: (index: CaptureIndex) => Captu
   const fd = openSync(`${path}.lock`, "a", 0o600);
   try {
     const until = Date.now() + LOCK_WAIT_MS;
-    while (!tryLock(fd)) {
+    while (!tryFlock(fd)) {
       if (Date.now() > until) {
         fail(
           `${path}.lock is held by another qsm-secrets for over ${LOCK_WAIT_MS / 1000} s`,

@@ -26,7 +26,7 @@ let flock: ((fd: number, op: number) => number) | undefined;
  * kernel drops it the moment the descriptor closes or its process exits, however it exits, so there
  * is never a stale lock to take over and the lock file is never removed.
  */
-export function tryLock(fd: number): boolean {
+export function tryFlock(fd: number): boolean {
   if (flock === undefined) {
     const libc = dlopen(process.platform === "darwin" ? "libc.dylib" : "libc.so.6", {
       flock: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },

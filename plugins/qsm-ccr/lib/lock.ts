@@ -7,7 +7,7 @@
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { join } from "node:path";
 import { sleep } from "bun";
-import { tryLock } from "../../../lib/fs.ts";
+import { tryFlock } from "../../../lib/fs.ts";
 import { QsmError } from "../../../lib/qsm-error.ts";
 
 const POLL_MS = 10;
@@ -22,7 +22,7 @@ function lockFile(stateDir: string): number {
 export function lockHeld(stateDir: string): boolean {
   const fd = lockFile(stateDir);
   try {
-    return !tryLock(fd);
+    return !tryFlock(fd);
   } finally {
     closeSync(fd);
   }
@@ -36,7 +36,7 @@ export async function withLock<T>(
   const fd = lockFile(stateDir);
   try {
     const until = Date.now() + waitMs;
-    while (!tryLock(fd)) {
+    while (!tryFlock(fd)) {
       if (Date.now() > until) {
         // a refusal, never a crash: the verb's boundary answers blocked
         throw new QsmError(
