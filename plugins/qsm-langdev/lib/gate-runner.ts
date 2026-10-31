@@ -410,7 +410,7 @@ async function scorePushedRefs(
 
 async function langdevAtCommit(root: string, point: EnforcementPoint): Promise<GateOutcome> {
   const skipped = fixStaged(root);
-  return withSkipped(await langdevAt(root, resolveRef(root, "HEAD"), "worktree", point), skipped);
+  return withSkipped(await langdevAt(root, resolveRef(root, "HEAD"), "index", point), skipped);
 }
 
 /** The one verdict from lib/structure.ts, mapped onto a gate outcome. */
@@ -432,7 +432,7 @@ async function structureAt(root: string, before: string, after: string): Promise
 
 async function structureAtCommit(root: string): Promise<GateOutcome> {
   const head = resolveRef(root, "HEAD");
-  return head === null ? pass("structure") : structureAt(root, head, "worktree");
+  return head === null ? pass("structure") : structureAt(root, head, "index");
 }
 
 const KNOWN_GATES = ["secrets", "entropy", "langdev", "structure"] as const;

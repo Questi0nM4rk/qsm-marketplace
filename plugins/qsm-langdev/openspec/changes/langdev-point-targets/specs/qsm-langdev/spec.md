@@ -396,7 +396,9 @@ through the same rule as `check`, and the architectural quality comparison,
 through the same rule as `structure`, in one run. A regression in either
 comparison SHALL block the stop, reporting the changed files and, for the
 comparison that regressed, the totals or the quality before and after. The
-gate SHALL allow the stop when both comparisons held or improved. When a tree
+gate SHALL allow the stop when both comparisons held or improved. The edited
+tree's side is its index, as for `check`: an edit the agent did not stage is
+not scored. When a tree
 has no ruleset to score one comparison under, or the checker that comparison
 needs is unavailable, the gate SHALL allow the stop and report a warning for
 that comparison rather than a block. The gate SHALL run at the pre-commit
@@ -461,3 +463,99 @@ in this mode. No rule, quality threshold, reference commit or engine-selection p
 - **WHEN** the result store holds a score collected without the explicit timeout argument
 - **THEN** that entry SHALL NOT answer a scan using the new argv, without changing the baseline
   commit or manually deleting cache files
+
+### Requirement: A check compares a reference tree against the shipped tree
+
+`check` SHALL score every selected checker against two sides: the reference, which is the last
+commit (`HEAD`), and the shipped side, which is the index: every file as it is staged. An unstaged
+change and an untracked file are not measured anywhere, at no point: only what is staged or
+committed is on its way out, so a change nobody staged decides nothing about the commit under the
+gate, and a file another session left on disk never reaches a gate. Each side SHALL be scored in a
+scratch tree that holds the inputs the repository's own commands read, so a checker measures there
+what it measures in the live checkout: every dependency directory the live checkout installed
+(`node_modules`, `.venv`) at any depth, and every ignored path a tsconfig's `include` or `files`
+names, linked in from the live checkout. A generated file stays on disk for the code that imports
+it; the file sets leave it unscored. A checker SHALL pass only when the shipped side's total is no
+higher than the reference side's; where the checker names files, no file SHALL carry more findings
+than before, a moved file compared under its old name; and where the checker reports individual
+findings, no finding SHALL occur more often than before. A finding is identified by its rule and
+message, never by its line, so code moving above it does not make it new. The run SHALL stop at the
+first checker that fails and name it with both totals and the newly-occurring lines. A checker that
+is not measured (it ran past its time limit, or its output could not be read) does not stop the run:
+it decides nothing, so the checkers after it still run and the report is whole. A checker is
+selected only when its file set holds a file of a type it covers. Each side is scored at most once
+per content: the reference side comes from the result store whenever it holds that content, so a run
+scores only what the store does not know (see "A checker runs once per content, against a stored
+result").
+
+#### Scenario: A new finding blocks
+
+- **WHEN** the shipped tree carries one more finding for a checker than the
+  reference tree
+- **THEN** `check` SHALL fail, name the checker, both totals, and the new
+  finding's location
+
+#### Scenario: An unstaged change is not measured
+
+- **WHEN** `a.ts` is staged with one change and then edited again without
+  staging, and `b.ts` is edited without staging
+- **THEN** `check` SHALL score the staged `a.ts` only, and `changed` SHALL hold
+  `a.ts` alone
+
+#### Scenario: An untracked file is not measured
+
+- **WHEN** the working tree holds a file git does not track, with a finding the
+  reference tree does not have
+- **THEN** `check` SHALL pass, hand the file to no checker, and list it in no
+  file set; once the file is added to the index it is measured like any change
+
+#### Scenario: A side reads the same inputs as the live checkout
+
+- **WHEN** a package imports a dependency installed only in its own
+  `node_modules`, or a generated declaration file its tsconfig names and git
+  ignores, or a generated file marked `export-ignore`
+- **THEN** a type-aware checker SHALL resolve it on either side and report
+  what it reports when run directly in the live checkout
+
+#### Scenario: A fix does not offset a new finding elsewhere
+
+- **WHEN** a change removes findings from one file and adds one to another,
+  lowering the overall total
+- **THEN** `check` SHALL fail on the file that grew
+
+#### Scenario: Moved code is not a new finding
+
+- **WHEN** lines are inserted above an unchanged finding, or a file carrying
+  findings is renamed with nothing else changed
+- **THEN** `check` SHALL pass
+
+#### Scenario: Nothing the change touches is covered
+
+- **WHEN** a change touches only files no selected checker covers
+- **THEN** `check` SHALL pass, reporting that no checker ran, not that every
+  checker passed
+
+### Requirement: Every run computes its file sets once
+
+Before any checker runs, the run SHALL compute three file sets and hand each
+checker the one it declares. They are computed once per run, never per
+checker, and the run reports each set's size.
+
+#### Scenario: A commit that touches two files
+
+- **WHEN** the index differs from `HEAD` in `a.ts` and `b.ts` and a
+  per-file checker covers TypeScript
+- **THEN** that checker SHALL be handed exactly `a.ts` and `b.ts`, and the
+  report SHALL say `changed: 2 files`
+
+#### Scenario: A file that another file imports
+
+- **WHEN** `a.ts` changed, `b.ts` imports `a.ts`, `c.ts` imports `b.ts`, and a
+  checker declares `changed+N` with N = 1
+- **THEN** that checker SHALL be handed `a.ts` and `b.ts`, not `c.ts`
+
+#### Scenario: The whole project on request
+
+- **WHEN** the caller names no files and a checker declares `given`
+- **THEN** that checker SHALL be handed every file under the repository root
+  that git does not ignore

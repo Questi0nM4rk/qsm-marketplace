@@ -49,18 +49,14 @@ import {
   type ResolvedPack,
   resolvePacks,
 } from "./rule-packs.ts";
-import { isIgnored, withCommitTree, withScratchDir, withWorktreeTree } from "./tree.ts";
+import { isIgnored, withCommitTree, withIndexTree, withScratchDir } from "./tree.ts";
 
 const REPORT_SCRATCH_PREFIX = "qsm-langdev-report-";
 
-/** Every tracked file the working tree holds, minus anything deleted on disk. An untracked
- * file is not on its way into a commit, so it is not measured. Empty when git could not answer. */
-function worktreePaths(root: string): string[] {
-  const paths = gitPaths(root, ["ls-files", "-z", "--cached"]);
-  if (paths === null) {
-    return [];
-  }
-  return paths.filter((path) => existsSync(join(root, path)));
+/** Every file the index holds: only what is staged is on its way into a commit. Empty when git
+ * could not answer. */
+function indexPaths(root: string): string[] {
+  return gitPaths(root, ["ls-files", "-z", "--cached"]) ?? [];
 }
 
 /** What a checker is handed to score: a directory holding a whole tree and
@@ -80,16 +76,16 @@ function withSide<T>(root: string, ref: string, fn: (side: Side) => Promise<T>):
   if (files === null) {
     throw new Error(`git could not list the tree at ${ref}`);
   }
-  if (ref === "worktree") {
-    return withWorktreeTree(root, (dir) => fn({ root: dir, files }));
+  if (ref === "index") {
+    return withIndexTree(root, (dir) => fn({ root: dir, files }));
   }
   return withCommitTree(root, ref, (dir) => fn({ root: dir, files }));
 }
 
 /** Every path the tree at `ref` holds, or null when git could not list it. */
 function sidePaths(root: string, ref: string): string[] | null {
-  return ref === "worktree"
-    ? worktreePaths(root)
+  return ref === "index"
+    ? indexPaths(root)
     : gitPaths(root, ["ls-tree", "-r", "-z", "--name-only", ref]);
 }
 
@@ -731,10 +727,10 @@ export function scoredAtCommit(root: string, file: string): boolean {
 }
 
 function changedBetween(root: string, beforeRef: string, after: string): string[] | null {
-  const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
+  const range = after === "index" ? ["--cached", beforeRef] : [beforeRef, after];
   // --no-renames: a moved file is in the set under both names.
-  // Against the working tree, git diff lists every tracked file that differs from the commit,
-  // a file added to the index included; an untracked file is not measured.
+  // Against the index, git diff lists every staged file that differs from the commit; an unstaged
+  // change and an untracked file are not measured.
   const changed = gitPaths(root, ["diff", "--name-only", "-z", "--no-renames", ...range]);
   if (changed === null) {
     return null;
@@ -743,7 +739,7 @@ function changedBetween(root: string, beforeRef: string, after: string): string[
 }
 
 function renamedBetween(root: string, beforeRef: string, after: string): Renames {
-  const range = after === "worktree" ? [beforeRef] : [beforeRef, after];
+  const range = after === "index" ? ["--cached", beforeRef] : [beforeRef, after];
   const fields = gitPaths(root, ["diff", "--name-status", "-z", "-M", ...range]);
   const renames = new Map<string, string>();
   if (fields === null) {

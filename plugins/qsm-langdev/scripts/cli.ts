@@ -117,7 +117,7 @@ const check: Handler = async (call) => {
   const { changed, sets, verdicts, store, warnings } = await compareTrees(
     root,
     beforeRef,
-    "worktree",
+    "index",
     {
       at,
       languages: lang === undefined ? config.languages : parseLanguages(lang),

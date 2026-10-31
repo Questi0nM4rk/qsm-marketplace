@@ -249,7 +249,7 @@ describe("compareStructure leaves test files out of both trees", () => {
     const { root, base } = repo();
     write(root, { ...TESTS_ONLY, "lib/gen.ts": 'import { helper } from "./helper.ts";\n' });
 
-    const result = await compareStructure(root, base, "worktree");
+    const result = await compareStructure(root, base, "index");
     const judged = verdict(result);
 
     expect(result.status).toBe("not-scored");
@@ -276,11 +276,12 @@ describe("compareStructure leaves test files out of both trees", () => {
     expect(verdict(result).detail).toContain("4 test file(s) left out of the score");
   });
 
-  test("the working tree's product change is scored against the commit", async () => {
+  test("the staged product change is scored against the commit", async () => {
     const { root, base } = repo();
     write(root, { "lib/a.ts": 'import { helper } from "./helper.ts";\n' });
+    git(root, ["add", "-A"]);
 
-    const result = await compareStructure(root, base, "worktree");
+    const result = await compareStructure(root, base, "index");
 
     expect(result.status).toBe("scored");
     if (result.status === "scored") {

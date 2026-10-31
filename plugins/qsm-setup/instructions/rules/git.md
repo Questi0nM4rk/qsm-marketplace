@@ -6,12 +6,13 @@ is the writing skill; worktrees are the worktrunk skill; threads are the review-
 1. Every session works in its own worktree under the project's `.claude/worktrees/`, made through wt
    (`EnterWorktree`), never in the main checkout, which only follows main; a subagent's worktree is
    cut from its session's branch. So every gate judges only the tree its own agent works in: the
-   edit the edited file, the commit the worktree's HEAD against what it commits, the push each
-   pushed commit: qsm-langdev scores it against the latest main, and the marketplace gates judge the
-   commit itself, never files not yet committed. A file another session left behind can then never
-   block your gate. Merge, never rebase unless it is needed. The person in their words: "kazda
-   session si udela svuj worktree pod .claude/ of the project", "there should be no shared checkout
-   ever".
+   edit the edited file, the commit and the stop the worktree's HEAD against what is staged, the
+   push each pushed commit: qsm-langdev scores it against the latest main, and the marketplace gates
+   judge the commit itself. Every comparison takes staged and committed content only, never an
+   unstaged change, so a file another session left behind can never block your gate. Merge, never
+   rebase unless it is needed. The person in their words: "kazda session si udela svuj worktree pod
+   .claude/ of the project", "there should be no shared checkout ever", "Unstaged nebereme nikdy a
+   nikde. Staged and up".
 2. The main agent pushes main after a merge, when a task or a batch finishes, so local commits
    never pile up. A worker never pushes.
 3. Work lands in this order, with no pull request until the person says otherwise: a worktree, a

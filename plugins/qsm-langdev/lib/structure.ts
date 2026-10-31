@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { Glob, TOML } from "bun";
 import { generatedPaths, gitPaths } from "./config.ts";
 import { arrayOf, num, recordOf, recordsOf, str, type Rec } from "./json.ts";
-import { type Kept, leaveOut, withCommitTree, withWorktreeTree } from "./tree.ts";
+import { type Kept, leaveOut, withCommitTree, withIndexTree } from "./tree.ts";
 
 const RULES_REL = join(".sentrux", "rules.toml");
 const INSTALL_LINE = "install a qsm-patched sentrux: qsm-langdev doctor names the command";
@@ -71,8 +71,8 @@ async function withTree<T>(
   ref: string,
   fn: (dir: string, kept: Kept) => T,
 ): Promise<T> {
-  if (ref === "worktree") {
-    return withWorktreeTree(root, (dir) => fn(dir, leaveOutNonProduct(dir)));
+  if (ref === "index") {
+    return withIndexTree(root, (dir) => fn(dir, leaveOutNonProduct(dir)));
   }
   return withCommitTree(root, ref, (dir) => {
     overlayRules(root, dir);
@@ -425,5 +425,5 @@ export async function compareStructure(
 /** The working tree against the commit at `before` — what a stop gate or
  * `structure` with no `--against` compares. */
 export function compareWorktreeSince(root: string, before: string): Promise<StructureResult> {
-  return compareStructure(root, before, "worktree");
+  return compareStructure(root, before, "index");
 }

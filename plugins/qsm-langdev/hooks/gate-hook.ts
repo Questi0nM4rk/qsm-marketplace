@@ -75,7 +75,7 @@ async function judgeTree(
   const warnings: string[] = [];
 
   const { languages } = readGatesConfig(tree.root);
-  const { verdicts } = await compareTrees(tree.root, tree.start, "worktree", {
+  const { verdicts } = await compareTrees(tree.root, tree.start, "index", {
     at: "pre-commit",
     languages,
     ...testBudgetMs(),
@@ -91,7 +91,7 @@ async function judgeTree(
 
   // The stop gate compares against the agent's own start point, so a whole session is judged as one
   // aggregate drift rather than commit by commit.
-  const structure = await compareStructure(tree.root, tree.start, "worktree");
+  const structure = await compareStructure(tree.root, tree.start, "index");
   const structureVerdict = verdict(structure);
   if (structureVerdict.pass) {
     // Each summary says what it is — a quality line, or a tree sentrux had no ruleset to score.

@@ -133,6 +133,7 @@ describe("qsm-langdev gate hook and a checker past its time", () => {
       QSM_LANGDEV_GATE_BUDGET_MS: "500",
     };
     writeFileSync(join(root, "a.fish"), "echo alpha\necho beta\n");
+    git(root, "add", "-u");
     runEditHook(stateDir, "s1", "a1", join(root, "a.fish"));
 
     const r = runHook(

@@ -134,7 +134,7 @@ const MARKED: CheckSpec = {
  * selection, so this always opts the registry's own languages in, the same
  * way a repository's gates.json would once it named them. */
 function run(root: string, head: string | null, registry: readonly CheckSpec[] = [MARKED]) {
-  return compareTrees(root, head, "worktree", {
+  return compareTrees(root, head, "index", {
     registry,
     at: "pre-commit",
     languages: [...new Set(registry.map((spec) => spec.language))],
@@ -346,7 +346,7 @@ function recorder(fileSet: CheckSpec["fileSet"], extensions: readonly string[] =
 /** Opts `spec`'s own language in by default, same reasoning as `run` above;
  * an `options.languages` the caller passes still wins. */
 function runWith(root: string, head: string | null, spec: CheckSpec, options: CompareOptions = {}) {
-  return compareTrees(root, head, "worktree", {
+  return compareTrees(root, head, "index", {
     registry: [spec],
     at: "pre-commit",
     languages: [spec.language],
@@ -397,8 +397,10 @@ describe("file sets: whole project and changes", () => {
       "a.ts": "1\n",
       "src/b.ts": "2\n",
     });
-    // ignored.ts and new.ts are untracked, so neither side is handed them
-    write(root, { "a.ts": "1 more\n", "ignored.ts": "x\n", "new.ts": "n\n" });
+    // ignored.ts and new.ts are not staged, so neither side is handed them
+    write(root, { "a.ts": "1 more\n" });
+    stage(root);
+    write(root, { "ignored.ts": "x\n", "new.ts": "n\n" });
     const { spec, handed } = recorder("given");
 
     const { sets } = await runWith(root, head, spec);
@@ -419,6 +421,19 @@ describe("file sets: whole project and changes", () => {
 
     expect(changed).toEqual([]);
     expect(handed).toEqual([]);
+  });
+
+  test("an unstaged change is not measured: only what is staged is on its way out", async () => {
+    const { root, head } = repoWith({ "a.ts": "1\n", "b.ts": "2\n" });
+    write(root, { "a.ts": "1 staged\n" });
+    stage(root);
+    write(root, { "a.ts": "1 staged, then edited\n", "b.ts": "2 unstaged\n" });
+    const { spec, handed } = recorder("changed");
+
+    const { changed } = await runWith(root, head, spec);
+
+    expect(changed).toEqual(["a.ts"]);
+    expect(handed).toEqual([["a.ts"], ["a.ts"]]);
   });
 
   test("a file added to the index is in changed", async () => {
@@ -450,6 +465,7 @@ describe("file sets: deletions and the reference", () => {
   test("a deleted file is in changed and scored on the reference side only", async () => {
     const { root, head } = repoWith({ "a.ts": "1\n", "b.ts": "2\n" });
     unlinkSync(join(root, "a.ts"));
+    stage(root);
     const { spec, handed } = recorder("changed");
 
     const { changed, verdicts } = await runWith(root, head, spec);
@@ -462,6 +478,7 @@ describe("file sets: deletions and the reference", () => {
   test("a checker whose set holds nothing it covers does not run, and says so", async () => {
     const { root, head } = repoWith({ "a.ts": "1\n", "docs/x.md": "doc\n" });
     write(root, { "a.ts": "1 more\n" });
+    stage(root);
     const { spec, handed } = recorder("given");
 
     const { sets, verdicts } = await runWith(root, head, spec, { given: ["docs"] });
@@ -477,7 +494,8 @@ describe("file sets: deletions and the reference", () => {
     const { root, head: base } = repoWith({ "a.ts": "1\n", "b.ts": "2\n", "c.ts": "3\n" });
     write(root, { "b.ts": "2 committed\n" });
     git(root, ["commit", "-qam", "second"]);
-    write(root, { "a.ts": "1 working\n" });
+    write(root, { "a.ts": "1 staged\n" });
+    stage(root);
     const { spec, handed } = recorder("changed");
 
     const { changed } = await runWith(root, base, spec);
@@ -494,6 +512,7 @@ describe("file sets: paths and languages", () => {
   test("given with a path names only the files under it", async () => {
     const { root, head } = repoWith({ "a.ts": "1\n", "src/b.ts": "2\n", "src/c.ts": "3\n" });
     write(root, { "a.ts": "1 more\n" });
+    stage(root);
     const { spec, handed } = recorder("given");
 
     const { sets } = await runWith(root, head, spec, { given: ["src/"] });
@@ -507,6 +526,7 @@ describe("file sets: paths and languages", () => {
   test("a language with no import extractor is named in the report", async () => {
     const { root, head } = repoWith({ "run.sh": "echo 1\n" });
     write(root, { "run.sh": "echo 2\n" });
+    stage(root);
     const { spec } = recorder({ changedPlus: 1 }, [".sh"]);
 
     const { sets } = await runWith(root, head, spec);
@@ -593,7 +613,7 @@ test("time limit: the checkers after one not measured still run, so the report i
   write(root, { "a.txt": `alpha\n${MARKER} fresh\n` });
   stage(root);
 
-  const { verdicts } = await compareTrees(root, head, "worktree", {
+  const { verdicts } = await compareTrees(root, head, "index", {
     registry: [SLOW, MARKED],
     languages: ["fish"],
     at: "pre-commit",

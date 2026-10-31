@@ -55,6 +55,7 @@ function repoWithShellFile(): string {
   writeFileSync(join(root, "a.sh"), "#!/bin/sh\necho hi\n");
   commit(root, "first");
   writeFileSync(join(root, "a.sh"), "#!/bin/sh\necho hi\necho there\n");
+  git(root, "add", "-u");
   return home;
 }
 
@@ -159,8 +160,9 @@ describe("qsm-langdev cli: gates", () => {
       join(root, ".qsm-langdev", "gates.json"),
       `${JSON.stringify({ hooks: { "pre-commit": ["langdev"], "pre-push": [] } })}\n`,
     );
+    git(root, "add", "-u");
     const r = run(["hook", "pre-commit"], { home });
-    // the edited a.sh and the untracked gates.json
+    // the staged a.sh and gates.json
     expect(r.stderr).toContain("file sets: changed: 2 files, given: 2 files");
   }, 60_000);
 
@@ -228,6 +230,7 @@ function repoWithTsAndPy(languages: readonly string[]): string {
   commit(root, "first");
   writeFileSync(join(root, "a.ts"), "const a = 2;\n");
   writeFileSync(join(root, "a.py"), "a = 2\n");
+  git(root, "add", "-u");
   return home;
 }
 

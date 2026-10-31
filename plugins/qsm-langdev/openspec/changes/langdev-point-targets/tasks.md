@@ -45,6 +45,13 @@
   `lib/compare.ts`, `lib/registry.ts`, `lib/result-store.ts`. Proof: through the real hook in a
   session, a new unstaged `.ts` file with an oxlint finding reports it; a finding already at HEAD is
   reported too; the timing table of `measurements.md` measured again. Blocked by nothing.
+- [x] 2.6 Staged and up, never unstaged (the owner, 2026-10-31: "porovnavame committed / staged
+  files. Unstaged nebereme nikdy a nikde"): the shipped side of `check`, the commit gate, the stop
+  gate and `structure` is the index, no longer the index refreshed with `git add -u`. Files:
+  `lib/tree.ts` (`withIndexTree`), `lib/compare.ts`, `lib/structure.ts`, `lib/gate-runner.ts`,
+  `hooks/gate-hook.ts`, `scripts/cli.ts`. Proof: the test "an unstaged change is not measured"
+  stages one edit of `a.ts`, then edits `a.ts` and `b.ts` again unstaged, and `changed` is `a.ts`
+  alone; the qsm-langdev suite 244/244.
 
 ## 3. Slow lines and doctor
 

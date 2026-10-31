@@ -42,7 +42,7 @@ profile's per-tool configs and records the repository's languages in `.qsm-langd
 
 ```bash
 qsm-langdev doctor                                   # which checker binaries are missing
-qsm-langdev check                                    # working tree against HEAD
+qsm-langdev check                                    # what is staged against HEAD
 qsm-langdev check --against main --at pre-push       # a branch against main, as the push gate does
 qsm-langdev install                                  # write the pre-commit and pre-push git hooks
 ```
