@@ -106,6 +106,12 @@ come from the repository's secrets.
 - **WHEN** the replaced commit is all zeros
 - **THEN** the job SHALL print `skipped` with the reason and pass
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: The edit hook reports a file's own regression and never blocks`
+- TO:
+  `### Requirement: The edit hook checks the written file against the project's rules and never blocks`
+
 ## MODIFIED Requirements
 
 ### Requirement: A checker runs once per content, against a stored result
@@ -139,13 +145,13 @@ network), SHALL never be stored and SHALL be scored every run, and the report SH
 A failed run is never stored, and an entry the store cannot read is a miss. The store SHALL keep
 each enforcement point's entries apart, `results/<checker>/<point>/`, because one checker runs
 another set and engine at a push than at a commit; the stop gate runs at the pre-commit point, and
-the edit point reads and writes the pre-commit entries, because a checker runs the same way at both.
-The `ci` point keeps its own entries. After a run the store SHALL keep, for every checker the run
-used and at the run's point only, the entries the reference and shipped sides of that run used, so
-it never grows without bound and a commit never evicts what a push stored, nor a push what a commit
-stored. An entry outside a point's directory is a miss and is removed by the next run of its
-checker. Nothing SHALL run a checker twice over the same content, the two sides of one run included.
-The report SHALL say, per checker, whether each side was a hit or scored, and the run's total.
+the `ci` point keeps its own entries. The edit point keeps none: it checks the live file in place.
+After a run the store SHALL keep, for every checker the run used and at the run's point only, the
+entries the reference and shipped sides of that run used, so it never grows without bound and a
+commit never evicts what a push stored, nor a push what a commit stored. An entry outside a point's
+directory is a miss and is removed by the next run of its checker. Nothing SHALL run a checker twice
+over the same content, the two sides of one run included. The report SHALL say, per checker, whether
+each side was a hit or scored, and the run's total.
 
 #### Scenario: The first run in a fresh worktree
 
@@ -310,30 +316,30 @@ and its thresholds, read live from the one registry every other verb reads.
 - **THEN** every row carries `measures.counts`, and the rows whose `measures.overlaps`
   name each other are exactly the pairs counting one quantity over shared files
 
-### Requirement: The edit hook reports a file's own regression and never blocks
+### Requirement: The edit hook checks the written file against the project's rules and never blocks
 
-After a file is written, the hook, through its door `qsm-langdev edited <file>`, SHALL run the same
-comparison as `check` scoped to that one file against its version at the reference commit, with the
-checkers that declare the `edit` point, never the whole pre-commit set, and SHALL surface the
-verdict, current findings marked whether newly occurring. The hook SHALL exit successfully
-regardless of the verdict; it is advisory only. The hook stays a function hook, where the engine
-gives every hook 10 seconds that no plugin can raise, so the edit point has no five-minute timeout:
-the checkers SHALL run under what is left of 7.5 seconds from the start of the binary, at least 1
-second, because the fixers and the start take their share first; a checker past its budget SHALL be
-reported as not measured, never as a failed hook, so several edits made at once still each get the
-checkers that finished. A checker SHALL declare the `edit` point only when it scores one file, one
-run measures under 1 second on a quiet machine, because the edit set runs at once and a load of 15
-made the same run about five times slower, and it finds in that file type something the project's
-rules flag that no faster edit checker already finds. An edit-point run SHALL read and write the
-pre-commit point's stored results, because a checker runs the same way at both.
+After a file is written, the hook, through its door `qsm-langdev edited <file>`, SHALL run the
+checkers that declare the `edit` point, never the whole pre-commit set, on that one file in place,
+in the live checkout with the project's own configuration, and compare it against nothing: no
+reference commit, no scratch tree, no stored result. A file git does not track yet is checked the
+same way. The hook SHALL exit successfully whatever it finds; it is advisory only. The ratchet
+against a reference belongs to the commit, the push and CI, which score the file again. The hook
+stays a function hook, where the engine gives every hook 10 seconds that no plugin can raise, so the
+edit point has no five-minute timeout: the checkers SHALL run under what is left of 7.5 seconds from
+the start of the binary, at least 1 second, because the fixers and the start take their share first;
+a checker past its budget SHALL be reported as not measured, never as a failed hook, so several
+edits made at once still each get the checkers that finished. A checker SHALL declare the `edit`
+point only when it scores one file, one run measures under 1 second on a quiet machine, because the
+edit set runs at once and a load of 15 made the same run about five times slower, and it finds in
+that file type something the project's rules flag that no faster edit checker already finds.
 
 What the hook gives the model SHALL be the errors the project's own rules raise in the edited file
-and nothing else: each finding with its rule and line, the ones this tree added marked `+`. A file
+and nothing else: each finding with its rule and line. A file
 with no finding SHALL give the model nothing. A checker that did not run, was not measured, or was
 slow SHALL NOT be told to the model; it SHALL go to the hook's log, because the commit gate scores
 the file again and the model cannot act on it.
 
-Before the comparison the hook, and the pre-commit gate over staged files with no unstaged changes,
+Before its checkers the hook, and the pre-commit gate over staged files with no unstaged changes,
 SHALL run each static fixer that covers the file and re-stage what the gate fixed. The fixers are
 the safe fix modes of the checkers langdev runs (`rumdl` and `markdownlint-cli2 --fix`,
 `oxlint --fix` and `oxfmt`, `ruff check --fix` and `ruff format`, `shfmt -w`, `fish_indent -w`,
@@ -343,12 +349,17 @@ no edit can carry, so `dotnet-format` only reports, once per owning project (`gr
 the changed files and with `--no-restore`, and the person runs the fix. When the pre-commit gate
 blocks, it names each staged file it skipped for unstaged changes.
 
-#### Scenario: A written file gained a finding
+#### Scenario: A written file breaks a rule
 
-- **WHEN** the edited file now carries one more finding than its reference
-  version
-- **THEN** the hook SHALL report the new finding to the editor and SHALL NOT
-  block the edit
+- **WHEN** the edited file carries a finding under the project's rules, whether
+  or not its version at HEAD carried it
+- **THEN** the hook SHALL report the finding to the editor and SHALL NOT block
+  the edit
+
+#### Scenario: A new file git does not track
+
+- **WHEN** the model writes a new `.ts` file that is not staged
+- **THEN** the hook SHALL check it like any other file and report its findings
 
 #### Scenario: A TypeScript edit under load
 
@@ -367,10 +378,9 @@ blocks, it names each staged file it skipped for unstaged changes.
 - **THEN** the model SHALL NOT see a line such as
   `oxlint: its changed set holds no file it covers — not run`
 
-#### Scenario: A hooks module in a tree without the engine types
+#### Scenario: A hooks module checked in place
 
-- **WHEN** a `hooks/register.tsx` that oxlint passes in the checkout is
-  written, and the gate scores it in a tree where `.claude/types` is missing
+- **WHEN** a `hooks/register.tsx` that oxlint passes in the checkout is written
 - **THEN** the hook SHALL report no `no-unsafe-*` finding the checkout does
   not have
 

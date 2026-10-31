@@ -22,11 +22,13 @@
   the reason per checker in the change's `measurements.md`. Files: `measurements.md`,
   `lib/registry.ts`. Proof: the table, and `qsm-langdev list --json` agreeing with it. Blocked by
   1.1.
-- [ ] 2.2 The edit hook runs the `edit` set and reads and writes the `pre-commit` store entries.
-  Files: `lib/edit-findings.ts`, `lib/result-store.ts`. Proof: the real path at load: run
-  `qsm-langdev edited <abs .ts file> --session probe` three times while `stress-ng --cpu 12` runs;
-  each answers under 7.5 s with the TypeScript edit set and no semgrep. Blocked by 2.1.
-- [x] 2.3 What the model gets: the project's errors in the edited file and nothing else; every
+- [ ] 2.2 The edit hook runs the `edit` set. Reopened 2026-10-31: the store sharing with
+      `pre-commit` it shipped is gone with 2.5. Files: `lib/edit-findings.ts`. Proof: the real path
+      at load: run `qsm-langdev edited <abs .ts file> --session probe` three times while
+      `stress-ng --cpu 12` runs; each answers under 7.5 s with the TypeScript edit set and no
+      semgrep. Blocked by 2.1.
+- [ ] 2.3 Reopened 2026-10-31 (the `+` marks against HEAD go with 2.5). What the model gets: the
+  project's errors in the edited file and nothing else; every
   `not run`, `not measured`, total and `slow` line to the hook's log. Files: `lib/edit-findings.ts`,
   `hooks/register.tsx`. Proof: in this repository, write a clean `.md` file and a `.ts` file with
   one oxlint finding through the real hook in a Claude Code session; the first adds no context, the
@@ -37,6 +39,12 @@
   the checkout is no worse at the commit gate, and `qsm-i1u.97` closes with the measured run.
   Blocked by nothing. Done 2026-10-31 without code: not reproducible at 8c563f0a (oxlint 0 -> 0
   through `check` and a real commit); fixed by 3262884a and 396218a2, `qsm-i1u.97` closed.
+- [ ] 2.5 The edit hook checks in place: the edit set runs on the live file with the project's
+  config, no HEAD side, no scratch tree, no store; an untracked file is checked too; the
+  `StorePoint` mapping of `edit` to `pre-commit` goes. Files: `lib/edit-findings.ts`,
+  `lib/compare.ts`, `lib/registry.ts`, `lib/result-store.ts`. Proof: through the real hook in a
+  session, a new unstaged `.ts` file with an oxlint finding reports it; a finding already at HEAD is
+  reported too; the timing table of `measurements.md` measured again. Blocked by nothing.
 
 ## 3. Slow lines and doctor
 

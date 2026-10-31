@@ -78,7 +78,16 @@ its point's row. The stop gate runs at `pre-commit`, so it gets 30 s and 5 min.
 `QSM_LANGDEV_GATE_BUDGET_MS` stays as the stop gate's test seam. Alternative rejected: a target per
 checker, because the owner set one per point ("per ONE checker").
 
-### D3. The edit point stays a function hook
+### D3. The edit point stays a function hook and checks in place
+
+The edit hook compares nothing against HEAD (owner: "edit maji byt in place checks against the
+rules, not against head"). Its checkers run on the written file in the live checkout, with the
+project's configuration, and report every error in it; no scratch tree, no reference side, no
+store. That drops the two tree checkouts and the second scoring from every edit, and checks a new
+file git does not track, which the HEAD comparison never saw because it scores tracked files only.
+The ratchet stays where a reference exists: commit, push and CI. Alternative rejected: keep the
+HEAD comparison and add untracked files to the scratch tree, which keeps the cost and answers a
+question (is it worse than HEAD) the commit asks again anyway.
 
 The edit hook stays in `hooks/register.tsx`, where the engine gives every hook 10 s that no plugin
 can raise (owner: "edit by mel byt tady v tomto hook module"). The checkers keep sharing what is
@@ -169,9 +178,8 @@ path, no community fallback. That `scan --pro` with only the token neither uploa
 ## Migration Plan
 
 The registry entries are rewritten once from `runsAt`/`prePush` to `points`; no stored result
-changes key, because the store's directories are per point already and `edit` reads the
-`pre-commit` entries (a checker runs the same way at both). Nothing reads an old shape after the
-change.
+changes key, because the store's directories are per point already and the edit point stores
+nothing. Nothing reads an old shape after the change.
 
 ## Open Questions
 
