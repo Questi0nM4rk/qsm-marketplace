@@ -28,6 +28,7 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { runtimeDir } from "../../../lib/paths.ts";
 
 type Proc = { uptime: number; stat: { busy: number }; meminfo: Record<string, number> };
 type Net = { rx_bytes: number; tx_bytes: number; rx_rate: number; tx_rate: number };
@@ -218,16 +219,14 @@ function nodeId(objects: unknown[], name: string): number {
   throw new Error(`PipeWire has no node ${name}`);
 }
 
-// The daemon reads the drop-in through XDG_CONFIG_HOME and listens in the slot's runtime dir,
-// where the shell looks; volume and mute are each node's Props, set once it is up.
+// The daemon reads the drop-in from DIR (slot-desktop makes DIR this process's config home) and
+// listens in the slot's runtime dir, where the shell looks; volume and mute are each node's Props,
+// set once it is up.
 async function startPipewire(pw: Pipewire): Promise<void> {
-  const runtime = process.env.XDG_RUNTIME_DIR ?? "";
-  if (runtime === "") throw new Error("the fake machine's PipeWire needs XDG_RUNTIME_DIR");
-  Bun.spawn(["pipewire"], {
-    env: { ...process.env, XDG_CONFIG_HOME: dir },
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  const runtime = runtimeDir(process.env);
+  if (runtime === undefined)
+    throw new Error("the fake machine's PipeWire needs the slot's runtime dir");
+  Bun.spawn(["pipewire"], { stdout: "inherit", stderr: "inherit" });
   const socket = join(runtime, "pipewire-0");
   for (let i = 0; i < 100 && !existsSync(socket); i++) await Bun.sleep(50);
   if (!existsSync(socket)) throw new Error(`PipeWire did not listen at ${socket}`);
