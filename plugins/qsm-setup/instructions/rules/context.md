@@ -117,7 +117,7 @@ subagents skill says how), merges by merge commit or cherry-pick, then deletes w
 branch. A worker never merges, rebases, pushes, or deletes; a leftover worktree is a defect. Any
 branch an agent opens, the main agent's own included, is merged into the working branch or deleted
 before the turn that finished its work ends, because an unmerged branch is finished work the
-working tree does not have; the session-end hook names every branch still ahead.
+working tree does not have; `qsm-worktrunk ahead` names every branch still ahead.
 
 ## Workflows
 

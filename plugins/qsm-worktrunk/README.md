@@ -22,7 +22,7 @@ reason to exist.
 | Command | `/qsm-worktrunk` | Reports whether `wt` is installed and new enough |
 | Hook | `tool.call` on Bash | Refuses raw `git worktree` and names the `wt` command instead |
 | Hook | `prompt.submit` | Tells the agent which workspace it runs in, and sets the working marker |
-| Hook | `session.end` | Clears the working marker and names every local branch ahead of the working branch |
+| Hook | `session.end` | Clears the working marker |
 | Hook | `WorktreeCreate` | Creates the workspace through `wt` and points it at the main checkout's task store |
 | Hook | `WorktreeRemove` | Removes the workspace through `wt` |
 | Hook | `Notification` | Sets the activity marker |
@@ -55,7 +55,7 @@ wt remove <branch>
 ```
 
 `/qsm-worktrunk` reports whether `wt` is installed and new enough. `qsm-worktrunk ahead` lists the
-branches still to merge or delete; the session end toasts the same list.
+branches still to merge or delete.
 
 ## Caveats
 
