@@ -276,6 +276,9 @@ slot_start_desktop() {
   local tool
   for tool in bwrap sway swaymsg niri start-hyprland qs dbus-daemon pkg-config; do need "$tool"; done
   [[ -z "$mock" ]] || need bun
+  if [[ -n "$mock" ]] && jq -e 'has("pipewire")' "$mock" >/dev/null; then
+    for tool in pipewire pw-dump pw-cli; do need "$tool"; done
+  fi
   slot_alive "$name" && die "slot '$name' is already running"
   aq="$(slot_aquamarine_lib)" || exit 1
   node="$(slot_render_node)"

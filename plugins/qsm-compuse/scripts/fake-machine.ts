@@ -6,6 +6,7 @@
 //   proc.uptime, proc.stat.busy, proc.meminfo  ->  /proc/uptime, /proc/stat, /proc/meminfo
 //   net.<if>.rx_bytes|tx_bytes|rx_rate|tx_rate  ->  /sys/class/net/<if>/statistics/{rx,tx}_bytes
 //   hwmon[i] (name and files, device: files)    ->  /sys/class/hwmon/hwmon<i>, fixed files
+//   pipewire (defaults and nodes)               ->  the slot's own PipeWire daemon, null devices
 //
 // A reader that divides a counter delta by an uptime delta (a network rate) needs both read at
 // one moment, so uptime and the network counters are FIFOs: every read gets content generated at
@@ -19,6 +20,7 @@
 import {
   closeSync,
   constants,
+  existsSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -30,7 +32,21 @@ import { dirname, join } from "node:path";
 type Proc = { uptime: number; stat: { busy: number }; meminfo: Record<string, number> };
 type Net = { rx_bytes: number; tx_bytes: number; rx_rate: number; tx_rate: number };
 type Hwmon = Record<string, string | number | Record<string, string | number>>;
-type State = { clock?: string; proc?: Proc; net?: Record<string, Net>; hwmon?: Hwmon[] };
+type PwNode = {
+  "node.name": string;
+  "node.description": string;
+  "media.class": "Audio/Sink" | "Audio/Source";
+  channelVolumes: number[];
+  mute: boolean;
+};
+type Pipewire = { "default.audio.sink"?: string; "default.audio.source"?: string; nodes: PwNode[] };
+type State = {
+  clock?: string;
+  proc?: Proc;
+  net?: Record<string, Net>;
+  hwmon?: Hwmon[];
+  pipewire?: Pipewire;
+};
 type Render = (s: State, proc: Proc, up: number) => string;
 // fifo: generated at each read; ticking: rewritten in place every TICK_MS; fixed: written once.
 type File = { path: string; target: string; kind: "fifo" | "ticking" | "fixed"; render: Render };
@@ -152,7 +168,80 @@ function prepare(s: State): void {
     }
     binds.push(`${join(dir, "hwmon")}\t/sys/class/hwmon`);
   }
+  if (s.pipewire !== undefined) {
+    const conf = join(dir, "pipewire", "pipewire.conf.d", "fake.conf");
+    mkdirSync(dirname(conf), { recursive: true });
+    writeFileSync(conf, pipewireConf(s.pipewire));
+  }
   process.stdout.write(binds.map((line) => `${line}\n`).join(""));
+}
+
+// A drop-in for the system pipewire.conf (SPA JSON takes plain JSON): the defaults as the
+// `default` metadata a session manager would keep, and each node a null device. Without a session
+// manager nothing links or moves them, so they stay exactly as written.
+function pipewireConf(pw: Pipewire): string {
+  const defaults = (["default.audio.sink", "default.audio.source"] as const).flatMap((key) => {
+    const name = pw[key];
+    return name === undefined ? [] : [{ key, type: "Spa:String:JSON", value: { name } }];
+  });
+  const nodes = pw.nodes.map((node) => {
+    if (node.channelVolumes.length < 1 || node.channelVolumes.length > 2)
+      throw new Error(`pipewire node ${node["node.name"]} needs one or two channelVolumes`);
+    return {
+      factory: "adapter",
+      args: {
+        "factory.name": "support.null-audio-sink",
+        "node.name": node["node.name"],
+        "node.description": node["node.description"],
+        "media.class": node["media.class"],
+        "audio.position": node.channelVolumes.length === 1 ? ["MONO"] : ["FL", "FR"],
+        "object.linger": true,
+        "monitor.channel-volumes": true,
+      },
+    };
+  });
+  const metadata = {
+    factory: "metadata",
+    args: { "metadata.name": "default", "metadata.values": defaults },
+  };
+  return `context.objects = ${JSON.stringify([metadata, ...nodes], null, 2)}\n`;
+}
+
+// The id of the node pw-dump lists under that node.name.
+function nodeId(objects: unknown[], name: string): number {
+  for (const o of objects) {
+    if (typeof o !== "object" || o === null || !("id" in o) || typeof o.id !== "number") continue;
+    if (!("info" in o) || typeof o.info !== "object" || o.info === null) continue;
+    if (!("props" in o.info) || typeof o.info.props !== "object" || o.info.props === null) continue;
+    if ("node.name" in o.info.props && o.info.props["node.name"] === name) return o.id;
+  }
+  throw new Error(`PipeWire has no node ${name}`);
+}
+
+// The daemon reads the drop-in through XDG_CONFIG_HOME and listens in the slot's runtime dir,
+// where the shell looks; volume and mute are each node's Props, set once it is up.
+async function startPipewire(pw: Pipewire): Promise<void> {
+  const runtime = process.env.XDG_RUNTIME_DIR ?? "";
+  if (runtime === "") throw new Error("the fake machine's PipeWire needs XDG_RUNTIME_DIR");
+  Bun.spawn(["pipewire"], {
+    env: { ...process.env, XDG_CONFIG_HOME: dir },
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const socket = join(runtime, "pipewire-0");
+  for (let i = 0; i < 100 && !existsSync(socket); i++) await Bun.sleep(50);
+  if (!existsSync(socket)) throw new Error(`PipeWire did not listen at ${socket}`);
+  const dumped = Bun.spawnSync(["pw-dump"]);
+  if (dumped.exitCode !== 0) throw new Error(`pw-dump: ${dumped.stderr.toString()}`);
+  const objects: unknown = JSON.parse(dumped.stdout.toString());
+  if (!Array.isArray(objects)) throw new Error("pw-dump did not answer a list");
+  for (const node of pw.nodes) {
+    const id = nodeId(objects, node["node.name"]);
+    const props = `{ channelVolumes = [ ${node.channelVolumes.join(" ")} ] mute = ${node.mute} }`;
+    const set = Bun.spawnSync(["pw-cli", "set-param", String(id), "Props", props]);
+    if (set.exitCode !== 0)
+      throw new Error(`pw-cli set-param ${node["node.name"]}: ${set.stderr.toString()}`);
+  }
 }
 
 const started = performance.now();
@@ -199,9 +288,14 @@ async function tick(path: string, render: Render, s: State, proc: Proc): Promise
   }
 }
 
+// slot-desktop starts the shell once `ready` exists: the shell connects to PipeWire once, at start.
 const current = state();
 if (verb === "prepare") prepare(current);
-else if (current.proc !== undefined) {
+else {
+  if (current.pipewire !== undefined) await startPipewire(current.pipewire);
+  writeFileSync(join(dir, "ready"), "");
+}
+if (verb === "serve" && current.proc !== undefined) {
   const proc = current.proc;
   await Promise.all(
     files(current)

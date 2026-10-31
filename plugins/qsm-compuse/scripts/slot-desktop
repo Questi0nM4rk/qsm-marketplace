@@ -75,5 +75,16 @@ if [[ -n "${DRIVE_FAKETIME:-}" ]]; then
   chmod +x "$dir/bin/hyprlock"
   PATH="$dir/bin:$PATH"
 fi
+# The shell connects to the fake machine's PipeWire once, at start, so it waits for the machine.
+if [[ -d "$dir/fake" ]]; then
+  for ((i = 0; i < 100; i++)); do
+    [[ -e "$dir/fake/ready" ]] && break
+    sleep 0.1
+  done
+  [[ -e "$dir/fake/ready" ]] || {
+    echo "the fake machine never became ready (see fake-machine.log)" >&2
+    exit 5
+  }
+fi
 XDG_CONFIG_HOME="$cfg" QT_QPA_PLATFORMTHEME=qt6ct qs --path "$qs_path" >"$dir/qs.log" 2>&1 &
 wait
