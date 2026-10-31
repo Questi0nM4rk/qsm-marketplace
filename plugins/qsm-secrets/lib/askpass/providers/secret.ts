@@ -4,6 +4,7 @@
 import { ok, fail as stop } from "../../../../../lib/outcome.ts";
 import { activeBackend } from "../../backend.ts";
 import { fail } from "../../errors.ts";
+import { forgetSetKey } from "../../run.ts";
 import { refusal } from "../answer.ts";
 import type { Provider } from "../types.ts";
 
@@ -35,6 +36,9 @@ export const secret: Provider = {
       backend.remove(input.namespace, key);
       return stop("failed", "the backend kept no value, nothing stored");
     }
-    return ok({ namespace: input.namespace, key, stored: true }, `stored ${key}`);
+    return {
+      ...ok({ namespace: input.namespace, key, stored: true }, `stored ${key}`),
+      warnings: forgetSetKey(input.namespace, key),
+    };
   },
 };

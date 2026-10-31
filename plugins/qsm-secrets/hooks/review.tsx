@@ -16,10 +16,16 @@ export type ReviewRow = {
 /** What the hooks module hands the list. */
 export type ReviewProps = { readonly rows: readonly ReviewRow[] };
 
-/** The arm is always on the selected row; `arm` counts the arms, so a timer knows its own. */
+/**
+ * The selection and the arm, each bound to a row's id and the place it had, because a delete's
+ * reply drops a row and moves every row under it up: a row that left or moved is no longer
+ * selected or armed there. `arm` counts the arms, so a timer knows its own.
+ */
 type ReviewState = {
-  readonly selected: number;
-  readonly armed: boolean;
+  readonly selected: string | null;
+  readonly at: number;
+  readonly armed: string | null;
+  readonly armedAt: number;
   readonly arm: number;
 };
 
@@ -28,12 +34,41 @@ const ARM_MS = 3000;
 /** The hint line and the blank line under it. */
 const HEADER_ROWS = 2;
 
-const IDLE: ReviewState = { selected: 0, armed: false, arm: 0 };
+const IDLE: ReviewState = { selected: null, at: 0, armed: null, armedAt: 0, arm: 0 };
 
 /** The keys that move the selection, and by how much. */
 const STEPS: Readonly<Record<string, number>> = { up: -1, down: 1 };
 /** The keys that arm the selected row: `d`, and DEL as the terminal names it. */
 const ARM_KEYS: ReadonlySet<string> = new Set(["d", "delete"]);
+
+/** Where the selection is: the selected id's row, or, when that row left, the row now in its place. */
+function selectedAt(state: ReviewState, rows: readonly ReviewRow[]): number {
+  const found = rows.findIndex((row) => row.id === state.selected);
+  return found === -1 ? Math.min(state.at, Math.max(0, rows.length - 1)) : found;
+}
+
+/** Whether the row at `at` is armed: the same id, still in the place it was armed in. */
+const isArmed = (state: ReviewState, rows: readonly ReviewRow[], at: number): boolean =>
+  state.armed !== null && rows[at]?.id === state.armed && state.armedAt === at;
+
+/** The selection moved `step` rows from `at`, disarmed. */
+function moved(
+  state: ReviewState,
+  rows: readonly ReviewRow[],
+  at: number,
+  step: number,
+): ReviewState {
+  const to = Math.min(Math.max(0, rows.length - 1), Math.max(0, at + step));
+  return { ...state, armed: null, selected: rows[to]?.id ?? null, at: to };
+}
+
+/** The row under the selection, when the key carries no modifier. */
+const plainRow = (
+  key: ClientKeyEvent,
+  rows: readonly ReviewRow[],
+  at: number,
+): ReviewRow | undefined =>
+  key.ctrl === undefined && key.meta === undefined ? rows[at] : undefined;
 
 /** What one key does to the state, and the id to delete when it confirms an armed row. Every key
  * but an arm key disarms. */
@@ -42,22 +77,26 @@ function onKey(
   rows: readonly ReviewRow[],
   key: ClientKeyEvent,
 ): { next: ReviewState; remove: string | null } {
-  const last = Math.max(0, rows.length - 1);
-  const selected = Math.min(state.selected, last);
+  const at = selectedAt(state, rows);
   const step = STEPS[key.key];
-  const idle = { ...state, armed: false };
   if (step !== undefined) {
+    return { next: moved(state, rows, at, step), remove: null };
+  }
+  const row = plainRow(key, rows, at);
+  if (row === undefined) {
+    return { next: { ...state, armed: null, at }, remove: null };
+  }
+  if (ARM_KEYS.has(key.key)) {
     return {
-      next: { ...idle, selected: Math.min(last, Math.max(0, selected + step)) },
+      next: { selected: row.id, at, armed: row.id, armedAt: at, arm: state.arm + 1 },
       remove: null,
     };
   }
-  const row = key.ctrl === undefined && key.meta === undefined ? rows[selected] : undefined;
-  if (row !== undefined && ARM_KEYS.has(key.key)) {
-    return { next: { selected, armed: true, arm: state.arm + 1 }, remove: null };
-  }
-  const confirmed = row !== undefined && key.key === "y" && state.armed;
-  return { next: { ...idle, selected }, remove: confirmed ? row.id : null };
+  const confirmed = key.key === "y" && isArmed(state, rows, at);
+  return {
+    next: { ...state, armed: null, selected: row.id, at },
+    remove: confirmed ? row.id : null,
+  };
 }
 
 const Review: ClientModule<ReviewProps, ReviewState> = (props, surface) => {
@@ -66,13 +105,13 @@ const Review: ClientModule<ReviewProps, ReviewState> = (props, surface) => {
     const before = surface.state ?? IDLE;
     const { next, remove } = onKey(before, props.rows, key);
     surface.setState(next);
-    if (next.armed && next.arm !== before.arm) {
+    if (next.armed !== null && next.arm !== before.arm) {
       // One shot: the timer stops itself, and disarms only the arm it was started for.
       const stop = surface.every(ARM_MS, () => {
         stop();
         const now = surface.state ?? IDLE;
-        if (now.armed && now.arm === next.arm) {
-          surface.setState({ ...now, armed: false });
+        if (now.armed !== null && now.arm === next.arm) {
+          surface.setState({ ...now, armed: null });
         }
       });
     }
@@ -84,7 +123,7 @@ const Review: ClientModule<ReviewProps, ReviewState> = (props, surface) => {
   if (props.rows.length === 0) {
     return <Text dimColor>Nothing was captured.</Text>;
   }
-  const selected = Math.min(state.selected, props.rows.length - 1);
+  const selected = selectedAt(state, props.rows);
   // The region is as tall as the pane's body; before the first layout it reads 0 and all rows show.
   const window = surface.rows === 0 ? props.rows.length : Math.max(1, surface.rows - HEADER_ROWS);
   const first = Math.min(
@@ -97,7 +136,7 @@ const Review: ClientModule<ReviewProps, ReviewState> = (props, surface) => {
       <Text> </Text>
       {props.rows.slice(first, first + window).map((row, i) => {
         const here = first + i === selected;
-        const armed = here && state.armed;
+        const armed = here && isArmed(state, props.rows, selected);
         const note = armed ? "  y to delete" : row.failed === null ? "" : `  failed: ${row.failed}`;
         return (
           <Text

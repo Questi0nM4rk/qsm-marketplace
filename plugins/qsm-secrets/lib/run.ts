@@ -4,12 +4,24 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { readStdin } from "../../../lib/cli-base.ts";
+import { messageOf } from "../../../lib/outcome.ts";
+import { QsmError } from "../../../lib/qsm-error.ts";
 import { writeAtomic } from "../../../lib/fs.ts";
 import { claudeDir } from "../../../lib/paths.ts";
 import { activeBackend, type Backend, backendChosen } from "./backend.ts";
 import { type Capture, captureSecrets } from "./capture.ts";
 import { type CaptureListing, rowId } from "./capture-row.ts";
-import { addRows, type CaptureIndex, forgetRows, moveRow, readRows } from "./captures.ts";
+import {
+  addRows,
+  type CaptureIndex,
+  forgetEntry,
+  forgetRows,
+  indexCheck,
+  indexPath,
+  moveEntry,
+  readRows,
+} from "./captures.ts";
+import type { Check } from "./doctor.ts";
 import {
   formatMetadata,
   keyExists,
@@ -108,9 +120,45 @@ export async function runCapture(origin: CaptureOrigin): Promise<Capture> {
       const { namespace, key } = locate(id);
       rows[rowId(namespace, key)] = { kind, capturedAt, ...origin };
     }
-    addRows(process.env, rows);
+    try {
+      addRows(process.env, rows);
+    } catch (error) {
+      // The values are stored: the person needs the index's state, not a vault fix.
+      fail(
+        `stored ${done.captured.length} secret(s), but the capture index was not written: ${messageOf(error)}`,
+        `run qsm-secrets doctor, which checks ${indexPath(process.env)}`,
+        error instanceof QsmError ? error.code : "failed",
+      );
+    }
   }
   return done;
+}
+
+/**
+ * Runs an index update that follows a vault change already made. The change stands whatever the
+ * index does, so a failed update is a warning naming the file, never the verb's failure.
+ */
+function indexStep(step: () => void): string[] {
+  try {
+    step();
+    return [];
+  } catch (error) {
+    return [
+      `the vault change is done, but the capture index ${indexPath(process.env)} was not updated (${messageOf(error)}); run qsm-secrets doctor`,
+    ];
+  }
+}
+
+/** The person set this key's value themselves, so its row, if a capture left one, goes. */
+export function forgetSetKey(namespace: string, key: string): string[] {
+  return indexStep(() => {
+    forgetEntry(process.env, namespace, key);
+  });
+}
+
+/** `doctor`'s check of the capture index. */
+export function runIndexCheck(): Check {
+  return indexCheck(process.env);
 }
 
 /**
@@ -118,10 +166,10 @@ export async function runCapture(origin: CaptureOrigin): Promise<Capture> {
  * is gone (removed with the backend's own tool) is dropped from the index and returned in `gone`.
  * An empty index needs no backend.
  */
-export function runCaptures(): { rows: CaptureListing[]; gone: string[] } {
+export function runCaptures(): { rows: CaptureListing[]; gone: string[]; warnings: string[] } {
   const index = readRows(process.env);
   if (Object.keys(index).length === 0) {
-    return { rows: [], gone: [] };
+    return { rows: [], gone: [], warnings: [] };
   }
   const entries = activeBackend().entries();
   const rows: CaptureListing[] = [];
@@ -134,33 +182,67 @@ export function runCaptures(): { rows: CaptureListing[]; gone: string[] } {
       gone.push(id);
     }
   }
-  if (gone.length > 0) {
-    forgetRows(process.env, gone);
-  }
-  return { rows: rows.toSorted((a, b) => b.capturedAt.localeCompare(a.capturedAt)), gone };
+  const warnings = [
+    ...gone.map((id) => `${id} is no longer stored; its index row was removed`),
+    ...(gone.length > 0
+      ? indexStep(() => {
+          forgetRows(process.env, gone);
+        })
+      : []),
+  ];
+  return {
+    rows: rows.toSorted((a, b) => b.capturedAt.localeCompare(a.capturedAt)),
+    gone,
+    warnings,
+  };
+}
+
+/** `captures` as text: one line per row, never a value. */
+export function formatCaptures(rows: readonly CaptureListing[]): string {
+  return rows.length === 0
+    ? "nothing was captured"
+    : rows
+        .map((row) =>
+          [
+            row.capturedAt,
+            row.kind,
+            rowId(row.namespace, row.key),
+            row.session ?? "-",
+            row.cwd ?? "-",
+          ].join("  "),
+        )
+        .join("\n");
+}
+
+/** What removing an entry did: whether the backend removed it, and the index's warnings. */
+interface Removal {
+  readonly removed: boolean;
+  readonly warnings: string[];
 }
 
 /**
  * Removes an entry from the backend and its capture index row with it, or, when the entry was
- * copied to `movedTo` first, files the row under that name: the index follows the backend. False
- * when the backend refused, and then the row stays.
+ * copied to `movedTo` first, files the row under that name: the index follows the backend. When the
+ * backend refused, the row stays; when only the index update failed, the removal stands with a
+ * warning, and `captures` repairs a row whose entry is gone.
  */
 function removeEntry(
   backend: Backend,
   namespace: string,
   key: string,
   movedTo?: { namespace: string; key: string },
-): boolean {
+): Removal {
   if (!backend.remove(namespace, key)) {
-    return false;
+    return { removed: false, warnings: [] };
   }
-  const id = rowId(namespace, key);
-  if (movedTo === undefined) {
-    forgetRows(process.env, [id]);
-  } else {
-    moveRow(process.env, id, rowId(movedTo.namespace, movedTo.key));
-  }
-  return true;
+  const warnings = indexStep(() => {
+    if (movedTo === undefined) {
+      forgetEntry(process.env, namespace, key);
+    } else {
+      moveEntry(process.env, { namespace, key }, movedTo);
+    }
+  });
+  return { removed: true, warnings };
 }
 
 /** The stored value, or a loud refusal: a key that is listed but reads null is unreadable (locked), not absent. */
@@ -385,19 +467,20 @@ export function runInspect(namespace: string): {
 export function runRemove(
   namespace: string,
   key: string,
-): { namespace: string; key: string; removed: true } {
+): { namespace: string; key: string; removed: true; warnings: string[] } {
   const backend = backendHolding(namespace, key);
-  if (!removeEntry(backend, namespace, key)) {
+  const { removed, warnings } = removeEntry(backend, namespace, key);
+  if (!removed) {
     fail(`could not remove ${key}`, `run ${backend.name} remove ${key} yourself to see why`);
   }
-  return { namespace, key, removed: true };
+  return { namespace, key, removed: true, warnings };
 }
 
 /** `set`: the value is typed into the backend's own prompt. */
 export function runSet(
   namespace: string,
   key: string,
-): { namespace: string; key: string; stored: true } {
+): { namespace: string; key: string; stored: true; warnings: string[] } {
   const backend = activeBackend();
   if (!process.stdin.isTTY) {
     fail(
@@ -417,7 +500,7 @@ export function runSet(
       "run qsm-secrets set again and type a value",
     );
   }
-  return { namespace, key, stored: true };
+  return { namespace, key, stored: true, warnings: forgetSetKey(namespace, key) };
 }
 
 /**
@@ -461,7 +544,7 @@ function label(side: { namespace: string; key: string }): string {
 export function runRename(
   from: { namespace: string; key: string },
   to: { namespace: string; key: string },
-): { from: string; to: string } {
+): { from: string; to: string; warnings: string[] } {
   const legacy = from.namespace === LEGACY_NAMESPACE;
   if (from.namespace === to.namespace && from.key === to.key) {
     fail("rename needs two different names", "pass a new <to> or --to-folder", "usage");
@@ -522,7 +605,8 @@ export function runRename(
     }
   };
   copyTo(holds);
-  if (!removeEntry(backend, from.namespace, from.key, to) && !legacy) {
+  const moved = removeEntry(backend, from.namespace, from.key, to);
+  if (!moved.removed && !legacy) {
     fail(
       `copied to ${label(to)} but could not remove ${label(from)}`,
       `both names hold the value now; remove the old one with qsm-secrets rm ${from.key}`,
@@ -532,7 +616,7 @@ export function runRename(
     copyTo(to.key);
     backend.remove(to.namespace, holds);
   }
-  return { from: label(from), to: label(to) };
+  return { from: label(from), to: label(to), warnings: moved.warnings };
 }
 
 /** Every transcript under a directory, subagent ones included. */
@@ -548,7 +632,7 @@ function allTranscripts(root: string): string[] {
  * ponytail: a capture made in a live session is named in its transcript only once the prompt is
  * rewritten; run prune after the sessions end.
  */
-export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
+export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean; warnings: string[] } {
   const backend = activeBackend();
   const projects = projectsDir();
   const transcripts = existsSync(projects) ? allTranscripts(projects) : [];
@@ -561,12 +645,15 @@ export function runPrune(dryRun: boolean): { ids: string[]; dryRun: boolean } {
     .filter((e) => e.folder === CAPTURE_NAMESPACE && e.user === WRAPPER_MARK && !used.has(e.name))
     .map((e) => e.name)
     .toSorted((a, b) => a.localeCompare(b));
+  const warnings: string[] = [];
   if (!dryRun) {
     for (const id of ids) {
-      if (!removeEntry(backend, CAPTURE_NAMESPACE, id)) {
+      const removal = removeEntry(backend, CAPTURE_NAMESPACE, id);
+      warnings.push(...removal.warnings);
+      if (!removal.removed) {
         fail(`could not remove ${id}`, "run qsm-secrets prune again after qsm-secrets doctor");
       }
     }
   }
-  return { ids, dryRun };
+  return { ids, dryRun, warnings };
 }

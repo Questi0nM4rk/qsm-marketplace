@@ -6,9 +6,10 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:f
 import { dirname, join } from "node:path";
 import { sleepSync } from "bun";
 import { tryFlock, writeAtomic } from "../../../lib/fs.ts";
-import { isRecord } from "../../../lib/outcome.ts";
+import { isRecord, messageOf } from "../../../lib/outcome.ts";
 import { dataDir, type Env } from "../../../lib/paths.ts";
-import { type CaptureRow, isRow } from "./capture-row.ts";
+import { type CaptureRow, isRow, rowId } from "./capture-row.ts";
+import type { Check } from "./doctor.ts";
 import { fail } from "./errors.ts";
 
 /** Every row, by its `rowId`. */
@@ -17,7 +18,8 @@ export type CaptureIndex = Record<string, CaptureRow>;
 const LOCK_WAIT_MS = 5000;
 const POLL_MS = 10;
 
-function indexPath(env: Env): string {
+/** The index file, for a message that must name it. */
+export function indexPath(env: Env): string {
   return join(dataDir(env), "qsm-secrets", "captures.json");
 }
 
@@ -89,6 +91,58 @@ export function addRows(env: Env, rows: Readonly<CaptureIndex>): void {
   updateIndex(env, (index) => ({ ...index, ...rows }));
 }
 
+/** Drops the row of one entry: it was removed, or the person set its value themselves. */
+export function forgetEntry(env: Env, namespace: string, key: string): void {
+  forgetRows(env, [rowId(namespace, key)]);
+}
+
+/** Files the row of an entry renamed from `from` under `to`. */
+export function moveEntry(
+  env: Env,
+  from: { namespace: string; key: string },
+  to: { namespace: string; key: string },
+): void {
+  moveRow(env, rowId(from.namespace, from.key), rowId(to.namespace, to.key));
+}
+
+/**
+ * `doctor`'s look at the index: it reads as rows, and its lock is free. The lock is a flock(2), so
+ * it is never stale: a held lock is a qsm-secrets that runs now.
+ */
+export function indexCheck(env: Env): Check {
+  const name = "capture index";
+  const path = indexPath(env);
+  if (!existsSync(path)) {
+    return { name, ok: true, detail: `${path}: no capture yet`, fix: null };
+  }
+  let rows: number;
+  try {
+    rows = Object.keys(readIndex(path)).length;
+  } catch (error) {
+    return {
+      name,
+      ok: false,
+      detail: messageOf(error),
+      fix: `fix ${path}, or delete it to start an empty index`,
+    };
+  }
+  const lock = `${path}.lock`;
+  if (existsSync(lock)) {
+    const fd = openSync(lock, "a", 0o600);
+    const free = tryFlock(fd);
+    closeSync(fd);
+    if (!free) {
+      return {
+        name,
+        ok: false,
+        detail: `${lock} is held by a qsm-secrets that runs now`,
+        fix: `let it end; \`fuser ${lock}\` names the process`,
+      };
+    }
+  }
+  return { name, ok: true, detail: `${path}: ${rows} row(s), the lock is free`, fix: null };
+}
+
 /** Drops the rows of `ids`; an index that holds none of them is left as it is. */
 export function forgetRows(env: Env, ids: readonly string[]): void {
   updateIndex(env, (index) =>
@@ -99,7 +153,7 @@ export function forgetRows(env: Env, ids: readonly string[]): void {
 }
 
 /** Files the row of `from` under `to`, its kind, time, session and cwd kept; none, nothing moves. */
-export function moveRow(env: Env, from: string, to: string): void {
+function moveRow(env: Env, from: string, to: string): void {
   updateIndex(env, (index) => {
     const row = index[from];
     if (row === undefined) {

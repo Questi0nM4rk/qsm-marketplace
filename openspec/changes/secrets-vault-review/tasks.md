@@ -65,8 +65,9 @@
    `openssl req -x509 -newkey ed25519 -nodes -subj /CN=junk -keyout /dev/null -days 1 2>/dev/null`
    and paste it into the prompt. The toast names its id, kind `pem-block`.
 3. Run `/qsm-secrets review`. The pane opens with the list; the newest row has `>` before it.
-4. 1.1: press the down and up arrows: the `>` moves. If the arrows scroll the pane instead, click
-   the list once and try again, and note it here. Press DEL: the row ends in `y to delete`. Wait 3
+4. 1.1: right after `/qsm-secrets review`, without clicking the pane, press the down and up
+   arrows: the `>` moves. If they do nothing or scroll the pane instead, note it here, then click
+   the list once and try again. Press DEL: the row ends in `y to delete`. Wait 3
    seconds: it goes. Press `d`, then the down arrow: no `y to delete`, the `>` moved. Press Escape:
    the keyboard is back in the prompt. If DEL shows nothing, stop: the choice is `d` alone, or
    waiting for the engine.

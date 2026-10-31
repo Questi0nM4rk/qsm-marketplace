@@ -6,9 +6,11 @@
 `<dataDir>/qsm-secrets/captures.json` keyed by `<namespace>/<key>`, holding the secret's kind, the
 capture time, the session id and the working directory it was given with `--session` and `--cwd`.
 The index SHALL never hold a value or any part of one. A `rename` of a captured entry SHALL file its
-row under the new name with its kind, time, session and working directory kept. Two captures that
-run at once SHALL both keep their rows. The `prompt.submit` hook SHALL pass the session id and the
-working directory.
+row under the new name with its kind, time, session and working directory kept. A `set` of a key
+that has a row SHALL drop the row, because the value is then the person's own. Two captures that
+run at once SHALL both keep their rows. A capture whose index write fails SHALL fail naming the
+index file and `qsm-secrets doctor`, which SHALL check that the index reads as rows and its lock is
+free. The `prompt.submit` hook SHALL pass the session id and the working directory.
 
 #### Scenario: a capture writes its row
 
@@ -22,6 +24,12 @@ working directory.
 - **THEN** `qsm-secrets captures` lists it under the new name with its kind, time, session and cwd,
   and no longer under the old one
 
+#### Scenario: set takes a captured key over
+
+- **WHEN** the person runs `qsm-secrets set deploy-key` for a key a `deploy-key=<value>` capture
+  stored
+- **THEN** `qsm-secrets captures` no longer lists `qsm/deploy-key`
+
 #### Scenario: two captures at once keep both rows
 
 - **WHEN** two sessions capture a secret each at the same moment
@@ -32,8 +40,9 @@ working directory.
 `qsm-secrets captures` SHALL print every index row whose entry the backend still stores, newest
 first, as text or under `--json` as
 `{ rows: [{ namespace, key, kind, capturedAt, session, cwd }] }`, and SHALL never print a value. A
-row whose entry is no longer stored SHALL be removed from the index and named in a warning. An empty
-index SHALL print that nothing was captured, as success.
+row whose entry is no longer stored SHALL be removed from the index and named in a warning. A
+backend listing that fails SHALL fail the verb and remove no row. An empty index SHALL print that
+nothing was captured, as success.
 
 #### Scenario: listing captures
 
@@ -45,16 +54,25 @@ index SHALL print that nothing was captured, as success.
 - **WHEN** an index row names an entry that was removed with the backend's own tool
 - **THEN** the row is not listed, it is removed from the index, and a warning names it
 
+#### Scenario: a listing that fails
+
+- **WHEN** the backend cannot list its entries (a locked vault, a Secret Service that does not
+  answer)
+- **THEN** `captures` fails with the cause and every index row stays
+
 ### Requirement: The review pane removes a capture in three keys
 
 The command `/qsm-secrets review` SHALL open a pane with the keyboard focus in a list of the
 `captures` rows, each showing the kind, the local date and time, the last segment of the working
-directory and the first eight characters of the session id, and never a value. The arrow keys SHALL
-move between rows. `d` or `DEL` on a row SHALL arm it, showing `y to delete`; `y` within 3 seconds
+directory and the first eight characters of the session id, and the id itself when it is a name
+rather than a generated `cap_` id, and never a value. The arrow keys SHALL move between rows. The
+selection and the arm SHALL follow the row they were made on: a row that leaves the list or moves is
+no longer armed. `d` or `DEL` on a row SHALL arm it, showing `y to delete`; `y` within 3 seconds
 SHALL run `qsm-secrets rm` for that entry and drop the row from the list; any other key or 3 seconds
 without one SHALL disarm the row. A failed removal SHALL keep the row with its outcome code beside
-it and a toast naming the id and the code. Escape SHALL return the focus to the prompt. An empty
-list SHALL say that nothing was captured.
+it and a toast naming the id and the code; an `rm` that times out or prints no outcome reads
+`failed`. A post that names no listed capture SHALL delete nothing and say so. Escape SHALL return
+the focus to the prompt. An empty list SHALL say that nothing was captured.
 
 #### Scenario: deleting a junk capture
 
@@ -76,12 +94,19 @@ list SHALL say that nothing was captured.
 - **WHEN** `qsm-secrets rm` fails for an armed and confirmed row
 - **THEN** the row stays with the outcome code beside it, and a toast names the id and the code
 
+#### Scenario: a reply moves the armed row
+
+- **WHEN** rows A, B and C are listed, A's delete is still running, and the person arms B
+- **THEN** when A leaves the list, B is no longer armed, and `y` deletes neither B nor C
+
 ## MODIFIED Requirements
 
 ### Requirement: Remove a stored key
 
 The wrapper SHALL delete a named stored key on request, SHALL remove its row from the capture
 index when it has one, and SHALL report failure, not a silent success, when the key was not stored.
+When the key was removed but its index row could not be, the removal SHALL be reported done with a
+warning naming the index file.
 
 #### Scenario: Removing a stored key
 

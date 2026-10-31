@@ -72,7 +72,8 @@ interface Bin {
   opened: { id: string; focus?: true }[];
   toasts: string[];
   /** The outcome `rm` answers; `ok` removes the row from `rows`. */
-  rmCode: "ok" | "missing";
+  /** How `rm` answers: removes, `missing`, prints no envelope, or never finishes. */
+  rmCode: "ok" | "missing" | "garbled" | "timeout";
 }
 
 /** The bin beneath the plugin: `captures` and `rm`, and quiet toasts and logs. */
@@ -109,6 +110,12 @@ function bin(on: On, rows: Listed[] = ROWS): Bin {
       if (state.rmCode === "missing") {
         const failed = { code: "missing", exit: 4, message: `not stored: ${key}`, data: null };
         return { value: { ...RAN, exitCode: 4, stdout: JSON.stringify(failed) } };
+      }
+      if (state.rmCode === "garbled") {
+        return { value: { ...RAN, exitCode: 1, stdout: "Segmentation fault" } };
+      }
+      if (state.rmCode === "timeout") {
+        throw new Error("qsm-secrets rm was killed after 10000 ms");
       }
       state.rows = state.rows.filter((row) => !(row.namespace === folder && row.key === key));
       const data = { namespace: folder, key, removed: true };
@@ -191,7 +198,9 @@ test("a row shows kind, local date and time, the project and the session's first
     expect(drawn[2]).toStartWith("> github-pat");
     // The kind column is as wide as the longest kind listed, credential-value.
     expect(drawn[3]).toBe(`  ${"pem-block".padEnd(16)}  ${date}  qsm-marketplace  42ffbd7c`);
-    expect(drawn[4]).toEndWith("  -  -");
+    // A key the person named shows its id, so it reads differently from generated junk.
+    expect(drawn[2]).not.toContain("capture/cap_new");
+    expect(drawn[4]).toEndWith("  -  -  qsm/deploy-key");
     await ui.unmount();
   }
 });
@@ -270,13 +279,59 @@ test("a failed delete keeps the row with its code, and a toast names the id and 
   }
 });
 
-test("a post naming no listed capture deletes nothing", async ($, on) => {
+test("an rm that times out or prints no envelope keeps the row with failed, and toasts the id", async ($, on) => {
+  const host = bin(on);
+  for (const mode of ["garbled", "timeout"] as const) {
+    host.reset();
+    host.rmCode = mode;
+    const ui = await openPane($, "terminal");
+
+    await press(ui, "delete", "y");
+
+    expect((await lines(ui))[2]).toEndWith("failed: failed");
+    expect(host.toasts).toContain("qsm-secrets: could not delete capture/cap_new: failed");
+    await ui.unmount();
+  }
+});
+
+test("a reply that drops a row above the armed one disarms it, so y never deletes the row below", async ($, on) => {
+  const host = bin(on);
+  const ui = await openPane($, "terminal");
+
+  // A, B, C: B armed, then the reply to an earlier delete of A lands and B moves up.
+  await press(ui, "down", "d");
+  await ui.post({ delete: "capture/cap_new" }, { in: "review" });
+  const drawn = await lines(ui);
+  await press(ui, "y");
+
+  expect(drawn[2]).toStartWith("> pem-block");
+  expect(drawn.join("\n")).not.toContain("y to delete");
+  expect(host.removed.map((argv) => argv[2])).toEqual(["cap_new"]);
+  await ui.unmount();
+});
+
+test("a post naming no listed capture deletes nothing and says so", async ($, on) => {
   const host = bin(on);
   const ui = await openPane($, "terminal");
 
   await ui.post({ delete: "qsm/github-token" }, { in: "review" });
 
   expect(host.removed).toEqual([]);
+  expect(host.toasts.join("\n")).toContain("nothing was deleted");
+  expect(await lines(ui)).toHaveLength(5);
+  await ui.unmount();
+});
+
+test("a delete from a pane drawn before /qsm-secrets review lists again and keeps the other rows", async ($, on) => {
+  const host = bin(on);
+  const ui = await mountPane($, "terminal");
+
+  await press(ui, "delete", "y");
+
+  expect(host.removed.map((argv) => argv[2])).toEqual(["cap_new"]);
+  const drawn = await lines(ui);
+  expect(drawn).toHaveLength(4);
+  expect(drawn[2]).toStartWith("> pem-block");
   await ui.unmount();
 });
 

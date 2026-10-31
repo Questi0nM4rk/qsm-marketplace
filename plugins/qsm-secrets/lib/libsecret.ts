@@ -17,6 +17,9 @@ const SERVICE = "org.freedesktop.secrets";
 const START_PROVIDER =
   "start a Secret Service provider, for example gnome-keyring-daemon or KeePassXC";
 const INSTALL_FIX = "install libsecret (it ships secret-tool)";
+/** Why a search that ran fails: measured, no session bus; expected, a cancelled unlock prompt. */
+const SEARCH_FIX =
+  "run qsm-secrets doctor; the usual causes are a locked keyring whose unlock prompt was cancelled, a provider that stopped, or no session bus";
 
 /** The attributes every entry of ours carries; `secret-tool` matches on all of them. */
 function attributes(namespace: string, key?: string): string[] {
@@ -75,6 +78,16 @@ function ready(): void {
 function entries(allowLegacy = false): Entry[] {
   ready();
   const found = spawnSync(BIN, ["search", "--all", "service", "qsm"], { encoding: "utf8" });
+  // A search that matches nothing exits 0; one the Secret Service could not answer exits 1 with
+  // its error as the last line of stderr (measured: an unreachable bus). An empty listing from a
+  // failed search would read as "nothing is stored", and `captures` would forget every row.
+  if (found.status !== 0) {
+    const said = found.stderr
+      .split("\n")
+      .findLast((line) => line.trim() !== "" && !line.startsWith("attribute."));
+    const cause = (said ?? "no error text").slice(0, 200);
+    fail(`${BIN} search failed (exit ${found.status ?? "none"}): ${cause}`, SEARCH_FIX);
+  }
   const rows: Entry[] = [];
   let item = new Map<string, string>();
   const flush = (): void => {

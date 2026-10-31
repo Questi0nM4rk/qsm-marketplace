@@ -87,6 +87,10 @@ const isStrings = (value: unknown): value is string[] =>
 const isNamed = (value: unknown): value is { name: string }[] =>
   Array.isArray(value) && value.every((item: unknown) => isRecord(item) && isString(item.name));
 
+const isListedIds = (value: unknown): value is { namespace: string; key: string }[] =>
+  Array.isArray(value) &&
+  value.every((item: unknown) => isRecord(item) && isString(item.namespace) && isString(item.key));
+
 const isCaptured = (value: unknown): value is { id: string }[] =>
   Array.isArray(value) && value.every((item: unknown) => isRecord(item) && isString(item.id));
 
@@ -144,6 +148,7 @@ function fakeSecretTool(store: string): string {
 verb="$1"; shift
 case "$verb" in
   search)
+    [ -n "$FAKE_LIST_FAILS" ] && { echo "secret-tool: Cannot create an item in a locked collection" >&2; exit 1; }
     n=0
     for f in "$store"/*; do
       [ -f "$f" ] || continue
@@ -202,6 +207,7 @@ while [ $# -gt 0 ]; do
 done
 case "$verb" in
   list)
+    [ -n "$FAKE_LIST_FAILS" ] && { echo "the agent is locked" >&2; exit 1; }
     for f in "$store"/*; do
       [ -f "$f" ] || continue
       case "$f" in *.user) continue ;; esac
@@ -238,14 +244,14 @@ const FLAVORS: readonly Flavor[] = [
     name: "rbw",
     fake: fakeRbw,
     absent: ["rbw is not on PATH", "cargo install rbw"],
-    checks: [6, 6],
+    checks: [7, 7],
     multiline: "refused",
   },
   {
     name: "libsecret",
     fake: fakeSecretTool,
     absent: ["secret-tool is not on PATH", "install libsecret"],
-    checks: [4, 3],
+    checks: [5, 4],
     multiline: "stored",
   },
 ];
@@ -1051,23 +1057,116 @@ for (const flavor of FLAVORS) {
         expect(textOf(capture(`here: ${token}`))).toMatch(/^here: \{\{secret:cap_/);
       });
 
-      test("a renamed capture keeps its index row under the new name", () => {
-        const run = cli(["capture", "--session", "s1", "--cwd", "/p", "--json"], { input: token });
-        const [first] = field(envelope(run).data, "captured", isCaptured);
-        const id = first?.id ?? "";
-        expect(cli(["rename", id, "kept", "--folder", "capture"]).code).toBe(0);
-
-        const listed = envelope(cli(["captures", "--json"])).data.rows;
-        expect(listed).toMatchObject([
-          { namespace: "capture", key: "kept", kind: "github-pat", session: "s1", cwd: "/p" },
-        ]);
-      });
-
       test("a path and a placeholder pass byte for byte, and need no backend", () => {
         const text = `/tmp/claude-1000/-home-qs_m4rk-Projects-FullStack-qsm-qsm-marketplace--claude-worktrees-rewrite/s/scratchpad and ${placeholderOf("cap_03c8872d7caa")}`;
         const run = capture(text, { backend: false });
         expect(run.code).toBe(0);
         expect(textOf(run)).toBe(text);
+      });
+    });
+
+    describe("the capture index", () => {
+      const token = `ghp_${"aB3dE9".repeat(6)}`;
+      const other = `ghp_${"Zq7Wm2".repeat(6)}`;
+      const indexFile = (): string => join(home, "data", "qsm-secrets", "captures.json");
+      /** `capture --session s1 --cwd /p` of `text`; the id it stored. */
+      const captured = (text: string): string => {
+        const run = cli(["capture", "--session", "s1", "--cwd", "/p", "--json"], { input: text });
+        const [first] = field(envelope(run).data, "captured", isCaptured);
+        return first?.id ?? "";
+      };
+      const listed = (): unknown => envelope(cli(["captures", "--json"])).data.rows;
+      const ids = (): string[] =>
+        field({ rows: listed() }, "rows", isListedIds).map((row) => `${row.namespace}/${row.key}`);
+
+      test("a capture writes its row with no byte of the value", () => {
+        const id = captured(`here: ${token}`);
+        const text = readFileSync(indexFile(), "utf8");
+        expect(text).not.toContain(token);
+        expect(text).not.toContain(token.slice(-4));
+        expect(listed()).toMatchObject([
+          { namespace: "capture", key: id, kind: "github-pat", session: "s1", cwd: "/p" },
+        ]);
+      });
+
+      test("two captures started together both keep their row", async () => {
+        const start = (text: string, session: string): Promise<number> =>
+          Bun.spawn([process.execPath, CLI, "capture", "--session", session, "--json"], {
+            env: childEnv(environment()),
+            stdin: new TextEncoder().encode(text),
+            stdout: "ignore",
+            stderr: "ignore",
+          }).exited;
+        expect(await Promise.all([start(`a: ${token}`, "sa"), start(`b: ${other}`, "sb")])).toEqual(
+          [0, 0],
+        );
+        expect(ids()).toHaveLength(2);
+      });
+
+      test("a row whose entry was removed outside the wrapper is dropped with a warning", () => {
+        const id = captured(`here: ${token}`);
+        rmSync(file("capture", id));
+        const run = cli(["captures", "--json"]);
+        expect(envelope(run).data.rows).toEqual([]);
+        expect(run.stdout).toContain(`capture/${id} is no longer stored`);
+        expect(readFileSync(indexFile(), "utf8")).not.toContain(id);
+      });
+
+      test("a listing that fails forgets no row", () => {
+        const id = captured(`here: ${token}`);
+        const run = cli(["captures", "--json"], { env: { FAKE_LIST_FAILS: "1" } });
+        expect(run.code).not.toBe(0);
+        expect(readFileSync(indexFile(), "utf8")).toContain(id);
+        expect(ids()).toEqual([`capture/${id}`]);
+      });
+
+      test("an index that cannot be written fails the capture naming the file, and doctor flags it", () => {
+        mkdirSync(join(home, "data", "qsm-secrets"), { recursive: true });
+        writeFileSync(indexFile(), '{"x": 1}');
+        const run = cli(["capture"], { input: `here: ${token}` });
+        expect(run.code).not.toBe(0);
+        expect(run.stderr).toContain("the capture index was not written");
+        expect(run.stderr).toContain(indexFile());
+        expect(run.stderr).toContain("qsm-secrets doctor");
+        const doctor = cli(["doctor"]);
+        expect(doctor.code).toBe(4);
+        expect(doctor.stdout + doctor.stderr).toContain(
+          `fail  capture index: ${indexFile()} is not a capture index`,
+        );
+      });
+
+      test("rm whose index update fails still reports the removal, with a warning naming the index", () => {
+        const id = captured(`here: ${token}`);
+        writeFileSync(indexFile(), '{"x": 1}');
+        const run = cli(["rm", id, "--folder", "capture", "--json"]);
+        expect(envelope(run).code).toBe("ok");
+        expect(run.stdout).toContain(`the capture index ${indexFile()} was not updated`);
+        expect(existsSync(file("capture", id))).toBe(false);
+      });
+
+      test("rm and prune remove the row", () => {
+        const removed = captured(`one: ${token}`);
+        const pruned = captured(`two: ${other}`);
+        expect(cli(["rm", removed, "--folder", "capture"]).code).toBe(0);
+        expect(ids()).toEqual([`capture/${pruned}`]);
+        expect(cli(["prune"]).code).toBe(0);
+        expect(ids()).toEqual([]);
+      });
+
+      test("rename files the row under the new name, kind, session and cwd kept", () => {
+        const id = captured(`here: ${token}`);
+        expect(cli(["rename", id, "kept", "--folder", "capture"]).code).toBe(0);
+        expect(listed()).toMatchObject([
+          { namespace: "capture", key: "kept", kind: "github-pat", session: "s1", cwd: "/p" },
+        ]);
+      });
+
+      test("set of a key the capture stored drops its row: the value is the person's now", () => {
+        expect(captured(`deploy-key=${token}`)).toBe("qsm/deploy-key");
+        expect(ids()).toEqual(["qsm/deploy-key"]);
+        const run = terminal(`bun ${CLI} set deploy-key`, environment({ FAKE_TYPED: "typed-1" }));
+        expect(run.code).toBe(0);
+        expect(ids()).toEqual([]);
       });
     });
   });

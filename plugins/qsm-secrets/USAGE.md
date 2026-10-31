@@ -31,12 +31,18 @@ each: time, kind, `<namespace>/<key>`, session, working directory (`--json` answ
 `{ rows: [{ namespace, key, kind, capturedAt, session, cwd }] }`); a row whose entry was removed
 with the backend's own tool is dropped from the index and named in a warning, and an empty index
 prints `nothing was captured`. `rm` and `prune` remove the row with the entry, and `rename` files it
-under the new name.
+under the new name; `set` drops the row of the key it writes, since the value is then yours. A
+listing the backend cannot give (a locked vault, a Secret Service that does not answer) fails
+`captures` and forgets no row. When only the index update fails after a vault change, the verb
+still answers ok, with a warning naming the index file; `doctor` checks that the index reads as
+rows and that its lock is free.
 
 `/qsm-secrets review` in a session opens a pane over the same rows (kind, local date and time, the
 working directory's last segment, the session's first eight characters). The arrows move, `d` or
 DEL arms a row (`y to delete`), and `y` within 3 seconds runs `qsm-secrets rm` for it; any other
-key or 3 seconds disarms. A failed delete keeps the row with its outcome code and a toast.
+key or 3 seconds disarms. A failed delete keeps the row with its outcome code and a toast (an
+`rm` that timed out or printed nothing reads `failed`). A key you named (`qsm/deploy-key`) shows
+its id at the end of the row.
 
 `guard` reads a Bash command on stdin and answers `ok`, or `blocked` (exit 5) with a code and the
 verb to use instead: `vault-reader`, `bus-secrets`, `keyring-files`, `rendered-config`,

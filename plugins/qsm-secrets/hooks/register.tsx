@@ -9,7 +9,7 @@ import type { ApiContentBlock, EngineInterface, On, SessionAppendInput } from "c
 import { type CaptureListing, isListing, rowId } from "../lib/capture-row.ts";
 import { type PathEnv, protectedRoots, reaches } from "../lib/protected.ts";
 import { MIN_MASKED, mapStrings } from "../lib/masking.ts";
-import { locate, substitute } from "../lib/substitute.ts";
+import { CAPTURE_NAMESPACE, locate, substitute } from "../lib/substitute.ts";
 import { argvOf, failure, registerNoun, unwrap, type VerbRow, verbs } from "./noun.generated.ts";
 import type { ReviewRow } from "./review.tsx";
 
@@ -441,8 +441,13 @@ function localTime(iso: string): string {
       });
 }
 
+/** A capture id the capture made up (`cap_<hex>`), as opposed to a name the person gave or
+ * renamed it to. */
+const GENERATED_ID = /^cap_/;
+
 /** The rows the review list shows: kind, local time, the cwd's last segment, the session's first
- * eight characters; never a value. */
+ * eight characters, and the id when it is a name (`qsm/deploy-key`), so a key the person named
+ * reads differently from generated junk; never a value. */
 function reviewRows({ listed, failed }: ReviewCache): ReviewRow[] {
   const rows = listed ?? [];
   const width = Math.max(0, ...rows.map((row) => row.kind.length));
@@ -455,6 +460,7 @@ function reviewRows({ listed, failed }: ReviewCache): ReviewRow[] {
       localTime(row.capturedAt).padEnd(13),
       project,
       row.session === null ? "-" : row.session.slice(0, 8),
+      ...(row.namespace === CAPTURE_NAMESPACE && GENERATED_ID.test(row.key) ? [] : [id]),
     ].join("  ");
     return { id, label, failed: failed[id] ?? null };
   });
@@ -467,17 +473,34 @@ async function listCaptures($: EngineInterface): Promise<ReviewCache> {
   return { listed: dataOf(argv, ran, isCapturesData).rows, failed: {} };
 }
 
-/** `qsm-secrets rm` for one capture; its outcome code, `ok` when the entry and its row are gone. */
+/** `qsm-secrets rm` for one capture; its outcome code, `ok` when the entry is gone. A run that
+ * timed out or printed no envelope is `failed`, its cause in the log. */
 async function removeCapture($: EngineInterface, id: string): Promise<string> {
   const { namespace, key } = locate(id);
   const argv = argvOf(verbOf("rm"), { key, folder: namespace });
-  const ran = await $.process.run(argv, { timeoutMs: CAPTURE_TIMEOUT_MS, cwd: RUN_DIR });
+  let ran: { exitCode: number; stdout: string; stderr: string };
+  try {
+    ran = await $.process.run(argv, { timeoutMs: CAPTURE_TIMEOUT_MS, cwd: RUN_DIR });
+  } catch (error) {
+    // differs: hooks sandbox, root lib's messageOf
+    $.ui.log(
+      `qsm-secrets rm ${id} did not finish: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return "failed";
+  }
   const envelope = envelopeOf(ran.stdout);
   if (envelope === undefined) {
-    throw new Error(`qsm-secrets rm printed no outcome envelope (exit ${ran.exitCode})`);
+    $.ui.log(
+      `qsm-secrets rm ${id} printed no outcome envelope (exit ${ran.exitCode}): ${ran.stderr.trim().slice(0, 200)}`,
+    );
+    return "failed";
   }
   return envelope.code;
 }
+
+/** The ids a cache lists. */
+const listedIds = ({ listed }: ReviewCache): string[] =>
+  (listed ?? []).map((row) => rowId(row.namespace, row.key));
 
 /** The id a review list's post asks to delete, or undefined when the post is not that shape. */
 const deleteRequestOf = (data: unknown): string | undefined =>
@@ -551,21 +574,22 @@ function registerReview(on: On): void {
 
   on("ui.message", { requestId: REVIEW_PANE }, async ($, e) => {
     const id = deleteRequestOf(e.data);
-    const cached = await read($, review);
+    const stored = await read($, review);
+    // A pane drawn before /qsm-secrets review ran has no cache: list now, as its render did.
+    const cached = stored.listed === null ? await listCaptures($) : stored;
     // The post is code's word, not a fact: only an id the list holds is deleted.
-    if (
-      id === undefined ||
-      !(cached.listed ?? []).some((row) => rowId(row.namespace, row.key) === id)
-    ) {
-      $.ui.log(`the review list asked for a delete of no listed capture; nothing was deleted`);
+    if (id === undefined || !listedIds(cached).includes(id)) {
+      $.ui.toast("qsm-secrets: nothing was deleted: the list asked for no listed capture");
       return { props: { rows: reviewRows(cached) } };
     }
     const code = await removeCapture($, id);
     if (code !== "ok") {
       $.ui.toast(`qsm-secrets: could not delete ${id}: ${code}`);
     }
-    const next = afterDelete(cached, id, code);
-    await update($, review, () => next);
+    // Applied to the cache as it is now, so a delete that finished meanwhile is not undone.
+    const next = await update($, review, (now) =>
+      afterDelete(now.listed === null ? cached : now, id, code),
+    );
     return { props: { rows: reviewRows(next) } };
   }).catch(($, _e, next) => {
     failure($, "ui.message", next.error);

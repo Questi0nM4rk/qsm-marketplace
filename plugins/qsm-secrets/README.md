@@ -69,7 +69,9 @@ When the capture took something that was no secret (a certificate, a test value)
 `/qsm-secrets review`: a pane lists every capture still stored, newest first, as kind, date,
 project and the session's first eight characters. Move with the arrows, press `d` or DEL, and `y`
 within 3 seconds removes the entry from the vault and its row from the list; any other key, or the
-3 seconds, leaves it. A failed delete stays in the list with its outcome code. Escape gives the
+3 seconds, leaves it. A failed delete stays in the list with its outcome code. A key you named
+(`deploy-key=<token>`) shows its id at the end of its row; `qsm-secrets set` of that key takes it
+out of the list. Escape gives the
 keyboard back to the prompt.
 
 ## Caveats
