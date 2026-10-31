@@ -357,6 +357,14 @@ qsm-web browserbox SHALL let an agent pause a tab on a wall until a human
 clears it through the live view, or a caller-set timeout elapses. While
 one tab waits, other tabs and instances SHALL stay usable.
 
+#### Scenario: The live view opens with its password, and nothing prints it
+
+- **WHEN** an agent runs takeover, or a person runs view, on a running instance
+- **THEN** qsm-web browserbox SHALL open the live view, password included, in the
+  desktop browser, and SHALL print only the address without the password;
+  with no browser to open, it SHALL fail naming that address and how to read
+  the password
+
 #### Scenario: Human clears the wall
 
 - **WHEN** an agent arms takeover on a blocked tab and a human solves the

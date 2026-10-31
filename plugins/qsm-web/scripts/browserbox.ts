@@ -1,6 +1,7 @@
 // qsm-web browserbox: the last rung.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
+import { spawnDetached } from "../../../lib/detach.ts";
 import { home } from "../../../lib/paths.ts";
 import { join } from "node:path";
 import {
@@ -131,17 +132,46 @@ function redact(job: Record<string, unknown>): Record<string, unknown> {
   return { ...job, steps: shown };
 }
 
-/** The address a person opens to watch and drive one instance, with its live-view password. */
-function liveViewOf(box: Box, name: string, port: number): string {
+/**
+ * Open one instance's live view, password included, in the person's own browser. The password is
+ * read from the instance at this moment and goes only to the opener's argument vector, never to
+ * the answer, so nothing that reads the CLI's output ever holds it. With nothing to open it, the
+ * failure names the address without the password and how to get the password by hand.
+ */
+function openLiveView(box: Box, name: string): string {
+  const port = Number(name.replace(/^bbox-/, ""));
+  const address = liveViewUrl(port);
   if (box.dryRun) {
     box.run(tokenDefinition(name));
-    return liveViewLink(port, "<token>");
+    box.commands.push(`xdg-open ${liveViewLink(port, "<token>")}`);
+    return address;
+  }
+  if (!instances(box).some((i) => i.name === name)) {
+    throw new QsmError(
+      "missing",
+      `no instance named ${name}; browserbox ls lists the running ones`,
+    );
   }
   const { status, stdout } = box.run(tokenDefinition(name));
-  if (status !== 0 || stdout.trim().length === 0) {
+  const token = stdout.trim();
+  if (status !== 0 || token.length === 0) {
     throw new QsmError("failed", `${name} has no live-view password (exit ${status})`);
   }
-  return liveViewLink(port, stdout.trim());
+  // Detached, because a cold browser keeps xdg-open in the foreground until it exits.
+  const opened = spawnDetached(
+    "xdg-open",
+    [liveViewLink(port, token)],
+    { file: "/dev/null", append: true },
+    process.env,
+  );
+  if (!opened.ok) {
+    throw new QsmError(
+      "failed",
+      `could not open a browser for ${address} (${opened.reason}); the person can read the ` +
+        `password with: docker exec ${name} cat /run/bbox.token, and add it as ?password=`,
+    );
+  }
+  return address;
 }
 
 function instances(box: Box): Instance[] {
@@ -228,7 +258,7 @@ function startInstance(box: Box, out?: string): Instance & { readonly out: strin
       `${name} started but its browser never answered; its container was removed`,
     );
   }
-  return { name, port, liveView: liveViewOf(box, name, port), out: where };
+  return { name, port, liveView, out: where };
 }
 
 function start(call: Call, box: Box): Outcome {
@@ -237,7 +267,7 @@ function start(call: Call, box: Box): Outcome {
 }
 
 function ls(_call: Call, box: Box): Outcome {
-  const live = instances(box).map((i) => ({ ...i, liveView: liveViewOf(box, i.name, i.port) }));
+  const live = instances(box);
   return ok(live, JSON.stringify(live));
 }
 
@@ -381,7 +411,7 @@ function takeover(call: Call, box: Box): Outcome {
   const name = requiredString(call, "name");
   const tab = requiredNumber(call, "tab");
   const timeoutMs = optionalNumber(call, "timeout") ?? DEFAULT_WAIT_MS;
-  const view = liveViewOf(box, name, Number(name.replace(/^bbox-/, "")));
+  const view = openLiveView(box, name);
   const armed = box.send(name, {
     cmd: "wait_for_human",
     tab,
@@ -391,12 +421,9 @@ function takeover(call: Call, box: Box): Outcome {
   if (armed.ok !== true) {
     return fail("failed", `${name} would not arm the wait`, armed);
   }
-  process.stderr.write(`qsm-web browserbox: open ${view} and clear the wall\n`);
+  process.stderr.write(`qsm-web browserbox: opened ${view}; clear the wall there\n`);
   if (box.dryRun) {
     return ok({ liveView: view }, view);
-  }
-  if (flagArg(call, "open")) {
-    spawnSync("xdg-open", [view], { stdio: "ignore" });
   }
   if (cleared(box, name, tab, timeoutMs)) {
     return ok({ resumed: true, liveView: view }, `${name} tab ${tab} was cleared`);
@@ -405,6 +432,11 @@ function takeover(call: Call, box: Box): Outcome {
     resumed: false,
     liveView: view,
   });
+}
+
+function viewVerb(call: Call, box: Box): Outcome {
+  const address = openLiveView(box, requiredString(call, "name"));
+  return ok({ liveView: address }, `opened ${address}`);
 }
 
 type BoxHandler = (call: Call, box: Box) => Outcome;
@@ -431,4 +463,5 @@ export const handlers: Readonly<Record<string, Handler>> = {
   "browserbox fetch": handler(fetchOne),
   "browserbox script": handler(runScript),
   "browserbox takeover": handler(takeover),
+  "browserbox view": handler(viewVerb),
 };

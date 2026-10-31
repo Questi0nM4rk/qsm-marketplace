@@ -43,7 +43,7 @@ At any point in the loop:
 - **One page will not load without a browser** (empty body, content built by script, a block):
   `qsm-web browserbox` for that one page only (the browserbox skill), then back to the loop.
 - **A captcha:** solve it once from a screenshot with the mouse steps (the browserbox skill). When
-  that fails, hand it to the person: `qsm-web browserbox takeover <name> <tab> --open` plus a
+  that fails, hand it to the person: `qsm-web browserbox takeover <name> <tab>` plus a
   desktop notification, and wait for `resumed`. The web-research agent does this itself, so the
   main agent never has to. One takeover per page: a page that timed out is not opened again.
 

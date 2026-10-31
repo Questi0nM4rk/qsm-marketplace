@@ -47,12 +47,15 @@ export type Web = {
     steps?: string;
     dryRun?: boolean;
   }): Promise<unknown>;
+  browserboxView(options: {
+    name: string;
+    dryRun?: boolean;
+  }): Promise<unknown>;
   browserboxTakeover(options: {
     name: string;
     tab: number;
     reason?: string;
     timeout?: number;
-    open?: boolean;
     dryRun?: boolean;
   }): Promise<unknown>;
 };
